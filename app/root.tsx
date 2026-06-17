@@ -7,6 +7,8 @@ import {
     isRouteErrorResponse,
 } from "react-router"
 
+import { TooltipProvider } from "~/components/ui/tooltip"
+
 import type { Route } from "./+types/root"
 import "./app.css"
 
@@ -20,7 +22,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Links />
             </head>
             <body>
-                {children}
+                <TooltipProvider>{children}</TooltipProvider>
                 <ScrollRestoration />
                 <Scripts />
             </body>
