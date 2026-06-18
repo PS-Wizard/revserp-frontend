@@ -47,6 +47,7 @@ type DashboardView = "revserp-audit" | "search-console" | "revserp-ai"
 export function AppNavbar({
   activeProjectId,
   isCrawlRunning,
+  onCrawlStart,
   organizationId,
   projects,
   userEmail,
@@ -56,6 +57,7 @@ export function AppNavbar({
 }: {
   activeProjectId?: string | null
   isCrawlRunning: boolean
+  onCrawlStart: () => void
   organizationId: string
   projects: ProjectResponse[]
   userEmail: string
@@ -173,6 +175,7 @@ export function AppNavbar({
           fetch_timeout_seconds: parsedFetchTimeoutSeconds,
         },
       })
+      onCrawlStart()
       setIsRunCrawlOpen(false)
       revalidator.revalidate()
     } catch (error) {
