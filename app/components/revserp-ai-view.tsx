@@ -39,7 +39,7 @@ import type {
   ScoreBreakdownPillarResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
-import { cn } from "~/lib/utils"
+import { cn, formatBucketLabel } from "~/lib/utils"
 
 type RevserpAIMessage = {
   role: "user" | "assistant"
@@ -435,7 +435,7 @@ function ScopeBreadcrumb({
                       key={bucket.id}
                       onCheckedChange={() => onToggleBucket(bucket)}
                     >
-                      <span className="min-w-0 flex-1 truncate">{bucket.label}</span>
+                      <span className="min-w-0 flex-1 truncate">{formatBucketLabel(bucket.id, bucket.label)}</span>
                       <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">
                         {bucket.affected_url_count}
                       </Badge>

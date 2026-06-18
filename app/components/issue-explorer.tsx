@@ -7,6 +7,7 @@ import { ScopeBreadcrumbs, TablePagination } from "~/components/issue-explorer/s
 import { EmptyMessage, IssueTypeTable, UrlIssueTable } from "~/components/issue-explorer/tables"
 import type { BucketScope, IssueScope, MergedIssueUrlRow } from "~/components/issue-explorer/types"
 import { areStringArraysEqual, fetchAllIssueUrls } from "~/components/issue-explorer/utils"
+import { formatBucketLabel } from "~/lib/utils"
 import { Button } from "~/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
@@ -49,7 +50,7 @@ export function IssueExplorer({
         pillarId: pillar.id,
         pillarLabel: pillar.label,
         bucketId: bucket.id,
-        bucketLabel: bucket.label,
+        bucketLabel: formatBucketLabel(bucket.id, bucket.label),
       }))
     )
   }, [selectedPillars])

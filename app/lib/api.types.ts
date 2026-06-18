@@ -66,7 +66,7 @@ export type CrawlResponse = {
   urls_discovered: number
   urls_crawled: number
   max_depth_reached: number
-  google_psi_results?: unknown
+  google_psi_results?: GooglePSIResults
   has_llms_txt?: boolean
   seo_score?: number
   aeo_score?: number
@@ -225,3 +225,64 @@ export type ProjectGSCOverviewResponse = {
     windows: Record<string, GSCOverviewWindowResponse>
   }
 }
+
+export type PillarScoringConfig = {
+  label: string
+  weight: number
+  minimum_issue_coverage?: number
+  bucket_weights: Record<string, number>
+  issue_penalty_by_type: Record<string, number>
+}
+
+export type ScoringConfig = {
+  version: string
+  minimum_overall_score: number
+  coverage_scale: number
+  volume_pressure_scale: number
+  maximum_volume_pressure: number
+  severity_multipliers: Record<string, number>
+  overall_weights: Record<string, number>
+  pillars: Record<string, PillarScoringConfig>
+}
+
+export type ScoringConfigResponse = {
+  config: ScoringConfig
+  default: ScoringConfig
+  updated_at?: string
+  updated_by_user_id?: string
+}
+
+export type ScoringPreviewResponse = {
+  breakdown: ScoreBreakdownResponse
+  scores: {
+    seo_score: number
+    aeo_score: number
+    pagespeed_score: number
+    overall_score: number
+  }
+}
+
+export type GooglePSIMetric = {
+  first_contentful_paint?: number
+  largest_contentful_paint?: number
+  cumulative_layout_shift?: number
+  first_input_delay?: number
+  speed_index?: number
+  time_to_interactive?: number
+}
+
+export type GooglePSIDeviceResult = {
+  success: boolean
+  performance_score?: number
+  strategy: string
+  metrics?: GooglePSIMetric
+  error?: string
+}
+
+export type GooglePSIStoredResult = {
+  url: string
+  mobile: GooglePSIDeviceResult
+  analysis_date: string
+}
+
+export type GooglePSIResults = GooglePSIStoredResult[]

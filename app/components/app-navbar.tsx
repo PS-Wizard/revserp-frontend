@@ -566,6 +566,8 @@ export function AppNavbar({
 
           <div className="flex justify-end">
             <ProfileMenu
+              activeProjectId={activeProjectId}
+              currentCrawlId={currentCrawl?.id ?? null}
               initials={initials}
               isActiveOrganizationOwner={isActiveOrganizationOwner}
               isLeavingWorkspace={isLeavingWorkspace}

@@ -1,3 +1,5 @@
+import { formatBucketLabel } from "~/lib/utils"
+
 "use client"
 
 import { useEffect, useMemo, useRef } from "react"
@@ -62,7 +64,7 @@ export function BucketScoreHistoryChart({
   const series = useMemo(
     () =>
       buckets.map((bucket, index) => ({
-        name: bucket.label.replace(/^bucket_/, ""),
+        name: formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, "")),
         color: getChartColor(index),
         data: chartRows.map((row) => ({ x: row.timestamp, y: row[bucket.id] })),
       })),
@@ -214,7 +216,7 @@ export function BucketScoreHistoryChart({
                     style={{ backgroundColor: getChartColor(index) }}
                   />
                   <span className="truncate text-muted-foreground">
-                    {bucket.label.replace(/^bucket_/, "")}
+                    {formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, ""))}
                   </span>
                 </div>
               ))}

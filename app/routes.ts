@@ -7,4 +7,5 @@ export default [
   route("auth/callback", "routes/auth-callback.tsx"),
   route("invite/:token", "routes/invite.tsx"),
   route("app", "routes/app.tsx"),
+  route("app/internal/scoring", "routes/app/internal/scoring.tsx"),
 ] satisfies RouteConfig

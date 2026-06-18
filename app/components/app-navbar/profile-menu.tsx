@@ -1,4 +1,6 @@
-import { DoorOpenIcon, LogOutIcon, SendIcon, UsersIcon } from "lucide-react"
+import { useNavigate } from "react-router"
+
+import { DoorOpenIcon, LogOutIcon, SendIcon, Settings2Icon, UsersIcon } from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
@@ -22,6 +24,8 @@ import { getWorkspaceInitials } from "./utils"
 
 type ProfileMenuProps = {
   activeOrganizationName?: string
+  activeProjectId?: string | null
+  currentCrawlId?: string | null
   initials: string
   isActiveOrganizationOwner: boolean
   isLeavingWorkspace: boolean
@@ -38,6 +42,8 @@ type ProfileMenuProps = {
 }
 
 export function ProfileMenu({
+  activeProjectId,
+  currentCrawlId,
   initials,
   isActiveOrganizationOwner,
   isLeavingWorkspace,
@@ -52,6 +58,8 @@ export function ProfileMenu({
   onLogout,
   onSelectOrganization,
 }: ProfileMenuProps) {
+  const navigate = useNavigate()
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -116,6 +124,15 @@ export function ProfileMenu({
               Leave workspace
             </DropdownMenuItem>
           )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => {
+              navigate(`/app/internal/scoring?project=${activeProjectId ?? ""}&crawl=${currentCrawlId ?? ""}`)
+            }}
+          >
+            <Settings2Icon />
+            Configure Scoring
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={isLoggingOut} onClick={onLogout}>
