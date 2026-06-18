@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { ApiError, clientApiPost } from "~/lib/api"
 import type {
@@ -60,7 +60,6 @@ export function GSCOverview({
     ctr: true,
     position: true,
   })
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 })
 
   const countryDisplayNames = useMemo(
     () =>
@@ -83,24 +82,18 @@ export function GSCOverview({
     setSelectedGSCSiteURL(selectedSiteURLFromStatus)
     setGSCProjectSelectionErrorMessage("")
   }
-
   const previousSelectedWindowOverviewRef = useRef(selectedWindowOverview)
   if (previousSelectedWindowOverviewRef.current !== selectedWindowOverview) {
     previousSelectedWindowOverviewRef.current = selectedWindowOverview
     setTableSearch("")
     setActiveDimensionTab("queries")
     setTableSort({ column: "clicks", direction: "desc" })
-    setDefaultVisibleChartRange(trendRows, setVisibleRange)
   }
 
   const currentVisibleTrendRows = useMemo(() => {
     if (!trendRows.length) return []
-    if (visibleRange.start <= 0 || visibleRange.end <= 0) return trendRows.slice(-7)
-    return trendRows.filter((row) => {
-      const timestamp = dateTimestamp(row.date)
-      return timestamp >= visibleRange.start && timestamp <= visibleRange.end
-    })
-  }, [trendRows, visibleRange])
+    return trendRows.slice(-7)
+  }, [trendRows])
 
   const previousVisibleTrendRows = useMemo(() => {
     if (!trendRows.length || !currentVisibleTrendRows.length) return []
@@ -115,11 +108,6 @@ export function GSCOverview({
     })
   }, [currentVisibleTrendRows, trendRows])
 
-  const visibleRangeLabel = currentVisibleTrendRows.length
-    ? `${currentVisibleTrendRows[0]?.date ?? "—"} → ${
-        currentVisibleTrendRows[currentVisibleTrendRows.length - 1]?.date ?? "—"
-      }`
-    : ""
 
   const derivedMetricSummary = {
     clicks: buildMetricSummary("clicks", currentVisibleTrendRows, previousVisibleTrendRows),
@@ -155,10 +143,6 @@ export function GSCOverview({
       ),
     [selectedWindowOverview]
   )
-
-  const handleChartZoomRange = useCallback((start: number, end: number) => {
-    setVisibleRange({ start, end })
-  }, [])
 
 
   const handleRefreshOverview = async () => {
@@ -231,10 +215,7 @@ export function GSCOverview({
             chartMetricOrder={chartMetricOrder}
             chartSeries={chartSeries}
             metricConfig={metricConfig}
-            onChartZoomRange={handleChartZoomRange}
             visibleMetrics={visibleMetrics}
-            visibleRangeLabel={visibleRangeLabel}
-            visibleTrendRowCount={currentVisibleTrendRows.length}
             windowOverview={selectedWindowOverview}
           />
           <GSCTableSection
@@ -256,17 +237,3 @@ export function GSCOverview({
   )
 }
 
-function setDefaultVisibleChartRange(
-  trendRows: Array<{ date?: string }>,
-  setVisibleRange: (range: { start: number; end: number }) => void
-) {
-  if (!trendRows.length) {
-    setVisibleRange({ start: 0, end: 0 })
-    return
-  }
-
-  setVisibleRange({
-    start: dateTimestamp(trendRows[Math.max(0, trendRows.length - 7)]?.date),
-    end: dateTimestamp(trendRows[trendRows.length - 1]?.date),
-  })
-}

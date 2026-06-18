@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import type { ApexOptions } from "apexcharts"
 
 import {
@@ -21,31 +21,15 @@ export function GSCPerformanceChart({
   visibleMetrics,
   chartMetricOrder,
   metricConfig,
-  visibleRangeLabel,
-  visibleTrendRowCount,
-  onChartZoomRange,
 }: {
   windowOverview: GSCOverviewWindowResponse | null
   chartSeries: ChartSeries[]
   visibleMetrics: Record<GSCMetricKey, boolean>
   chartMetricOrder: GSCMetricKey[]
   metricConfig: Record<GSCMetricKey, MetricConfig>
-  visibleRangeLabel: string
-  visibleTrendRowCount: number
-  onChartZoomRange: (startTimestamp: number, endTimestamp: number) => void
 }) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
   const chartInstanceRef = useRef<any>(null)
-  const initialRangeRef = useRef<{ start: number; end: number } | null>(null)
-
-  if (initialRangeRef.current === null) {
-    initialRangeRef.current = getDefaultVisibleRange(windowOverview)
-  }
-  const previousWindowOverviewRef = useRef(windowOverview)
-  if (previousWindowOverviewRef.current !== windowOverview) {
-    previousWindowOverviewRef.current = windowOverview
-    initialRangeRef.current = getDefaultVisibleRange(windowOverview)
-  }
 
   const visibleMetricKeys = useMemo(
     () => chartMetricOrder.filter((metricKey) => visibleMetrics[metricKey]),
@@ -62,14 +46,6 @@ export function GSCPerformanceChart({
     [chartSeries, metricConfig, visibleMetricKeys]
   )
   const yRange = useMemo(() => getMetricRange(visibleSeries), [visibleSeries])
-
-  const handleChartZoomRange = useCallback(
-    (startTimestamp: number, endTimestamp: number) => {
-      if (!Number.isFinite(startTimestamp) || !Number.isFinite(endTimestamp)) return
-      onChartZoomRange(startTimestamp, endTimestamp)
-    },
-    [onChartZoomRange]
-  )
 
   const chartOptions = useMemo<ApexOptions>(
     () => ({
@@ -91,26 +67,8 @@ export function GSCPerformanceChart({
           },
           autoSelected: "zoom",
         },
-        zoom: {
-          enabled: true,
-          type: "x",
-          autoScaleYaxis: true,
-          allowMouseWheelZoom: false,
-        },
+        zoom: { enabled: true, type: "x", autoScaleYaxis: true },
         animations: { speed: 300 },
-        events: {
-          zoomed: (_chartContext, payload) => {
-            if (payload?.xaxis) {
-              handleChartZoomRange(Number(payload.xaxis.min), Number(payload.xaxis.max))
-            }
-          },
-          beforeResetZoom: () => {
-            const fullRange = getFullVisibleRange(windowOverview)
-            if (fullRange.start > 0 && fullRange.end > 0) {
-              handleChartZoomRange(fullRange.start, fullRange.end)
-            }
-          },
-        },
       },
       colors: visibleMetricKeys.map((metricKey) => metricConfig[metricKey].color),
       dataLabels: { enabled: false },
@@ -162,7 +120,7 @@ export function GSCPerformanceChart({
         },
       },
     }),
-    [handleChartZoomRange, metricConfig, visibleMetricKeys, windowOverview, yRange]
+    [metricConfig, visibleMetricKeys, yRange]
   )
 
   useEffect(() => {
@@ -182,11 +140,6 @@ export function GSCPerformanceChart({
       })
       chartInstanceRef.current = chart
       await chart.render()
-
-      const initialRange = initialRangeRef.current ?? { start: 0, end: 0 }
-      if (initialRange.start > 0 && initialRange.end > 0) {
-        chart.zoomX(initialRange.start, initialRange.end)
-      }
     })()
 
     return () => {
@@ -207,8 +160,9 @@ export function GSCPerformanceChart({
       <CardHeader>
         <CardTitle>Performance</CardTitle>
         <CardDescription>
-          Visible range: {visibleRangeLabel || "—"} · comparing against the immediately previous{" "}
-          {visibleTrendRowCount}-day window.
+          {windowOverview?.trend.length
+            ? `Search Console trend over the last ${windowOverview.trend.length} days`
+            : "Search Console trend"}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col px-2 pt-2 sm:px-6">
@@ -268,24 +222,6 @@ function getMetricRange(series: ChartSeries[]) {
   return {
     min: Math.max(0, Math.floor(minValue - padding)),
     max: Math.ceil(maxValue + padding),
-  }
-}
-
-function getDefaultVisibleRange(windowOverview: GSCOverviewWindowResponse | null) {
-  if (!windowOverview?.trend.length) return { start: 0, end: 0 }
-
-  return {
-    start: dateTimestamp(windowOverview.trend[Math.max(0, windowOverview.trend.length - 7)]?.date),
-    end: dateTimestamp(windowOverview.trend[windowOverview.trend.length - 1]?.date),
-  }
-}
-
-function getFullVisibleRange(windowOverview: GSCOverviewWindowResponse | null) {
-  if (!windowOverview?.trend.length) return { start: 0, end: 0 }
-
-  return {
-    start: dateTimestamp(windowOverview.trend[0]?.date),
-    end: dateTimestamp(windowOverview.trend[windowOverview.trend.length - 1]?.date),
   }
 }
 
