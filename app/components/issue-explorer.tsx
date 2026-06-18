@@ -70,8 +70,10 @@ type MergedIssueUrlRow = ScoreBreakdownIssueURLsResponse["urls"][number] & {
 
 export function IssueExplorer({
   breakdown,
+  initialPillarId,
 }: {
   breakdown: ScoreBreakdownResponse | null
+  initialPillarId?: string
 }) {
   const [selectedPillarIds, setSelectedPillarIds] = useState<string[]>([])
   const [selectedBucketKeys, setSelectedBucketKeys] = useState<string[]>([])
@@ -133,6 +135,13 @@ export function IssueExplorer({
       return
     }
 
+    if (initialPillarId && pillarOptions.some((pillar) => pillar.id === initialPillarId)) {
+      if (selectedPillarIds.length !== 1 || selectedPillarIds[0] !== initialPillarId) {
+        setSelectedPillarIds([initialPillarId])
+      }
+      return
+    }
+
     const nextSelectedPillarIds = selectedPillarIds.filter((pillarId) =>
       pillarOptions.some((pillar) => pillar.id === pillarId)
     )
@@ -145,7 +154,7 @@ export function IssueExplorer({
     if (nextSelectedPillarIds.length !== selectedPillarIds.length) {
       setSelectedPillarIds(nextSelectedPillarIds)
     }
-  }, [pillarOptions, selectedPillarIds])
+  }, [initialPillarId, pillarOptions, selectedPillarIds])
 
   useEffect(() => {
     if (!availableBucketScopes.length) {
@@ -158,14 +167,18 @@ export function IssueExplorer({
     )
 
     if (!nextSelectedBucketKeys.length) {
-      setSelectedBucketKeys([availableBucketScopes[0].key])
+      setSelectedBucketKeys(
+        initialPillarId
+          ? availableBucketScopes.map((bucketScope) => bucketScope.key)
+          : [availableBucketScopes[0].key]
+      )
       return
     }
 
     if (nextSelectedBucketKeys.length !== selectedBucketKeys.length) {
       setSelectedBucketKeys(nextSelectedBucketKeys)
     }
-  }, [availableBucketScopes, selectedBucketKeys])
+  }, [availableBucketScopes, initialPillarId, selectedBucketKeys])
 
   useEffect(() => {
     const nextSelectedIssueTypeKeys = selectedIssueTypeKeys.filter((issueTypeKey) =>

@@ -5,6 +5,10 @@ import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { ChartAreaInteractive } from "~/components/chart-area-interactive"
 import { CompileLoader } from "~/components/compile-loader"
 import { IssueExplorer } from "~/components/issue-explorer"
+import {
+  PillarAuditView,
+  type CrawlBreakdown,
+} from "~/components/pillar-audit-view"
 import { SectionCards } from "~/components/section-cards"
 import {
   Card,
@@ -41,6 +45,7 @@ export async function loader({ request }: { request: Request }) {
 
   let recentCrawls: CrawlResponse[] = []
   let currentBreakdown: ScoreBreakdownResponse | null = null
+  let crawlBreakdowns: CrawlBreakdown[] = []
 
   if (activeProject) {
     const crawlsResponse = await serverApiFetch<CrawlsResponse>(
@@ -52,14 +57,20 @@ export async function loader({ request }: { request: Request }) {
     const sortedCompletedCrawls = [...recentCrawls]
       .filter((crawl) => crawl.status === "completed")
       .sort((left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left))
-    const currentCrawl = sortedCompletedCrawls[0]
+    const breakdownResults = await Promise.allSettled(
+      sortedCompletedCrawls.map(async (crawl) => ({
+        crawl,
+        breakdown: await serverApiFetch<ScoreBreakdownResponse>(
+          `/crawls/${crawl.id}/score-breakdown`,
+          request
+        ),
+      }))
+    )
 
-    if (currentCrawl) {
-      currentBreakdown = await serverApiFetch<ScoreBreakdownResponse>(
-        `/crawls/${currentCrawl.id}/score-breakdown`,
-        request
-      )
-    }
+    crawlBreakdowns = breakdownResults.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : []
+    )
+    currentBreakdown = crawlBreakdowns[0]?.breakdown ?? null
   }
 
   return {
@@ -68,6 +79,7 @@ export async function loader({ request }: { request: Request }) {
     activeProject,
     recentCrawls,
     currentBreakdown,
+    crawlBreakdowns,
   }
 }
 
@@ -77,6 +89,7 @@ type AppLoaderData = {
   activeProject: ProjectResponse | null
   recentCrawls: CrawlResponse[]
   currentBreakdown: ScoreBreakdownResponse | null
+  crawlBreakdowns: CrawlBreakdown[]
 }
 
 const viewLabels: Record<DashboardView, string> = {
@@ -86,13 +99,14 @@ const viewLabels: Record<DashboardView, string> = {
 }
 
 export default function AppPage() {
-  const { me, projects, activeProject, recentCrawls, currentBreakdown } =
+  const { me, projects, activeProject, recentCrawls, currentBreakdown, crawlBreakdowns } =
     useLoaderData() as AppLoaderData
   const revalidator = useRevalidator()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<"summary" | "seo" | "aeo" | "pagespeed">(
     "summary"
   )
+  const [isStartingCrawl, setIsStartingCrawl] = useState(false)
 
   const sortedCrawls = useMemo(
     () =>
@@ -105,7 +119,8 @@ export default function AppPage() {
     sortedCrawls.find(
       (crawl) => crawl.status === "queued" || crawl.status === "running"
     ) ?? null
-  const isCrawlRunning = activeRunningCrawl !== null
+  const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
+  const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
   const sortedCompletedCrawls = sortedCrawls.filter(
     (crawl) => crawl.status === "completed"
   )
@@ -128,12 +143,18 @@ export default function AppPage() {
     }
   }, [isCrawlRunning, revalidator])
 
+  useEffect(() => {
+    if (activeRunningCrawl) {
+      setIsStartingCrawl(false)
+    }
+  }, [activeRunningCrawl])
 
   return (
     <main className="min-h-svh bg-background text-foreground">
       <AppNavbar
         activeProjectId={activeProject?.id}
         isCrawlRunning={isCrawlRunning}
+        onCrawlStart={() => setIsStartingCrawl(true)}
         onViewChange={setView}
         organizationId={me.active_org_id}
         projects={projects}
@@ -173,31 +194,34 @@ export default function AppPage() {
                 <IssueExplorer breakdown={currentBreakdown} />
               </TabsContent>
 
-              <TabsContent value="seo" className="px-4 lg:px-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>SEO</CardTitle>
-                    <CardDescription>SEO detail view placeholder.</CardDescription>
-                  </CardHeader>
-                </Card>
+              <TabsContent value="seo">
+                <PillarAuditView
+                  activeProjectName={activeProject?.name}
+                  crawlBreakdowns={crawlBreakdowns}
+                  currentBreakdown={currentBreakdown}
+                  pillarId="seo"
+                  title="SEO"
+                />
               </TabsContent>
 
-              <TabsContent value="aeo" className="px-4 lg:px-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>AEO</CardTitle>
-                    <CardDescription>AEO detail view placeholder.</CardDescription>
-                  </CardHeader>
-                </Card>
+              <TabsContent value="aeo">
+                <PillarAuditView
+                  activeProjectName={activeProject?.name}
+                  crawlBreakdowns={crawlBreakdowns}
+                  currentBreakdown={currentBreakdown}
+                  pillarId="aeo"
+                  title="AEO"
+                />
               </TabsContent>
 
-              <TabsContent value="pagespeed" className="px-4 lg:px-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>PageSpeed</CardTitle>
-                    <CardDescription>PageSpeed detail view placeholder.</CardDescription>
-                  </CardHeader>
-                </Card>
+              <TabsContent value="pagespeed">
+                <PillarAuditView
+                  activeProjectName={activeProject?.name}
+                  crawlBreakdowns={crawlBreakdowns}
+                  currentBreakdown={currentBreakdown}
+                  pillarId="pagespeed"
+                  title="PageSpeed"
+                />
               </TabsContent>
 
               <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 justify-center px-4">
@@ -219,7 +243,7 @@ export default function AppPage() {
                   <div className="flex flex-col gap-1">
                     <h2 className="text-lg font-medium">Crawl in progress</h2>
                     <p className="text-sm text-muted-foreground">
-                      {activeProject?.name || "This project"} is currently {activeRunningCrawl.status}.
+                      {activeProject?.name || "This project"} is currently {crawlStatusLabel}.
                       Scores will refresh automatically when the crawl finishes.
                     </p>
                   </div>
