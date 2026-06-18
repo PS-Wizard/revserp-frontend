@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 WORKDIR /app
 RUN corepack enable
 
@@ -15,7 +15,7 @@ COPY . /app/
 COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 RUN pnpm build
 
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
