@@ -187,3 +187,60 @@
 .compile-loader-dot.d42 { animation-delay: 192ms; }
 .compile-loader-dot.d43 { animation-delay: 288ms; }
 .compile-loader-dot.d44 { animation-delay: 384ms; }
+
+.markdown-message {
+  line-height: 1.7;
+}
+.markdown-message h1,
+.markdown-message h2,
+.markdown-message h3,
+.markdown-message h4 {
+  margin: 0.75rem 0 0.35rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.markdown-message h1 { font-size: 1.4rem; }
+.markdown-message h2 { font-size: 1.18rem; }
+.markdown-message h3,
+.markdown-message h4 { font-size: 1rem; }
+.markdown-message p { margin: 0.5rem 0; }
+.markdown-message ul,
+.markdown-message ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+.markdown-message ul { list-style: disc; }
+.markdown-message ol { list-style: decimal; }
+.markdown-message li { margin: 0.25rem 0; }
+.markdown-message hr {
+  margin: 0.9rem 0;
+  border: 0;
+  border-top: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+.markdown-message code {
+  border-radius: 0.35rem;
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+  padding: 0.08rem 0.28rem;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+.markdown-message .markdown-table-wrap {
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+.markdown-message table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+.markdown-message th,
+.markdown-message td {
+  border: 1px solid color-mix(in oklab, var(--foreground) 10%, transparent);
+  padding: 0.55rem 0.65rem;
+  vertical-align: top;
+}
+.markdown-message th {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  font-weight: 650;
+  text-align: left;
+}

@@ -209,6 +209,7 @@ export function IssueExplorer({
     const selectedIssueScopes = availableIssueScopes.filter((issueScope) =>
       selectedIssueTypeKeys.includes(issueScope.key)
     )
+    const crawlId = breakdown.crawl_id
     const cacheKey = [
       breakdown.crawl_id,
       ...selectedIssueScopes.map((issueScope) => issueScope.key).sort(),
@@ -230,7 +231,7 @@ export function IssueExplorer({
       try {
         const rowsByScope = await Promise.all(
           selectedIssueScopes.map((issueScope) =>
-            fetchAllIssueUrls(breakdown.crawl_id, issueScope)
+            fetchAllIssueUrls(crawlId, issueScope)
           )
         )
 

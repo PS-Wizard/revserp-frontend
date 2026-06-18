@@ -121,3 +121,77 @@ export type ScoreBreakdownIssueURLsResponse = {
   urls: ScoreBreakdownIssueURLResponse[]
   pagination: PaginationResponse
 }
+
+export type ProjectGSCSiteResponse = {
+  site_url: string
+  permission_level?: string
+  match_score?: number
+}
+
+export type ProjectGSCStatusResponse = {
+  has_google_connection: boolean
+  google_connection_id?: string
+  google_account_email?: string
+  google_status?: string
+  needs_reconnect: boolean
+  can_manage_connection: boolean
+  connected: boolean
+  selected_site?: ProjectGSCSiteResponse
+  available_sites: ProjectGSCSiteResponse[]
+  token_error?: string
+}
+
+export type GSCMetricSummaryResponse = {
+  current: number
+  previous: number
+}
+
+export type GSCOverviewSummaryResponse = {
+  clicks: GSCMetricSummaryResponse
+  impressions: GSCMetricSummaryResponse
+  ctr: GSCMetricSummaryResponse
+  position: GSCMetricSummaryResponse
+}
+
+export type GSCSearchAnalyticsRowResponse = {
+  date?: string
+  query?: string
+  page?: string
+  country?: string
+  device?: string
+  clicks: number
+  impressions: number
+  ctr: number
+  position: number
+}
+
+export type GSCOverviewWindowResponse = {
+  range: {
+    current_start: string
+    current_end: string
+    previous_start: string
+    previous_end: string
+  }
+  summary: GSCOverviewSummaryResponse
+  trend: GSCSearchAnalyticsRowResponse[]
+  top_queries: GSCSearchAnalyticsRowResponse[]
+  top_pages: GSCSearchAnalyticsRowResponse[]
+  country_breakdown: GSCSearchAnalyticsRowResponse[]
+  device_breakdown: GSCSearchAnalyticsRowResponse[]
+  opportunities: {
+    low_ctr_queries: GSCSearchAnalyticsRowResponse[]
+    striking_distance_queries: GSCSearchAnalyticsRowResponse[]
+    question_queries: GSCSearchAnalyticsRowResponse[]
+  }
+}
+
+export type ProjectGSCOverviewResponse = {
+  project_id: string
+  site_url: string
+  permission_level?: string
+  google_connection: string
+  overview: {
+    history_days: number
+    windows: Record<string, GSCOverviewWindowResponse>
+  }
+}

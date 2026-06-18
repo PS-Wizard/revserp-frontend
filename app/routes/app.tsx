@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Link, useLoaderData, useRevalidator } from "react-router"
+import { useLoaderData, useRevalidator } from "react-router"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { ChartAreaInteractive } from "~/components/chart-area-interactive"
@@ -10,6 +10,8 @@ import {
   type CrawlBreakdown,
 } from "~/components/pillar-audit-view"
 import { SectionCards } from "~/components/section-cards"
+import { RevserpAIView } from "~/components/revserp-ai-view"
+import { SearchConsoleView } from "~/components/search-console-view"
 import {
   Card,
   CardContent,
@@ -126,6 +128,10 @@ export default function AppPage() {
   )
   const currentCrawl = sortedCompletedCrawls[0] ?? null
   const previousCrawl = sortedCompletedCrawls[1] ?? null
+  const activeOrganization = me.organizations.find(
+    (organization) => organization.id === me.active_org_id
+  )
+  const isOrganizationOwner = activeOrganization?.role === "owner"
 
   useEffect(() => {
     if (!isCrawlRunning) {
@@ -252,6 +258,13 @@ export default function AppPage() {
             </div>
           ) : null}
         </div>
+      ) : view === "search-console" ? (
+        <SearchConsoleView
+          activeProject={activeProject}
+          isOrganizationOwner={isOrganizationOwner}
+        />
+      ) : view === "revserp-ai" ? (
+        <RevserpAIView breakdown={currentBreakdown} />
       ) : (
         <div className="p-6">
           <Card>
@@ -262,13 +275,7 @@ export default function AppPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-              <p>
-                Signed in as <span className="font-medium text-foreground">{me.user.email}</span>
-              </p>
               <p>Current section: {viewLabels[view]}</p>
-              <Link className="underline underline-offset-4" to="/">
-                Back home
-              </Link>
             </CardContent>
           </Card>
         </div>
