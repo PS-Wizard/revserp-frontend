@@ -263,8 +263,8 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
   }
 
   return (
-    <section className="flex h-[calc(100svh-4.5rem)] min-h-0 flex-col overflow-hidden px-4 pb-6 pt-5 sm:px-6 lg:px-4">
-      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto pb-6">
+    <section className="flex h-[calc(100svh-4.5rem)] min-h-0 flex-col overflow-hidden px-4 pt-5 sm:px-6 lg:px-4">
+      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
             <div>

@@ -35,6 +35,25 @@ export type ProjectResponse = {
   base_url: string
 }
 
+export type ProjectBusinessProfileResponse = {
+  id: string
+  project_id: string
+  brand_name: string
+  website_url: string
+  primary_category?: string
+  primary_location?: string
+  business_description?: string
+  seed_prompts: string[]
+  created_at: string
+  updated_at: string
+}
+
+export type ProjectBusinessProfileStatusResponse = {
+  has_profile: boolean
+  can_manage_profile: boolean
+  business_profile?: ProjectBusinessProfileResponse
+}
+
 export type ProjectsResponse = {
   projects: ProjectResponse[]
 }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
+  Building2Icon,
   CheckIcon,
   ChevronsUpDownIcon,
   CopyIcon,
@@ -16,9 +17,16 @@ import {
   UsersIcon,
 } from "lucide-react"
 
-import { buildApiUrl, clientApiDelete, clientApiPost } from "~/lib/api"
+import { buildApiUrl, clientApiDelete, clientApiFetch, clientApiPost, clientApiPut } from "~/lib/api"
 import { clearSupabaseBrowserSession } from "~/lib/auth.client"
-import type { CrawlResponse, CreateOrganizationInviteResponse, MeResponse, ProjectResponse } from "~/lib/api.types"
+import type {
+  CrawlResponse,
+  CreateOrganizationInviteResponse,
+  MeResponse,
+  ProjectBusinessProfileResponse,
+  ProjectBusinessProfileStatusResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
 import { Button } from "~/components/ui/button"
 import { CompileLoader } from "~/components/compile-loader"
@@ -52,6 +60,14 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog"
 import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "~/components/ui/drawer"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -73,6 +89,7 @@ import {
   FieldLabel,
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
+import { Textarea } from "~/components/ui/textarea"
 import {
   Popover,
   PopoverContent,
@@ -137,6 +154,18 @@ export function AppNavbar({
   const [exportFormat, setExportFormat] = useState<ExportFormat>("xlsx")
   const [crawlPendingDelete, setCrawlPendingDelete] = useState<CrawlResponse | null>(null)
   const [isDeleteCrawlOpen, setIsDeleteCrawlOpen] = useState(false)
+  const [businessProfileProject, setBusinessProfileProject] = useState<ProjectResponse | null>(null)
+  const [businessProfileStatus, setBusinessProfileStatus] = useState<ProjectBusinessProfileStatusResponse | null>(null)
+  const [brandName, setBrandName] = useState("")
+  const [websiteUrl, setWebsiteUrl] = useState("")
+  const [primaryCategory, setPrimaryCategory] = useState("")
+  const [primaryLocation, setPrimaryLocation] = useState("")
+  const [businessDescription, setBusinessDescription] = useState("")
+  const [seedPrompts, setSeedPrompts] = useState(["", "", "", "", ""])
+  const [businessProfileError, setBusinessProfileError] = useState("")
+  const [businessProfileSuccess, setBusinessProfileSuccess] = useState("")
+  const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] = useState(false)
+  const [isSavingBusinessProfile, setIsSavingBusinessProfile] = useState(false)
   const [profileActionError, setProfileActionError] = useState("")
   const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false)
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
@@ -174,6 +203,9 @@ export function AppNavbar({
     organizations[0] ??
     null
   const isActiveOrganizationOwner = activeOrganization?.role === "owner"
+  const canManageBusinessProfile = businessProfileStatus?.can_manage_profile === true
+  const businessProfileFieldsDisabled =
+    isLoadingBusinessProfile || isSavingBusinessProfile || !canManageBusinessProfile
 
   async function handleSelectProject(projectId: string, crawlId?: string) {
     setIsProjectMenuOpen(false)
@@ -307,6 +339,86 @@ export function AppNavbar({
     setProjectActionError("")
     setProjectPendingDelete(project)
     setIsDeleteProjectOpen(true)
+  }
+
+  async function openBusinessProfileDrawer(project: ProjectResponse) {
+    setProjectActionError("")
+    setBusinessProfileProject(project)
+    setBusinessProfileStatus(null)
+    setBusinessProfileError("")
+    setBusinessProfileSuccess("")
+    applyBusinessProfile(undefined, project)
+    setIsProjectMenuOpen(false)
+    setIsLoadingBusinessProfile(true)
+
+    try {
+      const status = await clientApiFetch<ProjectBusinessProfileStatusResponse>(
+        `/projects/${project.id}/business-profile`
+      )
+      setBusinessProfileStatus(status)
+      applyBusinessProfile(status.business_profile, project)
+    } catch (error) {
+      setBusinessProfileError(
+        error instanceof Error ? error.message : "Unable to load business profile."
+      )
+    } finally {
+      setIsLoadingBusinessProfile(false)
+    }
+  }
+
+  function applyBusinessProfile(
+    profile: ProjectBusinessProfileResponse | undefined,
+    project: ProjectResponse
+  ) {
+    setBrandName(profile?.brand_name ?? "")
+    setWebsiteUrl(profile?.website_url?.trim() || project.base_url)
+    setPrimaryCategory(profile?.primary_category ?? "")
+    setPrimaryLocation(profile?.primary_location ?? "")
+    setBusinessDescription(profile?.business_description ?? "")
+    setSeedPrompts(Array.from({ length: 5 }, (_, index) => profile?.seed_prompts?.[index] ?? ""))
+  }
+
+  function updateSeedPrompt(index: number, value: string) {
+    setSeedPrompts((current) =>
+      current.map((prompt, promptIndex) => (promptIndex === index ? value : prompt))
+    )
+  }
+
+  async function handleSaveBusinessProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!businessProfileProject || !businessProfileStatus?.can_manage_profile || isSavingBusinessProfile) {
+      return
+    }
+
+    setBusinessProfileError("")
+    setBusinessProfileSuccess("")
+    setIsSavingBusinessProfile(true)
+
+    try {
+      const profile = await clientApiPut<ProjectBusinessProfileResponse>(
+        `/projects/${businessProfileProject.id}/business-profile`,
+        {
+          brand_name: brandName,
+          website_url: websiteUrl,
+          primary_category: primaryCategory,
+          primary_location: primaryLocation,
+          business_description: businessDescription,
+          seed_prompts: seedPrompts.map((prompt) => prompt.trim()).filter(Boolean),
+        }
+      )
+
+      setBusinessProfileStatus({
+        has_profile: true,
+        can_manage_profile: businessProfileStatus.can_manage_profile,
+        business_profile: profile,
+      })
+      applyBusinessProfile(profile, businessProfileProject)
+      setBusinessProfileProject(null)
+    } catch (error) {
+      setBusinessProfileError(error instanceof Error ? error.message : "Unable to save business profile.")
+    } finally {
+      setIsSavingBusinessProfile(false)
+    }
   }
 
   async function handleDeleteProject() {
@@ -755,6 +867,11 @@ export function AppNavbar({
                       </ContextMenuTrigger>
                       <ContextMenuContent className="w-44">
                         <ContextMenuGroup>
+                          <ContextMenuItem onClick={() => void openBusinessProfileDrawer(project)}>
+                            <Building2Icon />
+                            Business profile
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
                           <ContextMenuItem
                             disabled={deletingProjectId !== null}
                             onClick={() => openDeleteProjectDialog(project)}
@@ -810,6 +927,150 @@ export function AppNavbar({
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Drawer
+        direction="bottom"
+        onOpenChange={(open) => {
+          if (!open) {
+            setBusinessProfileProject(null)
+            setBusinessProfileStatus(null)
+            setBusinessProfileError("")
+            setBusinessProfileSuccess("")
+          }
+        }}
+        open={businessProfileProject !== null}
+      >
+        <DrawerContent className="max-h-[88vh]">
+          <form className="mx-auto flex w-full max-w-5xl min-h-0 flex-col" onSubmit={handleSaveBusinessProfile}>
+            <DrawerHeader>
+              <DrawerTitle>Business profile</DrawerTitle>
+              <DrawerDescription>
+                {businessProfileProject
+                  ? `${businessProfileProject.name} business context for AI audits.`
+                  : "Project business context for AI audits."}
+              </DrawerDescription>
+            </DrawerHeader>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+              {isLoadingBusinessProfile ? (
+                <div className="flex min-h-72 items-center justify-center">
+                  <CompileLoader className="text-foreground" size={24} />
+                </div>
+              ) : (
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="business-brand-name">Brand name</FieldLabel>
+                    <Input
+                      disabled={businessProfileFieldsDisabled}
+                      id="business-brand-name"
+                      onChange={(event) => setBrandName(event.target.value)}
+                      placeholder="Revserp.ai"
+                      value={brandName}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel htmlFor="business-website-url">Website URL</FieldLabel>
+                    <Input
+                      disabled={businessProfileFieldsDisabled}
+                      id="business-website-url"
+                      onChange={(event) => setWebsiteUrl(event.target.value)}
+                      placeholder="https://revserp.ai"
+                      value={websiteUrl}
+                    />
+                  </Field>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field>
+                      <FieldLabel htmlFor="business-primary-category">Primary category</FieldLabel>
+                      <Input
+                        disabled={businessProfileFieldsDisabled}
+                        id="business-primary-category"
+                        onChange={(event) => setPrimaryCategory(event.target.value)}
+                        placeholder="SEO software"
+                        value={primaryCategory}
+                      />
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="business-primary-location">Primary location</FieldLabel>
+                      <Input
+                        disabled={businessProfileFieldsDisabled}
+                        id="business-primary-location"
+                        onChange={(event) => setPrimaryLocation(event.target.value)}
+                        placeholder="United States"
+                        value={primaryLocation}
+                      />
+                    </Field>
+                  </div>
+
+                  <Field>
+                    <FieldLabel htmlFor="business-description">Business description</FieldLabel>
+                    <Textarea
+                      className="min-h-32 resize-none"
+                      disabled={businessProfileFieldsDisabled}
+                      id="business-description"
+                      onChange={(event) => setBusinessDescription(event.target.value)}
+                      placeholder="Describe the business, audience, products, services, and positioning..."
+                      value={businessDescription}
+                    />
+                  </Field>
+
+                  <Field>
+                    <FieldLabel>Seed prompts</FieldLabel>
+                    <FieldDescription>
+                      Starting prompts used for AI audits. Fill up to 5 prompts.
+                    </FieldDescription>
+                    <div className="grid gap-3">
+                      {seedPrompts.map((prompt, index) => (
+                        <Input
+                          disabled={businessProfileFieldsDisabled}
+                          key={index}
+                          onChange={(event) => updateSeedPrompt(index, event.target.value)}
+                          placeholder={`Enter prompt ${index + 1}...`}
+                          value={prompt}
+                        />
+                      ))}
+                    </div>
+                  </Field>
+
+                  {!canManageBusinessProfile ? (
+                    <p className="text-sm text-muted-foreground">
+                      View-only access. Workspace owners can update this profile.
+                    </p>
+                  ) : null}
+                </FieldGroup>
+              )}
+
+              {businessProfileError ? (
+                <p className="pt-4 text-sm text-destructive">{businessProfileError}</p>
+              ) : null}
+              {businessProfileSuccess ? (
+                <p className="pt-4 text-sm text-emerald-400">{businessProfileSuccess}</p>
+              ) : null}
+            </div>
+
+            <DrawerFooter className="mx-auto w-full max-w-5xl flex-row justify-end border-t border-border/50">
+              <Button
+                onClick={() => setBusinessProfileProject(null)}
+                type="button"
+                variant="outline"
+              >
+                Close
+              </Button>
+              <Button
+                disabled={!canManageBusinessProfile || isLoadingBusinessProfile || isSavingBusinessProfile}
+                type="submit"
+              >
+                {isSavingBusinessProfile ? (
+                  <CompileLoader className="text-primary-foreground" size={18} />
+                ) : null}
+                {isSavingBusinessProfile ? "Saving..." : "Save profile"}
+              </Button>
+            </DrawerFooter>
+          </form>
+        </DrawerContent>
+      </Drawer>
 
       <Dialog onOpenChange={setIsCreateProjectOpen} open={isCreateProjectOpen}>
         <DialogContent>

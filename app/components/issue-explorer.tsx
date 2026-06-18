@@ -314,15 +314,9 @@ export function IssueExplorer({
 
   return (
     <div className="px-4 pb-24 lg:px-6 lg:pb-32">
-      <div className="mb-4 flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-xl font-semibold text-foreground">Issues</h2>
-          <p className="text-sm text-muted-foreground">
-            Multi-select pillars, buckets, and issue types to combine results.
-          </p>
-        </div>
-        <div className="ml-auto inline-flex w-fit flex-col rounded-lg border border-border/70 p-[3px]">
-          <div className="flex flex-wrap items-center gap-1.5 rounded-md bg-background/80 px-2 py-1.5">
+      <div className="mb-4 flex w-full items-start justify-between gap-4">
+        <div className="inline-flex flex-col rounded-lg border border-foreground/20 bg-muted/95 p-[3px] shadow-2xl shadow-black/40 backdrop-blur-md">
+            <div className="flex flex-wrap items-center gap-1 rounded-md px-1.5 py-1">
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
@@ -386,6 +380,14 @@ export function IssueExplorer({
             </Breadcrumb>
           </div>
         </div>
+        <TablePagination
+          pageIndex={hasSelectedIssueTypes ? issueUrlPageIndex : issueTypePageIndex}
+          pageSize={hasSelectedIssueTypes ? issueUrlPageSize : issueTypePageSize}
+          rowLabel={hasSelectedIssueTypes ? "URLs" : "issue types"}
+          setPageIndex={hasSelectedIssueTypes ? setIssueUrlPageIndex : setIssueTypePageIndex}
+          setPageSize={hasSelectedIssueTypes ? setIssueUrlPageSize : setIssueTypePageSize}
+          totalRows={hasSelectedIssueTypes ? mergedIssueUrls.length : issueTypeRows.length}
+        />
       </div>
 
       <div className="min-h-[32rem]">
@@ -418,15 +420,6 @@ export function IssueExplorer({
           />
         )}
       </div>
-
-      <TablePagination
-        pageIndex={hasSelectedIssueTypes ? issueUrlPageIndex : issueTypePageIndex}
-        pageSize={hasSelectedIssueTypes ? issueUrlPageSize : issueTypePageSize}
-        rowLabel={hasSelectedIssueTypes ? "URLs" : "issue types"}
-        setPageIndex={hasSelectedIssueTypes ? setIssueUrlPageIndex : setIssueTypePageIndex}
-        setPageSize={hasSelectedIssueTypes ? setIssueUrlPageSize : setIssueTypePageSize}
-        totalRows={hasSelectedIssueTypes ? mergedIssueUrls.length : issueTypeRows.length}
-      />
     </div>
   )
 }
@@ -460,7 +453,7 @@ function ScopeMultiMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button size="sm" variant="ghost" className="h-8 rounded-md bg-transparent px-2 text-foreground hover:bg-background/80" />}
+        render={<Button size="xs" variant="ghost" className="h-7 rounded-md bg-transparent px-1.5 text-foreground hover:bg-background/80" />}
       >
         {label}
         <ChevronDownIcon data-icon="inline-end" />

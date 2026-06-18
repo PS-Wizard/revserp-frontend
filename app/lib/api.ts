@@ -39,6 +39,14 @@ export function clientApiPost<T>(path: string, body: unknown) {
   })
 }
 
+export function clientApiPut<T>(path: string, body: unknown) {
+  return clientApiFetch<T>(path, {
+    method: "PUT",
+    headers: new Headers({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  })
+}
+
 export function clientApiDelete<T>(path: string) {
   return clientApiFetch<T>(path, {
     method: "DELETE",

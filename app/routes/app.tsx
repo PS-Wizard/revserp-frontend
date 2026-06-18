@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useLoaderData, useLocation, useRevalidator } from "react-router"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
-import { ChartAreaInteractive } from "~/components/chart-area-interactive"
+import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { CompileLoader } from "~/components/compile-loader"
 import { IssueExplorer } from "~/components/issue-explorer"
 import {
@@ -10,6 +10,7 @@ import {
   type CrawlBreakdown,
 } from "~/components/pillar-audit-view"
 import { SectionCards } from "~/components/section-cards"
+import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpAIView } from "~/components/revserp-ai-view"
 import { SearchConsoleView } from "~/components/search-console-view"
 import {
@@ -19,6 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
+import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { serverApiFetch } from "~/lib/api"
 import type {
@@ -230,8 +232,19 @@ export default function AppPage() {
               className="gap-6"
             >
               <TabsContent value="summary" className="flex flex-col gap-4 md:gap-6">
-                <div className="px-4 lg:px-6">
-                  <ChartAreaInteractive
+                <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
+                  <ScoreRadialChart
+                    centerLabel="Overall"
+                    centerValue={currentCrawl?.overall_score}
+                    description="Current crawl pillar scores"
+                    segments={[
+                      { key: "seo", label: "SEO", value: currentCrawl?.seo_score },
+                      { key: "aeo", label: "AEO", value: currentCrawl?.aeo_score },
+                      { key: "pagespeed", label: "PageSpeed", value: currentCrawl?.pagespeed_score },
+                    ]}
+                    title="Overall Score"
+                  />
+                  <SummaryScoreHistoryChart
                     activeProjectName={activeProject?.name}
                     crawls={sortedCompletedCrawls}
                   />
@@ -241,6 +254,9 @@ export default function AppPage() {
                   currentCrawl={currentCrawl}
                   previousCrawl={previousCrawl}
                 />
+                <div className="px-4 lg:px-6">
+                  <Separator />
+                </div>
                 <IssueExplorer breakdown={currentBreakdown} />
               </TabsContent>
 

@@ -1,9 +1,10 @@
 "use client"
 
 import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
+import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { Badge } from "~/components/ui/badge"
 import {
   Card,
@@ -14,14 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import {
-  ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from "~/components/ui/chart"
+import { Separator } from "~/components/ui/separator"
 import type {
   CrawlResponse,
   ScoreBreakdownBucketResponse,
@@ -49,133 +43,40 @@ export function PillarAuditView({
   pillarId,
   title,
 }: PillarAuditViewProps) {
+  const currentPillar = currentBreakdown?.pillars.find((pillar) => pillar.id === pillarId)
+  const radialSegments =
+    currentPillar?.buckets.map((bucket) => ({
+      key: bucket.id,
+      label: bucket.label,
+      value: bucket.score,
+    })) ?? []
+
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      <div className="px-4 lg:px-6">
-        <BucketScoreHistory
+      <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
+        <ScoreRadialChart
+          centerLabel={title}
+          centerValue={currentPillar?.score}
+          description="Current crawl bucket scores"
+          segments={radialSegments}
+          title={`${title} Score`}
+        />
+        <BucketScoreHistoryChart
           activeProjectName={activeProjectName}
           crawlBreakdowns={crawlBreakdowns}
           pillarId={pillarId}
           title={title}
         />
       </div>
+      <div className="px-4 lg:px-6">
+        <Separator />
+      </div>
       <BucketScoreCards crawlBreakdowns={crawlBreakdowns} pillarId={pillarId} />
+      <div className="px-4 lg:px-6">
+        <Separator />
+      </div>
       <IssueExplorer breakdown={currentBreakdown} initialPillarId={pillarId} />
     </div>
-  )
-}
-
-function BucketScoreHistory({
-  activeProjectName,
-  crawlBreakdowns,
-  pillarId,
-  title,
-}: {
-  activeProjectName?: string
-  crawlBreakdowns: CrawlBreakdown[]
-  pillarId: string
-  title: string
-}) {
-  const chronologicalBreakdowns = [...crawlBreakdowns].reverse()
-  const buckets = getLatestPillarBuckets(crawlBreakdowns, pillarId)
-  const chartConfig = buildChartConfig(buckets)
-  const chartData = chronologicalBreakdowns.map(({ crawl, breakdown }) => {
-    const pillar = breakdown.pillars.find((item) => item.id === pillarId)
-    const timestamp = crawl.completed_at ?? crawl.created_at
-
-    return {
-      timestamp,
-      ...Object.fromEntries(
-        buckets.map((bucket) => [
-          getBucketDataKey(bucket.id),
-          pillar?.buckets.find((item) => item.id === bucket.id)?.score ?? null,
-        ])
-      ),
-    }
-  })
-
-  return (
-    <Card className="@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
-      <CardHeader>
-        <CardTitle>{title} Score History</CardTitle>
-        <CardDescription>
-          {activeProjectName
-            ? `Bucket trends for ${activeProjectName}`
-            : "Bucket trends from recent completed crawls"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        {chartData.length === 0 || buckets.length === 0 ? (
-          <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
-            No completed bucket history yet.
-          </div>
-        ) : (
-          <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
-            <AreaChart data={chartData}>
-              <defs>
-                {buckets.map((bucket, index) => (
-                  <linearGradient
-                    id={`fill-${pillarId}-${bucket.id}`}
-                    key={bucket.id}
-                    x1="0"
-                    x2="0"
-                    y1="0"
-                    y2="1"
-                  >
-                    <stop offset="5%" stopColor={getChartColor(index)} stopOpacity={0.28} />
-                    <stop offset="95%" stopColor={getChartColor(index)} stopOpacity={0.02} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid vertical={false} />
-              <XAxis
-                axisLine={false}
-                dataKey="timestamp"
-                minTickGap={24}
-                tickFormatter={formatAxisDateTime}
-                tickLine={false}
-                tickMargin={8}
-              />
-              <YAxis
-                axisLine={false}
-                domain={[0, 100]}
-                tickFormatter={(value) => `${value}%`}
-                tickLine={false}
-                width={44}
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    indicator="line"
-                    formatter={(value, name) => (
-                      <>
-                        <span className="text-muted-foreground">
-                          {String(name).replace(/^bucket_/, "")}
-                        </span>
-                        <span className="font-mono font-medium text-foreground tabular-nums">
-                          {typeof value === "number" ? `${Math.round(value)}%` : String(value)}
-                        </span>
-                      </>
-                    )}
-                    labelFormatter={(value) => formatTooltipDateTime(String(value))}
-                  />
-                }
-              />
-              <ChartLegend content={<ChartLegendContent />} />
-              {buckets.map((bucket, index) => (
-                <Area
-                  dataKey={getBucketDataKey(bucket.id)}
-                  fill={`url(#fill-${pillarId}-${bucket.id})`}
-                  key={bucket.id}
-                  stroke={getChartColor(index)}
-                  type="monotone"
-                />
-              ))}
-            </AreaChart>
-          </ChartContainer>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 
@@ -313,25 +214,6 @@ function getLatestPillarBuckets(crawlBreakdowns: CrawlBreakdown[], pillarId: str
   )
 }
 
-function buildChartConfig(buckets: ScoreBreakdownBucketResponse[]) {
-  return Object.fromEntries(
-    buckets.map((bucket, index) => [
-      getBucketDataKey(bucket.id),
-      {
-        label: bucket.label,
-        color: getChartColor(index),
-      },
-    ])
-  ) satisfies ChartConfig
-}
-
-function getBucketDataKey(bucketId: string) {
-  return `bucket_${bucketId.replace(/[^a-zA-Z0-9_]/g, "_")}`
-}
-
-function getChartColor(index: number) {
-  return `var(--chart-${(index % 5) + 1})`
-}
 
 function getTrendLabel(delta: number | null) {
   if (delta === null || delta === 0) {
@@ -372,21 +254,3 @@ function formatScore(value: number | undefined) {
   return value === undefined ? "—" : `${Math.round(value)}%`
 }
 
-function formatAxisDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value))
-}
-
-function formatTooltipDateTime(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value))
-}
