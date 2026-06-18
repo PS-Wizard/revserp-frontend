@@ -145,23 +145,37 @@ export default function AppPage() {
   )
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
 
+  const crawlsDataKey = useMemo(
+    () =>
+      recentCrawls
+        .map(
+          (c) => `${c.id}:${c.status}:${c.overall_score ?? ""}:${c.seo_score ?? ""}:${c.aeo_score ?? ""}:${c.pagespeed_score ?? ""}`
+        )
+        .join("|"),
+    [recentCrawls]
+  )
   const sortedCrawls = useMemo(
     () =>
       [...recentCrawls].sort(
         (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       ),
-    [recentCrawls]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [crawlsDataKey]
   )
-  const activeRunningCrawl =
-    sortedCrawls.find(
-      (crawl) => crawl.status === "queued" || crawl.status === "running"
-    ) ?? null
-  const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
-  const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
+  const sortedCompletedCrawls = useMemo(
+    () => sortedCrawls.filter((crawl) => crawl.status === "completed"),
+    [sortedCrawls]
+  )
+  const breakdownsDataKey = useMemo(
+    () =>
+      crawlBreakdowns
+        .map(
+          (item) => `${item.crawl.id}:${item.breakdown.overall_score ?? ""}:${item.breakdown.pillars.map((p) => `${p.id}:${p.score}`).join(",")}`
+        )
+        .join("|"),
+    [crawlBreakdowns]
+  )
   const selectedCrawlId = new URLSearchParams(location.search).get("crawl")
-  const sortedCompletedCrawls = sortedCrawls.filter(
-    (crawl) => crawl.status === "completed"
-  )
   const currentCrawl =
     sortedCrawls.find((crawl) => crawl.id === selectedCrawlId) ??
     sortedCompletedCrawls[0] ??
@@ -175,6 +189,24 @@ export default function AppPage() {
     (organization) => organization.id === me.active_org_id
   )
   const isOrganizationOwner = activeOrganization?.role === "owner"
+
+  const stableCrawlBreakdowns = useMemo(
+    () => crawlBreakdowns,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [breakdownsDataKey]
+  )
+  const stableBreakdown = useMemo(
+    () => currentBreakdown,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [breakdownsDataKey]
+  )
+
+  const activeRunningCrawl =
+    sortedCrawls.find(
+      (crawl) => crawl.status === "queued" || crawl.status === "running"
+    ) ?? null
+  const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
+  const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
 
   useEffect(() => {
     if (!isCrawlRunning) {
@@ -257,14 +289,14 @@ export default function AppPage() {
                 <div className="px-4 lg:px-6">
                   <Separator />
                 </div>
-                <IssueExplorer breakdown={currentBreakdown} />
+                <IssueExplorer breakdown={stableBreakdown} />
               </TabsContent>
 
               <TabsContent value="seo">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={crawlBreakdowns}
-                  currentBreakdown={currentBreakdown}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  currentBreakdown={stableBreakdown}
                   pillarId="seo"
                   title="SEO"
                 />
@@ -273,8 +305,8 @@ export default function AppPage() {
               <TabsContent value="aeo">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={crawlBreakdowns}
-                  currentBreakdown={currentBreakdown}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  currentBreakdown={stableBreakdown}
                   pillarId="aeo"
                   title="AEO"
                 />
@@ -283,8 +315,8 @@ export default function AppPage() {
               <TabsContent value="pagespeed">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={crawlBreakdowns}
-                  currentBreakdown={currentBreakdown}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  currentBreakdown={stableBreakdown}
                   pillarId="pagespeed"
                   title="PageSpeed"
                 />
@@ -324,7 +356,7 @@ export default function AppPage() {
           isOrganizationOwner={isOrganizationOwner}
         />
       ) : view === "revserp-ai" ? (
-        <RevserpAIView breakdown={currentBreakdown} />
+        <RevserpAIView breakdown={stableBreakdown} />
       ) : (
         <div className="p-6">
           <Card>
