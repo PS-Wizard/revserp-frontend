@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
 
 import { ApiError, clientApiPost } from "~/lib/api"
 import type {
@@ -145,12 +145,20 @@ export function GSCOverview({
           ? countryRows
           : deviceRows
   const activeTableRows = sortTableRows(filterTableRows(activeTableSourceRows, tableSearch), tableSort)
-  const chartSeries = buildChartSeries(
-    selectedWindowOverview,
-    chartMetricOrder,
-    metricConfig,
-    dateTimestamp
+  const chartSeries = useMemo(
+    () =>
+      buildChartSeries(
+        selectedWindowOverview,
+        chartMetricOrder,
+        metricConfig,
+        dateTimestamp
+      ),
+    [selectedWindowOverview]
   )
+
+  const handleChartZoomRange = useCallback((start: number, end: number) => {
+    setVisibleRange({ start, end })
+  }, [])
 
 
   const handleRefreshOverview = async () => {
@@ -223,7 +231,7 @@ export function GSCOverview({
             chartMetricOrder={chartMetricOrder}
             chartSeries={chartSeries}
             metricConfig={metricConfig}
-            onChartZoomRange={(start, end) => setVisibleRange({ start, end })}
+            onChartZoomRange={handleChartZoomRange}
             visibleMetrics={visibleMetrics}
             visibleRangeLabel={visibleRangeLabel}
             visibleTrendRowCount={currentVisibleTrendRows.length}
