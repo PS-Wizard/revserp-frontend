@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useLoaderData, useRevalidator } from "react-router"
+import { useLoaderData, useLocation, useRevalidator } from "react-router"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { ChartAreaInteractive } from "~/components/chart-area-interactive"
@@ -40,27 +40,55 @@ export async function loader({ request }: { request: Request }) {
 
   const requestUrl = new URL(request.url)
   const requestedProjectId = requestUrl.searchParams.get("project")
+  const requestedCrawlId = requestUrl.searchParams.get("crawl")
   const activeProject =
     projectsResponse.projects.find((project) => project.id === requestedProjectId) ??
     projectsResponse.projects[0] ??
     null
 
+  let projectCrawls: Record<string, CrawlResponse[]> = {}
   let recentCrawls: CrawlResponse[] = []
   let currentBreakdown: ScoreBreakdownResponse | null = null
   let crawlBreakdowns: CrawlBreakdown[] = []
 
-  if (activeProject) {
-    const crawlsResponse = await serverApiFetch<CrawlsResponse>(
-      `/projects/${activeProject.id}/crawls?limit=20&offset=0`,
-      request
+  if (projectsResponse.projects.length > 0) {
+    const projectCrawlResults = await Promise.allSettled(
+      projectsResponse.projects.map(async (project) => {
+        const crawlsResponse = await serverApiFetch<CrawlsResponse>(
+          `/projects/${project.id}/crawls?limit=50&offset=0`,
+          request
+        )
+
+        return [project.id, crawlsResponse.crawls] as const
+      })
     )
-    recentCrawls = crawlsResponse.crawls
+
+    projectCrawls = Object.fromEntries(
+      projectCrawlResults.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : []
+      )
+    )
+  }
+
+  if (activeProject) {
+    recentCrawls = projectCrawls[activeProject.id] ?? []
 
     const sortedCompletedCrawls = [...recentCrawls]
       .filter((crawl) => crawl.status === "completed")
       .sort((left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left))
+    const selectedCompletedCrawl =
+      sortedCompletedCrawls.find((crawl) => crawl.id === requestedCrawlId) ??
+      sortedCompletedCrawls[0] ??
+      null
+    const breakdownSourceCrawls = selectedCompletedCrawl
+      ? [
+          selectedCompletedCrawl,
+          ...sortedCompletedCrawls.filter((crawl) => crawl.id !== selectedCompletedCrawl.id),
+        ]
+      : sortedCompletedCrawls
+
     const breakdownResults = await Promise.allSettled(
-      sortedCompletedCrawls.map(async (crawl) => ({
+      breakdownSourceCrawls.map(async (crawl) => ({
         crawl,
         breakdown: await serverApiFetch<ScoreBreakdownResponse>(
           `/crawls/${crawl.id}/score-breakdown`,
@@ -72,7 +100,9 @@ export async function loader({ request }: { request: Request }) {
     crawlBreakdowns = breakdownResults.flatMap((result) =>
       result.status === "fulfilled" ? [result.value] : []
     )
-    currentBreakdown = crawlBreakdowns[0]?.breakdown ?? null
+    currentBreakdown =
+      crawlBreakdowns.find((item) => item.crawl.id === selectedCompletedCrawl?.id)
+        ?.breakdown ?? null
   }
 
   return {
@@ -80,6 +110,7 @@ export async function loader({ request }: { request: Request }) {
     projects: projectsResponse.projects,
     activeProject,
     recentCrawls,
+    projectCrawls,
     currentBreakdown,
     crawlBreakdowns,
   }
@@ -90,6 +121,7 @@ type AppLoaderData = {
   projects: ProjectResponse[]
   activeProject: ProjectResponse | null
   recentCrawls: CrawlResponse[]
+  projectCrawls: Record<string, CrawlResponse[]>
   currentBreakdown: ScoreBreakdownResponse | null
   crawlBreakdowns: CrawlBreakdown[]
 }
@@ -101,9 +133,10 @@ const viewLabels: Record<DashboardView, string> = {
 }
 
 export default function AppPage() {
-  const { me, projects, activeProject, recentCrawls, currentBreakdown, crawlBreakdowns } =
+  const { me, projects, activeProject, projectCrawls, recentCrawls, currentBreakdown, crawlBreakdowns } =
     useLoaderData() as AppLoaderData
   const revalidator = useRevalidator()
+  const location = useLocation()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<"summary" | "seo" | "aeo" | "pagespeed">(
     "summary"
@@ -123,11 +156,19 @@ export default function AppPage() {
     ) ?? null
   const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
   const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
+  const selectedCrawlId = new URLSearchParams(location.search).get("crawl")
   const sortedCompletedCrawls = sortedCrawls.filter(
     (crawl) => crawl.status === "completed"
   )
-  const currentCrawl = sortedCompletedCrawls[0] ?? null
-  const previousCrawl = sortedCompletedCrawls[1] ?? null
+  const currentCrawl =
+    sortedCrawls.find((crawl) => crawl.id === selectedCrawlId) ??
+    sortedCompletedCrawls[0] ??
+    null
+  const currentCompletedIndex = sortedCompletedCrawls.findIndex(
+    (crawl) => crawl.id === currentCrawl?.id
+  )
+  const previousCrawl =
+    currentCompletedIndex >= 0 ? sortedCompletedCrawls[currentCompletedIndex + 1] ?? null : null
   const activeOrganization = me.organizations.find(
     (organization) => organization.id === me.active_org_id
   )
@@ -159,11 +200,14 @@ export default function AppPage() {
     <main className="min-h-svh bg-background text-foreground">
       <AppNavbar
         activeProjectId={activeProject?.id}
+        currentCrawl={currentCrawl}
+        projectCrawls={projectCrawls}
         isCrawlRunning={isCrawlRunning}
         onCrawlStart={() => setIsStartingCrawl(true)}
         onViewChange={setView}
         organizationId={me.active_org_id}
         projects={projects}
+        organizations={me.organizations}
         userEmail={me.user.email}
         userName={me.user.name}
         view={view}

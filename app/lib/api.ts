@@ -39,6 +39,12 @@ export function clientApiPost<T>(path: string, body: unknown) {
   })
 }
 
+export function clientApiDelete<T>(path: string) {
+  return clientApiFetch<T>(path, {
+    method: "DELETE",
+  })
+}
+
 export async function serverApiFetch<T>(
   path: string,
   request: Request,

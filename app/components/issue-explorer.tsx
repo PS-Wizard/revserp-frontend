@@ -68,6 +68,8 @@ type MergedIssueUrlRow = ScoreBreakdownIssueURLsResponse["urls"][number] & {
   source: string
 }
 
+const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
+
 export function IssueExplorer({
   breakdown,
   initialPillarId,
@@ -87,7 +89,7 @@ export function IssueExplorer({
   const [issueUrlsError, setIssueUrlsError] = useState("")
   const issueUrlsCacheRef = useRef(new Map<string, MergedIssueUrlRow[]>())
 
-  const pillarOptions = breakdown?.pillars ?? []
+  const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
 
   const selectedPillars = useMemo(() => {
     return pillarOptions.filter((pillar) => selectedPillarIds.includes(pillar.id))
@@ -131,13 +133,16 @@ export function IssueExplorer({
 
   useEffect(() => {
     if (!pillarOptions.length) {
-      setSelectedPillarIds([])
+      if (selectedPillarIds.length) {
+        setSelectedPillarIds([])
+      }
       return
     }
 
     if (initialPillarId && pillarOptions.some((pillar) => pillar.id === initialPillarId)) {
-      if (selectedPillarIds.length !== 1 || selectedPillarIds[0] !== initialPillarId) {
-        setSelectedPillarIds([initialPillarId])
+      const nextSelectedPillarIds = [initialPillarId]
+      if (!areStringArraysEqual(selectedPillarIds, nextSelectedPillarIds)) {
+        setSelectedPillarIds(nextSelectedPillarIds)
       }
       return
     }
@@ -147,18 +152,23 @@ export function IssueExplorer({
     )
 
     if (!nextSelectedPillarIds.length) {
-      setSelectedPillarIds([pillarOptions[0].id])
+      const fallbackPillarIds = [pillarOptions[0].id]
+      if (!areStringArraysEqual(selectedPillarIds, fallbackPillarIds)) {
+        setSelectedPillarIds(fallbackPillarIds)
+      }
       return
     }
 
-    if (nextSelectedPillarIds.length !== selectedPillarIds.length) {
+    if (!areStringArraysEqual(nextSelectedPillarIds, selectedPillarIds)) {
       setSelectedPillarIds(nextSelectedPillarIds)
     }
   }, [initialPillarId, pillarOptions, selectedPillarIds])
 
   useEffect(() => {
     if (!availableBucketScopes.length) {
-      setSelectedBucketKeys([])
+      if (selectedBucketKeys.length) {
+        setSelectedBucketKeys([])
+      }
       return
     }
 
@@ -167,15 +177,16 @@ export function IssueExplorer({
     )
 
     if (!nextSelectedBucketKeys.length) {
-      setSelectedBucketKeys(
-        initialPillarId
-          ? availableBucketScopes.map((bucketScope) => bucketScope.key)
-          : [availableBucketScopes[0].key]
-      )
+      const fallbackBucketKeys = initialPillarId
+        ? availableBucketScopes.map((bucketScope) => bucketScope.key)
+        : [availableBucketScopes[0].key]
+      if (!areStringArraysEqual(selectedBucketKeys, fallbackBucketKeys)) {
+        setSelectedBucketKeys(fallbackBucketKeys)
+      }
       return
     }
 
-    if (nextSelectedBucketKeys.length !== selectedBucketKeys.length) {
+    if (!areStringArraysEqual(nextSelectedBucketKeys, selectedBucketKeys)) {
       setSelectedBucketKeys(nextSelectedBucketKeys)
     }
   }, [availableBucketScopes, initialPillarId, selectedBucketKeys])
@@ -185,7 +196,7 @@ export function IssueExplorer({
       availableIssueScopes.some((issueScope) => issueScope.key === issueTypeKey)
     )
 
-    if (nextSelectedIssueTypeKeys.length !== selectedIssueTypeKeys.length) {
+    if (!areStringArraysEqual(nextSelectedIssueTypeKeys, selectedIssueTypeKeys)) {
       setSelectedIssueTypeKeys(nextSelectedIssueTypeKeys)
     }
   }, [availableIssueScopes, selectedIssueTypeKeys])
@@ -728,6 +739,14 @@ function SeverityBadge({ severity }: { severity: string }) {
 
 function formatPenalty(value: number) {
   return Number(value.toFixed(2)).toString()
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  return left.every((value, index) => value === right[index])
 }
 
 function getSelectionLabel(values: string[], fallback: string) {

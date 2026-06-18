@@ -12,6 +12,17 @@ export type MeResponse = {
   active_org_id: string
 }
 
+export type CreateOrganizationInviteResponse = {
+  id: string
+  organization_id: string
+  token: string
+  expires_at: string
+  max_uses: number
+  used_count: number
+  revoked_at?: string
+  created_at: string
+}
+
 export type SignupCompletedWithoutSessionResponse = {
   email: string
   signup_completed_without_session: true
