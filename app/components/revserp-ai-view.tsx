@@ -68,6 +68,24 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
   const [errorMessage, setErrorMessage] = useState("")
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const crawlId = breakdown?.crawl_id ?? ""
+  const previousCrawlIdRef = useRef(crawlId)
+  if (previousCrawlIdRef.current !== crawlId) {
+    previousCrawlIdRef.current = crawlId
+    setMessages(crawlId ? chatStateByCrawlId.get(crawlId) ?? [] : [])
+  }
+
+  const nextScopeState = getNextScopeState(
+    breakdown,
+    selectedPillarId,
+    selectedBucketIds,
+    selectedIssueTypeIds
+  )
+  if (nextScopeState) {
+    setSelectedPillarId(nextScopeState.pillarId)
+    setSelectedBucketIds(nextScopeState.bucketIds)
+    setSelectedIssueTypeIds(nextScopeState.issueTypeIds)
+  }
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const selectedPillar = useMemo(() => {
@@ -114,45 +132,6 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
     breakdown?.crawl_id && selectedPillar && selectedBuckets.length && prompt.trim() && !isSending
   )
 
-  useEffect(() => {
-    const crawlId = breakdown?.crawl_id
-    setMessages(crawlId ? chatStateByCrawlId.get(crawlId) ?? [] : [])
-  }, [breakdown?.crawl_id])
-
-  useEffect(() => {
-    if (!breakdown?.pillars.length) {
-      setSelectedPillarId("")
-      setSelectedBucketIds([])
-      setSelectedIssueTypeIds([])
-      return
-    }
-
-    if (!selectedPillar || selectedPillar.id !== selectedPillarId) {
-      const nextPillar = selectedPillar ?? breakdown.pillars[0]
-      setSelectedPillarId(nextPillar.id)
-      setSelectedBucketIds(nextPillar.buckets[0] ? [nextPillar.buckets[0].id] : [])
-      setSelectedIssueTypeIds([])
-      return
-    }
-
-    const validBucketIds = new Set(selectedPillar.buckets.map((bucket) => bucket.id))
-    const nextBucketIds = selectedBucketIds.filter((bucketId) => validBucketIds.has(bucketId))
-    if (!nextBucketIds.length && selectedPillar.buckets[0]) {
-      setSelectedBucketIds([selectedPillar.buckets[0].id])
-      setSelectedIssueTypeIds([])
-    } else if (nextBucketIds.length !== selectedBucketIds.length) {
-      setSelectedBucketIds(nextBucketIds)
-      setSelectedIssueTypeIds([])
-    }
-  }, [breakdown?.pillars, selectedBucketIds, selectedPillar, selectedPillarId])
-
-  useEffect(() => {
-    const validIssueTypeIds = new Set(availableIssueTypes.map((issueType) => issueType.id))
-    const nextIssueTypeIds = selectedIssueTypeIds.filter((issueTypeId) => validIssueTypeIds.has(issueTypeId))
-    if (nextIssueTypeIds.length !== selectedIssueTypeIds.length) {
-      setSelectedIssueTypeIds(nextIssueTypeIds)
-    }
-  }, [availableIssueTypes, selectedIssueTypeIds])
 
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({
@@ -506,4 +485,77 @@ function ScopeBreadcrumb({
 
 function persistMessages(crawlId: string, messages: RevserpAIMessage[]) {
   chatStateByCrawlId.set(crawlId, messages)
+}
+
+type AIScopeState = {
+  pillarId: string
+  bucketIds: string[]
+  issueTypeIds: string[]
+}
+
+function getNextScopeState(
+  breakdown: ScoreBreakdownResponse | null,
+  selectedPillarId: string,
+  selectedBucketIds: string[],
+  selectedIssueTypeIds: string[]
+): AIScopeState | null {
+  if (!breakdown?.pillars.length) {
+    if (!selectedPillarId && !selectedBucketIds.length && !selectedIssueTypeIds.length) {
+      return null
+    }
+
+    return { pillarId: "", bucketIds: [], issueTypeIds: [] }
+  }
+
+  const selectedPillar =
+    breakdown.pillars.find((pillar) => pillar.id === selectedPillarId) ?? breakdown.pillars[0]
+  const validBucketIds = new Set(selectedPillar.buckets.map((bucket) => bucket.id))
+  let nextBucketIds = selectedBucketIds.filter((bucketId) => validBucketIds.has(bucketId))
+
+  if (!nextBucketIds.length && selectedPillar.buckets[0]) {
+    nextBucketIds = [selectedPillar.buckets[0].id]
+  }
+
+  const nextBucketIdSet = new Set(nextBucketIds)
+  const validIssueTypeIds = new Set<string>()
+  for (const bucket of selectedPillar.buckets) {
+    if (!nextBucketIdSet.has(bucket.id)) {
+      continue
+    }
+
+    for (const issueType of bucket.issues) {
+      validIssueTypeIds.add(issueType.id)
+    }
+  }
+  const nextIssueTypeIds = selectedIssueTypeIds.filter((issueTypeId) =>
+    validIssueTypeIds.has(issueTypeId)
+  )
+
+  if (
+    selectedPillar.id === selectedPillarId &&
+    areStringArraysEqual(nextBucketIds, selectedBucketIds) &&
+    areStringArraysEqual(nextIssueTypeIds, selectedIssueTypeIds)
+  ) {
+    return null
+  }
+
+  return {
+    pillarId: selectedPillar.id,
+    bucketIds: nextBucketIds,
+    issueTypeIds: nextIssueTypeIds,
+  }
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+
+  return true
 }

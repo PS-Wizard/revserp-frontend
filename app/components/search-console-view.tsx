@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { GSCOverview } from "~/components/gsc-overview/gsc-overview"
 import { Button } from "~/components/ui/button"
@@ -43,9 +43,49 @@ export function SearchConsoleView({
   const [gscOverview, setGSCOverview] = useState<ProjectGSCOverviewResponse | null>(null)
   const requestKeyRef = useRef(0)
 
+  const loadGSCData = useCallback(async () => {
+    if (!activeProject) {
+      setGSCStatus(null)
+      setGSCOverview(null)
+      return
+    }
+
+    const requestKey = ++requestKeyRef.current
+    setIsLoadingGSC(true)
+    setGSCLoadErrorMessage("")
+    setGSCConnectErrorMessage("")
+    setGSCProjectSelectionErrorMessage("")
+
+    try {
+      const nextStatus = await clientApiFetch<ProjectGSCStatusResponse>(
+        `/projects/${activeProject.id}/gsc/status`
+      )
+      if (requestKey !== requestKeyRef.current) return
+
+      setGSCStatus(nextStatus)
+      setSelectedGSCSiteURL(nextStatus.selected_site?.site_url ?? "")
+      setGSCOverview(null)
+
+      if (nextStatus.has_google_connection && nextStatus.connected) {
+        const overview = await clientApiFetch<ProjectGSCOverviewResponse>(
+          `/projects/${activeProject.id}/gsc/overview`
+        )
+        if (requestKey === requestKeyRef.current) setGSCOverview(overview)
+      }
+    } catch (error) {
+      if (requestKey === requestKeyRef.current) {
+        setGSCLoadErrorMessage(
+          error instanceof ApiError ? error.message : "Unable to load Google Search Console data."
+        )
+      }
+    } finally {
+      if (requestKey === requestKeyRef.current) setIsLoadingGSC(false)
+    }
+  }, [activeProject])
+
   useEffect(() => {
     void loadGSCData()
-  }, [activeProject?.id])
+  }, [loadGSCData])
 
   async function handleStartGSCConnect() {
     if (!activeProject) return
@@ -89,45 +129,6 @@ export function SearchConsoleView({
     }
   }
 
-  async function loadGSCData() {
-    if (!activeProject) {
-      setGSCStatus(null)
-      setGSCOverview(null)
-      return
-    }
-
-    const requestKey = ++requestKeyRef.current
-    setIsLoadingGSC(true)
-    setGSCLoadErrorMessage("")
-    setGSCConnectErrorMessage("")
-    setGSCProjectSelectionErrorMessage("")
-
-    try {
-      const nextStatus = await clientApiFetch<ProjectGSCStatusResponse>(
-        `/projects/${activeProject.id}/gsc/status`
-      )
-      if (requestKey !== requestKeyRef.current) return
-
-      setGSCStatus(nextStatus)
-      setSelectedGSCSiteURL(nextStatus.selected_site?.site_url ?? "")
-      setGSCOverview(null)
-
-      if (nextStatus.has_google_connection && nextStatus.connected) {
-        const overview = await clientApiFetch<ProjectGSCOverviewResponse>(
-          `/projects/${activeProject.id}/gsc/overview`
-        )
-        if (requestKey === requestKeyRef.current) setGSCOverview(overview)
-      }
-    } catch (error) {
-      if (requestKey === requestKeyRef.current) {
-        setGSCLoadErrorMessage(
-          error instanceof ApiError ? error.message : "Unable to load Google Search Console data."
-        )
-      }
-    } finally {
-      if (requestKey === requestKeyRef.current) setIsLoadingGSC(false)
-    }
-  }
 
   if (!activeProject) {
     return (

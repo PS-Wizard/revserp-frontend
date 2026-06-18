@@ -28,6 +28,7 @@ export default function LoginPage() {
       </div>
       <div className="relative hidden bg-muted lg:block">
         <video
+          aria-label="Revserp.ai cover animation"
           autoPlay
           className="absolute inset-0 h-full w-full object-cover"
           loop

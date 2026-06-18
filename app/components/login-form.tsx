@@ -125,12 +125,13 @@ export function AuthForm({
           <div className="flex items-center">
             <FieldLabel htmlFor="password">Password</FieldLabel>
             {isLogin && (
-              <a
-                className="ml-auto text-sm underline-offset-4 hover:underline"
-                href="#"
+              <button
+                className="ml-auto text-sm text-muted-foreground underline-offset-4"
+                disabled
+                type="button"
               >
                 Forgot your password?
-              </a>
+              </button>
             )}
           </div>
           <Input

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { ApiError, clientApiPost } from "~/lib/api"
 import type {
@@ -75,7 +75,23 @@ export function GSCOverview({
     null
   const overview = overviewResponse?.overview ?? null
   const selectedWindowOverview = overview?.windows["180"] ?? null
-  const trendRows = selectedWindowOverview?.trend ?? []
+  const trendRows = useMemo(() => selectedWindowOverview?.trend ?? [], [selectedWindowOverview])
+  const selectedSiteURLFromStatus = status.selected_site?.site_url ?? ""
+  const previousSelectedSiteURLFromStatusRef = useRef(selectedSiteURLFromStatus)
+  if (previousSelectedSiteURLFromStatusRef.current !== selectedSiteURLFromStatus) {
+    previousSelectedSiteURLFromStatusRef.current = selectedSiteURLFromStatus
+    setSelectedGSCSiteURL(selectedSiteURLFromStatus)
+    setGSCProjectSelectionErrorMessage("")
+  }
+
+  const previousSelectedWindowOverviewRef = useRef(selectedWindowOverview)
+  if (previousSelectedWindowOverviewRef.current !== selectedWindowOverview) {
+    previousSelectedWindowOverviewRef.current = selectedWindowOverview
+    setTableSearch("")
+    setActiveDimensionTab("queries")
+    setTableSort({ column: "clicks", direction: "desc" })
+    setDefaultVisibleChartRange(trendRows, setVisibleRange)
+  }
 
   const currentVisibleTrendRows = useMemo(() => {
     if (!trendRows.length) return []
@@ -136,17 +152,6 @@ export function GSCOverview({
     dateTimestamp
   )
 
-  useEffect(() => {
-    setSelectedGSCSiteURL(status.selected_site?.site_url ?? "")
-    setGSCProjectSelectionErrorMessage("")
-  }, [status.selected_site?.site_url])
-
-  useEffect(() => {
-    setTableSearch("")
-    setActiveDimensionTab("queries")
-    setTableSort({ column: "clicks", direction: "desc" })
-    setDefaultVisibleChartRange(trendRows, setVisibleRange)
-  }, [selectedWindowOverview])
 
   const handleRefreshOverview = async () => {
     setIsRefreshingOverview(true)

@@ -31,13 +31,7 @@ type ScoreRadialChartProps = {
 }
 
 export function ScoreRadialChart({ centerValue, description, segments, title }: ScoreRadialChartProps) {
-  const chartData = segments
-    .filter((segment) => typeof segment.value === "number" && Number.isFinite(segment.value))
-    .map((segment, index) => ({
-      ...segment,
-      fill: getChartColor(index),
-      value: Math.round(segment.value ?? 0),
-    }))
+  const chartData = buildChartData(segments)
   const chartConfig = buildChartConfig(chartData)
 
   return (
@@ -122,6 +116,24 @@ function getTooltipLabel(payload: unknown) {
   }
 
   return "Score"
+}
+
+function buildChartData(segments: ScoreRadialSegment[]) {
+  const chartData: Array<ScoreRadialSegment & { fill: string; value: number }> = []
+
+  for (const segment of segments) {
+    if (typeof segment.value !== "number" || !Number.isFinite(segment.value)) {
+      continue
+    }
+
+    chartData.push({
+      ...segment,
+      fill: getChartColor(chartData.length),
+      value: Math.round(segment.value),
+    })
+  }
+
+  return chartData
 }
 
 function buildChartConfig(segments: Array<ScoreRadialSegment & { fill: string; value: number }>) {

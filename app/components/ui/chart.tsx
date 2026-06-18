@@ -187,6 +187,7 @@ function ChartTooltipContent({
   }
 
   const nestLabel = payload.length === 1 && indicator !== "dot"
+  const visiblePayload = getVisiblePayloadItems(payload)
 
   return (
     <div
@@ -197,16 +198,14 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload
-          .filter((item) => item.type !== "none")
-          .map((item, index) => {
+        {visiblePayload.map((item, index) => {
             const key = `${nameKey ?? item.name ?? item.dataKey ?? "value"}`
             const itemConfig = getPayloadConfigFromPayload(config, item, key)
             const indicatorColor = color ?? item.payload?.fill ?? item.color
 
             return (
               <div
-                key={index}
+                key={getPayloadItemKey(item, key)}
                 className={cn(
                   "flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground",
                   indicator === "dot" && "items-center"
@@ -288,6 +287,7 @@ function ChartLegendContent({
     return null
   }
 
+  const visiblePayload = getVisiblePayloadItems(payload)
   return (
     <div
       className={cn(
@@ -296,15 +296,13 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload
-        .filter((item) => item.type !== "none")
-        .map((item, index) => {
+      {visiblePayload.map((item) => {
           const key = `${nameKey ?? item.dataKey ?? "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
 
           return (
             <div
-              key={index}
+              key={getPayloadItemKey(item, key)}
               className={cn(
                 "flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3 [&>svg]:text-muted-foreground"
               )}
@@ -361,6 +359,22 @@ function getPayloadConfigFromPayload(
   }
 
   return configLabelKey in config ? config[configLabelKey] : config[key]
+}
+
+function getVisiblePayloadItems<T extends { type?: string }>(payload: readonly T[]) {
+  const visibleItems: T[] = []
+
+  for (const item of payload) {
+    if (item.type !== "none") {
+      visibleItems.push(item)
+    }
+  }
+
+  return visibleItems
+}
+
+function getPayloadItemKey(item: { dataKey?: unknown; name?: unknown }, fallback: string) {
+  return String(item.dataKey ?? item.name ?? fallback)
 }
 
 export {

@@ -70,9 +70,15 @@ export function BucketScoreHistoryChart({
   )
 
   const yRange = useMemo(() => {
-    const values = chartRows.flatMap((row) =>
-      buckets.map((b) => row[b.id]).filter(isNumber)
-    )
+    const values: number[] = []
+    for (const row of chartRows) {
+      for (const bucket of buckets) {
+        const value = row[bucket.id]
+        if (isNumber(value)) {
+          values.push(value)
+        }
+      }
+    }
     if (!values.length) return { min: 0, max: 100 }
     const min = Math.max(0, Math.floor(Math.min(...values) - 8))
     const max = Math.min(100, Math.ceil(Math.max(...values) + 8))
@@ -152,25 +158,28 @@ export function BucketScoreHistoryChart({
   )
 
   useEffect(() => {
-    if (!chartContainerRef.current || chartInstanceRef.current || !chartRows.length) return
+    const chartContainer = chartContainerRef.current
+    if (!chartContainer || chartInstanceRef.current || !chartRows.length) return
+    let chart: any = null
     let isDestroyed = false
 
     void (async () => {
       const ApexCharts = (await import("apexcharts")).default
-      if (isDestroyed || !chartContainerRef.current || chartInstanceRef.current) return
-      chartInstanceRef.current = new ApexCharts(chartContainerRef.current, {
+      if (isDestroyed || chartInstanceRef.current) return
+      chart = new ApexCharts(chartContainer, {
         ...chartOptions,
         series,
       })
-      await chartInstanceRef.current.render()
+      chartInstanceRef.current = chart
+      await chart.render()
     })()
 
     return () => {
       isDestroyed = true
-      chartInstanceRef.current?.destroy()
+      chart?.destroy()
       chartInstanceRef.current = null
     }
-  }, [chartRows.length])
+  }, [chartOptions, chartRows.length, series])
 
   useEffect(() => {
     if (!chartInstanceRef.current) return
@@ -218,16 +227,18 @@ export function BucketScoreHistoryChart({
   )
 }
 
+const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+})
+
 function isNumber(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value)
 }
 
 function formatTooltipDateTime(value: number) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value))
+  return tooltipDateTimeFormatter.format(new Date(value))
 }

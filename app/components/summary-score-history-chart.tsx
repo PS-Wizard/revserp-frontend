@@ -128,27 +128,30 @@ export function SummaryScoreHistoryChart({
   )
 
   useEffect(() => {
-    if (!chartContainerRef.current || chartInstanceRef.current || !chartRows.length) return
+    const chartContainer = chartContainerRef.current
+    if (!chartContainer || chartInstanceRef.current || !chartRows.length) return
 
+    let chart: any = null
     let isDestroyed = false
 
     void (async () => {
       const ApexCharts = (await import("apexcharts")).default
-      if (isDestroyed || !chartContainerRef.current || chartInstanceRef.current) return
+      if (isDestroyed || chartInstanceRef.current) return
 
-      chartInstanceRef.current = new ApexCharts(chartContainerRef.current, {
+      chart = new ApexCharts(chartContainer, {
         ...chartOptions,
         series,
       })
-      await chartInstanceRef.current.render()
+      chartInstanceRef.current = chart
+      await chart.render()
     })()
 
     return () => {
       isDestroyed = true
-      chartInstanceRef.current?.destroy()
+      chart?.destroy()
       chartInstanceRef.current = null
     }
-  }, [chartRows.length])
+  }, [chartOptions, chartRows.length, series])
 
   useEffect(() => {
     if (!chartInstanceRef.current) return
@@ -197,9 +200,15 @@ export function SummaryScoreHistoryChart({
 
 
 function getScoreRange(rows: Array<Record<string, number | null>>) {
-  const values = rows.flatMap((row) =>
-    SCORE_SERIES.map((scoreSeries) => row[scoreSeries.key]).filter(isNumber)
-  )
+  const values: number[] = []
+  for (const row of rows) {
+    for (const scoreSeries of SCORE_SERIES) {
+      const value = row[scoreSeries.key]
+      if (isNumber(value)) {
+        values.push(value)
+      }
+    }
+  }
 
   if (!values.length) {
     return { min: 0, max: 100 }
@@ -219,18 +228,20 @@ function getScoreRange(rows: Array<Record<string, number | null>>) {
   return { min, max }
 }
 
+const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+})
+
 function isNumber(value: number | null): value is number {
   return typeof value === "number" && Number.isFinite(value)
 }
 
 function formatTooltipDateTime(value: number) {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value))
+  return tooltipDateTimeFormatter.format(new Date(value))
 }
 
 function getCrawlTimestamp(crawl: CrawlResponse) {

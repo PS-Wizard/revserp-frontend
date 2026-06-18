@@ -46,17 +46,8 @@ export default function AuthCallbackPage() {
 
       hasStartedOAuthExchange = false
 
-      if (error instanceof ApiError) {
-        setErrorMessage(error.message)
-        return
-      }
-
-      if (error instanceof Error && error.message.trim() !== "") {
-        setErrorMessage(error.message)
-        return
-      }
-
-      setErrorMessage("Unable to complete Google sign-in.")
+      const nextErrorMessage = getOAuthExchangeErrorMessage(error)
+      setErrorMessage(nextErrorMessage)
     })
 
     return () => {
@@ -81,4 +72,16 @@ export default function AuthCallbackPage() {
       </div>
     </div>
   )
+}
+
+function getOAuthExchangeErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.message
+  }
+
+  if (error instanceof Error && error.message.trim() !== "") {
+    return error.message
+  }
+
+  return "Unable to complete Google sign-in."
 }

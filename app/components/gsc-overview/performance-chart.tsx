@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import type { ApexOptions } from "apexcharts"
 
 import type { GSCOverviewWindowResponse } from "~/lib/api.types"
@@ -29,13 +29,24 @@ export function GSCPerformanceChart({
 }) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
   const chartInstanceRef = useRef<any>(null)
-  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 })
-
-  const handleChartZoomRange = (startTimestamp: number, endTimestamp: number) => {
-    if (!Number.isFinite(startTimestamp) || !Number.isFinite(endTimestamp)) return
-    setVisibleRange({ start: startTimestamp, end: endTimestamp })
-    onChartZoomRange(startTimestamp, endTimestamp)
+  const visibleRangeRef = useRef<{ start: number; end: number } | null>(null)
+  if (visibleRangeRef.current === null) {
+    visibleRangeRef.current = getDefaultVisibleRange(windowOverview)
   }
+  const previousWindowOverviewRef = useRef(windowOverview)
+  if (previousWindowOverviewRef.current !== windowOverview) {
+    previousWindowOverviewRef.current = windowOverview
+    visibleRangeRef.current = getDefaultVisibleRange(windowOverview)
+  }
+
+  const handleChartZoomRange = useCallback(
+    (startTimestamp: number, endTimestamp: number) => {
+      if (!Number.isFinite(startTimestamp) || !Number.isFinite(endTimestamp)) return
+      visibleRangeRef.current = { start: startTimestamp, end: endTimestamp }
+      onChartZoomRange(startTimestamp, endTimestamp)
+    },
+    [onChartZoomRange]
+  )
 
   const chartOptions = useMemo<ApexOptions>(
     () => ({
@@ -123,48 +134,40 @@ export function GSCPerformanceChart({
         },
       ],
     }),
-    [chartMetricOrder, chartSeries, metricConfig, windowOverview]
+    [chartMetricOrder, chartSeries, handleChartZoomRange, metricConfig, windowOverview]
   )
 
-  useEffect(() => {
-    if (!windowOverview?.trend.length) {
-      setVisibleRange({ start: 0, end: 0 })
-      return
-    }
-
-    const endTimestamp = dateTimestamp(windowOverview.trend[windowOverview.trend.length - 1]?.date)
-    const startTimestamp = dateTimestamp(
-      windowOverview.trend[Math.max(0, windowOverview.trend.length - 7)]?.date
-    )
-    handleChartZoomRange(startTimestamp, endTimestamp)
-  }, [windowOverview])
 
   useEffect(() => {
-    if (!chartContainerRef.current || chartInstanceRef.current) return
+    const chartContainer = chartContainerRef.current
+    if (!chartContainer || chartInstanceRef.current) return
 
+    let chart: any = null
     let isDestroyed = false
 
     void (async () => {
       const ApexCharts = (await import("apexcharts")).default
-      if (isDestroyed || !chartContainerRef.current || chartInstanceRef.current) return
+      if (isDestroyed || chartInstanceRef.current) return
 
-      chartInstanceRef.current = new ApexCharts(chartContainerRef.current, {
+      chart = new ApexCharts(chartContainer, {
         ...chartOptions,
         series: chartSeries,
       })
-      await chartInstanceRef.current.render()
-      applyMetricVisibility(chartInstanceRef.current, chartMetricOrder, metricConfig, visibleMetrics)
+      chartInstanceRef.current = chart
+      await chart.render()
+      applyMetricVisibility(chart, chartMetricOrder, metricConfig, visibleMetrics)
+      const visibleRange = visibleRangeRef.current ?? { start: 0, end: 0 }
       if (visibleRange.start > 0 && visibleRange.end > 0) {
-        chartInstanceRef.current.zoomX(visibleRange.start, visibleRange.end)
+        chart.zoomX(visibleRange.start, visibleRange.end)
       }
     })()
 
     return () => {
       isDestroyed = true
-      chartInstanceRef.current?.destroy()
+      chart?.destroy()
       chartInstanceRef.current = null
     }
-  }, [])
+  }, [chartMetricOrder, chartOptions, chartSeries, metricConfig, visibleMetrics])
 
   useEffect(() => {
     if (!chartInstanceRef.current) return
@@ -206,4 +209,17 @@ function applyMetricVisibility(
     if (visibleMetrics[metricKey]) chartInstance.showSeries(seriesName)
     else chartInstance.hideSeries(seriesName)
   }
+}
+
+function getDefaultVisibleRange(windowOverview: GSCOverviewWindowResponse | null) {
+  if (!windowOverview?.trend.length) {
+    return { start: 0, end: 0 }
+  }
+
+  const endTimestamp = dateTimestamp(windowOverview.trend[windowOverview.trend.length - 1]?.date)
+  const startTimestamp = dateTimestamp(
+    windowOverview.trend[Math.max(0, windowOverview.trend.length - 7)]?.date
+  )
+
+  return { start: startTimestamp, end: endTimestamp }
 }

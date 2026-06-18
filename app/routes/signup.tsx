@@ -13,6 +13,7 @@ export default function SignupPage() {
     <div className="grid min-h-svh bg-background lg:grid-cols-2">
       <div className="relative hidden bg-muted lg:block">
         <video
+          aria-label="Revserp.ai cover animation"
           autoPlay
           className="absolute inset-0 h-full w-full object-cover"
           loop

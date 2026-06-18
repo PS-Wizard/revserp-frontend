@@ -45,7 +45,7 @@ export function toTableRows<RowType extends GSCSearchAnalyticsRowResponse>(
   })) satisfies TableRow[]
 }
 
-export function metricValueForRows(
+function metricValueForRows(
   metricKey: GSCMetricKey,
   rows: GSCSearchAnalyticsRowResponse[]
 ) {
