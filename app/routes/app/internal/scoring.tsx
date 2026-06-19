@@ -1,13 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { LoaderFunctionArgs } from "react-router"
 import { useLoaderData } from "react-router"
 
 import { CompileLoader } from "~/components/compile-loader"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "~/components/ui/field"
 import { ScrollArea } from "~/components/ui/scroll-area"
+import { Separator } from "~/components/ui/separator"
 import { Slider } from "~/components/ui/slider"
 import { clientApiFetch, clientApiPut, serverApiFetch } from "~/lib/api"
 import { ApiError } from "~/lib/api"
@@ -20,6 +23,7 @@ import type {
   ScoringPreviewResponse,
 } from "~/lib/api.types"
 import { requireAuthenticatedUser } from "~/lib/auth.server"
+import { cn } from "~/lib/utils"
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const me = await requireAuthenticatedUser(request)
@@ -215,24 +219,21 @@ export default function ScoringPage() {
 
   return (
     <main className="min-h-svh bg-background text-foreground">
-      <div className="mx-auto w-full max-w-[104rem] space-y-6 px-4 py-10 sm:px-6 lg:px-4">
-        {/* Header */}
+      <div className="mx-auto flex w-full max-w-[104rem] flex-col gap-6 px-4 py-10 sm:px-6 lg:px-4">
         <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
-          <CardContent className="flex flex-col gap-6 p-6 sm:p-8 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
-                Tune scoring
-              </h1>
-              <p className="max-w-2xl pt-3 text-sm text-muted-foreground sm:text-[15px]">
-                Edit the global scoring model, preview it against the selected crawl, then save
-                it for future crawls.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
+          <CardHeader className="gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
+            <CardTitle className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
+              Tune scoring
+            </CardTitle>
+            <CardDescription className="max-w-2xl text-sm sm:text-[15px]">
+              Edit the global scoring model, preview it against the selected crawl, then save it
+              for future crawls.
+            </CardDescription>
+            <CardAction className="col-start-1 row-start-3 flex flex-wrap items-center gap-2 sm:col-start-2 sm:row-span-2 sm:row-start-1 sm:justify-self-end">
               {isPreviewing && (
-                <span className="inline-flex items-center gap-2 rounded-full border border-border/50 bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                <Badge variant="outline" className="h-8 gap-2 px-3">
                   <CompileLoader size={15} /> Previewing
-                </span>
+                </Badge>
               )}
               <Button variant="outline" size="sm" onClick={resetToSaved} disabled={!savedConfig}>
                 Reset saved
@@ -247,110 +248,93 @@ export default function ScoringPage() {
               >
                 {isSaving ? "Saving..." : "Save global"}
               </Button>
-            </div>
-          </CardContent>
+            </CardAction>
+          </CardHeader>
         </Card>
 
-        {/* Error / save messages */}
-        {loadError && (
-          <div className="rounded-md border border-red-300/15 bg-red-400/[0.045] px-4 py-3 text-sm text-red-100">
-            {loadError}
-          </div>
-        )}
-        {saveMessage && (
-          <div className="rounded-md border border-border/50 bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-            {saveMessage}
-          </div>
-        )}
+        {loadError && <StatusCard tone="destructive">{loadError}</StatusCard>}
+        {saveMessage && <StatusCard>{saveMessage}</StatusCard>}
 
-        <div className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)] xl:items-start">
-          {/* Sidebar */}
-          <aside className="space-y-4 xl:sticky xl:top-4">
-            {/* Global math */}
+        <div className="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start">
+          <aside className="xl:sticky xl:top-4">
             <Card className="border-border/50">
               <CardHeader>
-                <CardTitle className="text-sm font-medium">Global math</CardTitle>
+                <CardTitle>Parameters</CardTitle>
+                <CardDescription>Global scoring controls used for preview and future crawls.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <SliderRow
-                  label="Coverage scale"
-                  value={draftConfig.coverage_scale}
-                  min={0.5}
-                  max={16}
-                  step={0.1}
-                  onChange={(v) => updateTopLevel("coverage_scale", v)}
-                />
-                <SliderRow
-                  label="Volume pressure"
-                  value={draftConfig.volume_pressure_scale}
-                  min={0}
-                  max={4}
-                  step={0.05}
-                  onChange={(v) => updateTopLevel("volume_pressure_scale", v)}
-                />
-                <SliderRow
-                  label="Max volume pressure"
-                  value={draftConfig.maximum_volume_pressure}
-                  min={0}
-                  max={8}
-                  step={0.1}
-                  onChange={(v) => updateTopLevel("maximum_volume_pressure", v)}
-                />
-              </CardContent>
-            </Card>
+              <CardContent>
+                <FieldGroup className="gap-5">
+                  <SidebarSection title="Global math">
+                    <SliderRow
+                      label="Coverage scale"
+                      value={draftConfig.coverage_scale}
+                      min={0.5}
+                      max={16}
+                      step={0.1}
+                      onChange={(v) => updateTopLevel("coverage_scale", v)}
+                    />
+                    <SliderRow
+                      label="Volume pressure"
+                      value={draftConfig.volume_pressure_scale}
+                      min={0}
+                      max={4}
+                      step={0.05}
+                      onChange={(v) => updateTopLevel("volume_pressure_scale", v)}
+                    />
+                    <SliderRow
+                      label="Max volume pressure"
+                      value={draftConfig.maximum_volume_pressure}
+                      min={0}
+                      max={8}
+                      step={0.1}
+                      onChange={(v) => updateTopLevel("maximum_volume_pressure", v)}
+                    />
+                  </SidebarSection>
 
-            {/* Severity multipliers */}
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Severity multipliers</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {Object.entries(draftConfig.severity_multipliers).map(([severity, multiplier]) => (
-                  <SliderRow
-                    key={severity}
-                    label={humanize(severity)}
-                    value={multiplier}
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    onChange={(v) => updateSeverity(severity, v)}
-                  />
-                ))}
-              </CardContent>
-            </Card>
+                  <Separator />
 
-            {/* Overall weights */}
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium">Overall weights</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {Object.entries(draftConfig.overall_weights).map(([pillarId, weight]) => (
-                  <SliderRow
-                    key={pillarId}
-                    label={humanize(pillarId)}
-                    value={weight}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    onChange={(v) => updateOverallWeight(pillarId, v)}
-                  />
-                ))}
+                  <SidebarSection title="Severity multipliers">
+                    {Object.entries(draftConfig.severity_multipliers).map(([severity, multiplier]) => (
+                      <SliderRow
+                        key={severity}
+                        label={humanize(severity)}
+                        value={multiplier}
+                        min={0}
+                        max={2}
+                        step={0.05}
+                        onChange={(v) => updateSeverity(severity, v)}
+                      />
+                    ))}
+                  </SidebarSection>
+
+                  <Separator />
+
+                  <SidebarSection title="Overall weights">
+                    {Object.entries(draftConfig.overall_weights).map(([pillarId, weight]) => (
+                      <SliderRow
+                        key={pillarId}
+                        label={humanize(pillarId)}
+                        value={weight}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(v) => updateOverallWeight(pillarId, v)}
+                      />
+                    ))}
+                  </SidebarSection>
+                </FieldGroup>
               </CardContent>
             </Card>
           </aside>
 
-          {/* Main area */}
-          <div className="min-w-0 space-y-6">
+          <div className="flex min-w-0 flex-col gap-6">
             {!crawlId && (
-              <div className="rounded-md border border-border/50 bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
-                Select a crawl to preview score changes. Controls still edit the global draft
-                config.
-              </div>
+              <StatusCard>
+                Select a crawl to preview score changes. Controls still edit the global draft config.
+              </StatusCard>
             )}
 
-            {/* Score tiles */}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <ScoreTile
                 label="Overall"
                 value={displayedBreakdown?.overall_score ?? null}
@@ -367,10 +351,9 @@ export default function ScoringPage() {
                   />
                 )
               })}
-            </div>
+            </section>
 
-            {/* Pillar breakdowns */}
-            <div className="space-y-6">
+            <section className="flex flex-col gap-6">
               {configuredPillarIds.map((pillarId) => {
                 const pillarConfig = draftConfig.pillars[pillarId]
                 const pillarBreakdown = findPillar(pillarId)
@@ -380,133 +363,96 @@ export default function ScoringPage() {
 
                 return (
                   <Card key={pillarId} className="border-border/50">
-                    <CardContent className="p-5 sm:p-6">
-                      {/* Pillar header */}
-                      <div className="flex flex-col gap-6 border-b border-border/50 pb-6 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-end gap-3">
-                            <h2 className="text-3xl font-medium tracking-[-0.05em] sm:text-4xl">
-                              {pillarConfig.label}
-                            </h2>
-                            {delta != null && (
-                              <span
-                                className={`pb-1 text-sm ${
-                                  delta > 0
-                                    ? "text-emerald-200"
-                                    : delta < 0
-                                      ? "text-red-200"
-                                      : "text-muted-foreground/40"
-                                }`}
-                              >
-                                {delta > 0 ? "+" : ""}
-                                {delta}
-                              </span>
-                            )}
-                          </div>
-                          <p className="pt-2 text-sm text-muted-foreground">
-                            Score {fmtNum(pillarBreakdown?.score, 0)} · penalty{" "}
-                            {fmtNum(pillarBreakdown?.total_penalty)}
-                          </p>
-                        </div>
-                        <div className="min-w-[18rem] max-w-[24rem]">
-                          <SliderRow
-                            label="Overall weight"
-                            value={draftConfig.overall_weights[pillarId] ?? 0}
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            onChange={(v) => updateOverallWeight(pillarId, v)}
-                          />
-                        </div>
+                    <CardHeader className="border-b border-border/50">
+                      <CardTitle className="text-3xl font-medium tracking-[-0.05em] sm:text-4xl">
+                        {pillarConfig.label}
+                      </CardTitle>
+                      <CardDescription>
+                        Score {fmtNum(pillarBreakdown?.score, 0)} · penalty{" "}
+                        {fmtNum(pillarBreakdown?.total_penalty)}
+                      </CardDescription>
+                      {delta != null && (
+                        <CardAction>
+                          <DeltaBadge delta={delta} />
+                        </CardAction>
+                      )}
+                    </CardHeader>
+
+                    <CardContent className="flex flex-col gap-6">
+                      <div className="max-w-md">
+                        <SliderRow
+                          label="Overall weight"
+                          value={draftConfig.overall_weights[pillarId] ?? 0}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onChange={(v) => updateOverallWeight(pillarId, v)}
+                        />
                       </div>
 
-                      {/* Buckets + issue penalties */}
-                      <div className="grid gap-6 pt-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-                        {/* Buckets */}
-                        <section className="space-y-4">
-                          <h3 className="text-lg font-medium tracking-[-0.03em]">Buckets</h3>
-                          <div className="space-y-2">
+                      <Separator />
+
+                      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                        <section className="flex flex-col gap-3">
+                          <SectionHeading
+                            title="Buckets"
+                            description="Weights for each scoring bucket in this pillar."
+                          />
+                          <div className="flex flex-col gap-2">
                             {bucketEntries.map(([bucketId, weight]) => {
-                              const bucket = pillarBreakdown?.buckets.find(
-                                (b) => b.id === bucketId
-                              )
+                              const bucket = pillarBreakdown?.buckets.find((b) => b.id === bucketId)
                               return (
-                                <div
+                                <ConfigRow
                                   key={bucketId}
-                                  className="rounded-md border border-border/50 bg-muted/30 px-4 py-4"
+                                  title={bucket?.label ?? humanize(bucketId)}
+                                  description={
+                                    bucket
+                                      ? `${bucket.issue_type_count} active issues · ${bucket.affected_url_count} URLs`
+                                      : "No active issues in selected crawl"
+                                  }
+                                  value={fmtNum(bucket?.score, 0)}
                                 >
-                                  <div className="grid gap-4 lg:grid-cols-[minmax(11rem,0.62fr)_minmax(12rem,1fr)_5rem] lg:items-center">
-                                    <div>
-                                      <p className="text-sm font-medium">
-                                        {bucket?.label ?? humanize(bucketId)}
-                                      </p>
-                                      <p className="pt-1 text-xs text-muted-foreground">
-                                        {bucket
-                                          ? `${bucket.issue_type_count} active issues · ${bucket.affected_url_count} URLs`
-                                          : "No active issues in selected crawl"}
-                                      </p>
-                                    </div>
-                                    <InlineSlider
-                                      value={weight}
-                                      min={0}
-                                      max={1}
-                                      step={0.01}
-                                      onChange={(v) =>
-                                        updateBucketWeight(pillarId, bucketId, v)
-                                      }
-                                    />
-                                    <div className="text-sm tabular-nums text-muted-foreground lg:text-right">
-                                      {fmtNum(bucket?.score, 0)}
-                                    </div>
-                                  </div>
-                                </div>
+                                  <InlineSlider
+                                    value={weight}
+                                    min={0}
+                                    max={1}
+                                    step={0.01}
+                                    onChange={(v) => updateBucketWeight(pillarId, bucketId, v)}
+                                  />
+                                </ConfigRow>
                               )
                             })}
                           </div>
                         </section>
 
-                        {/* Issue penalties */}
-                        <section className="space-y-4">
-                          <h3 className="text-lg font-medium tracking-[-0.03em]">
-                            Issue penalties
-                          </h3>
-                          <ScrollArea className="h-[30rem] rounded-md border border-border/50 bg-muted/30">
-                            <div className="space-y-2 p-2.5">
+                        <section className="flex flex-col gap-3">
+                          <SectionHeading
+                            title="Issue penalties"
+                            description="Base penalties used before severity and coverage are applied."
+                          />
+                          <ScrollArea className="h-[30rem] rounded-xl border border-border/50 bg-muted/20">
+                            <div className="flex flex-col gap-2 p-2.5">
                               {issueEntries.map(([issueTypeId, penalty]) => {
-                                const issue = findIssue(
-                                  pillarBreakdown,
-                                  issueTypeId
-                                )
+                                const issue = findIssue(pillarBreakdown, issueTypeId)
                                 return (
-                                  <div
+                                  <ConfigRow
                                     key={issueTypeId}
-                                    className="rounded-[calc(var(--radius)-0.15rem)] border border-border/50 bg-card px-4 py-4"
+                                    title={issue?.label ?? humanize(issueTypeId)}
+                                    description={
+                                      issue
+                                        ? `${issue.severity} · ${issue.affected_url_count} URLs · final ${fmtNum(issue.final_penalty)}`
+                                        : "Not present in selected crawl"
+                                    }
+                                    value={fmtNum(issue?.base_penalty ?? penalty)}
                                   >
-                                    <div className="grid gap-4 lg:grid-cols-[minmax(12rem,0.7fr)_minmax(12rem,1fr)_6rem] lg:items-center">
-                                      <div className="min-w-0">
-                                        <p className="truncate text-sm font-medium">
-                                          {issue?.label ?? humanize(issueTypeId)}
-                                        </p>
-                                        <p className="pt-1 text-xs text-muted-foreground">
-                                          {issue
-                                            ? `${issue.severity} · ${issue.affected_url_count} URLs · final ${fmtNum(issue.final_penalty)}`
-                                            : "Not present in selected crawl"}
-                                        </p>
-                                      </div>
-                                      <InlineSlider
-                                        value={penalty}
-                                        min={0}
-                                        max={30}
-                                        step={0.5}
-                                        onChange={(v) =>
-                                          updateIssuePenalty(pillarId, issueTypeId, v)
-                                        }
-                                      />
-                                      <div className="text-sm tabular-nums text-muted-foreground lg:text-right">
-                                        {fmtNum(issue?.base_penalty ?? penalty)}
-                                      </div>
-                                    </div>
-                                  </div>
+                                    <InlineSlider
+                                      value={penalty}
+                                      min={0}
+                                      max={30}
+                                      step={0.5}
+                                      onChange={(v) => updateIssuePenalty(pillarId, issueTypeId, v)}
+                                    />
+                                  </ConfigRow>
                                 )
                               })}
                             </div>
@@ -517,7 +463,7 @@ export default function ScoringPage() {
                   </Card>
                 )
               })}
-            </div>
+            </section>
           </div>
         </div>
       </div>
@@ -571,6 +517,75 @@ function findIssue(
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
 
+function StatusCard({
+  children,
+  tone = "muted",
+}: {
+  children: ReactNode
+  tone?: "muted" | "destructive"
+}) {
+  return (
+    <Card
+      size="sm"
+      className={cn(
+        "border-border/50 shadow-none",
+        tone === "destructive" && "border-destructive/30 bg-destructive/10 text-destructive"
+      )}
+    >
+      <CardContent
+        className={cn("py-3 text-sm", tone === "destructive" ? "text-destructive" : "text-muted-foreground")}
+      >
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <FieldSet>
+      <FieldLegend variant="label">{title}</FieldLegend>
+      <FieldGroup className="gap-3">{children}</FieldGroup>
+    </FieldSet>
+  )
+}
+
+function SectionHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <header className="flex flex-col gap-1">
+      <h3 className="text-base font-medium">{title}</h3>
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </header>
+  )
+}
+
+function ConfigRow({
+  title,
+  description,
+  value,
+  children,
+}: {
+  title: string
+  description: string
+  value: string
+  children: ReactNode
+}) {
+  return (
+    <Card size="sm" className="bg-muted/20 shadow-none">
+      <CardContent className="grid gap-4 p-4 lg:grid-cols-[minmax(12rem,0.8fr)_minmax(13rem,1fr)_auto] lg:items-center">
+        <FieldContent className="min-w-0">
+          <FieldLabel className="truncate">{title}</FieldLabel>
+          <FieldDescription>{description}</FieldDescription>
+        </FieldContent>
+        {children}
+        <Badge variant="outline" className="justify-self-start tabular-nums lg:justify-self-end">
+          {value}
+        </Badge>
+      </CardContent>
+    </Card>
+  )
+}
+
 function SliderRow({
   label,
   value,
@@ -588,14 +603,12 @@ function SliderRow({
 }) {
   const id = `slider-${label.replace(/\s+/g, "-").toLowerCase()}`
   return (
-    <div className="rounded-md border border-border/50 bg-muted/30 px-4 py-3.5">
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <label htmlFor={id} className="text-muted-foreground">
-          {label}
-        </label>
-        <span className="text-xs tabular-nums text-muted-foreground/60">
+    <Field className="rounded-lg border border-border/50 bg-muted/20 p-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <FieldLabel htmlFor={id}>{label}</FieldLabel>
+        <Badge variant="outline" className="tabular-nums">
           {fmtNum(value, 2)}
-        </span>
+        </Badge>
       </div>
       <Slider
         id={id}
@@ -604,13 +617,12 @@ function SliderRow({
         max={max}
         step={step}
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
-        className="mt-3"
       />
-      <div className="mt-2 flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground/30">
+      <FieldDescription className="flex items-center justify-between text-xs">
         <span>{fmtNum(min, 2)}</span>
         <span>{fmtNum(max, 2)}</span>
-      </div>
-    </div>
+      </FieldDescription>
+    </Field>
   )
 }
 
@@ -628,7 +640,7 @@ function InlineSlider({
   onChange: (value: number) => void
 }) {
   return (
-    <div>
+    <Field className="gap-2">
       <Slider
         value={[value]}
         min={min}
@@ -636,11 +648,21 @@ function InlineSlider({
         step={step}
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
       />
-      <div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-[0.14em] text-muted-foreground/24">
+      <FieldDescription className="flex items-center justify-between text-xs">
         <span>{fmtNum(min, 2)}</span>
         <span>{fmtNum(max, 2)}</span>
-      </div>
-    </div>
+      </FieldDescription>
+    </Field>
+  )
+}
+
+function DeltaBadge({ delta }: { delta: number }) {
+  const variant = delta < 0 ? "destructive" : "outline"
+  return (
+    <Badge variant={variant} className="tabular-nums">
+      {delta > 0 ? "+" : ""}
+      {delta}
+    </Badge>
   )
 }
 
@@ -656,34 +678,25 @@ function ScoreTile({
   const delta = value != null && baseline != null ? value - baseline : null
   const surfaceTone =
     delta == null || delta === 0
-      ? "border-border/50 bg-muted/30"
+      ? "border-border/50 bg-muted/20"
       : delta > 0
         ? "border-emerald-300/16 bg-emerald-400/[0.045]"
         : "border-red-300/14 bg-red-400/[0.04]"
-  const deltaTone =
-    delta == null || delta === 0
-      ? "text-muted-foreground/40"
-      : delta > 0
-        ? "text-emerald-200"
-        : "text-red-200"
 
   return (
-    <Card className={`border ${surfaceTone}`}>
-      <CardContent className="p-4 sm:p-5">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/40">
-          {label}
+    <Card size="sm" className={cn("border", surfaceTone)}>
+      <CardHeader>
+        <CardDescription className="text-sm">{label}</CardDescription>
+        {delta != null && (
+          <CardAction>
+            <DeltaBadge delta={delta} />
+          </CardAction>
+        )}
+      </CardHeader>
+      <CardContent>
+        <p className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
+          {fmtNum(value, 0)}
         </p>
-        <div className="flex items-end gap-3 pt-3">
-          <p className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
-            {fmtNum(value, 0)}
-          </p>
-          {delta != null && (
-            <p className={`pb-1 text-sm ${deltaTone}`}>
-              {delta > 0 ? "+" : ""}
-              {delta}
-            </p>
-          )}
-        </div>
       </CardContent>
     </Card>
   )
