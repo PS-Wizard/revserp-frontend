@@ -356,7 +356,7 @@ export default function AppPage() {
           isOrganizationOwner={isOrganizationOwner}
         />
       ) : view === "revserp-ai" ? (
-        <RevserpAIView breakdown={stableBreakdown} />
+        <RevserpAIView breakdown={stableBreakdown} projectId={activeProject?.id} />
       ) : (
         <div className="p-6">
           <Card>

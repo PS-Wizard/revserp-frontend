@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   BotIcon,
   CheckIcon,
   ChevronDownIcon,
   CopyIcon,
   Loader2Icon,
+  MessageSquareIcon,
+  PlusIcon,
   SendIcon,
   SparklesIcon,
 } from "lucide-react"
@@ -29,11 +31,18 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { Textarea } from "~/components/ui/textarea"
-import { ApiError, clientApiPost } from "~/lib/api"
+import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
+  AIConversationDetailResponse,
+  AIConversationResponse,
+  AIConversationsResponse,
+  AIMessageResponse,
+  CreateAIConversationMessageResponse,
+  CreateAIConversationResponse,
   ScoreBreakdownBucketResponse,
   ScoreBreakdownIssueTypeResponse,
   ScoreBreakdownPillarResponse,
@@ -42,58 +51,52 @@ import type {
 import { cn, formatBucketLabel } from "~/lib/utils"
 
 type RevserpAIMessage = {
+  id?: string
   role: "user" | "assistant"
   content: string
 }
 
-type AIFixResponse = {
-  message: RevserpAIMessage
-  scope: {
-    pillar_label: string
-    bucket_label: string
-    issue_count: number
-    url_count: number
-  }
-}
-
-const chatStateByCrawlId = new Map<string, RevserpAIMessage[]>()
-
-export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse | null }) {
+export function RevserpAIView({
+  breakdown,
+  projectId,
+}: {
+  breakdown: ScoreBreakdownResponse | null
+  projectId?: string
+}) {
   const [prompt, setPrompt] = useState("")
   const [selectedPillarId, setSelectedPillarId] = useState("")
   const [selectedBucketIds, setSelectedBucketIds] = useState<string[]>([])
   const [selectedIssueTypeIds, setSelectedIssueTypeIds] = useState<string[]>([])
+  const [conversations, setConversations] = useState<AIConversationResponse[]>(
+    []
+  )
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | null
+  >(null)
   const [messages, setMessages] = useState<RevserpAIMessage[]>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
-  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const crawlId = breakdown?.crawl_id ?? ""
-  const previousCrawlIdRef = useRef(crawlId)
-  if (previousCrawlIdRef.current !== crawlId) {
-    previousCrawlIdRef.current = crawlId
-    setMessages(crawlId ? chatStateByCrawlId.get(crawlId) ?? [] : [])
-  }
-
-  const nextScopeState = getNextScopeState(
-    breakdown,
-    selectedPillarId,
-    selectedBucketIds,
-    selectedIssueTypeIds
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
+    null
   )
-  if (nextScopeState) {
-    setSelectedPillarId(nextScopeState.pillarId)
-    setSelectedBucketIds(nextScopeState.bucketIds)
-    setSelectedIssueTypeIds(nextScopeState.issueTypeIds)
-  }
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const crawlId = breakdown?.crawl_id ?? ""
 
   const selectedPillar = useMemo(() => {
-    return breakdown?.pillars.find((pillar) => pillar.id === selectedPillarId) ?? breakdown?.pillars[0] ?? null
+    return (
+      breakdown?.pillars.find((pillar) => pillar.id === selectedPillarId) ??
+      breakdown?.pillars[0] ??
+      null
+    )
   }, [breakdown?.pillars, selectedPillarId])
 
   const selectedBuckets = useMemo(() => {
-    return (selectedPillar?.buckets ?? []).filter((bucket) => selectedBucketIds.includes(bucket.id))
+    return (selectedPillar?.buckets ?? []).filter((bucket) =>
+      selectedBucketIds.includes(bucket.id)
+    )
   }, [selectedBucketIds, selectedPillar])
 
   const availableIssueTypes = useMemo(() => {
@@ -108,76 +111,227 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
       }
     }
 
-    return issueTypes.sort((left, right) => left.label.localeCompare(right.label))
+    return issueTypes.sort((left, right) =>
+      left.label.localeCompare(right.label)
+    )
   }, [selectedBuckets])
 
   const selectedIssueTypes = useMemo(() => {
-    return availableIssueTypes.filter((issueType) => selectedIssueTypeIds.includes(issueType.id))
+    return availableIssueTypes.filter((issueType) =>
+      selectedIssueTypeIds.includes(issueType.id)
+    )
   }, [availableIssueTypes, selectedIssueTypeIds])
 
-  const bucketLabel = selectedBuckets.length === 0
-    ? "Bucket"
-    : selectedBuckets.length === 1
-      ? selectedBuckets[0].label
-      : `${selectedBuckets.length} buckets`
-  const issueTypeLabel = selectedIssueTypeIds.length === 0
-    ? "All issue types"
-    : selectedIssueTypes.length === 1
-      ? selectedIssueTypes[0].label
-      : `${selectedIssueTypes.length} issue types`
-  const selectedScopeLabel = selectedPillar && selectedBuckets.length
-    ? `${selectedPillar.label} / ${bucketLabel} / ${issueTypeLabel}`
-    : "Choose crawl context"
+  const bucketLabel =
+    selectedBuckets.length === 0
+      ? "Bucket"
+      : selectedBuckets.length === 1
+        ? selectedBuckets[0].label
+        : `${selectedBuckets.length} buckets`
+  const issueTypeLabel =
+    selectedIssueTypeIds.length === 0
+      ? "All issue types"
+      : selectedIssueTypes.length === 1
+        ? selectedIssueTypes[0].label
+        : `${selectedIssueTypes.length} issue types`
+  const selectedScopeLabel =
+    selectedPillar && selectedBuckets.length
+      ? `${selectedPillar.label} / ${bucketLabel} / ${issueTypeLabel}`
+      : "Choose crawl context"
+  const activeConversation =
+    conversations.find(
+      (conversation) => conversation.id === activeConversationId
+    ) ?? null
+  const groupedConversations = useMemo(
+    () => groupConversationsByDate(conversations),
+    [conversations]
+  )
   const canSend = Boolean(
-    breakdown?.crawl_id && selectedPillar && selectedBuckets.length && prompt.trim() && !isSending
+    projectId &&
+    breakdown?.crawl_id &&
+    selectedPillar &&
+    selectedBuckets.length &&
+    prompt.trim() &&
+    !isSending
   )
 
+  const loadConversation = useCallback(async (conversationId: string) => {
+    setIsLoadingMessages(true)
+    setErrorMessage("")
+    try {
+      const response = await clientApiFetch<AIConversationDetailResponse>(
+        `/ai/conversations/${conversationId}`
+      )
+      setActiveConversationId(response.conversation.id)
+      setMessages(response.messages.map(newMessageFromResponse))
+      setConversations((current) =>
+        upsertConversation(current, response.conversation)
+      )
+    } catch (error) {
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to load AI conversation."
+      )
+    } finally {
+      setIsLoadingMessages(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const nextScopeState = getNextScopeState(
+      breakdown,
+      selectedPillarId,
+      selectedBucketIds,
+      selectedIssueTypeIds
+    )
+    if (!nextScopeState) return
+    setSelectedPillarId(nextScopeState.pillarId)
+    setSelectedBucketIds(nextScopeState.bucketIds)
+    setSelectedIssueTypeIds(nextScopeState.issueTypeIds)
+  }, [breakdown, selectedPillarId, selectedBucketIds, selectedIssueTypeIds])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadConversations() {
+      setMessages([])
+      setActiveConversationId(null)
+      setConversations([])
+      setErrorMessage("")
+      setIsLoadingHistory(false)
+      setIsLoadingMessages(false)
+      if (!projectId || !crawlId) return
+
+      setIsLoadingHistory(true)
+      try {
+        const response = await clientApiFetch<AIConversationsResponse>(
+          `/projects/${projectId}/ai/conversations?crawl_id=${encodeURIComponent(crawlId)}&limit=50&offset=0`
+        )
+        if (cancelled) return
+        setConversations(response.conversations)
+        const firstConversation = response.conversations[0]
+        if (firstConversation) {
+          setIsLoadingMessages(true)
+          const detail = await clientApiFetch<AIConversationDetailResponse>(
+            `/ai/conversations/${firstConversation.id}`
+          )
+          if (cancelled) return
+          setActiveConversationId(detail.conversation.id)
+          setMessages(detail.messages.map(newMessageFromResponse))
+          setConversations((current) =>
+            upsertConversation(current, detail.conversation)
+          )
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(
+            error instanceof ApiError
+              ? error.message
+              : "Unable to load AI history."
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingHistory(false)
+          setIsLoadingMessages(false)
+        }
+      }
+    }
+
+    void loadConversations()
+
+    return () => {
+      cancelled = true
+    }
+  }, [crawlId, projectId])
 
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({
       top: scrollContainerRef.current.scrollHeight,
       behavior: "smooth",
     })
-  }, [messages.length, isSending])
+  }, [messages.length, isSending, isLoadingMessages])
 
   async function handleSubmit() {
     const trimmedPrompt = prompt.trim()
-    if (!breakdown?.crawl_id || !selectedPillar || !selectedBuckets.length || !trimmedPrompt || isSending) {
+    if (
+      !projectId ||
+      !breakdown?.crawl_id ||
+      !selectedPillar ||
+      !selectedBuckets.length ||
+      !trimmedPrompt ||
+      isSending
+    ) {
       return
     }
 
-    const userMessage: RevserpAIMessage = { role: "user", content: trimmedPrompt }
-    const nextMessages = [...messages, userMessage]
-    persistMessages(breakdown.crawl_id, nextMessages)
-    setMessages(nextMessages)
+    const baseMessages = messages
+    const optimisticUserMessage: RevserpAIMessage = {
+      role: "user",
+      content: trimmedPrompt,
+    }
+    setMessages([...baseMessages, optimisticUserMessage])
     setPrompt("")
     setErrorMessage("")
     setIsSending(true)
     resetTextareaHeight()
 
     try {
-      const selectedBucketIdsForRequest = selectedBuckets.map((bucket) => bucket.id)
-      const response = await clientApiPost<AIFixResponse>(`/crawls/${breakdown.crawl_id}/ai/fix`, {
-        pillar_id: selectedPillar.id,
-        bucket_id: selectedBucketIdsForRequest[0],
-        bucket_ids: selectedBucketIdsForRequest,
-        issue_type_ids: selectedIssueTypeIds,
-        messages: nextMessages,
-      })
-      const responseMessages = [...nextMessages, response.message]
-      persistMessages(breakdown.crawl_id, responseMessages)
-      setMessages(responseMessages)
+      let conversationId = activeConversationId
+      if (!conversationId) {
+        const created = await clientApiPost<CreateAIConversationResponse>(
+          `/projects/${projectId}/ai/conversations`,
+          {
+            crawl_id: breakdown.crawl_id,
+            title: trimmedPrompt,
+          }
+        )
+        conversationId = created.conversation.id
+        setActiveConversationId(conversationId)
+        setConversations((current) =>
+          upsertConversation(current, created.conversation)
+        )
+      }
+
+      const selectedBucketIdsForRequest = selectedBuckets.map(
+        (bucket) => bucket.id
+      )
+      const response = await clientApiPost<CreateAIConversationMessageResponse>(
+        `/ai/conversations/${conversationId}/messages`,
+        {
+          crawl_id: breakdown.crawl_id,
+          pillar_id: selectedPillar.id,
+          bucket_id: selectedBucketIdsForRequest[0],
+          bucket_ids: selectedBucketIdsForRequest,
+          issue_type_ids: selectedIssueTypeIds,
+          content: trimmedPrompt,
+        }
+      )
+      setMessages([
+        ...baseMessages,
+        newMessageFromResponse(response.user_message),
+        newMessageFromResponse(response.assistant_message),
+      ])
+      setConversations((current) =>
+        upsertConversation(current, response.conversation)
+      )
     } catch (error) {
-      persistMessages(breakdown.crawl_id, messages)
-      setMessages(messages)
+      setMessages(baseMessages)
       setPrompt(trimmedPrompt)
-      setErrorMessage(error instanceof ApiError ? error.message : "Unable to generate an AI fix.")
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to generate an AI fix."
+      )
     } finally {
       setIsSending(false)
     }
   }
 
-  function handlePromptKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+  function handlePromptKeyDown(
+    event: React.KeyboardEvent<HTMLTextAreaElement>
+  ) {
     if (event.key !== "Enter" || event.shiftKey) return
     event.preventDefault()
     void handleSubmit()
@@ -213,6 +367,12 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
     )
   }
 
+  function startNewChat() {
+    setActiveConversationId(null)
+    setMessages([])
+    setErrorMessage("")
+  }
+
   function resetTextareaHeight() {
     window.requestAnimationFrame(() => {
       if (!textareaRef.current) return
@@ -231,9 +391,12 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
       <div className="flex min-h-[calc(100svh-5rem)] items-center justify-center p-6 text-center">
         <Card className="max-w-xl border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
           <CardContent className="py-12">
-            <h1 className="text-4xl font-medium tracking-[-0.06em]">Revserp AI needs crawl data</h1>
+            <h1 className="text-4xl font-medium tracking-[-0.06em]">
+              Revserp AI needs crawl data
+            </h1>
             <p className="pt-5 text-sm leading-7 text-muted-foreground">
-              Run a crawl first, then use Revserp AI to explain, prioritize, and fix scoped audit issues.
+              Run a crawl first, then use Revserp AI to explain, prioritize, and
+              fix scoped audit issues.
             </p>
           </CardContent>
         </Card>
@@ -244,7 +407,16 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
   return (
     <section className="flex h-[calc(100svh-4.5rem)] min-h-0 flex-col overflow-hidden px-4 pt-5 sm:px-6 lg:px-4">
       <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
+        {isLoadingMessages ? (
+          <div className="flex h-full items-center justify-center text-center">
+            <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-xl">
+              <CompileLoader size={22} />
+              <span className="text-muted-foreground">
+                Loading conversation...
+              </span>
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-center">
             <div>
               <div className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-border bg-card shadow-xl">
@@ -262,8 +434,11 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
           <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-2 py-4">
             {messages.map((message, messageIndex) => (
               <div
-                key={`${message.role}-${messageIndex}`}
-                className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}
+                key={message.id ?? `${message.role}-${messageIndex}`}
+                className={cn(
+                  "flex",
+                  message.role === "user" ? "justify-end" : "justify-start"
+                )}
               >
                 {message.role === "user" ? (
                   <div className="max-w-[min(34rem,78%)] rounded-2xl bg-primary px-4 py-2.5 text-base leading-7 text-primary-foreground shadow-xl">
@@ -281,7 +456,9 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
                           <Button
                             aria-label="Copy response"
                             className="size-8 rounded-full"
-                            onClick={() => void copyMessage(message.content, messageIndex)}
+                            onClick={() =>
+                              void copyMessage(message.content, messageIndex)
+                            }
                             size="icon"
                             variant="outline"
                           >
@@ -319,6 +496,20 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
         ) : null}
 
         <div className="rounded-[1.15rem] border border-border bg-card/95 px-2 py-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
+          <div className="flex min-w-0 items-center justify-between gap-2 px-1.5 py-1">
+            <HistoryDropdown
+              activeConversationId={activeConversationId}
+              conversations={groupedConversations}
+              isLoading={isLoadingHistory}
+              onNewChat={startNewChat}
+              onSelectConversation={(conversationId) =>
+                void loadConversation(conversationId)
+              }
+            />
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              {activeConversation?.title || "New chat"}
+            </span>
+          </div>
           <ScopeBreadcrumb
             availableIssueTypes={availableIssueTypes}
             bucketLabel={bucketLabel}
@@ -335,7 +526,7 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
             pillars={breakdown.pillars}
           />
 
-          <div className="flex items-end gap-2 px-1.5 pb-1 pt-0.5">
+          <div className="flex items-end gap-2 px-1.5 pt-0.5 pb-1">
             <Textarea
               ref={textareaRef}
               className="max-h-[22vh] min-h-9 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -354,12 +545,87 @@ export function RevserpAIView({ breakdown }: { breakdown: ScoreBreakdownResponse
               onClick={() => void handleSubmit()}
               size="icon"
             >
-              {isSending ? <Loader2Icon className="size-4 animate-spin" /> : <SendIcon className="size-4" />}
+              {isSending ? (
+                <Loader2Icon className="size-4 animate-spin" />
+              ) : (
+                <SendIcon className="size-4" />
+              )}
             </Button>
           </div>
         </div>
       </div>
     </section>
+  )
+}
+
+function HistoryDropdown({
+  activeConversationId,
+  conversations,
+  isLoading,
+  onNewChat,
+  onSelectConversation,
+}: {
+  activeConversationId: string | null
+  conversations: ConversationGroup[]
+  isLoading: boolean
+  onNewChat: () => void
+  onSelectConversation: (conversationId: string) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="ghost" className="h-7 rounded-full px-2 text-xs" />
+        }
+      >
+        <MessageSquareIcon className="size-3.5" />
+        History
+        <ChevronDownIcon className="size-3 opacity-60" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-96 w-80 rounded-2xl p-1.5"
+      >
+        <DropdownMenuItem onClick={onNewChat}>
+          <PlusIcon className="size-4" />
+          New chat
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {isLoading ? (
+          <DropdownMenuItem disabled>
+            <Loader2Icon className="size-4 animate-spin" />
+            Loading history...
+          </DropdownMenuItem>
+        ) : conversations.length === 0 ? (
+          <DropdownMenuItem disabled>No saved chats yet</DropdownMenuItem>
+        ) : (
+          conversations.map((group) => (
+            <DropdownMenuGroup key={group.label}>
+              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+              {group.conversations.map((conversation) => (
+                <DropdownMenuItem
+                  key={conversation.id}
+                  onClick={() => onSelectConversation(conversation.id)}
+                  className="items-start gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">
+                      {conversation.title || "Untitled chat"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {formatConversationTime(conversation.updated_at)}
+                    </div>
+                  </div>
+                  {activeConversationId === conversation.id ? (
+                    <CheckIcon className="mt-0.5 size-4" />
+                  ) : null}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -399,18 +665,33 @@ function ScopeBreadcrumb({
           <BreadcrumbItem>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button variant="ghost" className="h-7 max-w-36 justify-start rounded-full px-2 text-xs" />}
+                render={
+                  <Button
+                    variant="ghost"
+                    className="h-7 max-w-36 justify-start rounded-full px-2 text-xs"
+                  />
+                }
               >
-                <span className="truncate">{selectedPillar?.label ?? "Pillar"}</span>
+                <span className="truncate">
+                  {selectedPillar?.label ?? "Pillar"}
+                </span>
                 <ChevronDownIcon className="size-3 opacity-60" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56 rounded-2xl p-1.5">
+              <DropdownMenuContent
+                align="start"
+                className="w-56 rounded-2xl p-1.5"
+              >
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Pillar</DropdownMenuLabel>
                   {pillars.map((pillar) => (
-                    <DropdownMenuItem key={pillar.id} onClick={() => onSelectPillar(pillar)}>
+                    <DropdownMenuItem
+                      key={pillar.id}
+                      onClick={() => onSelectPillar(pillar)}
+                    >
                       <span className="truncate">{pillar.label}</span>
-                      {selectedPillarId === pillar.id ? <CheckIcon className="ml-auto size-4" /> : null}
+                      {selectedPillarId === pillar.id ? (
+                        <CheckIcon className="ml-auto size-4" />
+                      ) : null}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>
@@ -421,12 +702,20 @@ function ScopeBreadcrumb({
           <BreadcrumbItem>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button variant="ghost" className="h-7 max-w-44 justify-start rounded-full px-2 text-xs" />}
+                render={
+                  <Button
+                    variant="ghost"
+                    className="h-7 max-w-44 justify-start rounded-full px-2 text-xs"
+                  />
+                }
               >
                 <span className="truncate">{bucketLabel}</span>
                 <ChevronDownIcon className="size-3 opacity-60" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-96 w-72 overflow-y-auto rounded-2xl p-1.5">
+              <DropdownMenuContent
+                align="start"
+                className="max-h-96 w-72 overflow-y-auto rounded-2xl p-1.5"
+              >
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Buckets</DropdownMenuLabel>
                   {selectedPillarBuckets.map((bucket) => (
@@ -435,8 +724,13 @@ function ScopeBreadcrumb({
                       key={bucket.id}
                       onCheckedChange={() => onToggleBucket(bucket)}
                     >
-                      <span className="min-w-0 flex-1 truncate">{formatBucketLabel(bucket.id, bucket.label)}</span>
-                      <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">
+                      <span className="min-w-0 flex-1 truncate">
+                        {formatBucketLabel(bucket.id, bucket.label)}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="ml-2 shrink-0 text-[10px]"
+                      >
                         {bucket.affected_url_count}
                       </Badge>
                     </DropdownMenuCheckboxItem>
@@ -449,17 +743,27 @@ function ScopeBreadcrumb({
           <BreadcrumbItem>
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button variant="ghost" className="h-7 max-w-52 justify-start rounded-full px-2 text-xs" />}
+                render={
+                  <Button
+                    variant="ghost"
+                    className="h-7 max-w-52 justify-start rounded-full px-2 text-xs"
+                  />
+                }
               >
                 <span className="truncate">{issueTypeLabel}</span>
                 <ChevronDownIcon className="size-3 opacity-60" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-96 w-80 overflow-y-auto rounded-2xl p-1.5">
+              <DropdownMenuContent
+                align="start"
+                className="max-h-96 w-80 overflow-y-auto rounded-2xl p-1.5"
+              >
                 <DropdownMenuGroup>
                   <DropdownMenuLabel>Issue types</DropdownMenuLabel>
                   <DropdownMenuItem onClick={onSelectAllIssueTypes}>
                     All issue types
-                    {selectedIssueTypeIds.length === 0 ? <CheckIcon className="ml-auto size-4" /> : null}
+                    {selectedIssueTypeIds.length === 0 ? (
+                      <CheckIcon className="ml-auto size-4" />
+                    ) : null}
                   </DropdownMenuItem>
                   {availableIssueTypes.map((issueType) => (
                     <DropdownMenuCheckboxItem
@@ -467,8 +771,13 @@ function ScopeBreadcrumb({
                       key={issueType.id}
                       onCheckedChange={() => onToggleIssueType(issueType)}
                     >
-                      <span className="min-w-0 flex-1 truncate">{issueType.label}</span>
-                      <Badge variant="outline" className="ml-2 shrink-0 text-[10px]">
+                      <span className="min-w-0 flex-1 truncate">
+                        {issueType.label}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className="ml-2 shrink-0 text-[10px]"
+                      >
                         {issueType.affected_url_count}
                       </Badge>
                     </DropdownMenuCheckboxItem>
@@ -483,14 +792,15 @@ function ScopeBreadcrumb({
   )
 }
 
-function persistMessages(crawlId: string, messages: RevserpAIMessage[]) {
-  chatStateByCrawlId.set(crawlId, messages)
-}
-
 type AIScopeState = {
   pillarId: string
   bucketIds: string[]
   issueTypeIds: string[]
+}
+
+type ConversationGroup = {
+  label: string
+  conversations: AIConversationResponse[]
 }
 
 function getNextScopeState(
@@ -500,7 +810,11 @@ function getNextScopeState(
   selectedIssueTypeIds: string[]
 ): AIScopeState | null {
   if (!breakdown?.pillars.length) {
-    if (!selectedPillarId && !selectedBucketIds.length && !selectedIssueTypeIds.length) {
+    if (
+      !selectedPillarId &&
+      !selectedBucketIds.length &&
+      !selectedIssueTypeIds.length
+    ) {
       return null
     }
 
@@ -508,9 +822,14 @@ function getNextScopeState(
   }
 
   const selectedPillar =
-    breakdown.pillars.find((pillar) => pillar.id === selectedPillarId) ?? breakdown.pillars[0]
-  const validBucketIds = new Set(selectedPillar.buckets.map((bucket) => bucket.id))
-  let nextBucketIds = selectedBucketIds.filter((bucketId) => validBucketIds.has(bucketId))
+    breakdown.pillars.find((pillar) => pillar.id === selectedPillarId) ??
+    breakdown.pillars[0]
+  const validBucketIds = new Set(
+    selectedPillar.buckets.map((bucket) => bucket.id)
+  )
+  let nextBucketIds = selectedBucketIds.filter((bucketId) =>
+    validBucketIds.has(bucketId)
+  )
 
   if (!nextBucketIds.length && selectedPillar.buckets[0]) {
     nextBucketIds = [selectedPillar.buckets[0].id]
@@ -558,4 +877,65 @@ function areStringArraysEqual(left: string[], right: string[]) {
   }
 
   return true
+}
+
+function newMessageFromResponse(message: AIMessageResponse): RevserpAIMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+  }
+}
+
+function upsertConversation(
+  conversations: AIConversationResponse[],
+  conversation: AIConversationResponse
+) {
+  return [
+    conversation,
+    ...conversations.filter((item) => item.id !== conversation.id),
+  ]
+}
+
+function groupConversationsByDate(
+  conversations: AIConversationResponse[]
+): ConversationGroup[] {
+  const groups: ConversationGroup[] = []
+  const groupByLabel = new Map<string, AIConversationResponse[]>()
+
+  for (const conversation of conversations) {
+    const label = formatConversationDate(conversation.updated_at)
+    const group = groupByLabel.get(label)
+    if (group) {
+      group.push(conversation)
+      continue
+    }
+    const conversationsForDate = [conversation]
+    groupByLabel.set(label, conversationsForDate)
+    groups.push({ label, conversations: conversationsForDate })
+  }
+
+  return groups
+}
+
+function formatConversationDate(value: string) {
+  const date = new Date(value)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) return "Today"
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function formatConversationTime(value: string) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })
 }

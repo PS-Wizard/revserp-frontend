@@ -286,3 +286,50 @@ export type GooglePSIStoredResult = {
 }
 
 export type GooglePSIResults = GooglePSIStoredResult[]
+
+export type AIConversationResponse = {
+  id: string
+  project_id: string
+  crawl_id?: string
+  created_by_user_id: string
+  title?: string
+  message_count: number
+  created_at: string
+  updated_at: string
+}
+
+export type AIMessageResponse = {
+  id: string
+  conversation_id: string
+  role: "user" | "assistant"
+  content: string
+  crawl_id?: string
+  scope?: unknown
+  model?: string
+  created_at: string
+}
+
+export type AIConversationsResponse = {
+  conversations: AIConversationResponse[]
+}
+
+export type AIConversationDetailResponse = {
+  conversation: AIConversationResponse
+  messages: AIMessageResponse[]
+}
+
+export type CreateAIConversationResponse = {
+  conversation: AIConversationResponse
+}
+
+export type CreateAIConversationMessageResponse = {
+  conversation: AIConversationResponse
+  user_message: AIMessageResponse
+  assistant_message: AIMessageResponse
+  scope: {
+    pillar_label: string
+    bucket_label: string
+    issue_count: number
+    url_count: number
+  }
+}
