@@ -46,11 +46,13 @@ export function IssueExplorer({
   breakdown,
   initialPillarId,
   onGenerateAIFixesNow,
+  onOpenAIConversation,
   projectId,
 }: {
   breakdown: ScoreBreakdownResponse | null
   initialPillarId?: string
   onGenerateAIFixesNow?: (request: PendingAIFixRequest) => void
+  onOpenAIConversation?: (conversationId: string) => void
   projectId?: string
 }) {
   const [selectedPillarIds, setSelectedPillarIds] = useState<string[]>([])
@@ -324,8 +326,15 @@ export function IssueExplorer({
 
       toast.promise(queuedFixPromise, {
         loading: `Generating fixes for ${target.issueTypeLabel}…`,
-        success: (conversation) =>
-          `Fixes are ready in “${conversation.title || "Untitled chat"}”.`,
+        success: (conversation) => ({
+          message: `Fixes are ready in “${conversation.title || "Untitled chat"}”.`,
+          action: onOpenAIConversation
+            ? {
+                label: "Open chat",
+                onClick: () => onOpenAIConversation(conversation.id),
+              }
+            : undefined,
+        }),
         error: (error) =>
           error instanceof ApiError
             ? error.message
@@ -338,7 +347,7 @@ export function IssueExplorer({
       }
       void queuedFixPromise.then(clearPendingTarget, clearPendingTarget)
     },
-    [breakdown?.crawl_id, onGenerateAIFixesNow, projectId]
+    [breakdown?.crawl_id, onGenerateAIFixesNow, onOpenAIConversation, projectId]
   )
 
   if (!breakdown || !pillarOptions.length || !availableBucketScopes.length) {

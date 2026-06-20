@@ -154,6 +154,12 @@ export default function AppPage() {
     setView("revserp-ai")
   }
 
+  const handleOpenAIConversation = (conversationId: string) => {
+    setPendingAIFixRequest(null)
+    setOpenAIConversationId(conversationId)
+    setView("revserp-ai")
+  }
+
   const crawlsDataKey = useMemo(
     () =>
       recentCrawls
@@ -301,6 +307,7 @@ export default function AppPage() {
                 <IssueExplorer
                   breakdown={stableBreakdown}
                   onGenerateAIFixesNow={handleGenerateAIFixesNow}
+                  onOpenAIConversation={handleOpenAIConversation}
                   projectId={activeProject?.id}
                 />
               </TabsContent>
@@ -311,6 +318,7 @@ export default function AppPage() {
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
                   onGenerateAIFixesNow={handleGenerateAIFixesNow}
+                  onOpenAIConversation={handleOpenAIConversation}
                   pillarId="seo"
                   projectId={activeProject?.id}
                   title="SEO"
@@ -323,6 +331,7 @@ export default function AppPage() {
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
                   onGenerateAIFixesNow={handleGenerateAIFixesNow}
+                  onOpenAIConversation={handleOpenAIConversation}
                   pillarId="aeo"
                   projectId={activeProject?.id}
                   title="AEO"
@@ -335,6 +344,7 @@ export default function AppPage() {
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
                   onGenerateAIFixesNow={handleGenerateAIFixesNow}
+                  onOpenAIConversation={handleOpenAIConversation}
                   pillarId="pagespeed"
                   projectId={activeProject?.id}
                   title="PageSpeed"

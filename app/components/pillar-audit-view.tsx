@@ -36,6 +36,7 @@ type PillarAuditViewProps = {
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
   onGenerateAIFixesNow?: (request: PendingAIFixRequest) => void
+  onOpenAIConversation?: (conversationId: string) => void
   pillarId: string
   projectId?: string
   title: string
@@ -46,6 +47,7 @@ export function PillarAuditView({
   crawlBreakdowns,
   currentBreakdown,
   onGenerateAIFixesNow,
+  onOpenAIConversation,
   pillarId,
   projectId,
   title,
@@ -94,6 +96,7 @@ export function PillarAuditView({
         breakdown={currentBreakdown}
         initialPillarId={pillarId}
         onGenerateAIFixesNow={onGenerateAIFixesNow}
+        onOpenAIConversation={onOpenAIConversation}
         projectId={projectId}
       />
     </div>

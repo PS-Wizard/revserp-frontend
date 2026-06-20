@@ -107,6 +107,7 @@ export function RevserpAIView({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const handledPendingAIFixRequestIdRef = useRef<string | null>(null)
+  const inFlightPendingAIFixRequestIdRef = useRef<string | null>(null)
   const activeSendRequestIdRef = useRef<string | null>(null)
   const crawlId = breakdown?.crawl_id ?? ""
 
@@ -316,14 +317,14 @@ export function RevserpAIView({
   useEffect(() => {
     if (!pendingAIFixRequest || !projectId || !breakdown?.crawl_id) return
     if (
-      handledPendingAIFixRequestIdRef.current === pendingAIFixRequest.requestId
+      handledPendingAIFixRequestIdRef.current === pendingAIFixRequest.requestId ||
+      inFlightPendingAIFixRequestIdRef.current === pendingAIFixRequest.requestId
     )
       return
 
-    handledPendingAIFixRequestIdRef.current = pendingAIFixRequest.requestId
     const request = pendingAIFixRequest
     const crawlID = breakdown.crawl_id
-    let cancelled = false
+    inFlightPendingAIFixRequestIdRef.current = request.requestId
 
     async function generatePendingFix() {
       const target = request.target
@@ -345,7 +346,7 @@ export function RevserpAIView({
             title: request.title,
           }
         )
-        if (cancelled || !isActiveSendRequest(request.requestId)) return
+        if (!isActiveSendRequest(request.requestId)) return
 
         setActiveConversationId(created.conversation.id)
         setConversations((current) =>
@@ -364,7 +365,7 @@ export function RevserpAIView({
               content: request.prompt,
             }
           )
-        if (cancelled || !isActiveSendRequest(request.requestId)) return
+        if (!isActiveSendRequest(request.requestId)) return
 
         setActiveConversationId(response.conversation.id)
         setMessages([
@@ -375,7 +376,7 @@ export function RevserpAIView({
           upsertConversation(current, response.conversation)
         )
       } catch (error) {
-        if (!cancelled) {
+        if (isActiveSendRequest(request.requestId)) {
           setErrorMessage(
             error instanceof ApiError
               ? error.message
@@ -383,18 +384,16 @@ export function RevserpAIView({
           )
         }
       } finally {
-        if (!cancelled) {
-          finishSending(request.requestId)
-          onPendingAIFixRequestSettled?.(request.requestId)
+        if (inFlightPendingAIFixRequestIdRef.current === request.requestId) {
+          inFlightPendingAIFixRequestIdRef.current = null
         }
+        handledPendingAIFixRequestIdRef.current = request.requestId
+        finishSending(request.requestId)
+        onPendingAIFixRequestSettled?.(request.requestId)
       }
     }
 
     void generatePendingFix()
-
-    return () => {
-      cancelled = true
-    }
   }, [breakdown?.crawl_id, pendingAIFixRequest, projectId])
 
   useEffect(() => {
