@@ -45,13 +45,11 @@ const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
 export function IssueExplorer({
   breakdown,
   initialPillarId,
-  onGenerateAIFixesNow,
   onOpenAIConversation,
   projectId,
 }: {
   breakdown: ScoreBreakdownResponse | null
   initialPillarId?: string
-  onGenerateAIFixesNow?: (request: PendingAIFixRequest) => void
   onOpenAIConversation?: (conversationId: string) => void
   projectId?: string
 }) {
@@ -294,21 +292,13 @@ export function IssueExplorer({
   )
 
   const handleFixAction = useCallback(
-    (target: AIFixTarget, action: "now" | "queue") => {
+    (target: AIFixTarget) => {
       if (!breakdown?.crawl_id || !projectId) {
         toast.error("Recommended fixes are unavailable for this view.")
         return
       }
 
       const request = buildPendingAIFixRequest(target)
-      if (action === "now") {
-        if (!onGenerateAIFixesNow) {
-          toast.error("Generate Fixes Now is unavailable for this view.")
-          return
-        }
-        onGenerateAIFixesNow(request)
-        return
-      }
 
       if (pendingFixTargetKeysRef.current.has(target.key)) {
         return
@@ -347,7 +337,7 @@ export function IssueExplorer({
       }
       void queuedFixPromise.then(clearPendingTarget, clearPendingTarget)
     },
-    [breakdown?.crawl_id, onGenerateAIFixesNow, onOpenAIConversation, projectId]
+    [breakdown?.crawl_id, onOpenAIConversation, projectId]
   )
 
   if (!breakdown || !pillarOptions.length || !availableBucketScopes.length) {

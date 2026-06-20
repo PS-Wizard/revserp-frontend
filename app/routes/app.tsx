@@ -5,7 +5,6 @@ import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { CompileLoader } from "~/components/compile-loader"
 import { IssueExplorer } from "~/components/issue-explorer"
-import type { PendingAIFixRequest } from "~/components/issue-explorer/types"
 import {
   PillarAuditView,
   type CrawlBreakdown,
@@ -146,16 +145,8 @@ export default function AppPage() {
   )
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
-  const [pendingAIFixRequest, setPendingAIFixRequest] = useState<PendingAIFixRequest | null>(null)
-
-  const handleGenerateAIFixesNow = (request: PendingAIFixRequest) => {
-    setOpenAIConversationId(null)
-    setPendingAIFixRequest(request)
-    setView("revserp-ai")
-  }
 
   const handleOpenAIConversation = (conversationId: string) => {
-    setPendingAIFixRequest(null)
     setOpenAIConversationId(conversationId)
     setView("revserp-ai")
   }
@@ -306,7 +297,6 @@ export default function AppPage() {
                 </div>
                 <IssueExplorer
                   breakdown={stableBreakdown}
-                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   onOpenAIConversation={handleOpenAIConversation}
                   projectId={activeProject?.id}
                 />
@@ -317,7 +307,6 @@ export default function AppPage() {
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
-                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="seo"
                   projectId={activeProject?.id}
@@ -330,7 +319,6 @@ export default function AppPage() {
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
-                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="aeo"
                   projectId={activeProject?.id}
@@ -343,7 +331,6 @@ export default function AppPage() {
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
-                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="pagespeed"
                   projectId={activeProject?.id}
@@ -389,12 +376,6 @@ export default function AppPage() {
           breakdown={stableBreakdown}
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
-          pendingAIFixRequest={pendingAIFixRequest}
-          onPendingAIFixRequestSettled={(requestId) => {
-            setPendingAIFixRequest((current) =>
-              current?.requestId === requestId ? null : current
-            )
-          }}
         />
       ) : (
         <div className="p-6">

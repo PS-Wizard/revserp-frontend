@@ -18,7 +18,6 @@ import {
 import { Separator } from "~/components/ui/separator"
 import { GooglePSIDrawer } from "~/components/gsc-overview/google-psi-drawer"
 import type { GooglePSIStoredResult } from "~/lib/api.types"
-import type { PendingAIFixRequest } from "~/components/issue-explorer/types"
 import type {
   CrawlResponse,
   ScoreBreakdownBucketResponse,
@@ -35,7 +34,6 @@ type PillarAuditViewProps = {
   activeProjectName?: string
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
-  onGenerateAIFixesNow?: (request: PendingAIFixRequest) => void
   onOpenAIConversation?: (conversationId: string) => void
   pillarId: string
   projectId?: string
@@ -46,7 +44,6 @@ export function PillarAuditView({
   activeProjectName,
   crawlBreakdowns,
   currentBreakdown,
-  onGenerateAIFixesNow,
   onOpenAIConversation,
   pillarId,
   projectId,
@@ -95,7 +92,6 @@ export function PillarAuditView({
       <IssueExplorer
         breakdown={currentBreakdown}
         initialPillarId={pillarId}
-        onGenerateAIFixesNow={onGenerateAIFixesNow}
         onOpenAIConversation={onOpenAIConversation}
         projectId={projectId}
       />

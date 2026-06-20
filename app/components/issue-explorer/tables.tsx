@@ -1,20 +1,8 @@
-import {
-  ChevronDownIcon,
-  ClockIcon,
-  Loader2Icon,
-  SparklesIcon,
-} from "lucide-react"
+import { Loader2Icon, SparklesIcon } from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
 import {
   Table,
   TableBody,
@@ -27,12 +15,10 @@ import {
 import type { AIFixTarget, IssueScope, MergedIssueUrlRow } from "./types"
 import { formatPenalty } from "./utils"
 
-type IssueFixAction = "now" | "queue"
-
 type IssueTypeTableProps = {
   hasMultipleSources: boolean
   isFixActionPending: (targetKey: string) => boolean
-  onFixAction: (target: AIFixTarget, action: IssueFixAction) => void
+  onFixAction: (target: AIFixTarget) => void
   onSelectIssueType: (value: string) => void
   rows: IssueScope[]
   totalRows: number
@@ -102,9 +88,9 @@ export function IssueTypeTable({
                   className="text-right"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <RecommendedFixesMenu
+                  <RecommendFixesButton
                     isPending={isFixActionPending(target.key)}
-                    onSelect={(action) => onFixAction(target, action)}
+                    onClick={() => onFixAction(target)}
                   />
                 </TableCell>
               </TableRow>
@@ -121,7 +107,7 @@ type UrlIssueTableProps = {
   hasMultipleSources: boolean
   isFixActionPending: (targetKey: string) => boolean
   isLoading: boolean
-  onFixAction: (target: AIFixTarget, action: IssueFixAction) => void
+  onFixAction: (target: AIFixTarget) => void
   rows: MergedIssueUrlRow[]
   title: string
   totalRows: number
@@ -197,9 +183,9 @@ export function UrlIssueTable({
                   {row.details}
                 </TableCell>
                 <TableCell className="text-right">
-                  <RecommendedFixesMenu
+                  <RecommendFixesButton
                     isPending={isFixActionPending(target.key)}
-                    onSelect={(action) => onFixAction(target, action)}
+                    onClick={() => onFixAction(target)}
                   />
                 </TableCell>
               </TableRow>
@@ -219,52 +205,28 @@ export function EmptyMessage({ message }: { message: string }) {
   )
 }
 
-function RecommendedFixesMenu({
+function RecommendFixesButton({
   isPending,
-  onSelect,
+  onClick,
 }: {
   isPending: boolean
-  onSelect: (action: IssueFixAction) => void
+  onClick: () => void
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            className="h-8 rounded-full px-3 text-xs"
-            disabled={isPending}
-            size="sm"
-            variant="outline"
-          />
-        }
-      >
-        {isPending ? (
-          <Loader2Icon className="size-3.5 animate-spin" />
-        ) : (
-          <SparklesIcon className="size-3.5" />
-        )}
-        View Recommended Fixes
-        <ChevronDownIcon className="size-3 opacity-60" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            disabled={isPending}
-            onClick={() => onSelect("now")}
-          >
-            <SparklesIcon className="size-4" />
-            Generate Fixes Now
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={isPending}
-            onClick={() => onSelect("queue")}
-          >
-            <ClockIcon className="size-4" />
-            Queue Fixes
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      className="h-8 rounded-full px-3 text-xs"
+      disabled={isPending}
+      onClick={onClick}
+      size="sm"
+      variant="outline"
+    >
+      {isPending ? (
+        <Loader2Icon className="size-3.5 animate-spin" />
+      ) : (
+        <SparklesIcon className="size-3.5" />
+      )}
+      Recommend Fixes
+    </Button>
   )
 }
 
