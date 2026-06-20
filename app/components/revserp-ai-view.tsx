@@ -10,6 +10,7 @@ import {
   MessageSquareIcon,
   PlusIcon,
   SendIcon,
+  TrashIcon,
   SparklesIcon,
 } from "lucide-react"
 
@@ -25,6 +26,13 @@ import {
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "~/components/ui/context-menu"
+import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -35,7 +43,12 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { Textarea } from "~/components/ui/textarea"
-import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
+import {
+  ApiError,
+  clientApiDelete,
+  clientApiFetch,
+  clientApiPost,
+} from "~/lib/api"
 import type {
   AIConversationDetailResponse,
   AIConversationResponse,
@@ -77,6 +90,9 @@ export function RevserpAIView({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [isSending, setIsSending] = useState(false)
+  const [deletingConversationId, setDeletingConversationId] = useState<
+    string | null
+  >(null)
   const [errorMessage, setErrorMessage] = useState("")
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
     null
@@ -373,6 +389,41 @@ export function RevserpAIView({
     setErrorMessage("")
   }
 
+  async function deleteConversation(conversationId: string) {
+    if (deletingConversationId) return
+
+    const previousConversations = conversations
+    const previousActiveConversationId = activeConversationId
+    const previousMessages = messages
+    const wasActiveConversation = activeConversationId === conversationId
+    setDeletingConversationId(conversationId)
+    setErrorMessage("")
+    setConversations((current) =>
+      current.filter((conversation) => conversation.id !== conversationId)
+    )
+    if (wasActiveConversation) {
+      setActiveConversationId(null)
+      setMessages([])
+    }
+
+    try {
+      await clientApiDelete<null>(`/ai/conversations/${conversationId}`)
+    } catch (error) {
+      setConversations(previousConversations)
+      if (wasActiveConversation) {
+        setActiveConversationId(previousActiveConversationId)
+        setMessages(previousMessages)
+      }
+      setErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to delete AI conversation."
+      )
+    } finally {
+      setDeletingConversationId(null)
+    }
+  }
+
   function resetTextareaHeight() {
     window.requestAnimationFrame(() => {
       if (!textareaRef.current) return
@@ -502,8 +553,12 @@ export function RevserpAIView({
               conversations={groupedConversations}
               isLoading={isLoadingHistory}
               onNewChat={startNewChat}
+              deletingConversationId={deletingConversationId}
               onSelectConversation={(conversationId) =>
                 void loadConversation(conversationId)
+              }
+              onDeleteConversation={(conversationId) =>
+                void deleteConversation(conversationId)
               }
             />
             <span className="min-w-0 truncate text-xs text-muted-foreground">
@@ -561,13 +616,17 @@ export function RevserpAIView({
 function HistoryDropdown({
   activeConversationId,
   conversations,
+  deletingConversationId,
   isLoading,
+  onDeleteConversation,
   onNewChat,
   onSelectConversation,
 }: {
   activeConversationId: string | null
   conversations: ConversationGroup[]
+  deletingConversationId: string | null
   isLoading: boolean
+  onDeleteConversation: (conversationId: string) => void
   onNewChat: () => void
   onSelectConversation: (conversationId: string) => void
 }) {
@@ -603,23 +662,42 @@ function HistoryDropdown({
             <DropdownMenuGroup key={group.label}>
               <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
               {group.conversations.map((conversation) => (
-                <DropdownMenuItem
-                  key={conversation.id}
-                  onClick={() => onSelectConversation(conversation.id)}
-                  className="items-start gap-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm">
-                      {conversation.title || "Untitled chat"}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatConversationTime(conversation.updated_at)}
-                    </div>
-                  </div>
-                  {activeConversationId === conversation.id ? (
-                    <CheckIcon className="mt-0.5 size-4" />
-                  ) : null}
-                </DropdownMenuItem>
+                <ContextMenu key={conversation.id}>
+                  <ContextMenuTrigger>
+                    <DropdownMenuItem
+                      onClick={() => onSelectConversation(conversation.id)}
+                      className="items-start gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm">
+                          {conversation.title || "Untitled chat"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatConversationTime(conversation.updated_at)}
+                        </div>
+                      </div>
+                      {activeConversationId === conversation.id ? (
+                        <CheckIcon className="mt-0.5 size-4" />
+                      ) : null}
+                    </DropdownMenuItem>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-40">
+                    <ContextMenuGroup>
+                      <ContextMenuItem
+                        disabled={deletingConversationId === conversation.id}
+                        onClick={() => onDeleteConversation(conversation.id)}
+                        variant="destructive"
+                      >
+                        {deletingConversationId === conversation.id ? (
+                          <Loader2Icon className="size-4 animate-spin" />
+                        ) : (
+                          <TrashIcon />
+                        )}
+                        Delete
+                      </ContextMenuItem>
+                    </ContextMenuGroup>
+                  </ContextMenuContent>
+                </ContextMenu>
               ))}
             </DropdownMenuGroup>
           ))
