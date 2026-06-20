@@ -684,7 +684,7 @@ function HistoryDropdown({
         }
       >
         <MessageSquareIcon className="size-3.5" />
-        History
+        Chats
         <ChevronDownIcon className="size-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent
