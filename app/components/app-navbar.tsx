@@ -27,13 +27,6 @@ import {
 } from "~/components/app-navbar/utils"
 import { Button } from "~/components/ui/button"
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuGroup,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "~/components/ui/context-menu"
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -654,39 +647,37 @@ export function AppNavbar({
                         <DropdownMenuGroup key={group.label}>
                           <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
                           {group.conversations.map((conv) => (
-                            <ContextMenu key={conv.id}>
-                              <ContextMenuTrigger>
-                                <DropdownMenuItem
-                                  onClick={() => handleAiConversationSelect(conv.id)}
-                                  className="items-start gap-3"
-                                >
-                                  <div className="min-w-0 flex-1">
-                                    <div className="truncate text-sm">
-                                      {conv.title || "Untitled chat"}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {formatAiConversationTime(conv.updated_at)}
-                                    </div>
-                                  </div>
-                                </DropdownMenuItem>
-                              </ContextMenuTrigger>
-                              <ContextMenuContent className="w-40">
-                                <ContextMenuGroup>
-                                  <ContextMenuItem
-                                    disabled={deletingConversationId === conv.id}
-                                    onClick={() => handleDeleteConversation(conv.id)}
-                                    variant="destructive"
-                                  >
-                                    {deletingConversationId === conv.id ? (
-                                      <Loader2Icon className="size-4 animate-spin" />
-                                    ) : (
-                                      <TrashIcon />
-                                    )}
-                                    Delete
-                                  </ContextMenuItem>
-                                </ContextMenuGroup>
-                              </ContextMenuContent>
-                            </ContextMenu>
+                            <div
+                              key={conv.id}
+                              className="group/conv flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground"
+                              onClick={() => handleAiConversationSelect(conv.id)}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate">
+                                  {conv.title || "Untitled chat"}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatAiConversationTime(conv.updated_at)}
+                                </div>
+                              </div>
+                              <Button
+                                aria-label="Delete chat"
+                                className="size-7 shrink-0 opacity-0 transition-opacity group-hover/conv:opacity-100"
+                                disabled={deletingConversationId === conv.id}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void handleDeleteConversation(conv.id)
+                                }}
+                                size="icon"
+                                variant="ghost"
+                              >
+                                {deletingConversationId === conv.id ? (
+                                  <Loader2Icon className="size-4 animate-spin" />
+                                ) : (
+                                  <TrashIcon className="size-4" />
+                                )}
+                              </Button>
+                            </div>
                           ))}
                         </DropdownMenuGroup>
                       ))
