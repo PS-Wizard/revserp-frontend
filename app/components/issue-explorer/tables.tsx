@@ -1,4 +1,9 @@
-import { ChevronDownIcon, ClockIcon, SparklesIcon } from "lucide-react"
+import {
+  ChevronDownIcon,
+  ClockIcon,
+  Loader2Icon,
+  SparklesIcon,
+} from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
 import { Badge } from "~/components/ui/badge"
@@ -234,7 +239,7 @@ function RecommendedFixesMenu({
         }
       >
         {isPending ? (
-          <CompileLoader className="text-foreground" size={14} />
+          <Loader2Icon className="size-3.5 animate-spin" />
         ) : (
           <SparklesIcon className="size-3.5" />
         )}

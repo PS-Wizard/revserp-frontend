@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeftIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import {
   ScopeBreadcrumbs,
@@ -33,6 +34,7 @@ import {
 } from "~/components/ui/card"
 import { ApiError, clientApiPost } from "~/lib/api"
 import type {
+  AIConversationResponse,
   CreateAIConversationMessageResponse,
   CreateAIConversationResponse,
   ScoreBreakdownResponse,
@@ -66,7 +68,7 @@ export function IssueExplorer({
   const [isLoadingIssueUrls, setIsLoadingIssueUrls] = useState(false)
   const [issueUrlsError, setIssueUrlsError] = useState("")
   const [pendingFixTargetKeys, setPendingFixTargetKeys] = useState<string[]>([])
-  const [aiFixActionMessage, setAIFixActionMessage] = useState("")
+  const pendingFixTargetKeysRef = useRef(new Set<string>())
   const issueUrlsCacheRef = useRef<Map<string, MergedIssueUrlRow[]> | null>(
     null
   )
@@ -301,53 +303,37 @@ export function IssueExplorer({
         return
       }
 
-      if (pendingFixTargetKeys.includes(target.key)) {
+      if (pendingFixTargetKeysRef.current.has(target.key)) {
         return
       }
 
-      setPendingFixTargetKeys((current) => [...current, target.key])
-      setAIFixActionMessage("Queued fixes in a new Revserp AI chat.")
+      pendingFixTargetKeysRef.current.add(target.key)
+      setPendingFixTargetKeys([...pendingFixTargetKeysRef.current])
 
-      void (async () => {
-        try {
-          const created = await clientApiPost<CreateAIConversationResponse>(
-            `/projects/${projectId}/ai/conversations`,
-            {
-              crawl_id: breakdown.crawl_id,
-              title: request.title,
-            }
-          )
+      const queuedFixPromise = generateQueuedAIFix({
+        crawlId: breakdown.crawl_id,
+        projectId,
+        request,
+        target,
+      })
 
-          const response =
-            await clientApiPost<CreateAIConversationMessageResponse>(
-              `/ai/conversations/${created.conversation.id}/messages`,
-              {
-                crawl_id: breakdown.crawl_id,
-                pillar_id: target.pillarId,
-                bucket_ids: [target.bucketId],
-                issue_type_ids: [target.issueTypeId],
-                issue_urls: target.urls ?? [],
-                content: request.prompt,
-              }
-            )
+      toast.promise(queuedFixPromise, {
+        loading: `Generating fixes for ${target.issueTypeLabel}…`,
+        success: (conversation) =>
+          `Fixes are ready in “${conversation.title || "Untitled chat"}”.`,
+        error: (error) =>
+          error instanceof ApiError
+            ? error.message
+            : "Unable to generate recommended fixes.",
+      })
 
-          setAIFixActionMessage(
-            `Queued fixes are ready in “${response.conversation.title || "Untitled chat"}”.`
-          )
-        } catch (error) {
-          setAIFixActionMessage(
-            error instanceof ApiError
-              ? error.message
-              : "Unable to generate recommended fixes."
-          )
-        } finally {
-          setPendingFixTargetKeys((current) =>
-            current.filter((targetKey) => targetKey !== target.key)
-          )
-        }
-      })()
+      const clearPendingTarget = () => {
+        pendingFixTargetKeysRef.current.delete(target.key)
+        setPendingFixTargetKeys([...pendingFixTargetKeysRef.current])
+      }
+      void queuedFixPromise.then(clearPendingTarget, clearPendingTarget)
     },
-    [breakdown?.crawl_id, onGenerateAIFixesNow, pendingFixTargetKeys, projectId]
+    [breakdown?.crawl_id, onGenerateAIFixesNow, projectId]
   )
 
   if (!breakdown || !pillarOptions.length || !availableBucketScopes.length) {
@@ -390,11 +376,6 @@ export function IssueExplorer({
           }
         />
       </div>
-      {aiFixActionMessage ? (
-        <p className="mb-4 rounded-lg border border-border/60 bg-card px-3 py-2 text-sm text-muted-foreground">
-          {aiFixActionMessage}
-        </p>
-      ) : null}
 
       <div className="min-h-[32rem]">
         {hasSelectedIssueTypes ? (
@@ -534,6 +515,40 @@ function buildPendingAIFixRequest(target: AIFixTarget): PendingAIFixRequest {
     title: buildAIFixConversationTitle(target),
     prompt: buildAIFixConversationPrompt(target),
   }
+}
+
+async function generateQueuedAIFix({
+  crawlId,
+  projectId,
+  request,
+  target,
+}: {
+  crawlId: string
+  projectId: string
+  request: PendingAIFixRequest
+  target: AIFixTarget
+}): Promise<AIConversationResponse> {
+  const created = await clientApiPost<CreateAIConversationResponse>(
+    `/projects/${projectId}/ai/conversations`,
+    {
+      crawl_id: crawlId,
+      title: request.title,
+    }
+  )
+
+  const response = await clientApiPost<CreateAIConversationMessageResponse>(
+    `/ai/conversations/${created.conversation.id}/messages`,
+    {
+      crawl_id: crawlId,
+      pillar_id: target.pillarId,
+      bucket_ids: [target.bucketId],
+      issue_type_ids: [target.issueTypeId],
+      issue_urls: target.urls ?? [],
+      content: request.prompt,
+    }
+  )
+
+  return response.conversation
 }
 
 function buildAIFixConversationTitle(target: AIFixTarget) {

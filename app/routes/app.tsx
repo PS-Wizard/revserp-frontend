@@ -372,6 +372,11 @@ export default function AppPage() {
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
           pendingAIFixRequest={pendingAIFixRequest}
+          onPendingAIFixRequestSettled={(requestId) => {
+            setPendingAIFixRequest((current) =>
+              current?.requestId === requestId ? null : current
+            )
+          }}
         />
       ) : (
         <div className="p-6">

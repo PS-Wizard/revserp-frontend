@@ -75,10 +75,12 @@ export function RevserpAIView({
   openConversationId,
   projectId,
   pendingAIFixRequest,
+  onPendingAIFixRequestSettled,
 }: {
   breakdown: ScoreBreakdownResponse | null
   openConversationId?: string | null
   pendingAIFixRequest?: PendingAIFixRequest | null
+  onPendingAIFixRequestSettled?: (requestId: string) => void
   projectId?: string
 }) {
   const [prompt, setPrompt] = useState("")
@@ -105,6 +107,7 @@ export function RevserpAIView({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const handledPendingAIFixRequestIdRef = useRef<string | null>(null)
+  const activeSendRequestIdRef = useRef<string | null>(null)
   const crawlId = breakdown?.crawl_id ?? ""
 
   const selectedPillar = useMemo(() => {
@@ -177,7 +180,28 @@ export function RevserpAIView({
     !isSending
   )
 
+  function startSending(requestId: string) {
+    activeSendRequestIdRef.current = requestId
+    setIsSending(true)
+  }
+
+  function finishSending(requestId: string) {
+    if (activeSendRequestIdRef.current !== requestId) return
+    activeSendRequestIdRef.current = null
+    setIsSending(false)
+  }
+
+  function cancelSending() {
+    activeSendRequestIdRef.current = null
+    setIsSending(false)
+  }
+
+  function isActiveSendRequest(requestId: string) {
+    return activeSendRequestIdRef.current === requestId
+  }
+
   const loadConversation = useCallback(async (conversationId: string) => {
+    cancelSending()
     setIsLoadingMessages(true)
     setErrorMessage("")
     try {
@@ -217,13 +241,16 @@ export function RevserpAIView({
     let cancelled = false
 
     async function loadConversations() {
-      setMessages([])
-      setActiveConversationId(null)
+      cancelSending()
       setConversations([])
       setErrorMessage("")
       setIsLoadingHistory(false)
       setIsLoadingMessages(false)
-      if (!projectId || !crawlId) return
+      if (!projectId || !crawlId) {
+        setMessages([])
+        setActiveConversationId(null)
+        return
+      }
 
       setIsLoadingHistory(true)
       try {
@@ -232,15 +259,17 @@ export function RevserpAIView({
         )
         if (cancelled) return
         setConversations(response.conversations)
-        const hasUnhandledPendingAIFixRequest =
-          pendingAIFixRequest &&
-          handledPendingAIFixRequestIdRef.current !==
-            pendingAIFixRequest.requestId
-        const firstConversation = hasUnhandledPendingAIFixRequest
+
+        const hasExternalConversationRequest = Boolean(
+          openConversationId ||
+          (pendingAIFixRequest &&
+            handledPendingAIFixRequestIdRef.current !==
+              pendingAIFixRequest.requestId)
+        )
+        const firstConversation = hasExternalConversationRequest
           ? null
-          : (response.conversations.find(
-              (conversation) => conversation.id === openConversationId
-            ) ?? response.conversations[0])
+          : response.conversations[0]
+
         if (firstConversation) {
           setIsLoadingMessages(true)
           const detail = await clientApiFetch<AIConversationDetailResponse>(
@@ -252,6 +281,9 @@ export function RevserpAIView({
           setConversations((current) =>
             upsertConversation(current, detail.conversation)
           )
+        } else if (!hasExternalConversationRequest) {
+          setMessages([])
+          setActiveConversationId(null)
         }
       } catch (error) {
         if (!cancelled) {
@@ -274,7 +306,7 @@ export function RevserpAIView({
     return () => {
       cancelled = true
     }
-  }, [crawlId, openConversationId, pendingAIFixRequest, projectId])
+  }, [crawlId, projectId])
 
   useEffect(() => {
     if (!openConversationId) return
@@ -303,7 +335,7 @@ export function RevserpAIView({
       setPrompt("")
       setErrorMessage("")
       setIsLoadingMessages(false)
-      setIsSending(true)
+      startSending(request.requestId)
 
       try {
         const created = await clientApiPost<CreateAIConversationResponse>(
@@ -313,7 +345,7 @@ export function RevserpAIView({
             title: request.title,
           }
         )
-        if (cancelled) return
+        if (cancelled || !isActiveSendRequest(request.requestId)) return
 
         setActiveConversationId(created.conversation.id)
         setConversations((current) =>
@@ -332,7 +364,7 @@ export function RevserpAIView({
               content: request.prompt,
             }
           )
-        if (cancelled) return
+        if (cancelled || !isActiveSendRequest(request.requestId)) return
 
         setActiveConversationId(response.conversation.id)
         setMessages([
@@ -352,7 +384,8 @@ export function RevserpAIView({
         }
       } finally {
         if (!cancelled) {
-          setIsSending(false)
+          finishSending(request.requestId)
+          onPendingAIFixRequestSettled?.(request.requestId)
         }
       }
     }
@@ -384,6 +417,7 @@ export function RevserpAIView({
       return
     }
 
+    const requestId = crypto.randomUUID()
     const baseMessages = messages
     const optimisticUserMessage: RevserpAIMessage = {
       role: "user",
@@ -392,7 +426,7 @@ export function RevserpAIView({
     setMessages([...baseMessages, optimisticUserMessage])
     setPrompt("")
     setErrorMessage("")
-    setIsSending(true)
+    startSending(requestId)
     resetTextareaHeight()
 
     try {
@@ -405,6 +439,7 @@ export function RevserpAIView({
             title: trimmedPrompt,
           }
         )
+        if (!isActiveSendRequest(requestId)) return
         conversationId = created.conversation.id
         setActiveConversationId(conversationId)
         setConversations((current) =>
@@ -426,6 +461,7 @@ export function RevserpAIView({
           content: trimmedPrompt,
         }
       )
+      if (!isActiveSendRequest(requestId)) return
       setMessages([
         ...baseMessages,
         newMessageFromResponse(response.user_message),
@@ -435,6 +471,7 @@ export function RevserpAIView({
         upsertConversation(current, response.conversation)
       )
     } catch (error) {
+      if (!isActiveSendRequest(requestId)) return
       setMessages(baseMessages)
       setPrompt(trimmedPrompt)
       setErrorMessage(
@@ -443,7 +480,7 @@ export function RevserpAIView({
           : "Unable to generate an AI fix."
       )
     } finally {
-      setIsSending(false)
+      finishSending(requestId)
     }
   }
 
@@ -486,6 +523,7 @@ export function RevserpAIView({
   }
 
   function startNewChat() {
+    cancelSending()
     setActiveConversationId(null)
     setMessages([])
     setErrorMessage("")
@@ -504,6 +542,7 @@ export function RevserpAIView({
       current.filter((conversation) => conversation.id !== conversationId)
     )
     if (wasActiveConversation) {
+      cancelSending()
       setActiveConversationId(null)
       setMessages([])
     }
