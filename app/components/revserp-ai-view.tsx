@@ -82,7 +82,6 @@ export function RevserpAIView({
   const [selectedPillarId, setSelectedPillarId] = useState("")
   const [selectedBucketIds, setSelectedBucketIds] = useState<string[]>([])
   const [selectedIssueTypeIds, setSelectedIssueTypeIds] = useState<string[]>([])
-  const [includeContext, setIncludeContext] = useState(true)
   const [conversations, setConversations] = useState<AIConversationResponse[]>(
     []
   )
@@ -169,7 +168,8 @@ export function RevserpAIView({
   const canSend = Boolean(
     projectId &&
     breakdown?.crawl_id &&
-    (!includeContext || (selectedPillar && selectedBuckets.length)) &&
+    selectedPillar &&
+    selectedBuckets.length &&
     prompt.trim() &&
     !isSending
   )
@@ -314,9 +314,10 @@ export function RevserpAIView({
     if (
       !projectId ||
       !breakdown?.crawl_id ||
+      !selectedPillar ||
+      !selectedBuckets.length ||
       !trimmedPrompt ||
-      isSending ||
-      (includeContext && (!selectedPillar || !selectedBuckets.length))
+      isSending
     ) {
       return
     }
@@ -351,24 +352,19 @@ export function RevserpAIView({
         )
       }
 
-      const requestBody: Record<string, unknown> = {
-        crawl_id: breakdown.crawl_id,
-        content: trimmedPrompt,
-      }
-      if (includeContext) {
-        const selectedBucketIdsForRequest = selectedBuckets.map(
-          (bucket) => bucket.id
-        )
-        if (!selectedPillar || !selectedBuckets.length) return
-        requestBody.pillar_id = selectedPillar.id
-        requestBody.bucket_id = selectedBucketIdsForRequest[0]
-        requestBody.bucket_ids = selectedBucketIdsForRequest
-        requestBody.issue_type_ids = selectedIssueTypeIds
-      }
-
+      const selectedBucketIdsForRequest = selectedBuckets.map(
+        (bucket) => bucket.id
+      )
       const response = await clientApiPost<CreateAIConversationMessageResponse>(
         `/ai/conversations/${conversationId}/messages`,
-        requestBody
+        {
+          crawl_id: breakdown.crawl_id,
+          pillar_id: selectedPillar.id,
+          bucket_id: selectedBucketIdsForRequest[0],
+          bucket_ids: selectedBucketIdsForRequest,
+          issue_type_ids: selectedIssueTypeIds,
+          content: trimmedPrompt,
+        }
       )
       if (!isActiveSendRequest(requestId)) return
       setMessages([
@@ -601,13 +597,6 @@ export function RevserpAIView({
             <span className="min-w-0 truncate text-xs text-muted-foreground">
               {activeConversation?.title || "New chat"}
             </span>
-            <Button
-              className="h-7 rounded-full px-2 text-xs"
-              onClick={() => setIncludeContext((current) => !current)}
-              variant={includeContext ? "default" : "outline"}
-            >
-              {includeContext ? "Context on" : "Context off"}
-            </Button>
           </div>
           <ScopeBreadcrumb
             availableIssueTypes={availableIssueTypes}
