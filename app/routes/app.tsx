@@ -148,6 +148,12 @@ export default function AppPage() {
   const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
   const [pendingAIFixRequest, setPendingAIFixRequest] = useState<PendingAIFixRequest | null>(null)
 
+  const handleGenerateAIFixesNow = (request: PendingAIFixRequest) => {
+    setOpenAIConversationId(null)
+    setPendingAIFixRequest(request)
+    setView("revserp-ai")
+  }
+
   const crawlsDataKey = useMemo(
     () =>
       recentCrawls
@@ -294,11 +300,7 @@ export default function AppPage() {
                 </div>
                 <IssueExplorer
                   breakdown={stableBreakdown}
-                  onGenerateAIFixesNow={(request) => {
-                    setOpenAIConversationId(null)
-                    setPendingAIFixRequest(request)
-                    setView("revserp-ai")
-                  }}
+                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   projectId={activeProject?.id}
                 />
               </TabsContent>
@@ -308,7 +310,9 @@ export default function AppPage() {
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
+                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   pillarId="seo"
+                  projectId={activeProject?.id}
                   title="SEO"
                 />
               </TabsContent>
@@ -318,7 +322,9 @@ export default function AppPage() {
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
+                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   pillarId="aeo"
+                  projectId={activeProject?.id}
                   title="AEO"
                 />
               </TabsContent>
@@ -328,7 +334,9 @@ export default function AppPage() {
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentBreakdown={stableBreakdown}
+                  onGenerateAIFixesNow={handleGenerateAIFixesNow}
                   pillarId="pagespeed"
+                  projectId={activeProject?.id}
                   title="PageSpeed"
                 />
               </TabsContent>

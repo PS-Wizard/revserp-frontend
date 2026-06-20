@@ -294,12 +294,17 @@ export function IssueExplorer({
   const handleFixAction = useCallback(
     (target: AIFixTarget, action: "now" | "queue") => {
       if (!breakdown?.crawl_id || !projectId) {
+        toast.error("Recommended fixes are unavailable for this view.")
         return
       }
 
       const request = buildPendingAIFixRequest(target)
       if (action === "now") {
-        onGenerateAIFixesNow?.(request)
+        if (!onGenerateAIFixesNow) {
+          toast.error("Generate Fixes Now is unavailable for this view.")
+          return
+        }
+        onGenerateAIFixesNow(request)
         return
       }
 
