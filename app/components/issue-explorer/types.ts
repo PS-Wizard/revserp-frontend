@@ -33,6 +33,13 @@ export type AIFixTarget = {
   urls?: string[]
 }
 
+export type PendingAIFixRequest = {
+  requestId: string
+  target: AIFixTarget
+  title: string
+  prompt: string
+}
+
 export type MergedIssueUrlRow =
   ScoreBreakdownIssueURLsResponse["urls"][number] & {
     source: string

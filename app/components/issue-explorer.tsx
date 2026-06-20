@@ -17,6 +17,7 @@ import type {
   BucketScope,
   IssueScope,
   MergedIssueUrlRow,
+  PendingAIFixRequest,
 } from "~/components/issue-explorer/types"
 import {
   areStringArraysEqual,
@@ -42,12 +43,12 @@ const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
 export function IssueExplorer({
   breakdown,
   initialPillarId,
-  onOpenAIConversation,
+  onGenerateAIFixesNow,
   projectId,
 }: {
   breakdown: ScoreBreakdownResponse | null
   initialPillarId?: string
-  onOpenAIConversation?: (conversationId: string) => void
+  onGenerateAIFixesNow?: (request: PendingAIFixRequest) => void
   projectId?: string
 }) {
   const [selectedPillarIds, setSelectedPillarIds] = useState<string[]>([])
@@ -289,61 +290,64 @@ export function IssueExplorer({
   )
 
   const handleFixAction = useCallback(
-    async (target: AIFixTarget, action: "now" | "queue") => {
-      if (
-        !breakdown?.crawl_id ||
-        !projectId ||
-        pendingFixTargetKeys.includes(target.key)
-      ) {
+    (target: AIFixTarget, action: "now" | "queue") => {
+      if (!breakdown?.crawl_id || !projectId) {
+        return
+      }
+
+      const request = buildPendingAIFixRequest(target)
+      if (action === "now") {
+        onGenerateAIFixesNow?.(request)
+        return
+      }
+
+      if (pendingFixTargetKeys.includes(target.key)) {
         return
       }
 
       setPendingFixTargetKeys((current) => [...current, target.key])
-      setAIFixActionMessage("")
+      setAIFixActionMessage("Queued fixes in a new Revserp AI chat.")
 
-      try {
-        const created = await clientApiPost<CreateAIConversationResponse>(
-          `/projects/${projectId}/ai/conversations`,
-          {
-            crawl_id: breakdown.crawl_id,
-            title: buildAIFixConversationTitle(target),
-          }
-        )
-
-        const response =
-          await clientApiPost<CreateAIConversationMessageResponse>(
-            `/ai/conversations/${created.conversation.id}/messages`,
+      void (async () => {
+        try {
+          const created = await clientApiPost<CreateAIConversationResponse>(
+            `/projects/${projectId}/ai/conversations`,
             {
               crawl_id: breakdown.crawl_id,
-              pillar_id: target.pillarId,
-              bucket_ids: [target.bucketId],
-              issue_type_ids: [target.issueTypeId],
-              issue_urls: target.urls ?? [],
-              content: buildAIFixConversationPrompt(target),
+              title: request.title,
             }
           )
 
-        setAIFixActionMessage(
-          action === "queue"
-            ? `Queued fixes in “${response.conversation.title || "Untitled chat"}”.`
-            : "Recommended fixes generated."
-        )
-        if (action === "now") {
-          onOpenAIConversation?.(response.conversation.id)
+          const response =
+            await clientApiPost<CreateAIConversationMessageResponse>(
+              `/ai/conversations/${created.conversation.id}/messages`,
+              {
+                crawl_id: breakdown.crawl_id,
+                pillar_id: target.pillarId,
+                bucket_ids: [target.bucketId],
+                issue_type_ids: [target.issueTypeId],
+                issue_urls: target.urls ?? [],
+                content: request.prompt,
+              }
+            )
+
+          setAIFixActionMessage(
+            `Queued fixes are ready in “${response.conversation.title || "Untitled chat"}”.`
+          )
+        } catch (error) {
+          setAIFixActionMessage(
+            error instanceof ApiError
+              ? error.message
+              : "Unable to generate recommended fixes."
+          )
+        } finally {
+          setPendingFixTargetKeys((current) =>
+            current.filter((targetKey) => targetKey !== target.key)
+          )
         }
-      } catch (error) {
-        setAIFixActionMessage(
-          error instanceof ApiError
-            ? error.message
-            : "Unable to generate recommended fixes."
-        )
-      } finally {
-        setPendingFixTargetKeys((current) =>
-          current.filter((targetKey) => targetKey !== target.key)
-        )
-      }
+      })()
     },
-    [breakdown?.crawl_id, onOpenAIConversation, pendingFixTargetKeys, projectId]
+    [breakdown?.crawl_id, onGenerateAIFixesNow, pendingFixTargetKeys, projectId]
   )
 
   if (!breakdown || !pillarOptions.length || !availableBucketScopes.length) {
@@ -520,6 +524,15 @@ function syncSelectedBuckets({
 
   if (!areStringArraysEqual(nextSelectedBucketKeys, selectedBucketKeys)) {
     setSelectedBucketKeys(nextSelectedBucketKeys)
+  }
+}
+
+function buildPendingAIFixRequest(target: AIFixTarget): PendingAIFixRequest {
+  return {
+    requestId: `${Date.now()}:${target.key}`,
+    target,
+    title: buildAIFixConversationTitle(target),
+    prompt: buildAIFixConversationPrompt(target),
   }
 }
 

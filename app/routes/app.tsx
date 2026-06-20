@@ -5,6 +5,7 @@ import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { CompileLoader } from "~/components/compile-loader"
 import { IssueExplorer } from "~/components/issue-explorer"
+import type { PendingAIFixRequest } from "~/components/issue-explorer/types"
 import {
   PillarAuditView,
   type CrawlBreakdown,
@@ -145,6 +146,7 @@ export default function AppPage() {
   )
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
+  const [pendingAIFixRequest, setPendingAIFixRequest] = useState<PendingAIFixRequest | null>(null)
 
   const crawlsDataKey = useMemo(
     () =>
@@ -292,8 +294,9 @@ export default function AppPage() {
                 </div>
                 <IssueExplorer
                   breakdown={stableBreakdown}
-                  onOpenAIConversation={(conversationId) => {
-                    setOpenAIConversationId(conversationId)
+                  onGenerateAIFixesNow={(request) => {
+                    setOpenAIConversationId(null)
+                    setPendingAIFixRequest(request)
                     setView("revserp-ai")
                   }}
                   projectId={activeProject?.id}
@@ -368,6 +371,7 @@ export default function AppPage() {
           breakdown={stableBreakdown}
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
+          pendingAIFixRequest={pendingAIFixRequest}
         />
       ) : (
         <div className="p-6">

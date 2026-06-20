@@ -16,6 +16,7 @@ import {
 
 import { CompileLoader } from "~/components/compile-loader"
 import { MarkdownMessage } from "~/components/markdown-message"
+import type { PendingAIFixRequest } from "~/components/issue-explorer/types"
 import { Badge } from "~/components/ui/badge"
 import {
   Breadcrumb,
@@ -73,9 +74,11 @@ export function RevserpAIView({
   breakdown,
   openConversationId,
   projectId,
+  pendingAIFixRequest,
 }: {
   breakdown: ScoreBreakdownResponse | null
   openConversationId?: string | null
+  pendingAIFixRequest?: PendingAIFixRequest | null
   projectId?: string
 }) {
   const [prompt, setPrompt] = useState("")
@@ -101,6 +104,7 @@ export function RevserpAIView({
   )
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const handledPendingAIFixRequestIdRef = useRef<string | null>(null)
   const crawlId = breakdown?.crawl_id ?? ""
 
   const selectedPillar = useMemo(() => {
@@ -228,10 +232,15 @@ export function RevserpAIView({
         )
         if (cancelled) return
         setConversations(response.conversations)
-        const firstConversation =
-          response.conversations.find(
-            (conversation) => conversation.id === openConversationId
-          ) ?? response.conversations[0]
+        const hasUnhandledPendingAIFixRequest =
+          pendingAIFixRequest &&
+          handledPendingAIFixRequestIdRef.current !==
+            pendingAIFixRequest.requestId
+        const firstConversation = hasUnhandledPendingAIFixRequest
+          ? null
+          : (response.conversations.find(
+              (conversation) => conversation.id === openConversationId
+            ) ?? response.conversations[0])
         if (firstConversation) {
           setIsLoadingMessages(true)
           const detail = await clientApiFetch<AIConversationDetailResponse>(
@@ -265,12 +274,95 @@ export function RevserpAIView({
     return () => {
       cancelled = true
     }
-  }, [crawlId, openConversationId, projectId])
+  }, [crawlId, openConversationId, pendingAIFixRequest, projectId])
 
   useEffect(() => {
     if (!openConversationId) return
     void loadConversation(openConversationId)
   }, [loadConversation, openConversationId])
+
+  useEffect(() => {
+    if (!pendingAIFixRequest || !projectId || !breakdown?.crawl_id) return
+    if (
+      handledPendingAIFixRequestIdRef.current === pendingAIFixRequest.requestId
+    )
+      return
+
+    handledPendingAIFixRequestIdRef.current = pendingAIFixRequest.requestId
+    const request = pendingAIFixRequest
+    const crawlID = breakdown.crawl_id
+    let cancelled = false
+
+    async function generatePendingFix() {
+      const target = request.target
+      setSelectedPillarId(target.pillarId)
+      setSelectedBucketIds([target.bucketId])
+      setSelectedIssueTypeIds([target.issueTypeId])
+      setActiveConversationId(null)
+      setMessages([{ role: "user", content: request.prompt }])
+      setPrompt("")
+      setErrorMessage("")
+      setIsLoadingMessages(false)
+      setIsSending(true)
+
+      try {
+        const created = await clientApiPost<CreateAIConversationResponse>(
+          `/projects/${projectId}/ai/conversations`,
+          {
+            crawl_id: crawlID,
+            title: request.title,
+          }
+        )
+        if (cancelled) return
+
+        setActiveConversationId(created.conversation.id)
+        setConversations((current) =>
+          upsertConversation(current, created.conversation)
+        )
+
+        const response =
+          await clientApiPost<CreateAIConversationMessageResponse>(
+            `/ai/conversations/${created.conversation.id}/messages`,
+            {
+              crawl_id: crawlID,
+              pillar_id: target.pillarId,
+              bucket_ids: [target.bucketId],
+              issue_type_ids: [target.issueTypeId],
+              issue_urls: target.urls ?? [],
+              content: request.prompt,
+            }
+          )
+        if (cancelled) return
+
+        setActiveConversationId(response.conversation.id)
+        setMessages([
+          newMessageFromResponse(response.user_message),
+          newMessageFromResponse(response.assistant_message),
+        ])
+        setConversations((current) =>
+          upsertConversation(current, response.conversation)
+        )
+      } catch (error) {
+        if (!cancelled) {
+          setErrorMessage(
+            error instanceof ApiError
+              ? error.message
+              : "Unable to generate recommended fixes."
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setIsSending(false)
+        }
+      }
+    }
+
+    void generatePendingFix()
+
+    return () => {
+      cancelled = true
+    }
+  }, [breakdown?.crawl_id, pendingAIFixRequest, projectId])
 
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({
