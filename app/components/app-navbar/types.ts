@@ -16,4 +16,5 @@ export type AppNavbarProps = {
   userName?: string
   view: DashboardView
   onViewChange: (value: DashboardView) => void
+  onSelectConversation?: (conversationId: string) => void
 }

@@ -1,9 +1,9 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
-import { ChevronsUpDownIcon, SearchIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SearchIcon, MessageSquareIcon, PlusIcon } from "lucide-react"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import {
@@ -27,10 +27,22 @@ import {
 } from "~/components/app-navbar/utils"
 import { Button } from "~/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import { buildApiUrl, clientApiDelete, clientApiFetch, clientApiPost, clientApiPut } from "~/lib/api"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { buildApiUrl, clientApiDelete, clientApiFetch, clientApiPost, clientApiPut, ApiError } from "~/lib/api"
 import type {
+  AIConversationResponse,
+  AIConversationsResponse,
   CrawlResponse,
   CreateOrganizationInviteResponse,
+  MeResponse,
   ProjectBusinessProfileResponse,
   ProjectBusinessProfileStatusResponse,
   ProjectResponse,
@@ -52,6 +64,7 @@ export function AppNavbar({
   userName,
   view,
   onViewChange,
+  onSelectConversation,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -99,6 +112,9 @@ export function AppNavbar({
   const [isLeaveWorkspaceOpen, setIsLeaveWorkspaceOpen] = useState(false)
   const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [aiConversations, setAiConversations] = useState<AIConversationResponse[]>([])
+  const [isLoadingAiConversations, setIsLoadingAiConversations] = useState(false)
+  const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false)
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
@@ -116,6 +132,37 @@ export function AppNavbar({
     organizations.find((organization) => organization.id === organizationId) ?? organizations[0] ?? null
   const isActiveOrganizationOwner = activeOrganization?.role === "owner"
   const canManageBusinessProfile = businessProfileStatus?.can_manage_profile === true
+
+  async function fetchAiConversations() {
+    if (!activeProjectId) return
+    setIsLoadingAiConversations(true)
+    try {
+      const response = await clientApiFetch<AIConversationsResponse>(
+        `/projects/${activeProjectId}/ai/conversations`
+      )
+      setAiConversations(response.conversations)
+    } catch (error) {
+      console.error("Failed to fetch AI conversations:", error)
+      setAiConversations([])
+    } finally {
+      setIsLoadingAiConversations(false)
+    }
+  }
+
+  function handleAiTabMouseEnter() {
+    setIsAiChatMenuOpen(true)
+    void fetchAiConversations()
+  }
+
+  function handleAiTabMouseLeave() {
+    setIsAiChatMenuOpen(false)
+  }
+
+  function handleAiConversationSelect(conversationId: string) {
+    setIsAiChatMenuOpen(false)
+    onSelectConversation?.(conversationId)
+    onViewChange("revserp-ai")
+  }
 
   async function handleSelectProject(projectId: string, crawlId?: string) {
     setIsProjectMenuOpen(false)
@@ -534,7 +581,73 @@ export function AppNavbar({
               <TabsList>
                 <TabsTrigger value="revserp-audit">Revserp Audit</TabsTrigger>
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
-                <TabsTrigger value="revserp-ai">Revserp AI</TabsTrigger>
+<DropdownMenu open={isAiChatMenuOpen} onOpenChange={setIsAiChatMenuOpen}>
+<DropdownMenuTrigger
+  render={
+    <TabsTrigger
+      value="revserp-ai"
+      onMouseEnter={handleAiTabMouseEnter}
+      onMouseLeave={handleAiTabMouseLeave}
+      onClick={() => {
+        onViewChange("revserp-ai")
+        if (aiConversations.length > 0) {
+          onSelectConversation?.(aiConversations[0].id)
+        }
+      }}
+    />
+  }
+>
+  Revserp AI
+</DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="max-h-96 w-80 overflow-y-auto rounded-2xl p-1.5"
+                    onMouseEnter={() => setIsAiChatMenuOpen(true)}
+                    onMouseLeave={handleAiTabMouseLeave}
+                  >
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setIsAiChatMenuOpen(false)
+                        onViewChange("revserp-ai")
+                      }}
+                    >
+                      <PlusIcon className="size-4" />
+                      New chat
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {isLoadingAiConversations ? (
+                      <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        Loading chats...
+                      </div>
+                    ) : aiConversations.length === 0 ? (
+                      <div className="px-2 py-4 text-center text-sm text-muted-foreground">
+                        No saved chats yet
+                      </div>
+                    ) : (
+                      groupAiConversationsByDate(aiConversations).map((group) => (
+                        <DropdownMenuGroup key={group.label}>
+                          <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+                          {group.conversations.map((conv) => (
+                            <DropdownMenuItem
+                              key={conv.id}
+                              onClick={() => handleAiConversationSelect(conv.id)}
+                              className="items-start gap-3"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm">
+                                  {conv.title || "Untitled chat"}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatAiConversationTime(conv.updated_at)}
+                                </div>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuGroup>
+                      ))
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TabsList>
             </Tabs>
           </div>
@@ -735,5 +848,54 @@ function downloadBlob(blob: Blob, filename: string) {
   link.remove()
   URL.revokeObjectURL(downloadUrl)
 }
+
+type AiConversationGroup = {
+  label: string
+  conversations: AIConversationResponse[]
+}
+
+function formatAiConversationDate(value: string) {
+  const date = new Date(value)
+  const today = new Date()
+  const yesterday = new Date()
+  yesterday.setDate(today.getDate() - 1)
+
+  if (date.toDateString() === today.toDateString()) return "Today"
+  if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function formatAiConversationTime(value: string) {
+  return new Date(value).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  })
+}
+
+function groupAiConversationsByDate(
+  conversations: AIConversationResponse[]
+): AiConversationGroup[] {
+  const groups: AiConversationGroup[] = []
+  const groupByLabel = new Map<string, AIConversationResponse[]>()
+
+  for (const conversation of conversations) {
+    const label = formatAiConversationDate(conversation.updated_at)
+    const group = groupByLabel.get(label)
+    if (group) {
+      group.push(conversation)
+      continue
+    }
+    const conversationsForDate = [conversation]
+    groupByLabel.set(label, conversationsForDate)
+    groups.push({ label, conversations: conversationsForDate })
+  }
+
+  return groups
+}
+
 
 export type { DashboardView }

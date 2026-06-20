@@ -238,20 +238,21 @@ export default function AppPage() {
 
   return (
     <main className="min-h-svh bg-background text-foreground">
-      <AppNavbar
-        activeProjectId={activeProject?.id}
-        currentCrawl={currentCrawl}
-        projectCrawls={projectCrawls}
-        isCrawlRunning={isCrawlRunning}
-        onCrawlStart={() => setIsStartingCrawl(true)}
-        onViewChange={setView}
-        organizationId={me.active_org_id}
-        projects={projects}
-        organizations={me.organizations}
-        userEmail={me.user.email}
-        userName={me.user.name}
-        view={view}
-      />
+<AppNavbar
+  activeProjectId={activeProject?.id}
+  currentCrawl={currentCrawl}
+  projectCrawls={projectCrawls}
+  isCrawlRunning={isCrawlRunning}
+  onCrawlStart={() => setIsStartingCrawl(true)}
+  onViewChange={setView}
+  onSelectConversation={handleOpenAIConversation}
+  organizationId={me.active_org_id}
+  projects={projects}
+  organizations={me.organizations}
+  userEmail={me.user.email}
+  userName={me.user.name}
+  view={view}
+/>
 
       {view === "revserp-audit" ? (
         <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">

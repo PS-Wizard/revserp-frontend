@@ -598,19 +598,6 @@ export function RevserpAIView({
 
         <div className="rounded-[1.15rem] border border-border bg-card/95 px-2 py-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
           <div className="flex min-w-0 items-center justify-between gap-2 px-1.5 py-1">
-            <HistoryDropdown
-              activeConversationId={activeConversationId}
-              conversations={groupedConversations}
-              isLoading={isLoadingHistory}
-              onNewChat={startNewChat}
-              deletingConversationId={deletingConversationId}
-              onSelectConversation={(conversationId) =>
-                void loadConversation(conversationId)
-              }
-              onDeleteConversation={(conversationId) =>
-                void deleteConversation(conversationId)
-              }
-            />
             <span className="min-w-0 truncate text-xs text-muted-foreground">
               {activeConversation?.title || "New chat"}
             </span>
@@ -670,99 +657,7 @@ export function RevserpAIView({
   )
 }
 
-function HistoryDropdown({
-  activeConversationId,
-  conversations,
-  deletingConversationId,
-  isLoading,
-  onDeleteConversation,
-  onNewChat,
-  onSelectConversation,
-}: {
-  activeConversationId: string | null
-  conversations: ConversationGroup[]
-  deletingConversationId: string | null
-  isLoading: boolean
-  onDeleteConversation: (conversationId: string) => void
-  onNewChat: () => void
-  onSelectConversation: (conversationId: string) => void
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" className="h-7 rounded-full px-2 text-xs" />
-        }
-      >
-        <MessageSquareIcon className="size-3.5" />
-        Chats
-        <ChevronDownIcon className="size-3 opacity-60" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="max-h-96 w-80 rounded-2xl p-1.5"
-      >
-        <DropdownMenuItem onClick={onNewChat}>
-          <PlusIcon className="size-4" />
-          New chat
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {isLoading ? (
-          <DropdownMenuItem disabled>
-            <Loader2Icon className="size-4 animate-spin" />
-            Loading history...
-          </DropdownMenuItem>
-        ) : conversations.length === 0 ? (
-          <DropdownMenuItem disabled>No saved chats yet</DropdownMenuItem>
-        ) : (
-          conversations.map((group) => (
-            <DropdownMenuGroup key={group.label}>
-              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-              {group.conversations.map((conversation) => (
-                <ContextMenu key={conversation.id}>
-                  <ContextMenuTrigger>
-                    <DropdownMenuItem
-                      onClick={() => onSelectConversation(conversation.id)}
-                      className="items-start gap-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">
-                          {conversation.title || "Untitled chat"}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatConversationTime(conversation.updated_at)}
-                        </div>
-                      </div>
-                      {activeConversationId === conversation.id ? (
-                        <CheckIcon className="mt-0.5 size-4" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-40">
-                    <ContextMenuGroup>
-                      <ContextMenuItem
-                        disabled={deletingConversationId === conversation.id}
-                        onClick={() => onDeleteConversation(conversation.id)}
-                        variant="destructive"
-                      >
-                        {deletingConversationId === conversation.id ? (
-                          <Loader2Icon className="size-4 animate-spin" />
-                        ) : (
-                          <TrashIcon />
-                        )}
-                        Delete
-                      </ContextMenuItem>
-                    </ContextMenuGroup>
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))}
-            </DropdownMenuGroup>
-          ))
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
+
 
 function ScopeBreadcrumb({
   pillars,
