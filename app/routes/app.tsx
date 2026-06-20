@@ -151,6 +151,12 @@ export default function AppPage() {
     setView("revserp-ai")
   }
 
+  const handleDeleteAIConversation = (conversationId: string) => {
+    if (openAIConversationId === conversationId) {
+      setOpenAIConversationId(null)
+    }
+  }
+
   const crawlsDataKey = useMemo(
     () =>
       recentCrawls

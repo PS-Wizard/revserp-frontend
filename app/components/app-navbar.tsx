@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
-import { ChevronsUpDownIcon, SearchIcon, MessageSquareIcon, PlusIcon } from "lucide-react"
+import { ChevronsUpDownIcon, Loader2Icon, MessageSquareIcon, PlusIcon, SearchIcon, TrashIcon } from "lucide-react"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import {
@@ -26,7 +26,13 @@ import {
   readExportError,
 } from "~/components/app-navbar/utils"
 import { Button } from "~/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "~/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +42,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { buildApiUrl, clientApiDelete, clientApiFetch, clientApiPost, clientApiPut, ApiError } from "~/lib/api"
 import type {
   AIConversationResponse,
@@ -65,6 +72,7 @@ export function AppNavbar({
   view,
   onViewChange,
   onSelectConversation,
+  onDeleteConversation,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -115,6 +123,7 @@ export function AppNavbar({
   const [aiConversations, setAiConversations] = useState<AIConversationResponse[]>([])
   const [isLoadingAiConversations, setIsLoadingAiConversations] = useState(false)
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false)
+  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
@@ -162,6 +171,23 @@ export function AppNavbar({
     setIsAiChatMenuOpen(false)
     onSelectConversation?.(conversationId)
     onViewChange("revserp-ai")
+  }
+
+  async function handleDeleteConversation(conversationId: string) {
+    if (deletingConversationId) return
+
+    setDeletingConversationId(conversationId)
+    try {
+      await clientApiDelete<null>(`/ai/conversations/${conversationId}`)
+      setAiConversations((current) =>
+        current.filter((conversation) => conversation.id !== conversationId)
+      )
+      onDeleteConversation?.(conversationId)
+    } catch (error) {
+      console.error("Failed to delete AI conversation:", error)
+    } finally {
+      setDeletingConversationId(null)
+    }
   }
 
   async function handleSelectProject(projectId: string, crawlId?: string) {
@@ -628,20 +654,39 @@ export function AppNavbar({
                         <DropdownMenuGroup key={group.label}>
                           <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
                           {group.conversations.map((conv) => (
-                            <DropdownMenuItem
-                              key={conv.id}
-                              onClick={() => handleAiConversationSelect(conv.id)}
-                              className="items-start gap-3"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate text-sm">
-                                  {conv.title || "Untitled chat"}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {formatAiConversationTime(conv.updated_at)}
-                                </div>
-                              </div>
-                            </DropdownMenuItem>
+                            <ContextMenu key={conv.id}>
+                              <ContextMenuTrigger>
+                                <DropdownMenuItem
+                                  onClick={() => handleAiConversationSelect(conv.id)}
+                                  className="items-start gap-3"
+                                >
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm">
+                                      {conv.title || "Untitled chat"}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {formatAiConversationTime(conv.updated_at)}
+                                    </div>
+                                  </div>
+                                </DropdownMenuItem>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent className="w-40">
+                                <ContextMenuGroup>
+                                  <ContextMenuItem
+                                    disabled={deletingConversationId === conv.id}
+                                    onClick={() => handleDeleteConversation(conv.id)}
+                                    variant="destructive"
+                                  >
+                                    {deletingConversationId === conv.id ? (
+                                      <Loader2Icon className="size-4 animate-spin" />
+                                    ) : (
+                                      <TrashIcon />
+                                    )}
+                                    Delete
+                                  </ContextMenuItem>
+                                </ContextMenuGroup>
+                              </ContextMenuContent>
+                            </ContextMenu>
                           ))}
                         </DropdownMenuGroup>
                       ))
