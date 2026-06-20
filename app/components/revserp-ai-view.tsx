@@ -71,9 +71,11 @@ type RevserpAIMessage = {
 
 export function RevserpAIView({
   breakdown,
+  openConversationId,
   projectId,
 }: {
   breakdown: ScoreBreakdownResponse | null
+  openConversationId?: string | null
   projectId?: string
 }) {
   const [prompt, setPrompt] = useState("")
@@ -226,7 +228,10 @@ export function RevserpAIView({
         )
         if (cancelled) return
         setConversations(response.conversations)
-        const firstConversation = response.conversations[0]
+        const firstConversation =
+          response.conversations.find(
+            (conversation) => conversation.id === openConversationId
+          ) ?? response.conversations[0]
         if (firstConversation) {
           setIsLoadingMessages(true)
           const detail = await clientApiFetch<AIConversationDetailResponse>(
@@ -260,7 +265,12 @@ export function RevserpAIView({
     return () => {
       cancelled = true
     }
-  }, [crawlId, projectId])
+  }, [crawlId, openConversationId, projectId])
+
+  useEffect(() => {
+    if (!openConversationId) return
+    void loadConversation(openConversationId)
+  }, [loadConversation, openConversationId])
 
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({

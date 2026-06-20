@@ -53,7 +53,10 @@ export function toggleSelection(
   setSelectedValues([...selectedValues, value])
 }
 
-export async function fetchAllIssueUrls(crawlId: string, issueScope: IssueScope) {
+export async function fetchAllIssueUrls(
+  crawlId: string,
+  issueScope: IssueScope
+) {
   const pageSize = 100
   let offset = 0
   let total = Number.POSITIVE_INFINITY
@@ -69,6 +72,12 @@ export async function fetchAllIssueUrls(crawlId: string, issueScope: IssueScope)
       ...response.urls.map((row) => ({
         ...row,
         source: `${issueScope.pillarLabel} / ${issueScope.bucketLabel} / ${issueScope.issueTypeLabel}`,
+        pillarId: issueScope.pillarId,
+        pillarLabel: issueScope.pillarLabel,
+        bucketId: issueScope.bucketId,
+        bucketLabel: issueScope.bucketLabel,
+        issueTypeId: issueScope.issueTypeId,
+        issueTypeLabel: issueScope.issueTypeLabel,
       }))
     )
     offset += response.urls.length

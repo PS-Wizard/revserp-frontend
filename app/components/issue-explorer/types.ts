@@ -22,6 +22,24 @@ export type IssueScope = {
   issueType: ScoreBreakdownIssueTypeResponse
 }
 
-export type MergedIssueUrlRow = ScoreBreakdownIssueURLsResponse["urls"][number] & {
-  source: string
+export type AIFixTarget = {
+  key: string
+  pillarId: string
+  pillarLabel: string
+  bucketId: string
+  bucketLabel: string
+  issueTypeId: string
+  issueTypeLabel: string
+  urls?: string[]
 }
+
+export type MergedIssueUrlRow =
+  ScoreBreakdownIssueURLsResponse["urls"][number] & {
+    source: string
+    pillarId: string
+    pillarLabel: string
+    bucketId: string
+    bucketLabel: string
+    issueTypeId: string
+    issueTypeLabel: string
+  }

@@ -144,6 +144,7 @@ export default function AppPage() {
     "summary"
   )
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
+  const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
 
   const crawlsDataKey = useMemo(
     () =>
@@ -289,7 +290,14 @@ export default function AppPage() {
                 <div className="px-4 lg:px-6">
                   <Separator />
                 </div>
-                <IssueExplorer breakdown={stableBreakdown} />
+                <IssueExplorer
+                  breakdown={stableBreakdown}
+                  onOpenAIConversation={(conversationId) => {
+                    setOpenAIConversationId(conversationId)
+                    setView("revserp-ai")
+                  }}
+                  projectId={activeProject?.id}
+                />
               </TabsContent>
 
               <TabsContent value="seo">
@@ -356,7 +364,11 @@ export default function AppPage() {
           isOrganizationOwner={isOrganizationOwner}
         />
       ) : view === "revserp-ai" ? (
-        <RevserpAIView breakdown={stableBreakdown} projectId={activeProject?.id} />
+        <RevserpAIView
+          breakdown={stableBreakdown}
+          openConversationId={openAIConversationId}
+          projectId={activeProject?.id}
+        />
       ) : (
         <div className="p-6">
           <Card>
