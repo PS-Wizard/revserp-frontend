@@ -3,7 +3,8 @@
 import { useMemo, useReducer, useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
-import { ChevronsUpDownIcon, SearchIcon } from "lucide-react"
+import { Building2Icon, ChevronsUpDownIcon, DownloadIcon, PlayIcon, SearchIcon } from "lucide-react"
+import { CompileLoader } from "~/components/compile-loader"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import {
@@ -15,16 +16,27 @@ import {
 } from "~/components/app-navbar/dialogs"
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { ProjectPickerDialog } from "~/components/app-navbar/project-picker-dialog"
-import { RunCrawlPopover } from "~/components/app-navbar/run-crawl-popover"
+import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { AiConversationsPopover } from "~/components/app-navbar/ai-conversations-popover"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
 import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actions"
 import type { AppNavbarProps, DashboardView } from "~/components/app-navbar/types"
-import { getCrawlValidationError, getInitials } from "~/components/app-navbar/utils"
+import { formatCrawlDateTime, getCrawlValidationError, getInitials } from "~/components/app-navbar/utils"
 import { getCrawlTimestamp } from "~/lib/crawl"
 import { Button } from "~/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
 import { clientApiPost } from "~/lib/api"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
@@ -193,6 +205,12 @@ export function AppNavbar({
       )
     : []
 
+  const activeCrawls = activeProject
+    ? [...(projectCrawls[activeProject.id] ?? [])].sort(
+        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left),
+      )
+    : []
+
   function handleSelectProject(projectId: string, crawlId?: string) {
     setIsProjectMenuOpen(false)
 
@@ -306,20 +324,66 @@ export function AppNavbar({
               <ChevronsUpDownIcon data-icon="inline-end" />
             </Button>
 
-            <RunCrawlPopover
-              activeProject={activeProject}
-              activeProjectId={activeProjectId}
-              fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
-              isCrawlRunning={isCrawlRunning}
-              isOpen={runCrawl.isRunCrawlOpen}
-              isStartingCrawl={runCrawl.isStartingCrawl}
-              maxDepth={runCrawl.maxDepth}
-              runCrawlError={runCrawl.runCrawlError}
-              onFetchTimeoutSecondsChange={(value) => runCrawlDispatch({ type: "SET_FETCH_TIMEOUT", value })}
-              onMaxDepthChange={(value) => runCrawlDispatch({ type: "SET_MAX_DEPTH", value })}
-              onOpenChange={(open) => runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })}
-              onSubmit={handleRunCrawl}
-            />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={<Button variant="outline" />}
+              >
+                {isCrawlRunning ? <CompileLoader className="text-foreground" size={18} /> : null}
+                Run Crawl
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    disabled={!activeProjectId || isCrawlRunning}
+                    onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                  >
+                    <PlayIcon />
+                    Run Crawl
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!activeProject}
+                    onClick={() => activeProject && handleOpenBusinessProfileDrawer(activeProject)}
+                  >
+                    <Building2Icon />
+                    Business Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger disabled={activeCrawls.length === 0}>
+                      <DownloadIcon />
+                      Export Crawl
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-52">
+                      {activeCrawls.length === 0 ? (
+                        <DropdownMenuItem disabled>No crawls available</DropdownMenuItem>
+                      ) : (
+                        activeCrawls.map((crawl) => (
+                          <DropdownMenuSub key={crawl.id}>
+                            <DropdownMenuSubTrigger disabled={crawl.status !== "completed" || projectActions.exportingCrawlId !== null}>
+                              <span className="truncate">{formatCrawlDateTime(crawl)}</span>
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="w-24">
+                              <DropdownMenuItem
+                                disabled={crawl.status !== "completed" || projectActions.exportingCrawlId !== null}
+                                onClick={() => { void projectActions.handleExportCrawl(crawl, "xlsx") }}
+                              >
+                                XLSX
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                disabled={crawl.status !== "completed" || projectActions.exportingCrawlId !== null}
+                                onClick={() => { void projectActions.handleExportCrawl(crawl, "csv") }}
+                              >
+                                CSV
+                              </DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        ))
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="flex justify-end">
@@ -341,6 +405,20 @@ export function AppNavbar({
           </div>
         </div>
       </header>
+      <RunCrawlDialog
+        activeProject={activeProject}
+        activeProjectId={activeProjectId}
+        fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
+        isCrawlRunning={isCrawlRunning}
+        isOpen={runCrawl.isRunCrawlOpen}
+        isStartingCrawl={runCrawl.isStartingCrawl}
+        maxDepth={runCrawl.maxDepth}
+        runCrawlError={runCrawl.runCrawlError}
+        onFetchTimeoutSecondsChange={(value) => runCrawlDispatch({ type: "SET_FETCH_TIMEOUT", value })}
+        onMaxDepthChange={(value) => runCrawlDispatch({ type: "SET_MAX_DEPTH", value })}
+        onOpenChange={(open) => runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })}
+        onSubmit={handleRunCrawl}
+      />
 
       <AppNavbarDialogs
         activeProjectId={activeProjectId}
