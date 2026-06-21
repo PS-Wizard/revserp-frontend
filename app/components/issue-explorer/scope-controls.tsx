@@ -75,6 +75,8 @@ export function ScopeBreadcrumbs({
                   getSelectedBucketLabels(availableBucketScopes, selectedBucketKeys),
                   "Select buckets"
                 )}
+                multiSelect={true}
+                onToggleAll={(values) => setSelectedBucketKeys(values)}
                 options={availableBucketScopes.map((bucketScope) => ({
                   value: bucketScope.key,
                   label: `${bucketScope.pillarLabel} / ${bucketScope.bucketLabel}`,
@@ -91,6 +93,8 @@ export function ScopeBreadcrumbs({
                   getSelectedIssueTypeLabels(availableIssueScopes, selectedIssueTypeKeys),
                   "Issue Types"
                 )}
+                multiSelect={true}
+                onToggleAll={(values) => setSelectedIssueTypeKeys(values)}
                 options={availableIssueScopes.map((issueScope) => ({
                   value: issueScope.key,
                   label: `${issueScope.bucketLabel} / ${issueScope.issueTypeLabel}`,
@@ -110,12 +114,14 @@ export function ScopeBreadcrumbs({
 type ScopeMultiMenuProps = {
   label: string
   onToggle: (value: string) => void
+  onToggleAll?: (allValues: string[]) => void
   options: Array<{ value: string; label: string }>
   selectedValues: string[]
   title: string
+  multiSelect?: boolean
 }
 
-function ScopeMultiMenu({ label, onToggle, options, selectedValues, title }: ScopeMultiMenuProps) {
+function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues, title, multiSelect }: ScopeMultiMenuProps) {
   const [query, setQuery] = useState("")
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -126,7 +132,7 @@ function ScopeMultiMenu({ label, onToggle, options, selectedValues, title }: Sco
 
     return options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
   }, [options, query])
-
+  const allSelected = options.length > 0 && options.every((opt) => selectedValues.includes(opt.value))
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -152,6 +158,18 @@ function ScopeMultiMenu({ label, onToggle, options, selectedValues, title }: Sco
               value={query}
             />
           </div>
+          {multiSelect && options.length > 0 && (
+            <div className="border-b border-border/40 px-2 py-1.5">
+              <button
+                className="w-full text-left text-sm font-medium text-primary hover:underline"
+                onClick={() =>
+                  onToggleAll?.(allSelected ? [] : options.map((o) => o.value))
+                }
+              >
+                {allSelected ? "Unselect all" : "Select all"}
+              </button>
+            </div>
+          )}
           <DropdownMenuSeparator />
           {filteredOptions.length ? (
             filteredOptions.map((option) => (

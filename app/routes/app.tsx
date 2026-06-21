@@ -23,6 +23,7 @@ import {
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { serverApiFetch } from "~/lib/api"
+import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
   CrawlResponse,
   CrawlsResponse,
@@ -145,9 +146,11 @@ export default function AppPage() {
   )
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
+  const [pendingAIScope, setPendingAIScope] = useState<AIScopeState | null>(null)
 
-  const handleOpenAIConversation = (conversationId: string) => {
+  const handleOpenAIConversation = (conversationId: string, scope?: AIScopeState) => {
     setOpenAIConversationId(conversationId)
+    setPendingAIScope(scope ?? null)
     setView("revserp-ai")
   }
 
@@ -346,6 +349,7 @@ export default function AppPage() {
       ) : view === "revserp-ai" ? (
         <RevserpAIView
           breakdown={currentBreakdown}
+          initialScope={pendingAIScope}
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
         />

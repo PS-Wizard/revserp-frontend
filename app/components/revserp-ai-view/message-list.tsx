@@ -12,6 +12,7 @@ export function MessageList({
   copiedMessageIndex,
   selectedScopeLabel,
   onCopyMessage,
+  isPendingFirstResponse,
 }: {
   messages: RevserpAIMessage[]
   isLoadingMessages: boolean
@@ -19,8 +20,9 @@ export function MessageList({
   copiedMessageIndex: number | null
   selectedScopeLabel: string
   onCopyMessage: (content: string, messageIndex: number) => void
+  isPendingFirstResponse?: boolean
 }) {
-  if (isLoadingMessages) {
+  if (isLoadingMessages || (messages.length === 0 && isPendingFirstResponse)) {
     return (
       <div className="flex h-full items-center justify-center text-center">
         <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-xl">

@@ -145,7 +145,7 @@ export function IssueExplorer({
 }: {
   breakdown: ScoreBreakdownResponse | null
   initialPillarId?: string
-  onOpenAIConversation?: (conversationId: string) => void
+  onOpenAIConversation?: (conversationId: string, scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }) => void
   projectId?: string
 }) {
   const [selection, dispatchSelection] = useReducer(selectionReducer, initialSelectionState)
@@ -395,7 +395,11 @@ export function IssueExplorer({
           action: onOpenAIConversation
             ? {
                 label: "Open chat",
-                onClick: () => onOpenAIConversation(conversation.id),
+                onClick: () => onOpenAIConversation(conversation.id, {
+                  pillarId: target.pillarId,
+                  bucketIds: [target.bucketId],
+                  issueTypeIds: [target.issueTypeId],
+                }),
               }
             : undefined,
         }),

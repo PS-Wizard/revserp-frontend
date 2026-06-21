@@ -39,7 +39,7 @@ type PillarAuditViewProps = {
   activeProjectName?: string
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
-  onOpenAIConversation?: (conversationId: string) => void
+  onOpenAIConversation?: (conversationId: string, scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }) => void
   pillarId: string
   projectId?: string
   title: string
