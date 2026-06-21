@@ -3,3 +3,7 @@ packages: []
 allowBuilds:
   esbuild: true
   msw: false
+
+pnpm:
+  minimumReleaseAge: "7 days"
+  trustPolicy: "sandbox"

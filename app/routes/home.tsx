@@ -5,9 +5,7 @@ import {
     BarChart3,
     Bot,
     Check,
-    ChevronRight,
     Globe,
-    Layout,
     Play,
     Search,
     ShieldCheck,
@@ -105,7 +103,6 @@ function Reveal({
     delay?: number
 }) {
     const ref = useRef<HTMLDivElement>(null)
-    const [visible, setVisible] = useState(false)
 
     useEffect(() => {
         const el = ref.current
@@ -113,7 +110,7 @@ function Reveal({
         const observer = new IntersectionObserver(
             ([entry]) => {
                 if (entry.isIntersecting) {
-                    setVisible(true)
+                    el.classList.add("reveal-visible")
                     observer.unobserve(el)
                 }
             },
@@ -131,7 +128,6 @@ function Reveal({
                 "reveal-hidden",
                 direction === "left" && "reveal-left",
                 direction === "right" && "reveal-right",
-                visible && "reveal-visible",
                 className
             )}
         >
@@ -142,17 +138,16 @@ function Reveal({
 
 function HeroBounce({ children, className, delay = 0 }: { children: ReactNode; className?: string; delay?: number }) {
     const ref = useRef<HTMLDivElement>(null)
-    const [visible, setVisible] = useState(false)
 
     useEffect(() => {
         const el = ref.current
         if (!el) return
-        const timer = setTimeout(() => setVisible(true), delay)
+        const timer = setTimeout(() => el.classList.add("is-visible"), delay)
         return () => clearTimeout(timer)
     }, [delay])
 
     return (
-        <div ref={ref} className={cn("heading-bounce", visible && "is-visible", className)}>
+        <div ref={ref} className={cn("heading-bounce", className)}>
             {children}
         </div>
     )
@@ -281,14 +276,10 @@ function LogoCarousel() {
                 </Reveal>
                 <div className="mask-fade-edges relative overflow-hidden">
                     <div className="animate-carousel flex items-center gap-16 whitespace-nowrap">
-                        {[...integrations, ...integrations].map((name, i) => (
-                            <span
-                                key={`${name}-${i}`}
-                                className="text-lg font-medium tracking-tight text-muted-foreground/40"
-                            >
-                                {name}
-                            </span>
-                        ))}
+                      {integrations.flatMap((name) => [
+                        <span key={`${name}-a`} className="text-lg font-medium tracking-tight text-muted-foreground/40">{name}</span>,
+                        <span key={`${name}-b`} className="text-lg font-medium tracking-tight text-muted-foreground/40">{name}</span>,
+                      ])}
                     </div>
                 </div>
             </div>
@@ -321,6 +312,7 @@ function Solutions() {
                             return (
                                 <button
                                     key={solution.title}
+                                    type="button"
                                     onClick={() => setActive(index)}
                                     className={cn(
                                         "w-full rounded-xl border p-5 text-left transition-all duration-300",
@@ -528,7 +520,7 @@ function Method() {
 }
 
 function FAQ() {
-    const [open, setOpen] = useState<number | null>(0)
+    const [open, setOpen] = useState<number | null>(null)
 
     return (
         <section id="faq" className="px-6 py-24 md:py-32">
@@ -548,9 +540,10 @@ function FAQ() {
                     {faqs.map((faq, index) => {
                         const isOpen = open === index
                         return (
-                            <Reveal key={index} delay={index * 60}>
+                            <Reveal key={faq.question} delay={index * 60}>
                                 <div className="rounded-xl border border-border/50 bg-card">
                                     <button
+                                        type="button"
                                         onClick={() => setOpen(isOpen ? null : index)}
                                         className="flex w-full items-center justify-between p-5 text-left"
                                     >
@@ -612,6 +605,7 @@ function FinalCTA() {
 }
 
 function Footer() {
+    const year = new Date().getFullYear()
     return (
         <footer className="border-t border-border/50 px-6 py-12">
             <div className="mx-auto max-w-7xl">
@@ -679,7 +673,7 @@ function Footer() {
                 </div>
 
                 <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border/50 pt-8 text-sm text-muted-foreground sm:flex-row">
-                    <p>© {new Date().getFullYear()} Revserp. All rights reserved.</p>
+                    <p>(c) {year} Revserp. All rights reserved.</p>
                     <p className="text-xs">Built for the next generation of search.</p>
                 </div>
             </div>

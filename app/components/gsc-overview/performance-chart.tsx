@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useMemo, useRef } from "react"
 import type { ApexOptions } from "apexcharts"
 
 import {
@@ -12,8 +12,10 @@ import {
 } from "~/components/ui/card"
 import type { GSCOverviewWindowResponse } from "~/lib/api.types"
 
-import { dateTimestamp, formatNumber, formatPercentFromWholeNumber, formatPosition } from "./formatters"
+import { formatNumber, formatPercentFromWholeNumber, formatPosition } from "./formatters"
 import type { ChartSeries, GSCMetricKey, MetricConfig } from "./types"
+import { useApexChart } from "~/hooks/use-apex-chart"
+
 
 export function GSCPerformanceChart({
   windowOverview,
@@ -29,7 +31,6 @@ export function GSCPerformanceChart({
   metricConfig: Record<GSCMetricKey, MetricConfig>
 }) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
-  const chartInstanceRef = useRef<any>(null)
 
   const visibleMetricKeys = useMemo(
     () => chartMetricOrder.filter((metricKey) => visibleMetrics[metricKey]),
@@ -123,37 +124,7 @@ export function GSCPerformanceChart({
     [metricConfig, visibleMetricKeys, yRange]
   )
 
-  useEffect(() => {
-    const chartContainer = chartContainerRef.current
-    if (!chartContainer || chartInstanceRef.current || !visibleSeries.length) return
-
-    let chart: any = null
-    let isDestroyed = false
-
-    void (async () => {
-      const ApexCharts = (await import("apexcharts")).default
-      if (isDestroyed || chartInstanceRef.current) return
-
-      chart = new ApexCharts(chartContainer, {
-        ...chartOptions,
-        series: visibleSeries,
-      })
-      chartInstanceRef.current = chart
-      await chart.render()
-    })()
-
-    return () => {
-      isDestroyed = true
-      chart?.destroy()
-      chartInstanceRef.current = null
-    }
-  }, [chartOptions, visibleSeries])
-
-  useEffect(() => {
-    if (!chartInstanceRef.current) return
-    void chartInstanceRef.current.updateOptions(chartOptions, false, false, false)
-    void chartInstanceRef.current.updateSeries(visibleSeries, false)
-  }, [chartOptions, visibleSeries])
+  useApexChart(chartContainerRef, chartOptions, visibleSeries, visibleSeries.length > 0)
 
   return (
     <Card className="mx-4 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 text-foreground sm:mx-6 lg:mx-4">

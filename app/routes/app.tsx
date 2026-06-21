@@ -151,41 +151,17 @@ export default function AppPage() {
     setView("revserp-ai")
   }
 
-  const handleDeleteAIConversation = (conversationId: string) => {
-    if (openAIConversationId === conversationId) {
-      setOpenAIConversationId(null)
-    }
-  }
 
-  const crawlsDataKey = useMemo(
-    () =>
-      recentCrawls
-        .map(
-          (c) => `${c.id}:${c.status}:${c.overall_score ?? ""}:${c.seo_score ?? ""}:${c.aeo_score ?? ""}:${c.pagespeed_score ?? ""}`
-        )
-        .join("|"),
-    [recentCrawls]
-  )
   const sortedCrawls = useMemo(
     () =>
       [...recentCrawls].sort(
         (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [crawlsDataKey]
+    [recentCrawls]
   )
   const sortedCompletedCrawls = useMemo(
     () => sortedCrawls.filter((crawl) => crawl.status === "completed"),
     [sortedCrawls]
-  )
-  const breakdownsDataKey = useMemo(
-    () =>
-      crawlBreakdowns
-        .map(
-          (item) => `${item.crawl.id}:${item.breakdown.overall_score ?? ""}:${item.breakdown.pillars.map((p) => `${p.id}:${p.score}`).join(",")}`
-        )
-        .join("|"),
-    [crawlBreakdowns]
   )
   const selectedCrawlId = new URLSearchParams(location.search).get("crawl")
   const currentCrawl =
@@ -201,17 +177,6 @@ export default function AppPage() {
     (organization) => organization.id === me.active_org_id
   )
   const isOrganizationOwner = activeOrganization?.role === "owner"
-
-  const stableCrawlBreakdowns = useMemo(
-    () => crawlBreakdowns,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [breakdownsDataKey]
-  )
-  const stableBreakdown = useMemo(
-    () => currentBreakdown,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [breakdownsDataKey]
-  )
 
   const activeRunningCrawl =
     sortedCrawls.find(
@@ -303,7 +268,7 @@ export default function AppPage() {
                   <Separator />
                 </div>
                 <IssueExplorer
-                  breakdown={stableBreakdown}
+                  breakdown={currentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   projectId={activeProject?.id}
                 />
@@ -312,8 +277,8 @@ export default function AppPage() {
               <TabsContent value="seo">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  currentBreakdown={stableBreakdown}
+                  crawlBreakdowns={crawlBreakdowns}
+                  currentBreakdown={currentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="seo"
                   projectId={activeProject?.id}
@@ -324,8 +289,8 @@ export default function AppPage() {
               <TabsContent value="aeo">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  currentBreakdown={stableBreakdown}
+                  crawlBreakdowns={crawlBreakdowns}
+                  currentBreakdown={currentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="aeo"
                   projectId={activeProject?.id}
@@ -336,8 +301,8 @@ export default function AppPage() {
               <TabsContent value="pagespeed">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  currentBreakdown={stableBreakdown}
+                  crawlBreakdowns={crawlBreakdowns}
+                  currentBreakdown={currentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="pagespeed"
                   projectId={activeProject?.id}
@@ -380,7 +345,7 @@ export default function AppPage() {
         />
       ) : view === "revserp-ai" ? (
         <RevserpAIView
-          breakdown={stableBreakdown}
+          breakdown={currentBreakdown}
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
         />

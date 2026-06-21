@@ -1,4 +1,5 @@
-import type { CrawlResponse } from "~/lib/api.types"
+import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
+import { getCrawlReferenceTimestamp } from "~/lib/crawl"
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const crawlDateTimeFormatter = new Intl.DateTimeFormat("en", {
@@ -46,9 +47,6 @@ export function formatCrawlDateTime(crawl: CrawlResponse) {
   return crawlDateTimeFormatter.format(new Date(getCrawlReferenceTimestamp(crawl)))
 }
 
-export function getCrawlTimestamp(crawl: CrawlResponse) {
-  return new Date(getCrawlReferenceTimestamp(crawl)).getTime()
-}
 
 export async function readExportError(response: Response) {
   const responseText = await response.text()
@@ -86,6 +84,48 @@ export function getExportFilename(contentDispositionHeader: string | null, fallb
   return fallbackFilename
 }
 
-function getCrawlReferenceTimestamp(crawl: CrawlResponse) {
-  return crawl.completed_at || crawl.started_at || crawl.created_at
+
+export function getInviteValidationError(inviteExpiresAt: string, expiresAtDate: Date, maxUses: number) {
+  if (!inviteExpiresAt.trim() || Number.isNaN(expiresAtDate.getTime())) {
+    return "Expiry must be a valid date and time."
+  }
+
+  if (expiresAtDate.getTime() <= Date.now()) {
+    return "Expiry must be in the future."
+  }
+
+  if (!Number.isInteger(maxUses) || maxUses <= 0) {
+    return "Max uses must be greater than zero."
+  }
+
+  return ""
+}
+
+export function getCrawlValidationError(maxDepth: number, fetchTimeoutSeconds: number) {
+  if (!Number.isInteger(maxDepth) || maxDepth < 0) {
+    return "Max depth must be zero or greater."
+  }
+
+  if (!Number.isInteger(fetchTimeoutSeconds) || fetchTimeoutSeconds <= 0) {
+    return "Fetch timeout must be greater than zero."
+  }
+
+  return ""
+}
+
+export function getProjectFilenameSegment(project: ProjectResponse | undefined) {
+  const projectName = project?.name ?? "project"
+  const normalizedProjectName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
+  return normalizedProjectName || "project"
+}
+
+export function downloadBlob(blob: Blob, filename: string) {
+  const downloadUrl = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = downloadUrl
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(downloadUrl)
 }

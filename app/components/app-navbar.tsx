@@ -1,9 +1,9 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useReducer, useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
-import { ChevronsUpDownIcon, Loader2Icon, MessageSquareIcon, PlusIcon, SearchIcon, TrashIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SearchIcon } from "lucide-react"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import {
@@ -16,40 +16,120 @@ import {
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { ProjectPickerDialog } from "~/components/app-navbar/project-picker-dialog"
 import { RunCrawlPopover } from "~/components/app-navbar/run-crawl-popover"
-import type { AppNavbarProps, DashboardView, ExportFormat } from "~/components/app-navbar/types"
-import {
-  formatCrawlDate,
-  getCrawlTimestamp,
-  getDefaultInviteExpiryValue,
-  getExportFilename,
-  getInitials,
-  readExportError,
-} from "~/components/app-navbar/utils"
+import { AiConversationsPopover } from "~/components/app-navbar/ai-conversations-popover"
+import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
+import { useProjectActions } from "~/components/app-navbar/use-project-actions"
+import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actions"
+import type { AppNavbarProps, DashboardView } from "~/components/app-navbar/types"
+import { getCrawlValidationError, getInitials } from "~/components/app-navbar/utils"
+import { getCrawlTimestamp } from "~/lib/crawl"
 import { Button } from "~/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import { buildApiUrl, clientApiDelete, clientApiFetch, clientApiPost, clientApiPut, ApiError } from "~/lib/api"
-import type {
-  AIConversationResponse,
-  AIConversationsResponse,
-  CrawlResponse,
-  CreateOrganizationInviteResponse,
-  MeResponse,
-  ProjectBusinessProfileResponse,
-  ProjectBusinessProfileStatusResponse,
-  ProjectResponse,
-} from "~/lib/api.types"
-import { clearSupabaseBrowserSession } from "~/lib/auth.client"
+import { clientApiPost } from "~/lib/api"
+import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
-const EMPTY_SEED_PROMPTS = ["", "", "", "", ""]
+// --- Create project form reducer ---
+
+type CreateProjectState = {
+  isCreateProjectOpen: boolean
+  projectName: string
+  projectBaseUrl: string
+  createProjectError: string
+  isCreatingProject: boolean
+}
+
+type CreateProjectEvent =
+  | { type: "OPEN" }
+  | { type: "CLOSE" }
+  | { type: "SET_NAME"; value: string }
+  | { type: "SET_BASE_URL"; value: string }
+  | { type: "SET_ERROR"; error: string }
+  | { type: "SET_CREATING" }
+  | { type: "CREATED" }
+
+function createProjectReducer(
+  state: CreateProjectState,
+  event: CreateProjectEvent,
+): CreateProjectState {
+  switch (event.type) {
+    case "OPEN":
+      return { ...state, isCreateProjectOpen: true, createProjectError: "" }
+    case "CLOSE":
+      return { ...state, isCreateProjectOpen: false }
+    case "SET_NAME":
+      return { ...state, projectName: event.value }
+    case "SET_BASE_URL":
+      return { ...state, projectBaseUrl: event.value }
+    case "SET_ERROR":
+      return { ...state, createProjectError: event.error }
+    case "SET_CREATING":
+      return { ...state, isCreatingProject: true, createProjectError: "" }
+    case "CREATED":
+      return {
+        isCreateProjectOpen: false,
+        projectName: "",
+        projectBaseUrl: "",
+        createProjectError: "",
+        isCreatingProject: false,
+      }
+  }
+}
+
+const initialCreateProjectState: CreateProjectState = {
+  isCreateProjectOpen: false,
+  projectName: "",
+  projectBaseUrl: "",
+  createProjectError: "",
+  isCreatingProject: false,
+}
+
+// --- Run crawl form reducer ---
+
+type RunCrawlState = {
+  isRunCrawlOpen: boolean
+  maxDepth: string
+  fetchTimeoutSeconds: string
+  runCrawlError: string
+  isStartingCrawl: boolean
+}
+
+type RunCrawlEvent =
+  | { type: "OPEN" }
+  | { type: "CLOSE" }
+  | { type: "SET_MAX_DEPTH"; value: string }
+  | { type: "SET_FETCH_TIMEOUT"; value: string }
+  | { type: "SET_ERROR"; error: string }
+  | { type: "SET_STARTING" }
+  | { type: "STARTED" }
+
+function runCrawlReducer(state: RunCrawlState, event: RunCrawlEvent): RunCrawlState {
+  switch (event.type) {
+    case "OPEN":
+      return { ...state, isRunCrawlOpen: true, runCrawlError: "" }
+    case "CLOSE":
+      return { ...state, isRunCrawlOpen: false }
+    case "SET_MAX_DEPTH":
+      return { ...state, maxDepth: event.value }
+    case "SET_FETCH_TIMEOUT":
+      return { ...state, fetchTimeoutSeconds: event.value }
+    case "SET_ERROR":
+      return { ...state, runCrawlError: event.error }
+    case "SET_STARTING":
+      return { ...state, isStartingCrawl: true, runCrawlError: "" }
+    case "STARTED":
+      return { ...state, isStartingCrawl: false, isRunCrawlOpen: false }
+  }
+}
+
+const initialRunCrawlState: RunCrawlState = {
+  isRunCrawlOpen: false,
+  maxDepth: "5",
+  fetchTimeoutSeconds: "10",
+  runCrawlError: "",
+  isStartingCrawl: false,
+}
+
+// --- Component ---
 
 export function AppNavbar({
   activeProjectId,
@@ -70,53 +150,35 @@ export function AppNavbar({
   const navigate = useNavigate()
   const location = useLocation()
   const revalidator = useRevalidator()
+
   const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false)
-  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false)
-  const [projectName, setProjectName] = useState("")
-  const [projectBaseUrl, setProjectBaseUrl] = useState("")
-  const [createProjectError, setCreateProjectError] = useState("")
-  const [isCreatingProject, setIsCreatingProject] = useState(false)
-  const [isRunCrawlOpen, setIsRunCrawlOpen] = useState(false)
-  const [maxDepth, setMaxDepth] = useState("5")
-  const [fetchTimeoutSeconds, setFetchTimeoutSeconds] = useState("10")
-  const [runCrawlError, setRunCrawlError] = useState("")
-  const [isStartingCrawl, setIsStartingCrawl] = useState(false)
-  const [projectActionError, setProjectActionError] = useState("")
-  const [projectPendingDelete, setProjectPendingDelete] = useState<ProjectResponse | null>(null)
-  const [isDeleteProjectOpen, setIsDeleteProjectOpen] = useState(false)
-  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null)
-  const [deletingCrawlId, setDeletingCrawlId] = useState<string | null>(null)
-  const [exportingCrawlId, setExportingCrawlId] = useState<string | null>(null)
-  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null)
-  const [exportFormat, setExportFormat] = useState<ExportFormat>("xlsx")
-  const [crawlPendingDelete, setCrawlPendingDelete] = useState<CrawlResponse | null>(null)
-  const [isDeleteCrawlOpen, setIsDeleteCrawlOpen] = useState(false)
-  const [businessProfileProject, setBusinessProfileProject] = useState<ProjectResponse | null>(null)
-  const [businessProfileStatus, setBusinessProfileStatus] = useState<ProjectBusinessProfileStatusResponse | null>(null)
-  const [brandName, setBrandName] = useState("")
-  const [websiteUrl, setWebsiteUrl] = useState("")
-  const [primaryCategory, setPrimaryCategory] = useState("")
-  const [primaryLocation, setPrimaryLocation] = useState("")
-  const [businessDescription, setBusinessDescription] = useState("")
-  const [seedPrompts, setSeedPrompts] = useState(EMPTY_SEED_PROMPTS)
-  const [businessProfileError, setBusinessProfileError] = useState("")
-  const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] = useState(false)
-  const [isSavingBusinessProfile, setIsSavingBusinessProfile] = useState(false)
-  const [profileActionError, setProfileActionError] = useState("")
-  const [isSwitchingWorkspace, setIsSwitchingWorkspace] = useState(false)
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false)
-  const [inviteExpiresAt, setInviteExpiresAt] = useState(getDefaultInviteExpiryValue)
-  const [inviteMaxUses, setInviteMaxUses] = useState("10")
-  const [inviteLink, setInviteLink] = useState("")
-  const [hasCopiedInviteLink, setHasCopiedInviteLink] = useState(false)
-  const [isCreatingInvite, setIsCreatingInvite] = useState(false)
-  const [isLeaveWorkspaceOpen, setIsLeaveWorkspaceOpen] = useState(false)
-  const [isLeavingWorkspace, setIsLeavingWorkspace] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [aiConversations, setAiConversations] = useState<AIConversationResponse[]>([])
-  const [isLoadingAiConversations, setIsLoadingAiConversations] = useState(false)
-  const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false)
-  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
+
+  const projectActions = useProjectActions({
+    projects,
+    activeProjectId,
+    location,
+    navigate,
+    revalidator,
+  })
+
+  const workspaceActions = useWorkspaceActions({
+    organizationId,
+    organizations,
+    navigate,
+    revalidator,
+  })
+
+  const {
+    businessProfileProject, brandName, websiteUrl, primaryCategory,
+    primaryLocation, businessDescription, seedPrompts, businessProfileError,
+    isLoadingBusinessProfile, isSavingBusinessProfile, canManageBusinessProfile,
+    openBusinessProfileDrawer, closeBusinessProfileDrawer, updateSeedPrompt,
+    handleSaveBusinessProfile, setBrandName, setWebsiteUrl, setPrimaryCategory,
+    setPrimaryLocation, setBusinessDescription,
+  } = useBusinessProfile()
+
+  const [createProject, createProjectDispatch] = useReducer(createProjectReducer, initialCreateProjectState)
+  const [runCrawl, runCrawlDispatch] = useReducer(runCrawlReducer, initialRunCrawlState)
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
@@ -124,66 +186,14 @@ export function AppNavbar({
   }, [userEmail, userName])
 
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null
-  const crawlPanelProject = projects.find((project) => project.id === hoveredProjectId) ?? activeProject
+  const crawlPanelProject = projects.find((project) => project.id === projectActions.hoveredProjectId) ?? activeProject
   const crawlPanelCrawls = crawlPanelProject
     ? [...(projectCrawls[crawlPanelProject.id] ?? [])].sort(
-        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
+        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left),
       )
     : []
-  const activeOrganization =
-    organizations.find((organization) => organization.id === organizationId) ?? organizations[0] ?? null
-  const isActiveOrganizationOwner = activeOrganization?.role === "owner"
-  const canManageBusinessProfile = businessProfileStatus?.can_manage_profile === true
 
-  async function fetchAiConversations() {
-    if (!activeProjectId) return
-    setIsLoadingAiConversations(true)
-    try {
-      const response = await clientApiFetch<AIConversationsResponse>(
-        `/projects/${activeProjectId}/ai/conversations`
-      )
-      setAiConversations(response.conversations)
-    } catch (error) {
-      console.error("Failed to fetch AI conversations:", error)
-      setAiConversations([])
-    } finally {
-      setIsLoadingAiConversations(false)
-    }
-  }
-
-  function handleAiTabMouseEnter() {
-    setIsAiChatMenuOpen(true)
-    void fetchAiConversations()
-  }
-
-  function handleAiTabMouseLeave() {
-    setIsAiChatMenuOpen(false)
-  }
-
-  function handleAiConversationSelect(conversationId: string) {
-    setIsAiChatMenuOpen(false)
-    onSelectConversation?.(conversationId)
-    onViewChange("revserp-ai")
-  }
-
-  async function handleDeleteConversation(conversationId: string) {
-    if (deletingConversationId) return
-
-    setDeletingConversationId(conversationId)
-    try {
-      await clientApiDelete<null>(`/ai/conversations/${conversationId}`)
-      setAiConversations((current) =>
-        current.filter((conversation) => conversation.id !== conversationId)
-      )
-      onDeleteConversation?.(conversationId)
-    } catch (error) {
-      console.error("Failed to delete AI conversation:", error)
-    } finally {
-      setDeletingConversationId(null)
-    }
-  }
-
-  async function handleSelectProject(projectId: string, crawlId?: string) {
+  function handleSelectProject(projectId: string, crawlId?: string) {
     setIsProjectMenuOpen(false)
 
     const searchParams = new URLSearchParams(location.search)
@@ -194,360 +204,61 @@ export function AppNavbar({
       searchParams.delete("crawl")
     }
 
-    await navigate(`${location.pathname}?${searchParams.toString()}`)
+    void navigate(`${location.pathname}?${searchParams.toString()}`)
   }
 
-  async function handleSelectOrganization(nextOrganizationId: string) {
-    if (!nextOrganizationId || nextOrganizationId === organizationId || isSwitchingWorkspace) {
-      return
-    }
-
-    setProfileActionError("")
-    setIsSwitchingWorkspace(true)
-
-    try {
-      await clientApiPost<{ ok: boolean; active_org_id: string }>("/me/active-organization", {
-        organization_id: nextOrganizationId,
-      })
-      await navigate("/app")
-      revalidator.revalidate()
-    } catch (error) {
-      setProfileActionError(error instanceof Error ? error.message : "Unable to switch workspace.")
-    } finally {
-      setIsSwitchingWorkspace(false)
-    }
-  }
-
-  async function handleCreateInvite(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!organizationId || isCreatingInvite) {
-      return
-    }
-
-    setProfileActionError("")
-    setHasCopiedInviteLink(false)
-
-    const expiresAtDate = new Date(inviteExpiresAt)
-    const maxUses = Number(inviteMaxUses)
-    const validationError = getInviteValidationError(inviteExpiresAt, expiresAtDate, maxUses)
-    if (validationError) {
-      setProfileActionError(validationError)
-      return
-    }
-
-    setIsCreatingInvite(true)
-
-    try {
-      const invite = await clientApiPost<CreateOrganizationInviteResponse>(
-        `/organizations/${organizationId}/invites`,
-        {
-          expires_at: expiresAtDate.toISOString(),
-          max_uses: maxUses,
-        }
-      )
-      setInviteLink(`${window.location.origin}/invite/${invite.token}`)
-    } catch (error) {
-      setProfileActionError(error instanceof Error ? error.message : "Unable to create invite link.")
-    } finally {
-      setIsCreatingInvite(false)
-    }
-  }
-
-  async function handleCopyInviteLink() {
-    if (!inviteLink) {
-      return
-    }
-
-    await navigator.clipboard.writeText(inviteLink)
-    setHasCopiedInviteLink(true)
-  }
-
-  async function handleLeaveOrganization() {
-    if (!organizationId || isLeavingWorkspace) {
-      return
-    }
-
-    setProfileActionError("")
-    setIsLeavingWorkspace(true)
-
-    try {
-      await clientApiPost<{ ok: boolean }>(`/organizations/${organizationId}/leave`, {})
-      setIsLeaveWorkspaceOpen(false)
-      await navigate("/app")
-      revalidator.revalidate()
-    } catch (error) {
-      setProfileActionError(error instanceof Error ? error.message : "Unable to leave workspace.")
-    } finally {
-      setIsLeavingWorkspace(false)
-    }
-  }
-
-  async function handleLogout() {
-    if (isLoggingOut) {
-      return
-    }
-
-    setProfileActionError("")
-    setIsLoggingOut(true)
-
-    try {
-      await clientApiPost<unknown>("/auth/logout", {})
-    } finally {
-      try {
-        await clearSupabaseBrowserSession()
-      } catch {
-        // Backend session is already gone.
-      }
-      await navigate("/login")
-      setIsLoggingOut(false)
-    }
-  }
-
-  function openDeleteProjectDialog(project: ProjectResponse) {
-    setProjectActionError("")
-    setProjectPendingDelete(project)
-    setIsDeleteProjectOpen(true)
-  }
-
-  async function openBusinessProfileDrawer(project: ProjectResponse) {
-    setProjectActionError("")
-    setBusinessProfileProject(project)
-    setBusinessProfileStatus(null)
-    setBusinessProfileError("")
-    applyBusinessProfile(undefined, project)
+  function handleOpenBusinessProfileDrawer(project: ProjectResponse) {
+    openBusinessProfileDrawer(project)
     setIsProjectMenuOpen(false)
-    setIsLoadingBusinessProfile(true)
-
-    try {
-      const status = await clientApiFetch<ProjectBusinessProfileStatusResponse>(
-        `/projects/${project.id}/business-profile`
-      )
-      setBusinessProfileStatus(status)
-      applyBusinessProfile(status.business_profile, project)
-    } catch (error) {
-      setBusinessProfileError(error instanceof Error ? error.message : "Unable to load business profile.")
-    } finally {
-      setIsLoadingBusinessProfile(false)
-    }
-  }
-
-  function closeBusinessProfileDrawer() {
-    setBusinessProfileProject(null)
-    setBusinessProfileStatus(null)
-    setBusinessProfileError("")
-  }
-
-  function applyBusinessProfile(profile: ProjectBusinessProfileResponse | undefined, project: ProjectResponse) {
-    setBrandName(profile?.brand_name ?? "")
-    setWebsiteUrl(profile?.website_url?.trim() || project.base_url)
-    setPrimaryCategory(profile?.primary_category ?? "")
-    setPrimaryLocation(profile?.primary_location ?? "")
-    setBusinessDescription(profile?.business_description ?? "")
-    setSeedPrompts(Array.from({ length: 5 }, (_, index) => profile?.seed_prompts?.[index] ?? ""))
-  }
-
-  function updateSeedPrompt(index: number, value: string) {
-    setSeedPrompts((current) =>
-      current.map((prompt, promptIndex) => (promptIndex === index ? value : prompt))
-    )
-  }
-
-  async function handleSaveBusinessProfile(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!businessProfileProject || !businessProfileStatus?.can_manage_profile || isSavingBusinessProfile) {
-      return
-    }
-
-    setBusinessProfileError("")
-    setIsSavingBusinessProfile(true)
-
-    try {
-      const profile = await clientApiPut<ProjectBusinessProfileResponse>(
-        `/projects/${businessProfileProject.id}/business-profile`,
-        {
-          brand_name: brandName,
-          website_url: websiteUrl,
-          primary_category: primaryCategory,
-          primary_location: primaryLocation,
-          business_description: businessDescription,
-          seed_prompts: seedPrompts.flatMap((prompt) => {
-            const trimmedPrompt = prompt.trim()
-            return trimmedPrompt ? [trimmedPrompt] : []
-          }),
-        }
-      )
-
-      setBusinessProfileStatus({
-        has_profile: true,
-        can_manage_profile: businessProfileStatus.can_manage_profile,
-        business_profile: profile,
-      })
-      applyBusinessProfile(profile, businessProfileProject)
-      closeBusinessProfileDrawer()
-    } catch (error) {
-      setBusinessProfileError(error instanceof Error ? error.message : "Unable to save business profile.")
-    } finally {
-      setIsSavingBusinessProfile(false)
-    }
-  }
-
-  async function handleDeleteProject() {
-    if (!projectPendingDelete || deletingProjectId) {
-      return
-    }
-
-    setProjectActionError("")
-    setDeletingProjectId(projectPendingDelete.id)
-
-    try {
-      await clientApiDelete<{ ok: boolean }>(`/projects/${projectPendingDelete.id}`)
-
-      const remainingProjects = projects.filter((project) => project.id !== projectPendingDelete.id)
-      setProjectPendingDelete(null)
-      setIsDeleteProjectOpen(false)
-      setIsProjectMenuOpen(false)
-
-      if (projectPendingDelete.id === activeProjectId) {
-        await navigateToNextProject(remainingProjects)
-      }
-
-      revalidator.revalidate()
-    } catch (error) {
-      setProjectActionError(error instanceof Error ? error.message : "Unable to delete project.")
-    } finally {
-      setDeletingProjectId(null)
-    }
-  }
-
-  async function navigateToNextProject(remainingProjects: ProjectResponse[]) {
-    const searchParams = new URLSearchParams(location.search)
-    const nextProject = remainingProjects[0] ?? null
-
-    if (nextProject) {
-      searchParams.set("project", nextProject.id)
-    } else {
-      searchParams.delete("project")
-    }
-
-    await navigate(`${location.pathname}?${searchParams.toString()}`)
-  }
-
-  function openDeleteCrawlDialog(crawl: CrawlResponse) {
-    setProjectActionError("")
-    setCrawlPendingDelete(crawl)
-    setIsDeleteCrawlOpen(true)
-  }
-
-  async function handleDeleteCrawl() {
-    if (!crawlPendingDelete || deletingCrawlId) {
-      return
-    }
-
-    setProjectActionError("")
-    setDeletingCrawlId(crawlPendingDelete.id)
-
-    try {
-      await clientApiDelete<{ ok: boolean }>(`/crawls/${crawlPendingDelete.id}`)
-      setCrawlPendingDelete(null)
-      setIsDeleteCrawlOpen(false)
-
-      const searchParams = new URLSearchParams(location.search)
-      if (searchParams.get("crawl") === crawlPendingDelete.id) {
-        searchParams.delete("crawl")
-        await navigate(`${location.pathname}?${searchParams.toString()}`)
-      }
-
-      revalidator.revalidate()
-    } catch (error) {
-      setProjectActionError(error instanceof Error ? error.message : "Unable to delete crawl.")
-    } finally {
-      setDeletingCrawlId(null)
-    }
-  }
-
-  async function handleExportCrawl(crawl: CrawlResponse, format: ExportFormat) {
-    if (crawl.status !== "completed" || exportingCrawlId) {
-      setProjectActionError("Only completed crawls can be exported.")
-      return
-    }
-
-    setProjectActionError("")
-    setExportingCrawlId(crawl.id)
-
-    try {
-      const response = await fetch(buildApiUrl(`/crawls/${crawl.id}/score-breakdown/export.${format}`), {
-        credentials: "include",
-      })
-
-      if (!response.ok) {
-        throw new Error(await readExportError(response))
-      }
-
-      const blob = await response.blob()
-      const project = projects.find((item) => item.id === crawl.project_id)
-      const filename = getExportFilename(
-        response.headers.get("content-disposition"),
-        `${getProjectFilenameSegment(project)}-${formatCrawlDate(crawl)}-issues.${format}`
-      )
-      downloadBlob(blob, filename)
-    } catch (error) {
-      setProjectActionError(error instanceof Error ? error.message : "Unable to export crawl issues.")
-    } finally {
-      setExportingCrawlId(null)
-    }
   }
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (isCreatingProject) {
-      return
-    }
+    if (createProject.isCreatingProject) return
 
-    const trimmedName = projectName.trim()
-    const trimmedBaseUrl = projectBaseUrl.trim()
+    const trimmedName = createProject.projectName.trim()
+    const trimmedBaseUrl = createProject.projectBaseUrl.trim()
 
     if (!trimmedName || !trimmedBaseUrl) {
-      setCreateProjectError("Project name and base URL are required.")
+      createProjectDispatch({ type: "SET_ERROR", error: "Project name and base URL are required." })
       return
     }
 
-    setCreateProjectError("")
-    setIsCreatingProject(true)
+    createProjectDispatch({ type: "SET_CREATING" })
 
     try {
-      const createdProject = await clientApiPost<ProjectResponse>(`/organizations/${organizationId}/projects`, {
-        name: trimmedName,
-        base_url: trimmedBaseUrl,
-      })
+      const createdProject = await clientApiPost<ProjectResponse>(
+        `/organizations/${organizationId}/projects`,
+        { name: trimmedName, base_url: trimmedBaseUrl },
+      )
 
-      setProjectName("")
-      setProjectBaseUrl("")
-      setIsCreateProjectOpen(false)
+      createProjectDispatch({ type: "CREATED" })
       setIsProjectMenuOpen(false)
-      await navigate(`${location.pathname}?project=${createdProject.id}`)
+
+      const searchParams = new URLSearchParams(location.search)
+      searchParams.set("project", createdProject.id)
+      await navigate(`${location.pathname}?${searchParams.toString()}`)
     } catch (error) {
-      setCreateProjectError(error instanceof Error ? error.message : "Unable to create project.")
-    } finally {
-      setIsCreatingProject(false)
+      createProjectDispatch({
+        type: "SET_ERROR",
+        error: error instanceof Error ? error.message : "Unable to create project.",
+      })
     }
   }
 
   async function handleRunCrawl(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!activeProjectId || isStartingCrawl || isCrawlRunning) {
-      return
-    }
+    if (!activeProjectId || runCrawl.isStartingCrawl || isCrawlRunning) return
 
-    const parsedMaxDepth = Number(maxDepth)
-    const parsedFetchTimeoutSeconds = Number(fetchTimeoutSeconds)
+    const parsedMaxDepth = Number(runCrawl.maxDepth)
+    const parsedFetchTimeoutSeconds = Number(runCrawl.fetchTimeoutSeconds)
     const validationError = getCrawlValidationError(parsedMaxDepth, parsedFetchTimeoutSeconds)
     if (validationError) {
-      setRunCrawlError(validationError)
+      runCrawlDispatch({ type: "SET_ERROR", error: validationError })
       return
     }
 
-    setRunCrawlError("")
-    setIsStartingCrawl(true)
+    runCrawlDispatch({ type: "SET_STARTING" })
 
     try {
       await clientApiPost<CrawlResponse>(`/projects/${activeProjectId}/crawls`, {
@@ -557,38 +268,14 @@ export function AppNavbar({
         },
       })
       onCrawlStart()
-      setIsRunCrawlOpen(false)
+      runCrawlDispatch({ type: "STARTED" })
       revalidator.revalidate()
     } catch (error) {
-      setRunCrawlError(error instanceof Error ? error.message : "Unable to start crawl.")
-    } finally {
-      setIsStartingCrawl(false)
+      runCrawlDispatch({
+        type: "SET_ERROR",
+        error: error instanceof Error ? error.message : "Unable to start crawl.",
+      })
     }
-  }
-
-  function openInviteDialog() {
-    setProfileActionError("")
-    setInviteLink("")
-    setHasCopiedInviteLink(false)
-    setIsInviteDialogOpen(true)
-  }
-
-  function closeInviteDialog(open: boolean) {
-    setIsInviteDialogOpen(open)
-    if (open) {
-      return
-    }
-
-    setProfileActionError("")
-    setInviteLink("")
-    setHasCopiedInviteLink(false)
-    setInviteExpiresAt(getDefaultInviteExpiryValue())
-    setInviteMaxUses("10")
-  }
-
-  function openLeaveWorkspaceDialog() {
-    setProfileActionError("")
-    setIsLeaveWorkspaceOpen(true)
   }
 
   return (
@@ -600,90 +287,12 @@ export function AppNavbar({
               <TabsList>
                 <TabsTrigger value="revserp-audit">Revserp Audit</TabsTrigger>
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
-<DropdownMenu open={isAiChatMenuOpen} onOpenChange={setIsAiChatMenuOpen}>
-<DropdownMenuTrigger
-  render={
-    <TabsTrigger
-      value="revserp-ai"
-      onMouseEnter={handleAiTabMouseEnter}
-      onMouseLeave={handleAiTabMouseLeave}
-      onClick={() => {
-        onViewChange("revserp-ai")
-        if (aiConversations.length > 0) {
-          onSelectConversation?.(aiConversations[0].id)
-        }
-      }}
-    />
-  }
->
-  Revserp AI
-</DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="max-h-96 w-80 overflow-y-auto rounded-2xl p-1.5"
-                    onMouseEnter={() => setIsAiChatMenuOpen(true)}
-                    onMouseLeave={handleAiTabMouseLeave}
-                  >
-                    <DropdownMenuItem
-                      onClick={() => {
-                        setIsAiChatMenuOpen(false)
-                        onViewChange("revserp-ai")
-                      }}
-                    >
-                      <PlusIcon className="size-4" />
-                      New chat
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    {isLoadingAiConversations ? (
-                      <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                        Loading chats...
-                      </div>
-                    ) : aiConversations.length === 0 ? (
-                      <div className="px-2 py-4 text-center text-sm text-muted-foreground">
-                        No saved chats yet
-                      </div>
-                    ) : (
-                      groupAiConversationsByDate(aiConversations).map((group) => (
-                        <DropdownMenuGroup key={group.label}>
-                          <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-                          {group.conversations.map((conv) => (
-                            <div
-                              key={conv.id}
-                              className="group/conv flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none hover:bg-accent hover:text-accent-foreground"
-                              onClick={() => handleAiConversationSelect(conv.id)}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate">
-                                  {conv.title || "Untitled chat"}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {formatAiConversationTime(conv.updated_at)}
-                                </div>
-                              </div>
-                              <Button
-                                aria-label="Delete chat"
-                                className="size-7 shrink-0 opacity-0 transition-opacity group-hover/conv:opacity-100"
-                                disabled={deletingConversationId === conv.id}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  void handleDeleteConversation(conv.id)
-                                }}
-                                size="icon"
-                                variant="ghost"
-                              >
-                                {deletingConversationId === conv.id ? (
-                                  <Loader2Icon className="size-4 animate-spin" />
-                                ) : (
-                                  <TrashIcon className="size-4" />
-                                )}
-                              </Button>
-                            </div>
-                          ))}
-                        </DropdownMenuGroup>
-                      ))
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <AiConversationsPopover
+                  activeProjectId={activeProjectId}
+                  onViewChange={onViewChange}
+                  onSelectConversation={onSelectConversation}
+                  onDeleteConversation={onDeleteConversation}
+                />
               </TabsList>
             </Tabs>
           </div>
@@ -700,15 +309,15 @@ export function AppNavbar({
             <RunCrawlPopover
               activeProject={activeProject}
               activeProjectId={activeProjectId}
-              fetchTimeoutSeconds={fetchTimeoutSeconds}
+              fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
               isCrawlRunning={isCrawlRunning}
-              isOpen={isRunCrawlOpen}
-              isStartingCrawl={isStartingCrawl}
-              maxDepth={maxDepth}
-              runCrawlError={runCrawlError}
-              onFetchTimeoutSecondsChange={setFetchTimeoutSeconds}
-              onMaxDepthChange={setMaxDepth}
-              onOpenChange={setIsRunCrawlOpen}
+              isOpen={runCrawl.isRunCrawlOpen}
+              isStartingCrawl={runCrawl.isStartingCrawl}
+              maxDepth={runCrawl.maxDepth}
+              runCrawlError={runCrawl.runCrawlError}
+              onFetchTimeoutSecondsChange={(value) => runCrawlDispatch({ type: "SET_FETCH_TIMEOUT", value })}
+              onMaxDepthChange={(value) => runCrawlDispatch({ type: "SET_MAX_DEPTH", value })}
+              onOpenChange={(open) => runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })}
               onSubmit={handleRunCrawl}
             />
           </div>
@@ -718,45 +327,135 @@ export function AppNavbar({
               activeProjectId={activeProjectId}
               currentCrawlId={currentCrawl?.id ?? null}
               initials={initials}
-              isActiveOrganizationOwner={isActiveOrganizationOwner}
-              isLeavingWorkspace={isLeavingWorkspace}
-              isLoggingOut={isLoggingOut}
-              isSwitchingWorkspace={isSwitchingWorkspace}
+              isActiveOrganizationOwner={workspaceActions.isActiveOrganizationOwner}
+              workspaceState={workspaceActions.workspaceState}
               organizationId={organizationId}
               organizations={organizations}
-              profileActionError={profileActionError}
+              profileActionError={workspaceActions.profileActionError}
               userName={userName}
-              onInviteOpen={openInviteDialog}
-              onLeaveWorkspaceOpen={openLeaveWorkspaceDialog}
-              onLogout={() => void handleLogout()}
-              onSelectOrganization={(value) => void handleSelectOrganization(value)}
+              onInviteOpen={workspaceActions.openInviteDialog}
+              onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
+              onLogout={() => void workspaceActions.handleLogout()}
+              onSelectOrganization={(value) => void workspaceActions.handleSelectOrganization(value)}
             />
           </div>
         </div>
       </header>
 
+      <AppNavbarDialogs
+        activeProjectId={activeProjectId}
+        businessProfile={{
+          businessProfileProject, brandName, websiteUrl, primaryCategory,
+          primaryLocation, businessDescription, seedPrompts, businessProfileError,
+          isLoadingBusinessProfile, isSavingBusinessProfile, canManageBusinessProfile,
+          closeBusinessProfileDrawer, updateSeedPrompt,
+          handleSaveBusinessProfile, setBrandName, setWebsiteUrl, setPrimaryCategory,
+          setPrimaryLocation, setBusinessDescription,
+        }}
+        crawlPanelCrawls={crawlPanelCrawls}
+        createProject={createProject}
+        createProjectDispatch={createProjectDispatch}
+        currentCrawl={currentCrawl}
+        handleCreateProject={handleCreateProject}
+        handleOpenBusinessProfileDrawer={handleOpenBusinessProfileDrawer}
+        handleSelectProject={handleSelectProject}
+        isProjectMenuOpen={isProjectMenuOpen}
+        projectActions={projectActions}
+        projects={projects}
+        setIsProjectMenuOpen={setIsProjectMenuOpen}
+        workspaceActions={workspaceActions}
+      />
+    </>
+  )
+}
+
+
+
+// --- Dialogs ---
+
+type AppNavbarDialogsProps = {
+  activeProjectId: AppNavbarProps["activeProjectId"]
+  businessProfile: {
+    businessProfileProject: ReturnType<typeof useBusinessProfile>["businessProfileProject"]
+    brandName: string
+    websiteUrl: string
+    primaryCategory: string
+    primaryLocation: string
+    businessDescription: string
+    seedPrompts: string[]
+    businessProfileError: string
+    isLoadingBusinessProfile: boolean
+    isSavingBusinessProfile: boolean
+    canManageBusinessProfile: boolean
+    closeBusinessProfileDrawer: () => void
+    updateSeedPrompt: (index: number, value: string) => void
+    handleSaveBusinessProfile: (event: FormEvent<HTMLFormElement>) => Promise<void>
+    setBrandName: (v: string) => void
+    setWebsiteUrl: (v: string) => void
+    setPrimaryCategory: (v: string) => void
+    setPrimaryLocation: (v: string) => void
+    setBusinessDescription: (v: string) => void
+  }
+  crawlPanelCrawls: CrawlResponse[]
+  createProject: CreateProjectState
+  createProjectDispatch: React.Dispatch<CreateProjectEvent>
+  currentCrawl: AppNavbarProps["currentCrawl"]
+  handleCreateProject: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  handleOpenBusinessProfileDrawer: (project: ProjectResponse) => void
+  handleSelectProject: (projectId: string, crawlId?: string) => void
+  isProjectMenuOpen: boolean
+  projectActions: ReturnType<typeof useProjectActions>
+  projects: AppNavbarProps["projects"]
+  setIsProjectMenuOpen: (v: boolean) => void
+  workspaceActions: ReturnType<typeof useWorkspaceActions>
+}
+
+function AppNavbarDialogs({
+  activeProjectId,
+  businessProfile,
+  crawlPanelCrawls,
+  createProject,
+  createProjectDispatch,
+  currentCrawl,
+  handleCreateProject,
+  handleOpenBusinessProfileDrawer,
+  handleSelectProject,
+  isProjectMenuOpen,
+  projectActions,
+  projects,
+  setIsProjectMenuOpen,
+  workspaceActions,
+}: AppNavbarDialogsProps) {
+  const {
+    businessProfileProject, brandName, websiteUrl, primaryCategory,
+    primaryLocation, businessDescription, seedPrompts, businessProfileError,
+    isLoadingBusinessProfile, isSavingBusinessProfile, canManageBusinessProfile,
+    closeBusinessProfileDrawer, updateSeedPrompt,
+    handleSaveBusinessProfile, setBrandName, setWebsiteUrl, setPrimaryCategory,
+    setPrimaryLocation, setBusinessDescription,
+  } = businessProfile
+
+  return (
+    <>
       <ProjectPickerDialog
         activeProjectId={activeProjectId}
         crawlPanelCrawls={crawlPanelCrawls}
         currentCrawl={currentCrawl}
-        deletingCrawlId={deletingCrawlId}
-        deletingProjectId={deletingProjectId}
-        exportFormat={exportFormat}
-        exportingCrawlId={exportingCrawlId}
+        deletingCrawlId={projectActions.deletingCrawlId}
+        deletingProjectId={projectActions.deletingProjectId}
+        exportFormat={projectActions.exportFormat}
+        exportingCrawlId={projectActions.exportingCrawlId}
         isOpen={isProjectMenuOpen}
-        projectActionError={projectActionError}
+        projectActionError={projectActions.projectActionError}
         projects={projects}
-        onCreateProjectOpen={() => {
-          setCreateProjectError("")
-          setIsCreateProjectOpen(true)
-        }}
-        onDeleteCrawl={openDeleteCrawlDialog}
-        onDeleteProject={openDeleteProjectDialog}
-        onExportCrawl={(crawl, format) => void handleExportCrawl(crawl, format)}
-        onExportFormatChange={setExportFormat}
-        onOpenBusinessProfile={(project) => void openBusinessProfileDrawer(project)}
+        onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
+        onDeleteCrawl={projectActions.openDeleteCrawlDialog}
+        onDeleteProject={projectActions.openDeleteProjectDialog}
+        onExportCrawl={(crawl, format) => void projectActions.handleExportCrawl(crawl, format)}
+        onExportFormatChange={projectActions.onExportFormatChange}
+        onOpenBusinessProfile={(project) => void handleOpenBusinessProfileDrawer(project)}
         onOpenChange={setIsProjectMenuOpen}
-        onProjectHover={setHoveredProjectId}
+        onProjectHover={projectActions.onProjectHover}
         onSelectProject={(projectId, crawlId) => void handleSelectProject(projectId, crawlId)}
       />
 
@@ -783,155 +482,69 @@ export function AppNavbar({
       />
 
       <CreateProjectDialog
-        createProjectError={createProjectError}
-        isCreatingProject={isCreatingProject}
-        isOpen={isCreateProjectOpen}
-        projectBaseUrl={projectBaseUrl}
-        projectName={projectName}
-        onBaseUrlChange={setProjectBaseUrl}
-        onNameChange={setProjectName}
-        onOpenChange={setIsCreateProjectOpen}
+        createProjectError={createProject.createProjectError}
+        isCreatingProject={createProject.isCreatingProject}
+        isOpen={createProject.isCreateProjectOpen}
+        projectBaseUrl={createProject.projectBaseUrl}
+        projectName={createProject.projectName}
+        onBaseUrlChange={(value) => createProjectDispatch({ type: "SET_BASE_URL", value })}
+        onNameChange={(value) => createProjectDispatch({ type: "SET_NAME", value })}
+        onOpenChange={(open) => createProjectDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })}
         onSubmit={handleCreateProject}
       />
 
       <DeleteProjectDialog
-        deletingProjectId={deletingProjectId}
-        isOpen={isDeleteProjectOpen}
-        projectActionError={projectActionError}
-        projectPendingDelete={projectPendingDelete}
-        onDelete={() => void handleDeleteProject()}
-        onOpenChange={setIsDeleteProjectOpen}
+        deletingProjectId={projectActions.deletingProjectId}
+        isOpen={projectActions.isDeleteProjectOpen}
+        projectActionError={projectActions.projectActionError}
+        projectPendingDelete={projectActions.projectPendingDelete}
+        onDelete={() => {
+          setIsProjectMenuOpen(false)
+          void projectActions.handleDeleteProject()
+        }}
+        onOpenChange={(open) => {
+          if (!open) projectActions.closeDialog()
+        }}
       />
 
       <DeleteCrawlDialog
-        crawlPendingDelete={crawlPendingDelete}
-        deletingCrawlId={deletingCrawlId}
-        isOpen={isDeleteCrawlOpen}
-        projectActionError={projectActionError}
-        onDelete={() => void handleDeleteCrawl()}
-        onOpenChange={setIsDeleteCrawlOpen}
+        crawlPendingDelete={projectActions.crawlPendingDelete}
+        deletingCrawlId={projectActions.deletingCrawlId}
+        isOpen={projectActions.isDeleteCrawlOpen}
+        projectActionError={projectActions.projectActionError}
+        onDelete={() => void projectActions.handleDeleteCrawl()}
+        onOpenChange={(open) => {
+          if (!open) projectActions.closeDialog()
+        }}
       />
 
       <InviteMembersDialog
-        activeOrganizationName={activeOrganization?.name}
-        hasCopiedInviteLink={hasCopiedInviteLink}
-        inviteExpiresAt={inviteExpiresAt}
-        inviteLink={inviteLink}
-        inviteMaxUses={inviteMaxUses}
-        isCreatingInvite={isCreatingInvite}
-        isOpen={isInviteDialogOpen}
-        profileActionError={profileActionError}
-        onCopyInviteLink={() => void handleCopyInviteLink()}
-        onExpiresAtChange={setInviteExpiresAt}
-        onMaxUsesChange={setInviteMaxUses}
-        onOpenChange={closeInviteDialog}
-        onSubmit={handleCreateInvite}
+        activeOrganizationName={workspaceActions.activeOrganization?.name}
+        hasCopiedInviteLink={workspaceActions.hasCopiedInviteLink}
+        inviteExpiresAt={workspaceActions.inviteExpiresAt}
+        inviteLink={workspaceActions.inviteLink}
+        inviteMaxUses={workspaceActions.inviteMaxUses}
+        isCreatingInvite={workspaceActions.isCreatingInvite}
+        isOpen={workspaceActions.isInviteDialogOpen}
+        profileActionError={workspaceActions.profileActionError}
+        onCopyInviteLink={() => void workspaceActions.handleCopyInviteLink()}
+        onExpiresAtChange={workspaceActions.setInviteExpiresAt}
+        onMaxUsesChange={workspaceActions.setInviteMaxUses}
+        onOpenChange={workspaceActions.closeInviteDialog}
+        onSubmit={workspaceActions.handleCreateInvite}
       />
 
       <LeaveWorkspaceDialog
-        activeOrganizationName={activeOrganization?.name}
-        isLeavingWorkspace={isLeavingWorkspace}
-        isOpen={isLeaveWorkspaceOpen}
-        profileActionError={profileActionError}
-        onLeave={() => void handleLeaveOrganization()}
-        onOpenChange={setIsLeaveWorkspaceOpen}
+        activeOrganizationName={workspaceActions.activeOrganization?.name}
+        isLeavingWorkspace={workspaceActions.workspaceState === "leaving"}
+        isOpen={workspaceActions.isLeaveWorkspaceOpen}
+        profileActionError={workspaceActions.profileActionError}
+        onLeave={() => void workspaceActions.handleLeaveOrganization()}
+        onOpenChange={workspaceActions.setLeaveWorkspaceOpen}
       />
     </>
   )
 }
 
-function getInviteValidationError(inviteExpiresAt: string, expiresAtDate: Date, maxUses: number) {
-  if (!inviteExpiresAt.trim() || Number.isNaN(expiresAtDate.getTime())) {
-    return "Expiry must be a valid date and time."
-  }
-
-  if (expiresAtDate.getTime() <= Date.now()) {
-    return "Expiry must be in the future."
-  }
-
-  if (!Number.isInteger(maxUses) || maxUses <= 0) {
-    return "Max uses must be greater than zero."
-  }
-
-  return ""
-}
-
-function getCrawlValidationError(maxDepth: number, fetchTimeoutSeconds: number) {
-  if (!Number.isInteger(maxDepth) || maxDepth < 0) {
-    return "Max depth must be zero or greater."
-  }
-
-  if (!Number.isInteger(fetchTimeoutSeconds) || fetchTimeoutSeconds <= 0) {
-    return "Fetch timeout must be greater than zero."
-  }
-
-  return ""
-}
-
-function getProjectFilenameSegment(project: ProjectResponse | undefined) {
-  const projectName = project?.name ?? "project"
-  const normalizedProjectName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
-  return normalizedProjectName || "project"
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const downloadUrl = URL.createObjectURL(blob)
-  const link = document.createElement("a")
-  link.href = downloadUrl
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(downloadUrl)
-}
-
-type AiConversationGroup = {
-  label: string
-  conversations: AIConversationResponse[]
-}
-
-function formatAiConversationDate(value: string) {
-  const date = new Date(value)
-  const today = new Date()
-  const yesterday = new Date()
-  yesterday.setDate(today.getDate() - 1)
-
-  if (date.toDateString() === today.toDateString()) return "Today"
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
-  return date.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
-}
-
-function formatAiConversationTime(value: string) {
-  return new Date(value).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })
-}
-
-function groupAiConversationsByDate(
-  conversations: AIConversationResponse[]
-): AiConversationGroup[] {
-  const groups: AiConversationGroup[] = []
-  const groupByLabel = new Map<string, AIConversationResponse[]>()
-
-  for (const conversation of conversations) {
-    const label = formatAiConversationDate(conversation.updated_at)
-    const group = groupByLabel.get(label)
-    if (group) {
-      group.push(conversation)
-      continue
-    }
-    const conversationsForDate = [conversation]
-    groupByLabel.set(label, conversationsForDate)
-    groups.push({ label, conversations: conversationsForDate })
-  }
-
-  return groups
-}
-
-
 export type { DashboardView }
+

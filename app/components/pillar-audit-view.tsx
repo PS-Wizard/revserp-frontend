@@ -1,15 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
-import { Badge } from "~/components/ui/badge"
 import {
   Card,
-  CardAction,
   CardDescription,
   CardFooter,
   CardHeader,
@@ -20,10 +17,18 @@ import { GooglePSIDrawer } from "~/components/gsc-overview/google-psi-drawer"
 import type { GooglePSIStoredResult } from "~/lib/api.types"
 import type {
   CrawlResponse,
-  ScoreBreakdownBucketResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
-import { cn, formatBucketLabel } from "~/lib/utils"
+import { formatBucketLabel } from "~/lib/utils"
+import {
+  TrendBadge,
+  TrendSparkline,
+  formatScore,
+  getRoundedDelta,
+  getTrendLabel,
+  getTrendSummary,
+} from "~/components/trend-sparkline"
+
 
 export type CrawlBreakdown = {
   crawl: CrawlResponse
@@ -157,15 +162,7 @@ function BucketScoreCards({
                 <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
                   {formatScore(bucket.score)}
                 </CardTitle>
-                {delta !== null && (
-                  <CardAction>
-                    <Badge variant="outline">
-                      {delta > 0 ? <TrendingUpIcon /> : delta < 0 ? <TrendingDownIcon /> : null}
-                      {delta > 0 ? "+" : ""}
-                      {delta} pts
-                    </Badge>
-                  </CardAction>
-                )}
+                {delta !== null && <TrendBadge delta={delta} />}
               </CardHeader>
               <CardFooter className="flex items-end justify-between gap-4 text-sm">
                 <div className="flex min-w-0 flex-col gap-1">
@@ -174,7 +171,7 @@ function BucketScoreCards({
                     {getTrendSummary(previousBucket?.score, bucket.score)}
                   </div>
                 </div>
-                <Sparkline values={series} trend={delta} />
+                <TrendSparkline values={series} trend={delta} />
               </CardFooter>
             </Card>
             {bucket.id === "psi_cwv" && psiResult && (
@@ -191,59 +188,6 @@ function BucketScoreCards({
   )
 }
 
-function Sparkline({
-  values,
-  trend,
-}: {
-  values: Array<number | undefined>
-  trend: number | null
-}) {
-  const points = values.filter(isNumber).slice(-8)
-
-  if (points.length < 2) {
-    return (
-      <div className="h-12 w-24 rounded-md border border-dashed border-border/60 bg-background/40" />
-    )
-  }
-
-  const width = 96
-  const height = 40
-  const min = Math.min(...points)
-  const max = Math.max(...points)
-  const range = max - min || 1
-  const step = width / Math.max(points.length - 1, 1)
-  const linePoints = points
-    .map((value, index) => {
-      const x = index * step
-      const y = height - ((value - min) / range) * (height - 4) - 2
-      return `${x},${y}`
-    })
-    .join(" ")
-
-  return (
-    <svg
-      aria-hidden="true"
-      className={cn(
-        "h-12 w-24 shrink-0 text-muted-foreground",
-        trend === null || trend === 0
-          ? "text-muted-foreground"
-          : trend > 0
-            ? "text-emerald-400"
-            : "text-rose-400"
-      )}
-      viewBox={`0 0 ${width} ${height}`}
-    >
-      <polyline
-        fill="none"
-        points={linePoints}
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="2.25"
-      />
-    </svg>
-  )
-}
 
 function getLatestPillarBuckets(crawlBreakdowns: CrawlBreakdown[], pillarId: string) {
   return (
@@ -252,43 +196,4 @@ function getLatestPillarBuckets(crawlBreakdowns: CrawlBreakdown[], pillarId: str
   )
 }
 
-
-function getTrendLabel(delta: number | null) {
-  if (delta === null || delta === 0) {
-    return "Flat since last crawl"
-  }
-
-  return delta > 0 ? "Trending up since last crawl" : "Trending down since last crawl"
-}
-
-function getTrendSummary(
-  previousValue: number | undefined,
-  currentValue: number | undefined
-) {
-  if (currentValue === undefined) {
-    return "Waiting for crawl data."
-  }
-
-  if (previousValue === undefined) {
-    return formatScore(currentValue)
-  }
-
-  return `${formatScore(previousValue)} → ${formatScore(currentValue)}`
-}
-
-function getRoundedDelta(value: number | undefined, previousValue: number | undefined) {
-  if (value === undefined || previousValue === undefined) {
-    return null
-  }
-
-  return Math.round(value) - Math.round(previousValue)
-}
-
-function isNumber(value: number | undefined): value is number {
-  return typeof value === "number" && Number.isFinite(value)
-}
-
-function formatScore(value: number | undefined) {
-  return value === undefined ? "—" : `${Math.round(value)}%`
-}
 

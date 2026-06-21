@@ -1,7 +1,18 @@
-import { clientApiFetch } from "~/lib/api"
-import type { ScoreBreakdownIssueURLsResponse } from "~/lib/api.types"
+import { clientApiFetch, clientApiPost } from "~/lib/api"
+import type {
+  AIConversationResponse,
+  CreateAIConversationMessageResponse,
+  CreateAIConversationResponse,
+  ScoreBreakdownIssueURLsResponse,
+} from "~/lib/api.types"
 
-import type { IssueScope, MergedIssueUrlRow } from "./types"
+import type {
+  AIFixTarget,
+  IssueScope,
+  MergedIssueUrlRow,
+  PendingAIFixRequest,
+} from "./types"
+
 
 export function formatPenalty(value: number) {
   return Number(value.toFixed(2)).toString()
@@ -88,4 +99,72 @@ export async function fetchAllIssueUrls(
   }
 
   return rows
+}
+
+export function buildPendingAIFixRequest(target: AIFixTarget): PendingAIFixRequest {
+  return {
+    requestId: `${Date.now()}:${target.key}`,
+    target,
+    title: buildAIFixConversationTitle(target),
+    prompt: buildAIFixConversationPrompt(target),
+  }
+}
+
+export async function generateQueuedAIFix({
+  crawlId,
+  projectId,
+  request,
+  target,
+}: {
+  crawlId: string
+  projectId: string
+  request: PendingAIFixRequest
+  target: AIFixTarget
+}): Promise<AIConversationResponse> {
+  const created = await clientApiPost<CreateAIConversationResponse>(
+    `/projects/${projectId}/ai/conversations`,
+    {
+      crawl_id: crawlId,
+      title: request.title,
+    }
+  )
+
+  const response = await clientApiPost<CreateAIConversationMessageResponse>(
+    `/ai/conversations/${created.conversation.id}/messages`,
+    {
+      crawl_id: crawlId,
+      pillar_id: target.pillarId,
+      bucket_ids: [target.bucketId],
+      issue_type_ids: [target.issueTypeId],
+      issue_urls: target.urls ?? [],
+      content: request.prompt,
+    }
+  )
+
+  return response.conversation
+}
+
+function buildAIFixConversationTitle(target: AIFixTarget) {
+  if (target.urls?.length) {
+    return `Fix ${target.issueTypeLabel} on ${shortURLLabel(target.urls[0])}`
+  }
+
+  return `Fix ${target.issueTypeLabel}`
+}
+
+function buildAIFixConversationPrompt(target: AIFixTarget) {
+  if (target.urls?.length) {
+    return `Help me fix the ${target.issueTypeLabel} issue for this URL: ${target.urls[0]}. Give concrete, ready-to-apply recommendations based only on the crawl context.`
+  }
+
+  return `Help me fix these ${target.issueTypeLabel} issues. Prioritize the affected URLs and give concrete, ready-to-apply recommendations based only on the crawl context.`
+}
+
+function shortURLLabel(rawURL: string) {
+  try {
+    const url = new URL(rawURL)
+    return `${url.hostname}${url.pathname}`
+  } catch {
+    return rawURL
+  }
 }

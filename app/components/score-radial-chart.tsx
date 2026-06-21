@@ -1,6 +1,7 @@
 "use client"
 
-import { PolarGrid, RadialBar, RadialBarChart } from "recharts"
+import { useEffect, useMemo, useState } from "react"
+
 
 import {
   Card,
@@ -15,7 +16,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "~/components/ui/chart"
-
 export type ScoreRadialSegment = {
   key: string
   label: string
@@ -31,8 +31,24 @@ type ScoreRadialChartProps = {
 }
 
 export function ScoreRadialChart({ centerValue, description, segments, title }: ScoreRadialChartProps) {
-  const chartData = buildChartData(segments)
-  const chartConfig = buildChartConfig(chartData)
+  const [rechartsComponents, setRechartsComponents] = useState<{
+    PolarGrid: React.ComponentType<any>
+    RadialBar: React.ComponentType<any>
+    RadialBarChart: React.ComponentType<any>
+  } | null>(null)
+
+  useEffect(() => {
+    import("recharts").then((m) => {
+      setRechartsComponents({
+        PolarGrid: m.PolarGrid,
+        RadialBar: m.RadialBar,
+        RadialBarChart: m.RadialBarChart,
+      })
+    })
+  }, [])
+
+  const chartData = useMemo(() => buildChartData(segments), [segments])
+  const chartConfig = useMemo(() => buildChartConfig(chartData), [chartData])
 
   return (
     <Card className="flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
@@ -45,11 +61,15 @@ export function ScoreRadialChart({ centerValue, description, segments, title }: 
           <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
             No score data yet.
           </div>
+        ) : !rechartsComponents ? (
+          <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
+            Loading chart...
+          </div>
         ) : (
           <>
             <div className="relative mx-auto h-[250px] w-[250px]">
               <ChartContainer config={chartConfig} className="h-full w-full">
-                <RadialBarChart data={chartData} innerRadius={34} outerRadius={108}>
+                <rechartsComponents.RadialBarChart data={chartData} innerRadius={34} outerRadius={108}>
                   <ChartTooltip
                     cursor={false}
                     content={
@@ -71,9 +91,9 @@ export function ScoreRadialChart({ centerValue, description, segments, title }: 
                       />
                     }
                   />
-                  <PolarGrid gridType="circle" radialLines={false} />
-                  <RadialBar background dataKey="value" />
-                </RadialBarChart>
+                  <rechartsComponents.PolarGrid gridType="circle" radialLines={false} />
+                  <rechartsComponents.RadialBar background dataKey="value" />
+                </rechartsComponents.RadialBarChart>
               </ChartContainer>
               {typeof centerValue === "number" && Number.isFinite(centerValue) ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

@@ -197,7 +197,7 @@ export function UrlIssueTable({
   )
 }
 
-export function EmptyMessage({ message }: { message: string }) {
+function EmptyMessage({ message }: { message: string }) {
   return (
     <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed border-border/60 bg-background/30 px-6 text-center text-sm text-muted-foreground">
       {message}

@@ -28,9 +28,7 @@ type ProfileMenuProps = {
   currentCrawlId?: string | null
   initials: string
   isActiveOrganizationOwner: boolean
-  isLeavingWorkspace: boolean
-  isLoggingOut: boolean
-  isSwitchingWorkspace: boolean
+  workspaceState: 'idle' | 'switching' | 'leaving' | 'logging-out'
   organizationId: string
   organizations: MeResponse["organizations"]
   profileActionError: string
@@ -46,9 +44,7 @@ export function ProfileMenu({
   currentCrawlId,
   initials,
   isActiveOrganizationOwner,
-  isLeavingWorkspace,
-  isLoggingOut,
-  isSwitchingWorkspace,
+  workspaceState,
   organizationId,
   organizations,
   profileActionError,
@@ -59,6 +55,9 @@ export function ProfileMenu({
   onSelectOrganization,
 }: ProfileMenuProps) {
   const navigate = useNavigate()
+  const isSwitchingWorkspace = workspaceState === "switching"
+  const isLeavingWorkspace = workspaceState === "leaving"
+  const isLoggingOut = workspaceState === "logging-out"
 
   return (
     <DropdownMenu>
@@ -106,7 +105,7 @@ export function ProfileMenu({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {isActiveOrganizationOwner ? (
-            <DropdownMenuItem onClick={onInviteOpen}>
+            <DropdownMenuItem onClick={onInviteOpen} variant="default">
               <SendIcon />
               Invite members
             </DropdownMenuItem>
@@ -129,13 +128,14 @@ export function ProfileMenu({
             onClick={() => {
               navigate(`/app/internal/scoring?project=${activeProjectId ?? ""}&crawl=${currentCrawlId ?? ""}`)
             }}
+            variant="default"
           >
             <Settings2Icon />
             Configure Scoring
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={isLoggingOut} onClick={onLogout}>
+        <DropdownMenuItem disabled={isLoggingOut} onClick={onLogout} variant="default">
           {isLoggingOut ? (
             <CompileLoader className="text-foreground" size={16} />
           ) : (

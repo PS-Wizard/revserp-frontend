@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useMemo, useRef } from "react"
 import type { ApexOptions } from "apexcharts"
 
 import type { CrawlResponse } from "~/lib/api.types"
@@ -11,6 +11,10 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
+import { useApexChart } from "~/hooks/use-apex-chart"
+import { getCrawlTimestamp } from "~/lib/crawl"
+import { isNumber } from "~/components/trend-sparkline"
+
 
 const SCORE_SERIES = [
   { key: "overall", label: "Overall", color: "var(--chart-1)" },
@@ -27,7 +31,6 @@ export function SummaryScoreHistoryChart({
   crawls: CrawlResponse[]
 }) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
-  const chartInstanceRef = useRef<any>(null)
 
   const chartRows = useMemo(
     () =>
@@ -127,37 +130,7 @@ export function SummaryScoreHistoryChart({
     [yRange]
   )
 
-  useEffect(() => {
-    const chartContainer = chartContainerRef.current
-    if (!chartContainer || chartInstanceRef.current || !chartRows.length) return
-
-    let chart: any = null
-    let isDestroyed = false
-
-    void (async () => {
-      const ApexCharts = (await import("apexcharts")).default
-      if (isDestroyed || chartInstanceRef.current) return
-
-      chart = new ApexCharts(chartContainer, {
-        ...chartOptions,
-        series,
-      })
-      chartInstanceRef.current = chart
-      await chart.render()
-    })()
-
-    return () => {
-      isDestroyed = true
-      chart?.destroy()
-      chartInstanceRef.current = null
-    }
-  }, [chartOptions, chartRows.length, series])
-
-  useEffect(() => {
-    if (!chartInstanceRef.current) return
-    void chartInstanceRef.current.updateOptions(chartOptions, false, false, false)
-    void chartInstanceRef.current.updateSeries(series, false)
-  }, [chartOptions, series])
+  useApexChart(chartContainerRef, chartOptions, series, chartRows.length > 0)
 
   return (
     <Card className="@container/card flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
@@ -236,14 +209,10 @@ const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 })
 
-function isNumber(value: number | null): value is number {
-  return typeof value === "number" && Number.isFinite(value)
-}
+
 
 function formatTooltipDateTime(value: number) {
   return tooltipDateTimeFormatter.format(new Date(value))
 }
 
-function getCrawlTimestamp(crawl: CrawlResponse) {
-  return new Date(crawl.completed_at ?? crawl.created_at).getTime()
-}
+

@@ -1,59 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import {
-  BotIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  CopyIcon,
-  Loader2Icon,
-  MessageSquareIcon,
-  PlusIcon,
-  SendIcon,
-  TrashIcon,
-  SparklesIcon,
-} from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent, useReducer } from "react"
 
-import { CompileLoader } from "~/components/compile-loader"
-import { MarkdownMessage } from "~/components/markdown-message"
-import { Badge } from "~/components/ui/badge"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb"
-import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuGroup,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "~/components/ui/context-menu"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
-import { Textarea } from "~/components/ui/textarea"
-import {
-  ApiError,
-  clientApiDelete,
-  clientApiFetch,
-  clientApiPost,
-} from "~/lib/api"
+import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   AIConversationDetailResponse,
   AIConversationResponse,
   AIConversationsResponse,
-  AIMessageResponse,
   CreateAIConversationMessageResponse,
   CreateAIConversationResponse,
   ScoreBreakdownBucketResponse,
@@ -61,15 +15,51 @@ import type {
   ScoreBreakdownPillarResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
-import { cn, formatBucketLabel } from "~/lib/utils"
+import { getNextScopeState, newMessageFromResponse, upsertConversation } from "~/lib/ai-conversation"
+import type { RevserpAIMessage } from "~/lib/ai-conversation"
+import { MessageList } from "~/components/revserp-ai-view/message-list"
+import { Composer } from "~/components/revserp-ai-view/composer"
 
-type RevserpAIMessage = {
-  id?: string
-  role: "user" | "assistant"
-  content: string
+type ScopeState = {
+  pillarId: string
+  bucketIds: string[]
+  issueTypeIds: string[]
 }
 
-export function RevserpAIView({
+type ScopeAction =
+  | { type: "SET_PILLAR"; pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
+  | { type: "TOGGLE_BUCKET"; bucketId: string }
+  | { type: "TOGGLE_ISSUE_TYPE"; issueTypeId: string }
+  | { type: "SET_SCOPE"; pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
+
+const initialScope: ScopeState = { pillarId: "", bucketIds: [], issueTypeIds: [] }
+
+function scopeReducer(state: ScopeState, action: ScopeAction): ScopeState {
+  switch (action.type) {
+    case "SET_PILLAR":
+      return { pillarId: action.pillarId, bucketIds: action.bucketIds, issueTypeIds: action.issueTypeIds }
+    case "TOGGLE_BUCKET": {
+      const nextBucketIds = state.bucketIds.includes(action.bucketId)
+        ? state.bucketIds.filter((id) => id !== action.bucketId)
+        : [...state.bucketIds, action.bucketId]
+      return {
+        ...state,
+        bucketIds: nextBucketIds.length ? nextBucketIds : state.bucketIds,
+        issueTypeIds: [],
+      }
+    }
+    case "TOGGLE_ISSUE_TYPE": {
+      const nextIssueTypeIds = state.issueTypeIds.includes(action.issueTypeId)
+        ? state.issueTypeIds.filter((id) => id !== action.issueTypeId)
+        : [...state.issueTypeIds, action.issueTypeId]
+      return { ...state, issueTypeIds: nextIssueTypeIds }
+    }
+    case "SET_SCOPE":
+      return { pillarId: action.pillarId, bucketIds: action.bucketIds, issueTypeIds: action.issueTypeIds }
+  }
+}
+
+function useAIConversation({
   breakdown,
   openConversationId,
   projectId,
@@ -78,27 +68,17 @@ export function RevserpAIView({
   openConversationId?: string | null
   projectId?: string
 }) {
+  const [scope, dispatchScope] = useReducer(scopeReducer, initialScope)
+  const { pillarId: selectedPillarId, bucketIds: selectedBucketIds, issueTypeIds: selectedIssueTypeIds } = scope
   const [prompt, setPrompt] = useState("")
-  const [selectedPillarId, setSelectedPillarId] = useState("")
-  const [selectedBucketIds, setSelectedBucketIds] = useState<string[]>([])
-  const [selectedIssueTypeIds, setSelectedIssueTypeIds] = useState<string[]>([])
-  const [conversations, setConversations] = useState<AIConversationResponse[]>(
-    []
-  )
-  const [activeConversationId, setActiveConversationId] = useState<
-    string | null
-  >(null)
+  const [conversations, setConversations] = useState<AIConversationResponse[]>([])
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<RevserpAIMessage[]>([])
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
-  const [isSending, setIsSending] = useState(false)
-  const [deletingConversationId, setDeletingConversationId] = useState<
-    string | null
-  >(null)
+  const [activeSendRequestId, setActiveSendRequestId] = useState<string | null>(null)
+  const isSending = activeSendRequestId !== null
   const [errorMessage, setErrorMessage] = useState("")
-  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
-    null
-  )
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const activeSendRequestIdRef = useRef<string | null>(null)
@@ -161,10 +141,6 @@ export function RevserpAIView({
     conversations.find(
       (conversation) => conversation.id === activeConversationId
     ) ?? null
-  const groupedConversations = useMemo(
-    () => groupConversationsByDate(conversations),
-    [conversations]
-  )
   const canSend = Boolean(
     projectId &&
     breakdown?.crawl_id &&
@@ -176,19 +152,19 @@ export function RevserpAIView({
 
   function startSending(requestId: string) {
     activeSendRequestIdRef.current = requestId
-    setIsSending(true)
+    setActiveSendRequestId(requestId)
   }
 
   function finishSending(requestId: string) {
     if (activeSendRequestIdRef.current !== requestId) return
     activeSendRequestIdRef.current = null
-    setIsSending(false)
+    setActiveSendRequestId(null)
   }
 
-  function cancelSending() {
+  const cancelSending = useCallback(() => {
     activeSendRequestIdRef.current = null
-    setIsSending(false)
-  }
+    setActiveSendRequestId(null)
+  }, [])
 
   function isActiveSendRequest(requestId: string) {
     return activeSendRequestIdRef.current === requestId
@@ -199,7 +175,7 @@ export function RevserpAIView({
     setIsLoadingMessages(true)
     setErrorMessage("")
     try {
-      const response = await clientApiFetch<AIConversationDetailResponse>(
+      const response = await clientApiFetch<AIConversationDetailResponse >(
         `/ai/conversations/${conversationId}`
       )
       setActiveConversationId(response.conversation.id)
@@ -216,9 +192,10 @@ export function RevserpAIView({
     } finally {
       setIsLoadingMessages(false)
     }
-  }, [])
+  }, [cancelSending])
 
-  useEffect(() => {
+  // Sync scope when breakdown changes (no-derived-state fix)
+  const syncScope = useEffectEvent(() => {
     const nextScopeState = getNextScopeState(
       breakdown,
       selectedPillarId,
@@ -226,19 +203,26 @@ export function RevserpAIView({
       selectedIssueTypeIds
     )
     if (!nextScopeState) return
-    setSelectedPillarId(nextScopeState.pillarId)
-    setSelectedBucketIds(nextScopeState.bucketIds)
-    setSelectedIssueTypeIds(nextScopeState.issueTypeIds)
-  }, [breakdown, selectedPillarId, selectedBucketIds, selectedIssueTypeIds])
+    dispatchScope({
+      type: "SET_SCOPE",
+      pillarId: nextScopeState.pillarId,
+      bucketIds: nextScopeState.bucketIds,
+      issueTypeIds: nextScopeState.issueTypeIds,
+    })
+  })
+  useEffect(() => {
+    syncScope()
+  }, [breakdown])
 
+  // Load conversations on mount / crawl change
+  const hasExternalConversationRequest = Boolean(openConversationId)
   useEffect(() => {
     let cancelled = false
 
-    async function loadConversations() {
+    void (async () => {
       cancelSending()
       setConversations([])
       setErrorMessage("")
-      setIsLoadingHistory(false)
       setIsLoadingMessages(false)
       if (!projectId || !crawlId) {
         setMessages([])
@@ -246,22 +230,19 @@ export function RevserpAIView({
         return
       }
 
-      setIsLoadingHistory(true)
       try {
-        const response = await clientApiFetch<AIConversationsResponse>(
+        const response = await clientApiFetch<AIConversationsResponse >(
           `/projects/${projectId}/ai/conversations?crawl_id=${encodeURIComponent(crawlId)}&limit=50&offset=0`
         )
         if (cancelled) return
         setConversations(response.conversations)
 
-        const hasExternalConversationRequest = Boolean(openConversationId)
         const firstConversation = hasExternalConversationRequest
           ? null
           : response.conversations[0]
 
         if (firstConversation) {
-
-          const detail = await clientApiFetch<AIConversationDetailResponse>(
+          const detail = await clientApiFetch<AIConversationDetailResponse >(
             `/ai/conversations/${firstConversation.id}`
           )
           if (cancelled) return
@@ -282,20 +263,13 @@ export function RevserpAIView({
               : "Unable to load AI history."
           )
         }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingHistory(false)
-          setIsLoadingMessages(false)
-        }
       }
-    }
-
-    void loadConversations()
+    })()
 
     return () => {
       cancelled = true
     }
-  }, [crawlId, projectId])
+  }, [crawlId, projectId, hasExternalConversationRequest])
 
   useEffect(() => {
     if (!openConversationId) return
@@ -328,10 +302,13 @@ export function RevserpAIView({
       role: "user",
       content: trimmedPrompt,
     }
-    setMessages([...baseMessages, optimisticUserMessage])
+
+    // Batch related state updates
+    const sendRequestId = requestId
+    startSending(sendRequestId)
     setPrompt("")
     setErrorMessage("")
-    startSending(requestId)
+    setMessages([...baseMessages, optimisticUserMessage])
     resetTextareaHeight()
 
     try {
@@ -344,7 +321,7 @@ export function RevserpAIView({
             title: trimmedPrompt,
           }
         )
-        if (!isActiveSendRequest(requestId)) return
+        if (!isActiveSendRequest(sendRequestId)) return
         conversationId = created.conversation.id
         setActiveConversationId(conversationId)
         setConversations((current) =>
@@ -366,7 +343,7 @@ export function RevserpAIView({
           content: trimmedPrompt,
         }
       )
-      if (!isActiveSendRequest(requestId)) return
+      if (!isActiveSendRequest(sendRequestId)) return
       setMessages([
         ...baseMessages,
         newMessageFromResponse(response.user_message),
@@ -376,7 +353,7 @@ export function RevserpAIView({
         upsertConversation(current, response.conversation)
       )
     } catch (error) {
-      if (!isActiveSendRequest(requestId)) return
+      if (!isActiveSendRequest(sendRequestId)) return
       setMessages(baseMessages)
       setPrompt(trimmedPrompt)
       setErrorMessage(
@@ -385,7 +362,7 @@ export function RevserpAIView({
           : "Unable to generate an AI fix."
       )
     } finally {
-      finishSending(requestId)
+      finishSending(sendRequestId)
     }
   }
 
@@ -404,70 +381,24 @@ export function RevserpAIView({
   }
 
   function selectPillar(pillar: ScoreBreakdownPillarResponse) {
-    setSelectedPillarId(pillar.id)
-    setSelectedBucketIds(pillar.buckets[0] ? [pillar.buckets[0].id] : [])
-    setSelectedIssueTypeIds([])
+    dispatchScope({
+      type: "SET_PILLAR",
+      pillarId: pillar.id,
+      bucketIds: pillar.buckets[0] ? [pillar.buckets[0].id] : [],
+      issueTypeIds: [],
+    })
   }
 
   function toggleBucket(bucket: ScoreBreakdownBucketResponse) {
-    setSelectedBucketIds((current) => {
-      const next = current.includes(bucket.id)
-        ? current.filter((bucketId) => bucketId !== bucket.id)
-        : [...current, bucket.id]
-      return next.length ? next : current
-    })
-    setSelectedIssueTypeIds([])
+    dispatchScope({ type: "TOGGLE_BUCKET", bucketId: bucket.id })
   }
 
   function toggleIssueType(issueType: ScoreBreakdownIssueTypeResponse) {
-    setSelectedIssueTypeIds((current) =>
-      current.includes(issueType.id)
-        ? current.filter((issueTypeId) => issueTypeId !== issueType.id)
-        : [...current, issueType.id]
-    )
+    dispatchScope({ type: "TOGGLE_ISSUE_TYPE", issueTypeId: issueType.id })
   }
 
-  function startNewChat() {
-    cancelSending()
-    setActiveConversationId(null)
-    setMessages([])
-    setErrorMessage("")
-  }
-
-  async function deleteConversation(conversationId: string) {
-    if (deletingConversationId) return
-
-    const previousConversations = conversations
-    const previousActiveConversationId = activeConversationId
-    const previousMessages = messages
-    const wasActiveConversation = activeConversationId === conversationId
-    setDeletingConversationId(conversationId)
-    setErrorMessage("")
-    setConversations((current) =>
-      current.filter((conversation) => conversation.id !== conversationId)
-    )
-    if (wasActiveConversation) {
-      cancelSending()
-      setActiveConversationId(null)
-      setMessages([])
-    }
-
-    try {
-      await clientApiDelete<null>(`/ai/conversations/${conversationId}`)
-    } catch (error) {
-      setConversations(previousConversations)
-      if (wasActiveConversation) {
-        setActiveConversationId(previousActiveConversationId)
-        setMessages(previousMessages)
-      }
-      setErrorMessage(
-        error instanceof ApiError
-          ? error.message
-          : "Unable to delete AI conversation."
-      )
-    } finally {
-      setDeletingConversationId(null)
-    }
+  function clearIssueTypeIds() {
+    dispatchScope({ type: "SET_SCOPE", pillarId: selectedPillarId, bucketIds: selectedBucketIds, issueTypeIds: [] })
   }
 
   function resetTextareaHeight() {
@@ -483,478 +414,141 @@ export function RevserpAIView({
     textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
   }
 
+  return {
+    prompt,
+    setPrompt,
+    selectedPillarId,
+    selectedBucketIds,
+    selectedIssueTypeIds,
+    conversations,
+    activeConversationId,
+    activeConversation,
+    messages,
+    isLoadingMessages,
+    isSending,
+    errorMessage,
+    copiedMessageIndex,
+    setCopiedMessageIndex,
+    crawlId,
+    selectedPillar,
+    clearIssueTypeIds,
+    availableIssueTypes,
+    selectedIssueTypes,
+    bucketLabel,
+    issueTypeLabel,
+    selectedScopeLabel,
+    canSend,
+    handleSubmit,
+    handlePromptKeyDown,
+    copyMessage,
+    selectPillar,
+    toggleBucket,
+    toggleIssueType,
+    growTextarea,
+    scrollContainerRef,
+    textareaRef,
+  }
+}
+
+function NoCrawlDataView() {
+  return (
+    <div className="flex min-h-[calc(100svh-5rem)] items-center justify-center p-6 text-center">
+      <Card className="max-w-xl border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+        <CardContent className="py-12">
+          <h1 className="text-4xl font-medium tracking-[-0.06em]">
+            Revserp AI needs crawl data
+          </h1>
+          <p className="pt-5 text-sm leading-7 text-muted-foreground">
+            Run a crawl first, then use Revserp AI to explain, prioritize, and
+            fix scoped audit issues.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export function RevserpAIView({
+  breakdown,
+  openConversationId,
+  projectId,
+}: {
+  breakdown: ScoreBreakdownResponse | null
+  openConversationId?: string | null
+  projectId?: string
+}) {
+  const {
+    prompt,
+    setPrompt,
+    selectedPillarId,
+    selectedBucketIds,
+    selectedIssueTypeIds,
+    activeConversation,
+    messages,
+    isLoadingMessages,
+    isSending,
+    errorMessage,
+    copiedMessageIndex,
+    selectedPillar,
+    clearIssueTypeIds,
+    availableIssueTypes,
+    bucketLabel,
+    issueTypeLabel,
+    selectedScopeLabel,
+    canSend,
+    handleSubmit,
+    handlePromptKeyDown,
+    copyMessage,
+    selectPillar,
+    toggleBucket,
+    toggleIssueType,
+    growTextarea,
+    scrollContainerRef,
+    textareaRef,
+  } = useAIConversation({ breakdown, openConversationId, projectId })
+
   if (!breakdown) {
-    return (
-      <div className="flex min-h-[calc(100svh-5rem)] items-center justify-center p-6 text-center">
-        <Card className="max-w-xl border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
-          <CardContent className="py-12">
-            <h1 className="text-4xl font-medium tracking-[-0.06em]">
-              Revserp AI needs crawl data
-            </h1>
-            <p className="pt-5 text-sm leading-7 text-muted-foreground">
-              Run a crawl first, then use Revserp AI to explain, prioritize, and
-              fix scoped audit issues.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <NoCrawlDataView />
   }
 
   return (
     <section className="flex h-[calc(100svh-4.5rem)] min-h-0 flex-col overflow-hidden px-4 pt-5 sm:px-6 lg:px-4">
       <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
-        {isLoadingMessages ? (
-          <div className="flex h-full items-center justify-center text-center">
-            <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-xl">
-              <CompileLoader size={22} />
-              <span className="text-muted-foreground">
-                Loading conversation...
-              </span>
-            </div>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-center">
-            <div>
-              <div className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-border bg-card shadow-xl">
-                <SparklesIcon className="size-5" />
-              </div>
-              <h1 className="pt-5 text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
-                What should we fix?
-              </h1>
-              <p className="mx-auto max-w-xl pt-5 text-sm leading-7 text-muted-foreground">
-                {selectedScopeLabel}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-6 px-2 py-4">
-            {messages.map((message, messageIndex) => (
-              <div
-                key={message.id ?? `${message.role}-${messageIndex}`}
-                className={cn(
-                  "flex",
-                  message.role === "user" ? "justify-end" : "justify-start"
-                )}
-              >
-                {message.role === "user" ? (
-                  <div className="max-w-[min(34rem,78%)] rounded-2xl bg-primary px-4 py-2.5 text-base leading-7 text-primary-foreground shadow-xl">
-                    <MarkdownMessage content={message.content} />
-                  </div>
-                ) : (
-                  <article className="w-full text-base leading-7 text-foreground">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-card">
-                        <BotIcon className="size-4" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <MarkdownMessage content={message.content} />
-                        <div className="pt-3">
-                          <Button
-                            aria-label="Copy response"
-                            className="size-8 rounded-full"
-                            onClick={() =>
-                              void copyMessage(message.content, messageIndex)
-                            }
-                            size="icon"
-                            variant="outline"
-                          >
-                            {copiedMessageIndex === messageIndex ? (
-                              <CheckIcon className="size-4" />
-                            ) : (
-                              <CopyIcon className="size-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                )}
-              </div>
-            ))}
-
-            {isSending ? (
-              <div className="flex justify-start">
-                <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-xl">
-                  <CompileLoader size={22} />
-                  <span className="text-muted-foreground">Thinking...</span>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </div>
-
-      <div className="mx-auto w-full max-w-6xl shrink-0">
-        {errorMessage ? (
-          <p className="mx-auto mb-2 max-w-3xl rounded-full border border-red-400/20 bg-red-500/10 px-3 py-1.5 text-sm text-red-200">
-            {errorMessage}
-          </p>
-        ) : null}
-
-        <div className="rounded-[1.15rem] border border-border bg-card/95 px-2 py-1.5 shadow-[0_18px_56px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
-          <div className="flex min-w-0 items-center justify-between gap-2 px-1.5 py-1">
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              {activeConversation?.title || "New chat"}
-            </span>
-          </div>
-          <ScopeBreadcrumb
-            availableIssueTypes={availableIssueTypes}
-            bucketLabel={bucketLabel}
-            issueTypeLabel={issueTypeLabel}
-            onSelectAllIssueTypes={() => setSelectedIssueTypeIds([])}
-            onSelectPillar={selectPillar}
-            onToggleBucket={toggleBucket}
-            onToggleIssueType={toggleIssueType}
-            selectedBucketIds={selectedBucketIds}
-            selectedIssueTypeIds={selectedIssueTypeIds}
-            selectedPillar={selectedPillar}
-            selectedPillarId={selectedPillarId}
-            selectedPillarBuckets={selectedPillar?.buckets ?? []}
-            pillars={breakdown.pillars}
+          <MessageList
+            copiedMessageIndex={copiedMessageIndex}
+            isLoadingMessages={isLoadingMessages}
+            isSending={isSending}
+            messages={messages}
+            onCopyMessage={copyMessage}
+            selectedScopeLabel={selectedScopeLabel}
           />
-
-          <div className="flex items-end gap-2 px-1.5 pt-0.5 pb-1">
-            <Textarea
-              ref={textareaRef}
-              className="max-h-[22vh] min-h-9 flex-1 resize-none border-0 bg-transparent px-2 py-1.5 text-sm leading-6 shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
-              onChange={(event) => setPrompt(event.currentTarget.value)}
-              onInput={growTextarea}
-              onKeyDown={handlePromptKeyDown}
-              placeholder="Ask Revserp to fix, rewrite, prioritize, or explain this context..."
-              rows={1}
-              value={prompt}
-            />
-
-            <Button
-              aria-label="Send prompt"
-              className="mb-0.5 size-8 rounded-full"
-              disabled={!canSend}
-              onClick={() => void handleSubmit()}
-              size="icon"
-            >
-              {isSending ? (
-                <Loader2Icon className="size-4 animate-spin" />
-              ) : (
-                <SendIcon className="size-4" />
-              )}
-            </Button>
-          </div>
-        </div>
       </div>
+
+      <Composer
+        activeConversationTitle={activeConversation?.title}
+        availableIssueTypes={availableIssueTypes}
+        bucketLabel={bucketLabel}
+        canSend={canSend}
+        errorMessage={errorMessage}
+        isSending={isSending}
+        issueTypeLabel={issueTypeLabel}
+        onPromptChange={setPrompt}
+        onSelectAllIssueTypes={clearIssueTypeIds}
+        onSelectPillar={selectPillar}
+        onToggleBucket={toggleBucket}
+        onToggleIssueType={toggleIssueType}
+        onSubmit={() => { void handleSubmit(); }}
+        onKeyDown={handlePromptKeyDown}
+        onTextareaInput={growTextarea}
+        pillars={breakdown.pillars}
+        prompt={prompt}
+        selectedBucketIds={selectedBucketIds}
+        selectedIssueTypeIds={selectedIssueTypeIds}
+        selectedPillar={selectedPillar}
+        selectedPillarBuckets={selectedPillar?.buckets ?? []}
+        selectedPillarId={selectedPillarId}
+        textareaRef={textareaRef}
+      />
     </section>
   )
-}
-
-
-
-function ScopeBreadcrumb({
-  pillars,
-  selectedPillar,
-  selectedPillarId,
-  selectedPillarBuckets,
-  selectedBucketIds,
-  selectedIssueTypeIds,
-  availableIssueTypes,
-  bucketLabel,
-  issueTypeLabel,
-  onSelectPillar,
-  onToggleBucket,
-  onToggleIssueType,
-  onSelectAllIssueTypes,
-}: {
-  pillars: ScoreBreakdownPillarResponse[]
-  selectedPillar: ScoreBreakdownPillarResponse | null
-  selectedPillarId: string
-  selectedPillarBuckets: ScoreBreakdownBucketResponse[]
-  selectedBucketIds: string[]
-  selectedIssueTypeIds: string[]
-  availableIssueTypes: ScoreBreakdownIssueTypeResponse[]
-  bucketLabel: string
-  issueTypeLabel: string
-  onSelectPillar: (pillar: ScoreBreakdownPillarResponse) => void
-  onToggleBucket: (bucket: ScoreBreakdownBucketResponse) => void
-  onToggleIssueType: (issueType: ScoreBreakdownIssueTypeResponse) => void
-  onSelectAllIssueTypes: () => void
-}) {
-  return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-1.5 py-1 text-sm">
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    className="h-7 max-w-36 justify-start rounded-full px-2 text-xs"
-                  />
-                }
-              >
-                <span className="truncate">
-                  {selectedPillar?.label ?? "Pillar"}
-                </span>
-                <ChevronDownIcon className="size-3 opacity-60" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-56 rounded-2xl p-1.5"
-              >
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Pillar</DropdownMenuLabel>
-                  {pillars.map((pillar) => (
-                    <DropdownMenuItem
-                      key={pillar.id}
-                      onClick={() => onSelectPillar(pillar)}
-                    >
-                      <span className="truncate">{pillar.label}</span>
-                      {selectedPillarId === pillar.id ? (
-                        <CheckIcon className="ml-auto size-4" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    className="h-7 max-w-44 justify-start rounded-full px-2 text-xs"
-                  />
-                }
-              >
-                <span className="truncate">{bucketLabel}</span>
-                <ChevronDownIcon className="size-3 opacity-60" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="max-h-96 w-72 overflow-y-auto rounded-2xl p-1.5"
-              >
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Buckets</DropdownMenuLabel>
-                  {selectedPillarBuckets.map((bucket) => (
-                    <DropdownMenuCheckboxItem
-                      checked={selectedBucketIds.includes(bucket.id)}
-                      key={bucket.id}
-                      onCheckedChange={() => onToggleBucket(bucket)}
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        {formatBucketLabel(bucket.id, bucket.label)}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="ml-2 shrink-0 text-[10px]"
-                      >
-                        {bucket.affected_url_count}
-                      </Badge>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </BreadcrumbItem>
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    className="h-7 max-w-52 justify-start rounded-full px-2 text-xs"
-                  />
-                }
-              >
-                <span className="truncate">{issueTypeLabel}</span>
-                <ChevronDownIcon className="size-3 opacity-60" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="max-h-96 w-80 overflow-y-auto rounded-2xl p-1.5"
-              >
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Issue types</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={onSelectAllIssueTypes}>
-                    All issue types
-                    {selectedIssueTypeIds.length === 0 ? (
-                      <CheckIcon className="ml-auto size-4" />
-                    ) : null}
-                  </DropdownMenuItem>
-                  {availableIssueTypes.map((issueType) => (
-                    <DropdownMenuCheckboxItem
-                      checked={selectedIssueTypeIds.includes(issueType.id)}
-                      key={issueType.id}
-                      onCheckedChange={() => onToggleIssueType(issueType)}
-                    >
-                      <span className="min-w-0 flex-1 truncate">
-                        {issueType.label}
-                      </span>
-                      <Badge
-                        variant="outline"
-                        className="ml-2 shrink-0 text-[10px]"
-                      >
-                        {issueType.affected_url_count}
-                      </Badge>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-    </div>
-  )
-}
-
-type AIScopeState = {
-  pillarId: string
-  bucketIds: string[]
-  issueTypeIds: string[]
-}
-
-type ConversationGroup = {
-  label: string
-  conversations: AIConversationResponse[]
-}
-
-function getNextScopeState(
-  breakdown: ScoreBreakdownResponse | null,
-  selectedPillarId: string,
-  selectedBucketIds: string[],
-  selectedIssueTypeIds: string[]
-): AIScopeState | null {
-  if (!breakdown?.pillars.length) {
-    if (
-      !selectedPillarId &&
-      !selectedBucketIds.length &&
-      !selectedIssueTypeIds.length
-    ) {
-      return null
-    }
-
-    return { pillarId: "", bucketIds: [], issueTypeIds: [] }
-  }
-
-  const selectedPillar =
-    breakdown.pillars.find((pillar) => pillar.id === selectedPillarId) ??
-    breakdown.pillars[0]
-  const validBucketIds = new Set(
-    selectedPillar.buckets.map((bucket) => bucket.id)
-  )
-  let nextBucketIds = selectedBucketIds.filter((bucketId) =>
-    validBucketIds.has(bucketId)
-  )
-
-  if (!nextBucketIds.length && selectedPillar.buckets[0]) {
-    nextBucketIds = [selectedPillar.buckets[0].id]
-  }
-
-  const nextBucketIdSet = new Set(nextBucketIds)
-  const validIssueTypeIds = new Set<string>()
-  for (const bucket of selectedPillar.buckets) {
-    if (!nextBucketIdSet.has(bucket.id)) {
-      continue
-    }
-
-    for (const issueType of bucket.issues) {
-      validIssueTypeIds.add(issueType.id)
-    }
-  }
-  const nextIssueTypeIds = selectedIssueTypeIds.filter((issueTypeId) =>
-    validIssueTypeIds.has(issueTypeId)
-  )
-
-  if (
-    selectedPillar.id === selectedPillarId &&
-    areStringArraysEqual(nextBucketIds, selectedBucketIds) &&
-    areStringArraysEqual(nextIssueTypeIds, selectedIssueTypeIds)
-  ) {
-    return null
-  }
-
-  return {
-    pillarId: selectedPillar.id,
-    bucketIds: nextBucketIds,
-    issueTypeIds: nextIssueTypeIds,
-  }
-}
-
-function areStringArraysEqual(left: string[], right: string[]) {
-  if (left.length !== right.length) {
-    return false
-  }
-
-  for (let index = 0; index < left.length; index += 1) {
-    if (left[index] !== right[index]) {
-      return false
-    }
-  }
-
-  return true
-}
-
-function newMessageFromResponse(message: AIMessageResponse): RevserpAIMessage {
-  return {
-    id: message.id,
-    role: message.role,
-    content: message.content,
-  }
-}
-
-function upsertConversation(
-  conversations: AIConversationResponse[],
-  conversation: AIConversationResponse
-) {
-  return [
-    conversation,
-    ...conversations.filter((item) => item.id !== conversation.id),
-  ]
-}
-
-function groupConversationsByDate(
-  conversations: AIConversationResponse[]
-): ConversationGroup[] {
-  const groups: ConversationGroup[] = []
-  const groupByLabel = new Map<string, AIConversationResponse[]>()
-
-  for (const conversation of conversations) {
-    const label = formatConversationDate(conversation.updated_at)
-    const group = groupByLabel.get(label)
-    if (group) {
-      group.push(conversation)
-      continue
-    }
-    const conversationsForDate = [conversation]
-    groupByLabel.set(label, conversationsForDate)
-    groups.push({ label, conversations: conversationsForDate })
-  }
-
-  return groups
-}
-
-function formatConversationDate(value: string) {
-  const date = new Date(value)
-  const today = new Date()
-  const yesterday = new Date()
-  yesterday.setDate(today.getDate() - 1)
-
-  if (date.toDateString() === today.toDateString()) return "Today"
-  if (date.toDateString() === yesterday.toDateString()) return "Yesterday"
-  return date.toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  })
-}
-
-function formatConversationTime(value: string) {
-  return new Date(value).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })
 }

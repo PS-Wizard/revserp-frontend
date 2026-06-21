@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useReducer } from "react"
 import { ChevronLeftIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -9,7 +9,6 @@ import {
   TablePagination,
 } from "~/components/issue-explorer/scope-controls"
 import {
-  EmptyMessage,
   IssueTypeTable,
   UrlIssueTable,
 } from "~/components/issue-explorer/tables"
@@ -18,11 +17,12 @@ import type {
   BucketScope,
   IssueScope,
   MergedIssueUrlRow,
-  PendingAIFixRequest,
 } from "~/components/issue-explorer/types"
 import {
   areStringArraysEqual,
+  buildPendingAIFixRequest,
   fetchAllIssueUrls,
+  generateQueuedAIFix,
 } from "~/components/issue-explorer/utils"
 import { formatBucketLabel } from "~/lib/utils"
 import { Button } from "~/components/ui/button"
@@ -32,13 +32,108 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import { ApiError, clientApiPost } from "~/lib/api"
-import type {
-  AIConversationResponse,
-  CreateAIConversationMessageResponse,
-  CreateAIConversationResponse,
-  ScoreBreakdownResponse,
-} from "~/lib/api.types"
+import { ApiError } from "~/lib/api"
+import type { ScoreBreakdownResponse } from "~/lib/api.types"
+
+
+// --- URL loading reducer ---
+
+type IssueUrlState = {
+  urls: MergedIssueUrlRow[]
+  loading: boolean
+  error: string
+}
+
+const initialIssueUrlState: IssueUrlState = {
+  urls: [],
+  loading: false,
+  error: "",
+}
+
+type IssueUrlAction =
+  | { type: "LOAD_START" }
+  | { type: "LOAD_SUCCESS"; urls: MergedIssueUrlRow[] }
+  | { type: "LOAD_ERROR"; error: string }
+  | { type: "CLEAR" }
+
+function issueUrlReducer(state: IssueUrlState, action: IssueUrlAction): IssueUrlState {
+  switch (action.type) {
+    case "LOAD_START":
+      return { urls: [], loading: true, error: "" }
+    case "LOAD_SUCCESS":
+      return { urls: action.urls, loading: false, error: "" }
+    case "LOAD_ERROR":
+      return { ...state, loading: false, error: action.error }
+    case "CLEAR":
+      return { urls: [], loading: false, error: "" }
+  }
+}
+
+// --- Selection reducer ---
+
+type SelectionState = {
+  selectedPillarIds: string[]
+  selectedBucketKeys: string[]
+  selectedIssueTypeKeys: string[]
+  issueTypePageIndex: number
+  issueTypePageSize: number
+  issueUrlPageIndex: number
+  issueUrlPageSize: number
+}
+
+type SelectionAction =
+  | { type: "SET_PILLAR_IDS"; payload: string[] }
+  | { type: "SET_BUCKET_KEYS"; payload: string[] }
+  | { type: "SET_ISSUE_TYPE_KEYS"; payload: string[] }
+  | { type: "SET_ISSUE_TYPE_PAGE_INDEX"; payload: number }
+  | { type: "SET_ISSUE_TYPE_PAGE_SIZE"; payload: number }
+  | { type: "SET_ISSUE_URL_PAGE_INDEX"; payload: number }
+  | { type: "SET_ISSUE_URL_PAGE_SIZE"; payload: number }
+  | { type: "CLEAR_ISSUE_TYPES"; payload?: undefined }
+
+function selectionReducer(state: SelectionState, action: SelectionAction): SelectionState {
+  switch (action.type) {
+    case "SET_PILLAR_IDS":
+      return { ...state, selectedPillarIds: action.payload }
+    case "SET_BUCKET_KEYS":
+      return {
+        ...state,
+        selectedBucketKeys: action.payload,
+        selectedIssueTypeKeys: [],
+        issueTypePageIndex: 0,
+      }
+    case "SET_ISSUE_TYPE_KEYS":
+      return {
+        ...state,
+        selectedIssueTypeKeys: action.payload,
+        issueUrlPageIndex: 0,
+      }
+    case "SET_ISSUE_TYPE_PAGE_INDEX":
+      return { ...state, issueTypePageIndex: action.payload }
+    case "SET_ISSUE_TYPE_PAGE_SIZE":
+      return { ...state, issueTypePageSize: action.payload }
+    case "SET_ISSUE_URL_PAGE_INDEX":
+      return { ...state, issueUrlPageIndex: action.payload }
+    case "SET_ISSUE_URL_PAGE_SIZE":
+      return { ...state, issueUrlPageSize: action.payload }
+    case "CLEAR_ISSUE_TYPES":
+      return {
+        ...state,
+        selectedIssueTypeKeys: [],
+        issueUrlPageIndex: 0,
+      }
+  }
+}
+
+const initialSelectionState: SelectionState = {
+  selectedPillarIds: [],
+  selectedBucketKeys: [],
+  selectedIssueTypeKeys: [],
+  issueTypePageIndex: 0,
+  issueTypePageSize: 10,
+  issueUrlPageIndex: 0,
+  issueUrlPageSize: 10,
+}
 
 const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
 
@@ -53,31 +148,42 @@ export function IssueExplorer({
   onOpenAIConversation?: (conversationId: string) => void
   projectId?: string
 }) {
-  const [selectedPillarIds, setSelectedPillarIds] = useState<string[]>([])
-  const [selectedBucketKeys, setSelectedBucketKeys] = useState<string[]>([])
-  const [selectedIssueTypeKeys, setSelectedIssueTypeKeys] = useState<string[]>(
-    []
-  )
-  const [issueTypePageIndex, setIssueTypePageIndex] = useState(0)
-  const [issueTypePageSize, setIssueTypePageSize] = useState(10)
-  const [issueUrlPageIndex, setIssueUrlPageIndex] = useState(0)
-  const [issueUrlPageSize, setIssueUrlPageSize] = useState(10)
-  const [mergedIssueUrls, setMergedIssueUrls] = useState<MergedIssueUrlRow[]>(
-    []
-  )
-  const [isLoadingIssueUrls, setIsLoadingIssueUrls] = useState(false)
-  const [issueUrlsError, setIssueUrlsError] = useState("")
+  const [selection, dispatchSelection] = useReducer(selectionReducer, initialSelectionState)
+  const {
+    selectedPillarIds,
+    selectedBucketKeys,
+    selectedIssueTypeKeys,
+    issueTypePageIndex,
+    issueTypePageSize,
+    issueUrlPageIndex,
+    issueUrlPageSize,
+  } = selection
+
+  const [issueUrlState, dispatchIssueUrl] = useReducer(issueUrlReducer, initialIssueUrlState)
+  const { urls: mergedIssueUrls, loading: isLoadingIssueUrls, error: issueUrlsError } = issueUrlState
   const [pendingFixTargetKeys, setPendingFixTargetKeys] = useState<string[]>([])
-  const pendingFixTargetKeysRef = useRef(new Set<string>())
-  const issueUrlsCacheRef = useRef<Map<string, MergedIssueUrlRow[]> | null>(
-    null
-  )
-  if (issueUrlsCacheRef.current === null) {
-    issueUrlsCacheRef.current = new Map()
+
+  // Lazy-init refs to avoid creating objects on every render
+  const pendingFixTargetKeysRef = useRef<Set<string>>(null!)
+  if (!pendingFixTargetKeysRef.current) {
+    pendingFixTargetKeysRef.current = new Set<string>()
+  }
+  const issueUrlsCacheRef = useRef<Map<string, MergedIssueUrlRow[]>>(null!)
+  if (!issueUrlsCacheRef.current) {
+    issueUrlsCacheRef.current = new Map<string, MergedIssueUrlRow[]>()
   }
   const issueUrlsCache = issueUrlsCacheRef.current
 
   const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
+
+  // --- Selection sync in render (replaces useEffect-based derived-state pattern) ---
+
+  syncSelectedPillars({
+    initialPillarId,
+    pillarOptions,
+    selectedPillarIds,
+    setSelectedPillarIds: (ids: string[]) => dispatchSelection({ type: "SET_PILLAR_IDS", payload: ids }),
+  })
 
   const selectedPillars = useMemo(() => {
     return pillarOptions.filter((pillar) =>
@@ -96,6 +202,14 @@ export function IssueExplorer({
       }))
     )
   }, [selectedPillars])
+
+  // Sync buckets after computing available scopes
+  syncSelectedBuckets({
+    availableBucketScopes,
+    initialPillarId,
+    selectedBucketKeys,
+    setSelectedBucketKeys: (keys: string[]) => dispatchSelection({ type: "SET_BUCKET_KEYS", payload: keys }),
+  })
 
   const availableIssueScopes = useMemo<IssueScope[]>(() => {
     return availableBucketScopes.flatMap((bucketScope) => {
@@ -118,11 +232,20 @@ export function IssueExplorer({
       }))
     })
   }, [availableBucketScopes, selectedPillars])
+
   const selectedIssueScopes = useMemo(() => {
     return availableIssueScopes.filter((issueScope) =>
       selectedIssueTypeKeys.includes(issueScope.key)
     )
   }, [availableIssueScopes, selectedIssueTypeKeys])
+
+  // Sync issue types after computing available scopes
+  syncSelectedIssueTypes({
+    availableIssueScopes,
+    selectedIssueTypeKeys,
+    onApply: (keys: string[]) => dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: keys }),
+  })
+
   const issueUrlCacheKey = [
     breakdown?.crawl_id ?? "",
     ...selectedIssueScopes.map((issueScope) => issueScope.key).sort(),
@@ -132,76 +255,34 @@ export function IssueExplorer({
     : undefined
   const displayedIssueUrls = cachedIssueUrls ?? mergedIssueUrls
   const crawlId = breakdown?.crawl_id ?? ""
-  const previousCrawlIdRef = useRef(crawlId)
-  if (previousCrawlIdRef.current !== crawlId) {
-    previousCrawlIdRef.current = crawlId
+
+  useEffect(() => {
     issueUrlsCache.clear()
-    if (mergedIssueUrls.length) {
-      setMergedIssueUrls([])
-    }
-    if (issueUrlsError) {
-      setIssueUrlsError("")
-    }
-  }
+    dispatchIssueUrl({ type: "CLEAR" })
+  }, [crawlId, dispatchIssueUrl, issueUrlsCache])
 
-  const handleSelectedBucketKeysChange = useCallback(
+  const onSelectedBucketKeysChange = useCallback(
     (nextBucketKeys: string[]) => {
-      setSelectedBucketKeys(nextBucketKeys)
-      setIssueTypePageIndex(0)
-      setSelectedIssueTypeKeys([])
+      dispatchSelection({ type: "SET_BUCKET_KEYS", payload: nextBucketKeys })
     },
     []
   )
 
-  const handleSelectedIssueTypeKeysChange = useCallback(
+  const onSelectedIssueTypeKeysChange = useCallback(
     (nextIssueTypeKeys: string[]) => {
-      setSelectedIssueTypeKeys(nextIssueTypeKeys)
-      setIssueUrlPageIndex(0)
+      dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: nextIssueTypeKeys })
     },
     []
   )
 
-  useEffect(() => {
-    syncSelectedPillars({
-      initialPillarId,
-      pillarOptions,
-      selectedPillarIds,
-      setSelectedPillarIds,
-    })
-  }, [initialPillarId, pillarOptions, selectedPillarIds])
+  const onBackToIssueTypes = useCallback(() => {
+    dispatchSelection({ type: "CLEAR_ISSUE_TYPES" })
+    dispatchIssueUrl({ type: "CLEAR" })
+  }, [])
 
-  useEffect(() => {
-    syncSelectedBuckets({
-      availableBucketScopes,
-      initialPillarId,
-      selectedBucketKeys,
-      setSelectedBucketKeys: handleSelectedBucketKeysChange,
-    })
-  }, [
-    availableBucketScopes,
-    handleSelectedBucketKeysChange,
-    initialPillarId,
-    selectedBucketKeys,
-  ])
-
-  useEffect(() => {
-    const nextSelectedIssueTypeKeys = selectedIssueTypeKeys.filter(
-      (issueTypeKey) =>
-        availableIssueScopes.some(
-          (issueScope) => issueScope.key === issueTypeKey
-        )
-    )
-
-    if (
-      !areStringArraysEqual(nextSelectedIssueTypeKeys, selectedIssueTypeKeys)
-    ) {
-      handleSelectedIssueTypeKeysChange(nextSelectedIssueTypeKeys)
-    }
-  }, [
-    availableIssueScopes,
-    handleSelectedIssueTypeKeysChange,
-    selectedIssueTypeKeys,
-  ])
+  const onSelectIssueType = useCallback((issueTypeKey: string) => {
+    dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: [issueTypeKey] })
+  }, [])
 
   useEffect(() => {
     if (!breakdown || !selectedIssueTypeKeys.length) {
@@ -216,8 +297,7 @@ export function IssueExplorer({
     let cancelled = false
 
     async function loadIssueUrls() {
-      setIsLoadingIssueUrls(true)
-      setIssueUrlsError("")
+      dispatchIssueUrl({ type: "LOAD_START" })
 
       try {
         const rowsByScope = await Promise.all(
@@ -226,27 +306,19 @@ export function IssueExplorer({
           )
         )
 
-        if (cancelled) {
-          return
-        }
+        if (cancelled) return
 
         const nextRows = rowsByScope
           .flat()
           .sort((left, right) => left.url.localeCompare(right.url))
         issueUrlsCache.set(cacheKey, nextRows)
-        setMergedIssueUrls(nextRows)
+        dispatchIssueUrl({ type: "LOAD_SUCCESS", urls: nextRows })
       } catch (error) {
-        if (cancelled) {
-          return
-        }
-
-        setIssueUrlsError(
-          error instanceof Error ? error.message : "Unable to load issue URLs."
-        )
-      } finally {
-        if (!cancelled) {
-          setIsLoadingIssueUrls(false)
-        }
+        if (cancelled) return
+        dispatchIssueUrl({
+          type: "LOAD_ERROR",
+          error: error instanceof Error ? error.message : "Unable to load issue URLs.",
+        })
       }
     }
 
@@ -258,6 +330,7 @@ export function IssueExplorer({
   }, [
     breakdown,
     crawlId,
+    dispatchIssueUrl,
     issueUrlCacheKey,
     issueUrlsCache,
     selectedIssueScopes,
@@ -286,12 +359,13 @@ export function IssueExplorer({
     selectedPillarIds.length > 1 ||
     selectedBucketKeys.length > 1 ||
     selectedIssueTypeKeys.length > 1
+
   const isFixActionPending = useCallback(
     (targetKey: string) => pendingFixTargetKeys.includes(targetKey),
     [pendingFixTargetKeys]
   )
 
-  const handleFixAction = useCallback(
+  const onFixAction = useCallback(
     (target: AIFixTarget) => {
       if (!breakdown?.crawl_id || !projectId) {
         toast.error("Recommended fixes are unavailable for this view.")
@@ -317,7 +391,7 @@ export function IssueExplorer({
       toast.promise(queuedFixPromise, {
         loading: `Generating fixes for ${target.issueTypeLabel}…`,
         success: (conversation) => ({
-          message: `Fixes are ready in “${conversation.title || "Untitled chat"}”.`,
+          message: `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
           action: onOpenAIConversation
             ? {
                 label: "Open chat",
@@ -345,85 +419,43 @@ export function IssueExplorer({
   }
 
   return (
-    <div className="px-4 pb-24 lg:px-6 lg:pb-32">
-      <div className="mb-4 flex w-full items-start justify-between gap-4">
-        <ScopeBreadcrumbs
-          availableBucketScopes={availableBucketScopes}
-          availableIssueScopes={availableIssueScopes}
-          pillarOptions={pillarOptions}
-          selectedBucketKeys={selectedBucketKeys}
-          selectedIssueTypeKeys={selectedIssueTypeKeys}
-          selectedPillarIds={selectedPillarIds}
-          selectedPillarLabels={selectedPillars.map((pillar) => pillar.label)}
-          setSelectedBucketKeys={handleSelectedBucketKeysChange}
-          setSelectedIssueTypeKeys={handleSelectedIssueTypeKeysChange}
-          setSelectedPillarIds={setSelectedPillarIds}
-        />
-        <TablePagination
-          pageIndex={
-            hasSelectedIssueTypes ? issueUrlPageIndex : issueTypePageIndex
-          }
-          pageSize={
-            hasSelectedIssueTypes ? issueUrlPageSize : issueTypePageSize
-          }
-          rowLabel={hasSelectedIssueTypes ? "URLs" : "issue types"}
-          setPageIndex={
-            hasSelectedIssueTypes ? setIssueUrlPageIndex : setIssueTypePageIndex
-          }
-          setPageSize={
-            hasSelectedIssueTypes ? setIssueUrlPageSize : setIssueTypePageSize
-          }
-          totalRows={
-            hasSelectedIssueTypes
-              ? displayedIssueUrls.length
-              : issueTypeRows.length
-          }
-        />
-      </div>
-
-      <div className="min-h-[32rem]">
-        {hasSelectedIssueTypes ? (
-          <>
-            <Button
-              className="mb-4"
-              onClick={() => {
-                handleSelectedIssueTypeKeysChange([])
-                setMergedIssueUrls([])
-                setIssueUrlsError("")
-              }}
-              size="sm"
-              variant="outline"
-            >
-              <ChevronLeftIcon data-icon="inline-start" />
-              Back to issue types
-            </Button>
-            <UrlIssueTable
-              error={issueUrlsError}
-              hasMultipleSources={hasMultipleSources}
-              isFixActionPending={isFixActionPending}
-              isLoading={isLoadingIssueUrls}
-              onFixAction={handleFixAction}
-              rows={paginatedMergedIssueUrls}
-              title="Selected issue types"
-              totalRows={displayedIssueUrls.length}
-            />
-          </>
-        ) : (
-          <IssueTypeTable
-            hasMultipleSources={hasMultipleSources}
-            isFixActionPending={isFixActionPending}
-            onFixAction={handleFixAction}
-            rows={paginatedIssueTypeRows}
-            totalRows={issueTypeRows.length}
-            onSelectIssueType={(issueTypeKey) =>
-              handleSelectedIssueTypeKeysChange([issueTypeKey])
-            }
-          />
-        )}
-      </div>
-    </div>
+    <IssueExplorerContent
+      availableBucketScopes={availableBucketScopes}
+      availableIssueScopes={availableIssueScopes}
+      displayedIssueUrls={displayedIssueUrls}
+      onBackToIssueTypes={onBackToIssueTypes}
+      onFixAction={onFixAction}
+      onSelectIssueType={onSelectIssueType}
+      onSelectedBucketKeysChange={onSelectedBucketKeysChange}
+      onSelectedIssueTypeKeysChange={onSelectedIssueTypeKeysChange}
+      viewState={{ hasMultipleSources, hasSelectedIssueTypes }}
+      isFixActionPending={isFixActionPending}
+      isLoadingIssueUrls={isLoadingIssueUrls}
+      issueTypePageIndex={issueTypePageIndex}
+      issueTypePageSize={issueTypePageSize}
+      issueTypeRows={issueTypeRows}
+      issueUrlPageIndex={issueUrlPageIndex}
+      issueUrlPageSize={issueUrlPageSize}
+      issueUrlsError={issueUrlsError}
+      paginatedIssueTypeRows={paginatedIssueTypeRows}
+      paginatedMergedIssueUrls={paginatedMergedIssueUrls}
+      totalIssueTypeRows={issueTypeRows.length}
+      pillarOptions={pillarOptions}
+      selectedBucketKeys={selectedBucketKeys}
+      selectedIssueTypeKeys={selectedIssueTypeKeys}
+      selectedPillarIds={selectedPillarIds}
+      selectedPillars={selectedPillars}
+      setIssueTypePageIndex={(v) => dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_INDEX", payload: v })}
+      setIssueTypePageSize={(v) => dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_SIZE", payload: v })}
+      setIssueUrlPageIndex={(v) => dispatchSelection({ type: "SET_ISSUE_URL_PAGE_INDEX", payload: v })}
+      setIssueUrlPageSize={(v) => dispatchSelection({ type: "SET_ISSUE_URL_PAGE_SIZE", payload: v })}
+      setSelectedPillarIds={(v) => dispatchSelection({ type: "SET_PILLAR_IDS", payload: v })}
+    />
   )
 }
+
+
+// --- Sync helpers (pure computation, called from render) ---
 
 type SyncSelectedPillarsArgs = {
   initialPillarId?: string
@@ -512,73 +544,33 @@ function syncSelectedBuckets({
   }
 }
 
-function buildPendingAIFixRequest(target: AIFixTarget): PendingAIFixRequest {
-  return {
-    requestId: `${Date.now()}:${target.key}`,
-    target,
-    title: buildAIFixConversationTitle(target),
-    prompt: buildAIFixConversationPrompt(target),
-  }
+type SyncSelectedIssueTypesArgs = {
+  availableIssueScopes: IssueScope[]
+  selectedIssueTypeKeys: string[]
+  onApply: (keys: string[]) => void
 }
 
-async function generateQueuedAIFix({
-  crawlId,
-  projectId,
-  request,
-  target,
-}: {
-  crawlId: string
-  projectId: string
-  request: PendingAIFixRequest
-  target: AIFixTarget
-}): Promise<AIConversationResponse> {
-  const created = await clientApiPost<CreateAIConversationResponse>(
-    `/projects/${projectId}/ai/conversations`,
-    {
-      crawl_id: crawlId,
-      title: request.title,
-    }
+function syncSelectedIssueTypes({
+  availableIssueScopes,
+  selectedIssueTypeKeys,
+  onApply,
+}: SyncSelectedIssueTypesArgs) {
+  const nextSelectedIssueTypeKeys = selectedIssueTypeKeys.filter(
+    (issueTypeKey) =>
+      availableIssueScopes.some(
+        (issueScope) => issueScope.key === issueTypeKey
+      )
   )
 
-  const response = await clientApiPost<CreateAIConversationMessageResponse>(
-    `/ai/conversations/${created.conversation.id}/messages`,
-    {
-      crawl_id: crawlId,
-      pillar_id: target.pillarId,
-      bucket_ids: [target.bucketId],
-      issue_type_ids: [target.issueTypeId],
-      issue_urls: target.urls ?? [],
-      content: request.prompt,
-    }
-  )
-
-  return response.conversation
-}
-
-function buildAIFixConversationTitle(target: AIFixTarget) {
-  if (target.urls?.length) {
-    return `Fix ${target.issueTypeLabel} on ${shortURLLabel(target.urls[0])}`
-  }
-
-  return `Fix ${target.issueTypeLabel}`
-}
-
-function buildAIFixConversationPrompt(target: AIFixTarget) {
-  if (target.urls?.length) {
-    return `Help me fix the ${target.issueTypeLabel} issue for this URL: ${target.urls[0]}. Give concrete, ready-to-apply recommendations based only on the crawl context.`
-  }
-
-  return `Help me fix these ${target.issueTypeLabel} issues. Prioritize the affected URLs and give concrete, ready-to-apply recommendations based only on the crawl context.`
-}
-
-function shortURLLabel(rawURL: string) {
-  try {
-    const url = new URL(rawURL)
-    return `${url.hostname}${url.pathname}`
-  } catch {
-    return rawURL
+  if (
+    !areStringArraysEqual(nextSelectedIssueTypeKeys, selectedIssueTypeKeys)
+  ) {
+    onApply(nextSelectedIssueTypeKeys)
   }
 }
+
+
+// --- Presentational sub-components ---
 
 function NoIssueBreakdown() {
   return (
@@ -591,6 +583,200 @@ function NoIssueBreakdown() {
           </CardDescription>
         </CardHeader>
       </Card>
+    </div>
+  )
+}
+
+type IssueExplorerContentProps = {
+  availableBucketScopes: BucketScope[]
+  availableIssueScopes: IssueScope[]
+  displayedIssueUrls: MergedIssueUrlRow[]
+  onBackToIssueTypes: () => void
+  onFixAction: (target: AIFixTarget) => void
+  onSelectIssueType: (key: string) => void
+  onSelectedBucketKeysChange: (keys: string[]) => void
+  onSelectedIssueTypeKeysChange: (keys: string[]) => void
+  isLoadingIssueUrls: boolean
+  issueTypePageIndex: number
+  issueTypePageSize: number
+  issueTypeRows: IssueScope[]
+  issueUrlPageIndex: number
+  issueUrlPageSize: number
+  issueUrlsError: string
+  paginatedIssueTypeRows: IssueScope[]
+  paginatedMergedIssueUrls: MergedIssueUrlRow[]
+  totalIssueTypeRows: number
+  pillarOptions: Array<{ id: string; label: string }>
+  selectedBucketKeys: string[]
+  selectedIssueTypeKeys: string[]
+  selectedPillarIds: string[]
+  selectedPillars: Array<{ label: string }>
+  setIssueTypePageIndex: (v: number) => void
+  setIssueTypePageSize: (v: number) => void
+  setIssueUrlPageIndex: (v: number) => void
+  setIssueUrlPageSize: (v: number) => void
+  setSelectedPillarIds: (v: string[]) => void
+  /** Combined view state flags */
+  viewState: {
+    hasMultipleSources: boolean
+    hasSelectedIssueTypes: boolean
+  }
+  isFixActionPending: (key: string) => boolean
+}
+
+function IssueExplorerContent(props: IssueExplorerContentProps) {
+  const {
+    availableBucketScopes,
+    availableIssueScopes,
+    displayedIssueUrls,
+    onBackToIssueTypes,
+    onFixAction,
+    onSelectIssueType,
+    onSelectedBucketKeysChange,
+    onSelectedIssueTypeKeysChange,
+    isLoadingIssueUrls,
+    issueTypePageIndex,
+    issueTypePageSize,
+    issueTypeRows,
+    issueUrlPageIndex,
+    issueUrlPageSize,
+    issueUrlsError,
+    totalIssueTypeRows,
+    paginatedIssueTypeRows,
+    paginatedMergedIssueUrls,
+    pillarOptions,
+    selectedBucketKeys,
+    selectedIssueTypeKeys,
+    selectedPillarIds,
+    selectedPillars,
+    setIssueTypePageIndex,
+    setIssueTypePageSize,
+    setIssueUrlPageIndex,
+    setIssueUrlPageSize,
+    setSelectedPillarIds,
+    viewState,
+    isFixActionPending,
+  } = props
+  const { hasMultipleSources, hasSelectedIssueTypes } = viewState
+
+  return (
+    <div className="px-4 pb-24 lg:px-6 lg:pb-32">
+      <div className="mb-4 flex w-full items-start justify-between gap-4">
+        <ScopeBreadcrumbs
+          availableBucketScopes={availableBucketScopes}
+          availableIssueScopes={availableIssueScopes}
+          pillarOptions={pillarOptions}
+          selectedBucketKeys={selectedBucketKeys}
+          selectedIssueTypeKeys={selectedIssueTypeKeys}
+          selectedPillarIds={selectedPillarIds}
+          selectedPillarLabels={selectedPillars.map((pillar) => pillar.label)}
+          setSelectedBucketKeys={onSelectedBucketKeysChange}
+          setSelectedIssueTypeKeys={onSelectedIssueTypeKeysChange}
+          setSelectedPillarIds={setSelectedPillarIds}
+        />
+        <TablePagination
+          pageIndex={
+            hasSelectedIssueTypes ? issueUrlPageIndex : issueTypePageIndex
+          }
+          pageSize={
+            hasSelectedIssueTypes ? issueUrlPageSize : issueTypePageSize
+          }
+          rowLabel={hasSelectedIssueTypes ? "URLs" : "issue types"}
+          setPageIndex={
+            hasSelectedIssueTypes ? setIssueUrlPageIndex : setIssueTypePageIndex
+          }
+          setPageSize={
+            hasSelectedIssueTypes ? setIssueUrlPageSize : setIssueTypePageSize
+          }
+          totalRows={
+            hasSelectedIssueTypes
+              ? displayedIssueUrls.length
+              : issueTypeRows.length
+          }
+        />
+      </div>
+
+      <IssueExplorerTableArea
+        displayedIssueUrls={displayedIssueUrls}
+        hasMultipleSources={hasMultipleSources}
+        hasSelectedIssueTypes={hasSelectedIssueTypes}
+        isFixActionPending={isFixActionPending}
+        isLoadingIssueUrls={isLoadingIssueUrls}
+        issueUrlsError={issueUrlsError}
+        onBackToIssueTypes={onBackToIssueTypes}
+        onFixAction={onFixAction}
+        onSelectIssueType={onSelectIssueType}
+        paginatedIssueTypeRows={paginatedIssueTypeRows}
+        paginatedMergedIssueUrls={paginatedMergedIssueUrls}
+        totalIssueTypeRows={totalIssueTypeRows}
+      />
+    </div>
+  )
+}
+
+type IssueExplorerTableAreaProps = {
+  displayedIssueUrls: MergedIssueUrlRow[]
+  hasMultipleSources: boolean
+  hasSelectedIssueTypes: boolean
+  isFixActionPending: (key: string) => boolean
+  isLoadingIssueUrls: boolean
+  issueUrlsError: string
+  onBackToIssueTypes: () => void
+  onFixAction: (target: AIFixTarget) => void
+  onSelectIssueType: (key: string) => void
+  paginatedIssueTypeRows: IssueScope[]
+  paginatedMergedIssueUrls: MergedIssueUrlRow[]
+  totalIssueTypeRows: number
+}
+
+function IssueExplorerTableArea({
+  displayedIssueUrls,
+  hasMultipleSources,
+  hasSelectedIssueTypes,
+  isFixActionPending,
+  isLoadingIssueUrls,
+  issueUrlsError,
+  onBackToIssueTypes,
+  onFixAction,
+  onSelectIssueType,
+  paginatedIssueTypeRows,
+  paginatedMergedIssueUrls,
+  totalIssueTypeRows,
+}: IssueExplorerTableAreaProps) {
+  return (
+    <div className="min-h-[32rem]">
+      {hasSelectedIssueTypes ? (
+        <>
+          <Button
+            className="mb-4"
+            onClick={onBackToIssueTypes}
+            size="sm"
+            variant="outline"
+          >
+            <ChevronLeftIcon data-icon="inline-start" />
+            Back to issue types
+          </Button>
+          <UrlIssueTable
+            error={issueUrlsError}
+            hasMultipleSources={hasMultipleSources}
+            isFixActionPending={isFixActionPending}
+            isLoading={isLoadingIssueUrls}
+            onFixAction={onFixAction}
+            rows={paginatedMergedIssueUrls}
+            title="Selected issue types"
+            totalRows={displayedIssueUrls.length}
+          />
+        </>
+      ) : (
+        <IssueTypeTable
+          hasMultipleSources={hasMultipleSources}
+          isFixActionPending={isFixActionPending}
+          onFixAction={onFixAction}
+          rows={paginatedIssueTypeRows}
+          totalRows={totalIssueTypeRows}
+          onSelectIssueType={onSelectIssueType}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useReducer, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router"
 
 import { clientApiPost, ApiError } from "~/lib/api"
@@ -18,6 +18,42 @@ import {
   FieldSeparator,
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
+type FormState = {
+  errorMessage: string
+  infoMessage: string
+  isSubmitting: boolean
+  isGoogleSubmitting: boolean
+}
+
+type FormAction =
+  | { type: "CLEAR_MESSAGES" }
+  | { type: "SET_ERROR"; message: string }
+  | { type: "SET_INFO"; message: string }
+  | { type: "SUBMIT_START" }
+  | { type: "SUBMIT_END" }
+  | { type: "GOOGLE_START" }
+  | { type: "GOOGLE_END" }
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case "CLEAR_MESSAGES":
+      return { ...state, errorMessage: "", infoMessage: "" }
+    case "SET_ERROR":
+      return { ...state, errorMessage: action.message }
+    case "SET_INFO":
+      return { ...state, infoMessage: action.message }
+    case "SUBMIT_START":
+      return { ...state, isSubmitting: true, errorMessage: "", infoMessage: "" }
+    case "SUBMIT_END":
+      return { ...state, isSubmitting: false }
+    case "GOOGLE_START":
+      return { ...state, isGoogleSubmitting: true, errorMessage: "", infoMessage: "" }
+    case "GOOGLE_END":
+      return { ...state, isGoogleSubmitting: false }
+    default:
+      return state
+  }
+}
 
 export function AuthForm({
   className,
@@ -34,16 +70,16 @@ export function AuthForm({
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [errorMessage, setErrorMessage] = useState("")
-  const [infoMessage, setInfoMessage] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
+  const [formState, dispatch] = useReducer(formReducer, {
+    errorMessage: "",
+    infoMessage: "",
+    isSubmitting: false,
+    isGoogleSubmitting: false,
+  })
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setErrorMessage("")
-    setInfoMessage("")
-    setIsSubmitting(true)
+    dispatch({ type: "SUBMIT_START" })
 
     try {
       if (isLogin) {
@@ -54,41 +90,43 @@ export function AuthForm({
         >("/auth/signup", { email, password })
 
         if ("signup_completed_without_session" in response) {
-          setInfoMessage(
-            "Signup completed without a session. Verify your email if this is a new account, or log in if it already exists."
-          )
+          dispatch({
+            type: "SET_INFO",
+            message: "Signup completed without a session. Verify your email if this is a new account, or log in if it already exists.",
+          })
+          dispatch({ type: "SUBMIT_END" })
           return
         }
       }
 
       await navigate(nextPath)
     } catch (error) {
-      setErrorMessage(
-        error instanceof ApiError
+      dispatch({
+        type: "SET_ERROR",
+        message: error instanceof ApiError
           ? error.message
           : isLogin
             ? "Unable to log in."
-            : "Unable to sign up."
-      )
+            : "Unable to sign up.",
+      })
     } finally {
-      setIsSubmitting(false)
+      dispatch({ type: "SUBMIT_END" })
     }
   }
 
   async function handleGoogleSignIn() {
-    setErrorMessage("")
-    setInfoMessage("")
-    setIsGoogleSubmitting(true)
+    dispatch({ type: "GOOGLE_START" })
 
     try {
       await startGoogleSignIn(nextPath)
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error
+      dispatch({
+        type: "SET_ERROR",
+        message: error instanceof Error
           ? error.message
-          : "Unable to start Google sign-in."
-      )
-      setIsGoogleSubmitting(false)
+          : "Unable to start Google sign-in.",
+      })
+      dispatch({ type: "GOOGLE_END" })
     }
   }
 
@@ -144,8 +182,8 @@ export function AuthForm({
           />
         </Field>
         <Field>
-          <Button disabled={isSubmitting} type="submit">
-            {isSubmitting
+          <Button disabled={formState.isSubmitting} type="submit">
+            {formState.isSubmitting
               ? isLogin
                 ? "Logging in..."
                 : "Creating account..."
@@ -157,7 +195,7 @@ export function AuthForm({
         <FieldSeparator>Or continue with</FieldSeparator>
         <Field>
           <Button
-            disabled={isGoogleSubmitting}
+            disabled={formState.isGoogleSubmitting}
             onClick={handleGoogleSignIn}
             type="button"
             variant="outline"
@@ -180,20 +218,20 @@ export function AuthForm({
                 fill="currentColor"
               />
             </svg>
-            {isGoogleSubmitting
+            {formState.isGoogleSubmitting
               ? "Redirecting..."
               : isLogin
                 ? "Login With Google"
                 : "Sign up with Google"}
           </Button>
-          {infoMessage && (
+          {formState.infoMessage && (
             <FieldDescription className="text-center">
-              {infoMessage}
+              {formState.infoMessage}
             </FieldDescription>
           )}
-          {errorMessage && (
+          {formState.errorMessage && (
             <FieldDescription className="text-center text-destructive">
-              {errorMessage}
+              {formState.errorMessage}
             </FieldDescription>
           )}
           <FieldDescription className="text-center">
