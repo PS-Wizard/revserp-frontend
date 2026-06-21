@@ -111,7 +111,7 @@ function useAIConversation({
   const [activeSendRequestId, setActiveSendRequestId] = useState<string | null>(
     null
   )
-  const [isPendingFirstResponse, setIsPendingFirstResponse] = useState(false)
+  const [emptyPollCount, setEmptyPollCount] = useState(0)
   const isSending = activeSendRequestId !== null
   const [errorMessage, setErrorMessage] = useState("")
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(
@@ -121,6 +121,9 @@ function useAIConversation({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const activeSendRequestIdRef = useRef<string | null>(null)
   const initialScopeAppliedRef = useRef(false)
+  const MAX_EMPTY_POLLS = 15
+  const openConversationIdRef = useRef(openConversationId)
+  openConversationIdRef.current = openConversationId ?? null
   const crawlId = breakdown?.crawl_id ?? ""
 
   const selectedPillar = useMemo(() => {
@@ -217,7 +220,7 @@ function useAIConversation({
           upsertConversation(current, response.conversation)
         )
         if (loadedMessages.length > 0) {
-          setIsPendingFirstResponse(false)
+          setEmptyPollCount(0)
         }
       } catch (error) {
         setErrorMessage(
@@ -313,12 +316,12 @@ function useAIConversation({
     }
   }, [crawlId, projectId, hasExternalConversationRequest])
 
-  // Apply initial scope when opening a conversation from external source (e.g. Recommend Fixes)
+  // Apply external scope (e.g. from Recommend Fixes) when opening a conversation
   useEffect(() => {
     if (!openConversationId || !initialScope) return
 
     initialScopeAppliedRef.current = true
-    setIsPendingFirstResponse(true)
+    setEmptyPollCount(0)
     dispatchScope({
       type: "SET_SCOPE",
       pillarId: initialScope.pillarId,
@@ -328,7 +331,6 @@ function useAIConversation({
 
     return () => {
       initialScopeAppliedRef.current = false
-      setIsPendingFirstResponse(false)
     }
   }, [openConversationId, initialScope])
 
@@ -337,17 +339,23 @@ function useAIConversation({
     void loadConversation(openConversationId)
   }, [loadConversation, openConversationId])
 
-  // Poll when waiting for first AI response on a pending conversation
+  // Poll when a conversation is open but has no messages yet (AI response in flight)
   useEffect(() => {
-    if (!openConversationId || !isPendingFirstResponse) return
+    if (!openConversationId) return
     if (isLoadingMessages) return
+    if (messages.length > 0) {
+      setEmptyPollCount(0)
+      return
+    }
+    if (emptyPollCount >= MAX_EMPTY_POLLS) return
 
     const timer = window.setTimeout(() => {
-      void loadConversation(openConversationId)
+      setEmptyPollCount((c) => c + 1)
+      void loadConversation(openConversationIdRef.current!)
     }, 2000)
 
     return () => window.clearTimeout(timer)
-  }, [openConversationId, isPendingFirstResponse, isLoadingMessages, loadConversation])
+  }, [openConversationId, isLoadingMessages, messages.length, emptyPollCount, loadConversation])
 
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({
@@ -493,6 +501,10 @@ function useAIConversation({
     textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
   }
 
+  const isLoadingConversation =
+    isLoadingMessages ||
+    (messages.length === 0 && openConversationId !== null && emptyPollCount < MAX_EMPTY_POLLS)
+
   return {
     prompt,
     setPrompt,
@@ -513,7 +525,7 @@ function useAIConversation({
     issueTypeLabel,
     selectedScopeLabel,
     canSend,
-    isPendingFirstResponse,
+    isLoadingConversation,
     handleSubmit,
     handlePromptKeyDown,
     handlePresetClick,
@@ -562,7 +574,6 @@ export function RevserpAIView({
     selectedPillarId,
     selectedIssueTypeIds,
     messages,
-    isLoadingMessages,
     isSending,
     errorMessage,
     copiedMessageIndex,
@@ -570,7 +581,7 @@ export function RevserpAIView({
     issueTypeLabel,
     selectedScopeLabel,
     canSend,
-    isPendingFirstResponse,
+    isLoadingConversation,
     handleSubmit,
     handlePromptKeyDown,
     handlePresetClick,
@@ -593,12 +604,11 @@ export function RevserpAIView({
       <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
         <MessageList
           copiedMessageIndex={copiedMessageIndex}
-          isLoadingMessages={isLoadingMessages}
+          isLoadingConversation={isLoadingConversation}
           isSending={isSending}
           messages={messages}
           onCopyMessage={copyMessage}
           selectedScopeLabel={selectedScopeLabel}
-          isPendingFirstResponse={isPendingFirstResponse}
         />
       </div>
 
