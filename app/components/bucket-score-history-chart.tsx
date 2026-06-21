@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { memo, useMemo, useRef } from "react"
+
 import type { ApexOptions } from "apexcharts"
 
 import type { CrawlResponse, ScoreBreakdownBucketResponse } from "~/lib/api.types"
@@ -25,7 +26,7 @@ function getChartColor(index: number) {
   return `var(--chart-${(index % 5) + 1})`
 }
 
-export function BucketScoreHistoryChart({
+export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
   activeProjectName,
   crawlBreakdowns,
   pillarId,
@@ -200,7 +201,7 @@ export function BucketScoreHistoryChart({
       </CardContent>
     </Card>
   )
-}
+})
 
 const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",

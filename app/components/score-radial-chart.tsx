@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useState } from "react"
 
 
 import {
@@ -30,7 +30,7 @@ type ScoreRadialChartProps = {
   title: string
 }
 
-export function ScoreRadialChart({ centerValue, description, segments, title }: ScoreRadialChartProps) {
+export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, description, segments, title }: ScoreRadialChartProps) {
   const [rechartsComponents, setRechartsComponents] = useState<{
     PolarGrid: React.ComponentType<any>
     RadialBar: React.ComponentType<any>
@@ -124,7 +124,7 @@ export function ScoreRadialChart({ centerValue, description, segments, title }: 
       </CardContent>
     </Card>
   )
-}
+})
 
 function getTooltipLabel(payload: unknown) {
   if (payload && typeof payload === "object" && "label" in payload) {

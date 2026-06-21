@@ -8,6 +8,8 @@ export function useApexChart(
   enabled: boolean
 ) {
   const chartInstanceRef = useRef<any>(null)
+  const lastSeriesRef = useRef(series)
+  const lastOptionsRef = useRef(chartOptions)
 
   useEffect(() => {
     if (!enabled) {
@@ -46,7 +48,13 @@ export function useApexChart(
   useEffect(() => {
     if (!enabled || !chartInstanceRef.current) return
 
-    void chartInstanceRef.current.updateOptions(chartOptions, false, false, false)
-    void chartInstanceRef.current.updateSeries(series, false)
+    if (series !== lastSeriesRef.current) {
+      lastSeriesRef.current = series
+      void chartInstanceRef.current.updateSeries(series, false)
+    }
+    if (chartOptions !== lastOptionsRef.current) {
+      lastOptionsRef.current = chartOptions
+      void chartInstanceRef.current.updateOptions(chartOptions, false, false, false)
+    }
   }, [chartOptions, enabled, series])
 }

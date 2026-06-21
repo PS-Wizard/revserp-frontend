@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { memo, useMemo, useRef } from "react"
+
 import type { ApexOptions } from "apexcharts"
 
 import type { CrawlResponse } from "~/lib/api.types"
@@ -23,7 +24,7 @@ const SCORE_SERIES = [
   { key: "pagespeed", label: "PageSpeed", color: "var(--chart-4)" },
 ] as const
 
-export function SummaryScoreHistoryChart({
+export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
   activeProjectName,
   crawls,
 }: {
@@ -168,7 +169,7 @@ export function SummaryScoreHistoryChart({
       </CardContent>
     </Card>
   )
-}
+})
 
 
 

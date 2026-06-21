@@ -1,5 +1,7 @@
 "use client"
 
+import { memo, useMemo } from "react"
+
 import type { CrawlResponse } from "~/lib/api.types"
 import {
   Card,
@@ -18,7 +20,7 @@ import {
 } from "~/components/trend-sparkline"
 
 
-export function SectionCards({
+export const SectionCards = memo(function SectionCards({
   crawls,
   currentCrawl,
   previousCrawl,
@@ -27,8 +29,8 @@ export function SectionCards({
   currentCrawl: CrawlResponse | null
   previousCrawl: CrawlResponse | null
 }) {
-  const cardCrawls = [...crawls].reverse()
-  const cards = [
+  const cardCrawls = useMemo(() => [...crawls].reverse(), [crawls])
+  const cards = useMemo(() => [
     {
       label: "Overall Score",
       value: currentCrawl?.overall_score,
@@ -53,7 +55,7 @@ export function SectionCards({
       previousValue: previousCrawl?.pagespeed_score,
       series: cardCrawls.map((crawl) => crawl.pagespeed_score),
     },
-  ] as const
+  ] as const, [cardCrawls, currentCrawl, previousCrawl])
 
   return (
     <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
@@ -86,6 +88,6 @@ export function SectionCards({
       })}
     </div>
   )
-}
+})
 
 

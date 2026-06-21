@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useReducer, useRef, useState } from "react"
 
 import { GSCOverview } from "~/components/gsc-overview/gsc-overview"
 import { Button } from "~/components/ui/button"
@@ -91,13 +91,15 @@ function asyncReducer(state: AsyncState, action: AsyncAction): AsyncState {
   }
 }
 
-export function SearchConsoleView({
-  activeProject,
-  isOrganizationOwner,
-}: {
+type SearchConsoleViewProps = {
   activeProject: ProjectResponse | null
   isOrganizationOwner: boolean
-}) {
+}
+
+export const SearchConsoleView = memo(function SearchConsoleView({
+  activeProject,
+  isOrganizationOwner,
+}: SearchConsoleViewProps) {
   const [asyncState, dispatch] = useReducer(asyncReducer, initialAsyncState)
   const [selectedGSCSiteURL, setSelectedGSCSiteURL] = useState("")
   const { gscStatus, gscOverview } = asyncState
@@ -306,6 +308,16 @@ export function SearchConsoleView({
       description="Let the organization owner know they need to connect Google Search Console before this view is available."
       title="Google Search Console is currently not connected"
     />
+  )
+}, areSearchConsoleViewPropsEqual)
+
+function areSearchConsoleViewPropsEqual(
+  previous: SearchConsoleViewProps,
+  next: SearchConsoleViewProps
+) {
+  return (
+    previous.activeProject?.id === next.activeProject?.id &&
+    previous.isOrganizationOwner === next.isOrganizationOwner
   )
 }
 

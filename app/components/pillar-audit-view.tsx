@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { memo, useMemo, useState } from "react"
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
@@ -45,7 +45,7 @@ type PillarAuditViewProps = {
   title: string
 }
 
-export function PillarAuditView({
+export const PillarAuditView = memo(function PillarAuditView({
   activeProjectName,
   crawlBreakdowns,
   currentBreakdown,
@@ -102,9 +102,9 @@ export function PillarAuditView({
       />
     </div>
   )
-}
+})
 
-function BucketScoreCards({
+const BucketScoreCards = memo(function BucketScoreCards({
   crawlBreakdowns,
   pillarId,
   psiResult,
@@ -114,11 +114,14 @@ function BucketScoreCards({
   psiResult: GooglePSIStoredResult | null
 }) {
   const [psiDrawerOpen, setPsiDrawerOpen] = useState(false)
-  const buckets = getLatestPillarBuckets(crawlBreakdowns, pillarId)
-  const previousPillar = crawlBreakdowns[1]?.breakdown.pillars.find(
-    (pillar) => pillar.id === pillarId
+  const buckets = useMemo(() => getLatestPillarBuckets(crawlBreakdowns, pillarId), [crawlBreakdowns, pillarId])
+  const previousPillar = useMemo(
+    () => crawlBreakdowns[1]?.breakdown.pillars.find(
+      (pillar) => pillar.id === pillarId
+    ),
+    [crawlBreakdowns, pillarId]
   )
-  const chronologicalBreakdowns = [...crawlBreakdowns].reverse()
+  const chronologicalBreakdowns = useMemo(() => [...crawlBreakdowns].reverse(), [crawlBreakdowns])
 
   if (!buckets.length) {
     return (
@@ -186,7 +189,7 @@ function BucketScoreCards({
       })}
     </div>
   )
-}
+})
 
 
 function getLatestPillarBuckets(crawlBreakdowns: CrawlBreakdown[], pillarId: string) {

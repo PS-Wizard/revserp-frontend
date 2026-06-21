@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { memo, useMemo, useRef } from "react"
 import type { ApexOptions } from "apexcharts"
 
 import {
@@ -17,7 +17,7 @@ import type { ChartSeries, GSCMetricKey, MetricConfig } from "./types"
 import { useApexChart } from "~/hooks/use-apex-chart"
 
 
-export function GSCPerformanceChart({
+export const GSCPerformanceChart = memo(function GSCPerformanceChart({
   windowOverview,
   chartSeries,
   visibleMetrics,
@@ -164,7 +164,7 @@ export function GSCPerformanceChart({
       </CardContent>
     </Card>
   )
-}
+})
 
 const tooltipDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLoaderData, useLocation, useRevalidator } from "react-router"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
@@ -148,11 +148,11 @@ export default function AppPage() {
   const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
   const [pendingAIScope, setPendingAIScope] = useState<AIScopeState | null>(null)
 
-  const handleOpenAIConversation = (conversationId: string, scope?: AIScopeState) => {
+  const handleOpenAIConversation = useCallback((conversationId: string, scope?: AIScopeState) => {
     setOpenAIConversationId(conversationId)
     setPendingAIScope(scope ?? null)
     setView("revserp-ai")
-  }
+  }, [])
 
 
   const sortedCrawls = useMemo(
@@ -171,20 +171,20 @@ export default function AppPage() {
     sortedCrawls.find((crawl) => crawl.id === selectedCrawlId) ??
     sortedCompletedCrawls[0] ??
     null
-  const currentCompletedIndex = sortedCompletedCrawls.findIndex(
-    (crawl) => crawl.id === currentCrawl?.id
-  )
-  const previousCrawl =
-    currentCompletedIndex >= 0 ? sortedCompletedCrawls[currentCompletedIndex + 1] ?? null : null
+  const previousCrawl = useMemo(() => {
+    const idx = sortedCompletedCrawls.findIndex(
+      (crawl) => crawl.id === currentCrawl?.id
+    )
+    return idx >= 0 ? sortedCompletedCrawls[idx + 1] ?? null : null
+  }, [currentCrawl, sortedCompletedCrawls])
   const activeOrganization = me.organizations.find(
     (organization) => organization.id === me.active_org_id
   )
   const isOrganizationOwner = activeOrganization?.role === "owner"
 
-  const activeRunningCrawl =
-    sortedCrawls.find(
-      (crawl) => crawl.status === "queued" || crawl.status === "running"
-    ) ?? null
+  const activeRunningCrawl = sortedCrawls.find(
+    (crawl) => crawl.status === "queued" || crawl.status === "running"
+  ) ?? null
   const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
   const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
 
@@ -209,6 +209,55 @@ export default function AppPage() {
       setIsStartingCrawl(false)
     }
   }, [activeRunningCrawl])
+  // Stabilize chart props so polling doesn't re-render charts when data is unchanged
+  const chartCacheRef = useRef({
+    crawlsKey: "",
+    breakdownsKey: "",
+    currentId: "",
+    crawls: [] as CrawlResponse[],
+    breakdowns: [] as CrawlBreakdown[],
+    current: null as ScoreBreakdownResponse | null,
+  })
+
+  const completedCrawlsKey = sortedCompletedCrawls.map(getCrawlChartKey).join(",")
+  if (completedCrawlsKey !== chartCacheRef.current.crawlsKey) {
+    chartCacheRef.current.crawlsKey = completedCrawlsKey
+    chartCacheRef.current.crawls = sortedCompletedCrawls
+  }
+
+  const breakdownKey = crawlBreakdowns.map(getBreakdownChartKey).join(",")
+  if (breakdownKey !== chartCacheRef.current.breakdownsKey) {
+    chartCacheRef.current.breakdownsKey = breakdownKey
+    chartCacheRef.current.breakdowns = crawlBreakdowns
+  }
+
+  const currentKey = currentBreakdown ? getScoreBreakdownChartKey(currentBreakdown) : ""
+  if (currentKey !== chartCacheRef.current.currentId) {
+    chartCacheRef.current.currentId = currentKey
+    chartCacheRef.current.current = currentBreakdown
+  }
+
+  const stableSortedCompletedCrawls = chartCacheRef.current.crawls
+  const stableCrawlBreakdowns = chartCacheRef.current.breakdowns
+  const stableCurrentBreakdown = chartCacheRef.current.current
+  const stableCurrentCrawl =
+    stableSortedCompletedCrawls.find((crawl) => crawl.id === currentCrawl?.id) ??
+    currentCrawl
+  const stablePreviousCrawl =
+    stableSortedCompletedCrawls.find((crawl) => crawl.id === previousCrawl?.id) ??
+    previousCrawl
+  const scoreSegments = useMemo(
+    () => [
+      { key: "seo", label: "SEO", value: stableCurrentCrawl?.seo_score },
+      { key: "aeo", label: "AEO", value: stableCurrentCrawl?.aeo_score },
+      { key: "pagespeed", label: "PageSpeed", value: stableCurrentCrawl?.pagespeed_score },
+    ],
+    [
+      stableCurrentCrawl?.seo_score,
+      stableCurrentCrawl?.aeo_score,
+      stableCurrentCrawl?.pagespeed_score,
+    ]
+  )
 
   return (
     <main className="min-h-svh bg-background text-foreground">
@@ -248,30 +297,26 @@ export default function AppPage() {
                 <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
                   <ScoreRadialChart
                     centerLabel="Overall"
-                    centerValue={currentCrawl?.overall_score}
+                    centerValue={stableCurrentCrawl?.overall_score}
                     description="Current crawl pillar scores"
-                    segments={[
-                      { key: "seo", label: "SEO", value: currentCrawl?.seo_score },
-                      { key: "aeo", label: "AEO", value: currentCrawl?.aeo_score },
-                      { key: "pagespeed", label: "PageSpeed", value: currentCrawl?.pagespeed_score },
-                    ]}
+                    segments={scoreSegments}
                     title="Overall Score"
                   />
                   <SummaryScoreHistoryChart
                     activeProjectName={activeProject?.name}
-                    crawls={sortedCompletedCrawls}
+                    crawls={stableSortedCompletedCrawls}
                   />
                 </div>
                 <SectionCards
-                  crawls={sortedCompletedCrawls}
-                  currentCrawl={currentCrawl}
-                  previousCrawl={previousCrawl}
+                  crawls={stableSortedCompletedCrawls}
+                  currentCrawl={stableCurrentCrawl}
+                  previousCrawl={stablePreviousCrawl}
                 />
                 <div className="px-4 lg:px-6">
                   <Separator />
                 </div>
                 <IssueExplorer
-                  breakdown={currentBreakdown}
+                  breakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   projectId={activeProject?.id}
                 />
@@ -280,8 +325,8 @@ export default function AppPage() {
               <TabsContent value="seo">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={crawlBreakdowns}
-                  currentBreakdown={currentBreakdown}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  currentBreakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="seo"
                   projectId={activeProject?.id}
@@ -292,8 +337,8 @@ export default function AppPage() {
               <TabsContent value="aeo">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={crawlBreakdowns}
-                  currentBreakdown={currentBreakdown}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  currentBreakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="aeo"
                   projectId={activeProject?.id}
@@ -304,8 +349,8 @@ export default function AppPage() {
               <TabsContent value="pagespeed">
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
-                  crawlBreakdowns={crawlBreakdowns}
-                  currentBreakdown={currentBreakdown}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  currentBreakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="pagespeed"
                   projectId={activeProject?.id}
@@ -348,7 +393,7 @@ export default function AppPage() {
         />
       ) : view === "revserp-ai" ? (
         <RevserpAIView
-          breakdown={currentBreakdown}
+          breakdown={stableCurrentBreakdown}
           initialScope={pendingAIScope}
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
@@ -374,4 +419,35 @@ export default function AppPage() {
 
 function getCrawlTimestamp(crawl: CrawlResponse) {
   return new Date(crawl.completed_at ?? crawl.started_at ?? crawl.created_at).getTime()
+}
+
+function getCrawlChartKey(crawl: CrawlResponse) {
+  return [
+    crawl.id,
+    crawl.status,
+    crawl.completed_at ?? "",
+    crawl.overall_score ?? "",
+    crawl.seo_score ?? "",
+    crawl.aeo_score ?? "",
+    crawl.pagespeed_score ?? "",
+  ].join(":")
+}
+
+function getBreakdownChartKey(crawlBreakdown: CrawlBreakdown) {
+  return `${getCrawlChartKey(crawlBreakdown.crawl)}:${getScoreBreakdownChartKey(crawlBreakdown.breakdown)}`
+}
+
+function getScoreBreakdownChartKey(breakdown: ScoreBreakdownResponse) {
+  return [
+    breakdown.crawl_id,
+    ...breakdown.pillars.flatMap((pillar) => [
+      pillar.id,
+      pillar.score ?? "",
+      ...pillar.buckets.flatMap((bucket) => [
+        bucket.id,
+        bucket.score ?? "",
+        bucket.affected_url_count,
+      ]),
+    ]),
+  ].join(":")
 }
