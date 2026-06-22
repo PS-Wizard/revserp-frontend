@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, useReducer } from "react"
-import { ChevronLeftIcon } from "lucide-react"
+import { ChevronLeftIcon, DownloadIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -32,8 +32,9 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import { ApiError } from "~/lib/api"
+import { ApiError, buildApiUrl } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
+import { downloadBlob, getExportFilename } from "~/components/app-navbar/utils"
 
 
 // --- URL loading reducer ---
@@ -427,6 +428,7 @@ export function IssueExplorer({
       availableBucketScopes={availableBucketScopes}
       availableIssueScopes={availableIssueScopes}
       displayedIssueUrls={displayedIssueUrls}
+      crawlId={crawlId}
       onBackToIssueTypes={onBackToIssueTypes}
       onFixAction={onFixAction}
       onSelectIssueType={onSelectIssueType}
@@ -607,6 +609,7 @@ type IssueExplorerContentProps = {
   issueUrlPageIndex: number
   issueUrlPageSize: number
   issueUrlsError: string
+  crawlId: string
   paginatedIssueTypeRows: IssueScope[]
   paginatedMergedIssueUrls: MergedIssueUrlRow[]
   totalIssueTypeRows: number
@@ -631,6 +634,7 @@ type IssueExplorerContentProps = {
 function IssueExplorerContent(props: IssueExplorerContentProps) {
   const {
     availableBucketScopes,
+    crawlId,
     availableIssueScopes,
     displayedIssueUrls,
     onBackToIssueTypes,
@@ -662,6 +666,45 @@ function IssueExplorerContent(props: IssueExplorerContentProps) {
     isFixActionPending,
   } = props
   const { hasMultipleSources, hasSelectedIssueTypes } = viewState
+
+  const handleExportXlsx = useCallback(async () => {
+    if (!crawlId) return
+
+    const params = new URLSearchParams()
+    if (selectedPillarIds.length) params.set("pillar_ids", selectedPillarIds.join(","))
+    if (selectedBucketKeys.length) params.set("bucket_keys", selectedBucketKeys.join(","))
+    if (selectedIssueTypeKeys.length) params.set("issue_type_keys", selectedIssueTypeKeys.join(","))
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/crawls/${crawlId}/score-breakdown/export.xlsx?${params}`),
+        { credentials: "include" }
+      )
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorMsg = "Unable to export crawl issues."
+        try {
+          const body = JSON.parse(errorText)
+          if (typeof (body as Record<string, unknown>).error === "string") {
+            errorMsg = (body as Record<string, unknown>).error as string
+          }
+        } catch {
+          // use default message
+        }
+        throw new Error(errorMsg)
+      }
+
+      const blob = await response.blob()
+      const filename = getExportFilename(
+        response.headers.get("content-disposition"),
+        `crawl-${crawlId.slice(0, 8)}-issues.xlsx`
+      )
+      downloadBlob(blob, filename)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to export crawl issues.")
+    }
+  }, [crawlId, selectedPillarIds, selectedBucketKeys, selectedIssueTypeKeys])
 
   return (
     <div className="px-4 pb-24 lg:px-6 lg:pb-32">
@@ -698,6 +741,18 @@ function IssueExplorerContent(props: IssueExplorerContentProps) {
               : issueTypeRows.length
           }
         />
+      </div>
+
+      <div className="mb-4 flex justify-end">
+        <Button
+          disabled={!crawlId || !selectedIssueTypeKeys.length}
+          onClick={handleExportXlsx}
+          size="sm"
+          variant="outline"
+        >
+          <DownloadIcon className="size-4" />
+          Export XLSX
+        </Button>
       </div>
 
       <IssueExplorerTableArea
