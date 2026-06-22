@@ -158,6 +158,7 @@ export function AppNavbar({
   onViewChange,
   onSelectConversation,
   onDeleteConversation,
+  isPlatformAdmin,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -388,8 +389,6 @@ export function AppNavbar({
 
           <div className="flex justify-end">
             <ProfileMenu
-              activeProjectId={activeProjectId}
-              currentCrawlId={currentCrawl?.id ?? null}
               initials={initials}
               isActiveOrganizationOwner={workspaceActions.isActiveOrganizationOwner}
               workspaceState={workspaceActions.workspaceState}
@@ -397,6 +396,7 @@ export function AppNavbar({
               organizations={organizations}
               profileActionError={workspaceActions.profileActionError}
               userName={userName}
+              isPlatformAdmin={isPlatformAdmin}
               onInviteOpen={workspaceActions.openInviteDialog}
               onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
               onLogout={() => void workspaceActions.handleLogout()}

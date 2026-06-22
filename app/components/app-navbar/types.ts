@@ -18,4 +18,5 @@ export type AppNavbarProps = {
   onViewChange: (value: DashboardView) => void
   onSelectConversation?: (conversationId: string) => void
   onDeleteConversation?: (conversationId: string) => void
+  isPlatformAdmin: boolean
 }

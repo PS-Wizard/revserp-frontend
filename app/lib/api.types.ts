@@ -4,6 +4,7 @@ export type MeResponse = {
     email: string
     name?: string
   }
+  is_platform_admin: boolean
   organizations: Array<{
     id: string
     name: string
@@ -332,4 +333,44 @@ export type CreateAIConversationMessageResponse = {
     issue_count: number
     url_count: number
   }
+}
+
+
+// --- Admin types ---
+
+export type AdminUserResponse = {
+  id: string
+  email: string
+  name?: string
+  status: string
+  is_platform_admin: boolean
+  created_at: string
+}
+
+export type AdminUsersResponse = {
+  users: AdminUserResponse[]
+}
+
+export type AdminOrganizationResponse = {
+  id: string
+  name: string
+}
+
+export type AdminOrganizationOverrideConfigResponse = {
+  config: ScoringConfig
+  default: ScoringConfig
+  is_override: boolean
+  updated_at?: string
+}
+
+export type AdminAIAppConfig = {
+  context_prompt: string
+  guidelines: string
+  other_notes: string
+}
+
+export type AdminAIAppConfigResponse = {
+  config: AdminAIAppConfig
+  default_config: AdminAIAppConfig
+  updated_at?: string
 }

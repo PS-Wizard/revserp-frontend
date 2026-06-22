@@ -275,6 +275,7 @@ export default function AppPage() {
   userEmail={me.user.email}
   userName={me.user.name}
   view={view}
+  isPlatformAdmin={me.is_platform_admin}
 />
 
       {view === "revserp-audit" ? (

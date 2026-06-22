@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router"
 
-import { DoorOpenIcon, LogOutIcon, SendIcon, Settings2Icon, UsersIcon } from "lucide-react"
+import { DoorOpenIcon, LogOutIcon, SendIcon, ShieldIcon, UsersIcon } from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
@@ -33,6 +33,7 @@ type ProfileMenuProps = {
   organizations: MeResponse["organizations"]
   profileActionError: string
   userName?: string
+  isPlatformAdmin: boolean
   onInviteOpen: () => void
   onLeaveWorkspaceOpen: () => void
   onLogout: () => void
@@ -40,8 +41,6 @@ type ProfileMenuProps = {
 }
 
 export function ProfileMenu({
-  activeProjectId,
-  currentCrawlId,
   initials,
   isActiveOrganizationOwner,
   workspaceState,
@@ -49,6 +48,7 @@ export function ProfileMenu({
   organizations,
   profileActionError,
   userName,
+  isPlatformAdmin,
   onInviteOpen,
   onLeaveWorkspaceOpen,
   onLogout,
@@ -124,15 +124,17 @@ export function ProfileMenu({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onClick={() => {
-              navigate(`/app/internal/scoring?project=${activeProjectId ?? ""}&crawl=${currentCrawlId ?? ""}`)
-            }}
-            variant="default"
-          >
-            <Settings2Icon />
-            Configure Scoring
-          </DropdownMenuItem>
+          {isPlatformAdmin ? (
+            <DropdownMenuItem
+              onClick={() => {
+                navigate("/app/admin")
+              }}
+              variant="default"
+            >
+              <ShieldIcon />
+              Admin Settings
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={isLoggingOut} onClick={onLogout} variant="default">

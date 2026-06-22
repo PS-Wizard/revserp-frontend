@@ -16,6 +16,10 @@ export async function redirectAuthenticatedUser(request: Request) {
       return null
     }
 
+    if (error instanceof ApiError) {
+      throw redirect("/account-suspended")
+    }
+
     throw error
   }
 }
@@ -28,6 +32,10 @@ export async function requireAuthenticatedUser(request: Request) {
       const url = new URL(request.url)
       const nextPath = `${url.pathname}${url.search}`
       throw redirect(`/login?next=${encodeURIComponent(nextPath)}`)
+    }
+
+    if (error instanceof ApiError) {
+      throw redirect("/account-suspended")
     }
 
     throw error
