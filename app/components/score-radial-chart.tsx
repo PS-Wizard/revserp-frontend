@@ -20,6 +20,7 @@ export type ScoreRadialSegment = {
   key: string
   label: string
   value?: number | null
+  color?: string
 }
 
 type ScoreRadialChartProps = {
@@ -148,7 +149,7 @@ function buildChartData(segments: ScoreRadialSegment[]) {
 
     chartData.push({
       ...segment,
-      fill: getChartColor(chartData.length),
+      fill: segment.color ?? getChartColor(chartData.length),
       value: Math.round(segment.value),
     })
   }

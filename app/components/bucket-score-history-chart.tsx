@@ -15,15 +15,12 @@ import {
 import { useApexChart } from "~/hooks/use-apex-chart"
 import { isNumber } from "~/components/trend-sparkline"
 import { formatBucketLabel } from "~/lib/utils"
+import { getPillarChartColor } from "~/lib/pillar-colors"
 
 
 type CrawlBreakdown = {
   crawl: CrawlResponse
   breakdown: { pillars: Array<{ id: string; buckets: ScoreBreakdownBucketResponse[] }> }
-}
-
-function getChartColor(index: number) {
-  return `var(--chart-${(index % 5) + 1})`
 }
 
 export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
@@ -67,10 +64,10 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     () =>
       buckets.map((bucket, index) => ({
         name: formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, "")),
-        color: getChartColor(index),
+        color: getPillarChartColor(pillarId, index),
         data: chartRows.map((row) => ({ x: row.timestamp, y: row[bucket.id] })),
       })),
-    [buckets, chartRows]
+    [buckets, chartRows, pillarId]
   )
 
   const yRange = useMemo(() => {
@@ -116,7 +113,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
         zoom: { enabled: true, type: "x", autoScaleYaxis: true },
         animations: { speed: 300 },
       },
-      colors: buckets.map((_, i) => getChartColor(i)),
+      colors: buckets.map((_, i) => getPillarChartColor(pillarId, i)),
       dataLabels: { enabled: false },
       fill: {
         type: "gradient",
@@ -187,7 +184,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
                 <div className="flex items-center gap-2" key={bucket.id}>
                   <span
                     className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: getChartColor(index) }}
+                    style={{ backgroundColor: getPillarChartColor(pillarId, index) }}
                   />
                   <span className="truncate text-muted-foreground">
                     {formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, ""))}

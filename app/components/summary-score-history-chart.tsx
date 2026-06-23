@@ -15,13 +15,14 @@ import {
 import { useApexChart } from "~/hooks/use-apex-chart"
 import { getCrawlTimestamp } from "~/lib/crawl"
 import { isNumber } from "~/components/trend-sparkline"
+import { getPillarChartColor } from "~/lib/pillar-colors"
 
 
 const SCORE_SERIES = [
-  { key: "overall", label: "Overall", color: "var(--chart-1)" },
-  { key: "seo", label: "SEO", color: "var(--chart-2)" },
-  { key: "aeo", label: "AEO", color: "var(--chart-3)" },
-  { key: "pagespeed", label: "PageSpeed", color: "var(--chart-4)" },
+  { key: "overall",   label: "Overall",    color: "rgba(255,255,255,0.50)" },
+  { key: "seo",       label: "SEO",        color: getPillarChartColor("seo", 0) },
+  { key: "aeo",       label: "AEO",        color: getPillarChartColor("aeo", 0) },
+  { key: "pagespeed", label: "PageSpeed",  color: getPillarChartColor("pagespeed", 0) },
 ] as const
 
 export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({

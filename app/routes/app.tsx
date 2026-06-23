@@ -23,6 +23,7 @@ import {
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { serverApiFetch } from "~/lib/api"
+import { getPillarChartColor } from "~/lib/pillar-colors"
 import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
   CrawlResponse,
@@ -248,9 +249,9 @@ export default function AppPage() {
     previousCrawl
   const scoreSegments = useMemo(
     () => [
-      { key: "seo", label: "SEO", value: stableCurrentCrawl?.seo_score },
-      { key: "aeo", label: "AEO", value: stableCurrentCrawl?.aeo_score },
-      { key: "pagespeed", label: "PageSpeed", value: stableCurrentCrawl?.pagespeed_score },
+      { key: "seo", label: "SEO", value: stableCurrentCrawl?.seo_score, color: getPillarChartColor("seo", 0) },
+      { key: "aeo", label: "AEO", value: stableCurrentCrawl?.aeo_score, color: getPillarChartColor("aeo", 0) },
+      { key: "pagespeed", label: "PageSpeed", value: stableCurrentCrawl?.pagespeed_score, color: getPillarChartColor("pagespeed", 0) },
     ],
     [
       stableCurrentCrawl?.seo_score,

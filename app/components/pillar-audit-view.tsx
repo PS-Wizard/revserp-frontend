@@ -20,6 +20,7 @@ import type {
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
 import { formatBucketLabel } from "~/lib/utils"
+import { getPillarChartColor } from "~/lib/pillar-colors"
 import {
   TrendBadge,
   TrendSparkline,
@@ -56,10 +57,11 @@ export const PillarAuditView = memo(function PillarAuditView({
 }: PillarAuditViewProps) {
   const currentPillar = currentBreakdown?.pillars.find((pillar) => pillar.id === pillarId)
   const radialSegments =
-    currentPillar?.buckets.map((bucket) => ({
+    currentPillar?.buckets.map((bucket, index) => ({
       key: bucket.id,
       label: formatBucketLabel(bucket.id, bucket.label),
       value: bucket.score,
+      color: getPillarChartColor(pillarId, index),
     })) ?? []
 
   return (
@@ -72,6 +74,17 @@ export const PillarAuditView = memo(function PillarAuditView({
           segments={radialSegments}
           title={`${title} Score`}
         />
+        <BucketScoreCards
+          crawlBreakdowns={crawlBreakdowns}
+          pillarId={pillarId}
+          psiResult={
+            pillarId === "pagespeed"
+              ? (crawlBreakdowns[0]?.crawl?.google_psi_results as GooglePSIStoredResult[])?.[0] ?? null
+              : null
+          }
+        />
+      </div>
+      <div className="px-4 lg:px-6">
         <BucketScoreHistoryChart
           activeProjectName={activeProjectName}
           crawlBreakdowns={crawlBreakdowns}
@@ -79,18 +92,6 @@ export const PillarAuditView = memo(function PillarAuditView({
           title={title}
         />
       </div>
-      <div className="px-4 lg:px-6">
-        <Separator />
-      </div>
-      <BucketScoreCards
-        crawlBreakdowns={crawlBreakdowns}
-        pillarId={pillarId}
-        psiResult={
-          pillarId === "pagespeed"
-            ? (crawlBreakdowns[0]?.crawl?.google_psi_results as GooglePSIStoredResult[])?.[0] ?? null
-            : null
-        }
-      />
       <div className="px-4 lg:px-6">
         <Separator />
       </div>
@@ -125,20 +126,18 @@ const BucketScoreCards = memo(function BucketScoreCards({
 
   if (!buckets.length) {
     return (
-      <div className="px-4 lg:px-6">
-        <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
-          <CardHeader>
-            <CardTitle>No bucket scores yet</CardTitle>
-            <CardDescription>Run a completed crawl to populate this view.</CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
+      <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+        <CardHeader>
+          <CardTitle>No bucket scores yet</CardTitle>
+          <CardDescription>Run a completed crawl to populate this view.</CardDescription>
+        </CardHeader>
+      </Card>
     )
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      {buckets.map((bucket) => {
+    <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+      {buckets.map((bucket, index) => {
         const previousBucket = previousPillar?.buckets.find((item) => item.id === bucket.id)
         const series = chronologicalBreakdowns.map(({ breakdown }) =>
           breakdown.pillars
@@ -150,7 +149,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
         return (
           <>
             <Card
-              className={`@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
+              className={`@container/card flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
                 bucket.id === "psi_cwv" && psiResult
                   ? "cursor-pointer transition hover:border-primary/30"
                   : ""
@@ -160,13 +159,15 @@ const BucketScoreCards = memo(function BucketScoreCards({
                 if (bucket.id === "psi_cwv" && psiResult) setPsiDrawerOpen(true)
               }}
             >
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardDescription>{bucket.id === "psi_cwv" ? "Google PSI" : bucket.label}</CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                  {formatScore(bucket.score)}
-                </CardTitle>
                 {delta !== null && <TrendBadge delta={delta} />}
               </CardHeader>
+              <div className="flex flex-1 items-center justify-center px-6 py-4">
+                <CardTitle className="text-3xl font-semibold tabular-nums @[250px]/card:text-4xl">
+                  {formatScore(bucket.score)}
+                </CardTitle>
+              </div>
               <CardFooter className="flex items-end justify-between gap-4 text-sm">
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="font-medium">{getTrendLabel(delta)}</div>

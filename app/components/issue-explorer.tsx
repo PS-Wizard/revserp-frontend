@@ -213,7 +213,10 @@ export function IssueExplorer({
   })
 
   const availableIssueScopes = useMemo<IssueScope[]>(() => {
-    return availableBucketScopes.flatMap((bucketScope) => {
+    const selectedBucketScopes = availableBucketScopes.filter((bucketScope) =>
+      selectedBucketKeys.includes(bucketScope.key)
+    )
+    return selectedBucketScopes.flatMap((bucketScope) => {
       const pillar = selectedPillars.find(
         (item) => item.id === bucketScope.pillarId
       )
@@ -232,7 +235,7 @@ export function IssueExplorer({
         issueType,
       }))
     })
-  }, [availableBucketScopes, selectedPillars])
+  }, [availableBucketScopes, selectedBucketKeys, selectedPillars])
 
   const selectedIssueScopes = useMemo(() => {
     return availableIssueScopes.filter((issueScope) =>

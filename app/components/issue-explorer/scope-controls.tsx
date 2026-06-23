@@ -76,6 +76,7 @@ export function ScopeBreadcrumbs({
                   "Select buckets"
                 )}
                 multiSelect={true}
+                allowEmpty={false}
                 onToggleAll={(values) => setSelectedBucketKeys(values)}
                 options={availableBucketScopes.map((bucketScope) => ({
                   value: bucketScope.key,
@@ -119,9 +120,10 @@ type ScopeMultiMenuProps = {
   selectedValues: string[]
   title: string
   multiSelect?: boolean
+  allowEmpty?: boolean
 }
 
-function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues, title, multiSelect }: ScopeMultiMenuProps) {
+function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues, title, multiSelect, allowEmpty = true }: ScopeMultiMenuProps) {
   const [query, setQuery] = useState("")
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -162,9 +164,13 @@ function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues,
             <div className="border-b border-border/40 px-2 py-1.5">
               <button
                 className="w-full text-left text-sm font-medium text-primary hover:underline"
-                onClick={() =>
-                  onToggleAll?.(allSelected ? [] : options.map((o) => o.value))
-                }
+                onClick={() => {
+                  if (allSelected) {
+                    onToggleAll?.(allowEmpty ? [] : options.slice(0, 1).map((o) => o.value))
+                  } else {
+                    onToggleAll?.(options.map((o) => o.value))
+                  }
+                }}
               >
                 {allSelected ? "Unselect all" : "Select all"}
               </button>
