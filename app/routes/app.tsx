@@ -46,7 +46,9 @@ export async function loader({ request }: { request: Request }) {
   const requestedProjectId = requestUrl.searchParams.get("project")
   const requestedCrawlId = requestUrl.searchParams.get("crawl")
   const activeProject =
-    projectsResponse.projects.find((project) => project.id === requestedProjectId) ??
+    projectsResponse.projects.find(
+      (project) => project.id === requestedProjectId
+    ) ??
     projectsResponse.projects[0] ??
     null
 
@@ -87,7 +89,9 @@ export async function loader({ request }: { request: Request }) {
     const breakdownSourceCrawls = selectedCompletedCrawl
       ? [
           selectedCompletedCrawl,
-          ...sortedCompletedCrawls.filter((crawl) => crawl.id !== selectedCompletedCrawl.id),
+          ...sortedCompletedCrawls.filter(
+            (crawl) => crawl.id !== selectedCompletedCrawl.id
+          ),
         ]
       : sortedCompletedCrawls
 
@@ -105,8 +109,9 @@ export async function loader({ request }: { request: Request }) {
       result.status === "fulfilled" ? [result.value] : []
     )
     currentBreakdown =
-      crawlBreakdowns.find((item) => item.crawl.id === selectedCompletedCrawl?.id)
-        ?.breakdown ?? null
+      crawlBreakdowns.find(
+        (item) => item.crawl.id === selectedCompletedCrawl?.id
+      )?.breakdown ?? null
   }
 
   return {
@@ -137,24 +142,37 @@ const viewLabels: Record<DashboardView, string> = {
 }
 
 export default function AppPage() {
-  const { me, projects, activeProject, projectCrawls, recentCrawls, currentBreakdown, crawlBreakdowns } =
-    useLoaderData() as AppLoaderData
+  const {
+    me,
+    projects,
+    activeProject,
+    projectCrawls,
+    recentCrawls,
+    currentBreakdown,
+    crawlBreakdowns,
+  } = useLoaderData() as AppLoaderData
   const revalidator = useRevalidator()
   const location = useLocation()
   const [view, setView] = useState<DashboardView>("revserp-audit")
-  const [auditTab, setAuditTab] = useState<"summary" | "seo" | "aeo" | "pagespeed">(
-    "summary"
-  )
+  const [auditTab, setAuditTab] = useState<
+    "summary" | "seo" | "aeo" | "pagespeed"
+  >("summary")
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
-  const [openAIConversationId, setOpenAIConversationId] = useState<string | null>(null)
-  const [pendingAIScope, setPendingAIScope] = useState<AIScopeState | null>(null)
+  const [openAIConversationId, setOpenAIConversationId] = useState<
+    string | null
+  >(null)
+  const [pendingAIScope, setPendingAIScope] = useState<AIScopeState | null>(
+    null
+  )
 
-  const handleOpenAIConversation = useCallback((conversationId: string, scope?: AIScopeState) => {
-    setOpenAIConversationId(conversationId)
-    setPendingAIScope(scope ?? null)
-    setView("revserp-ai")
-  }, [])
-
+  const handleOpenAIConversation = useCallback(
+    (conversationId: string, scope?: AIScopeState) => {
+      setOpenAIConversationId(conversationId)
+      setPendingAIScope(scope ?? null)
+      setView("revserp-ai")
+    },
+    []
+  )
 
   const sortedCrawls = useMemo(
     () =>
@@ -176,16 +194,17 @@ export default function AppPage() {
     const idx = sortedCompletedCrawls.findIndex(
       (crawl) => crawl.id === currentCrawl?.id
     )
-    return idx >= 0 ? sortedCompletedCrawls[idx + 1] ?? null : null
+    return idx >= 0 ? (sortedCompletedCrawls[idx + 1] ?? null) : null
   }, [currentCrawl, sortedCompletedCrawls])
   const activeOrganization = me.organizations.find(
     (organization) => organization.id === me.active_org_id
   )
   const isOrganizationOwner = activeOrganization?.role === "owner"
 
-  const activeRunningCrawl = sortedCrawls.find(
-    (crawl) => crawl.status === "queued" || crawl.status === "running"
-  ) ?? null
+  const activeRunningCrawl =
+    sortedCrawls.find(
+      (crawl) => crawl.status === "queued" || crawl.status === "running"
+    ) ?? null
   const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
   const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
 
@@ -220,7 +239,9 @@ export default function AppPage() {
     current: null as ScoreBreakdownResponse | null,
   })
 
-  const completedCrawlsKey = sortedCompletedCrawls.map(getCrawlChartKey).join(",")
+  const completedCrawlsKey = sortedCompletedCrawls
+    .map(getCrawlChartKey)
+    .join(",")
   if (completedCrawlsKey !== chartCacheRef.current.crawlsKey) {
     chartCacheRef.current.crawlsKey = completedCrawlsKey
     chartCacheRef.current.crawls = sortedCompletedCrawls
@@ -232,7 +253,9 @@ export default function AppPage() {
     chartCacheRef.current.breakdowns = crawlBreakdowns
   }
 
-  const currentKey = currentBreakdown ? getScoreBreakdownChartKey(currentBreakdown) : ""
+  const currentKey = currentBreakdown
+    ? getScoreBreakdownChartKey(currentBreakdown)
+    : ""
   if (currentKey !== chartCacheRef.current.currentId) {
     chartCacheRef.current.currentId = currentKey
     chartCacheRef.current.current = currentBreakdown
@@ -242,16 +265,33 @@ export default function AppPage() {
   const stableCrawlBreakdowns = chartCacheRef.current.breakdowns
   const stableCurrentBreakdown = chartCacheRef.current.current
   const stableCurrentCrawl =
-    stableSortedCompletedCrawls.find((crawl) => crawl.id === currentCrawl?.id) ??
-    currentCrawl
+    stableSortedCompletedCrawls.find(
+      (crawl) => crawl.id === currentCrawl?.id
+    ) ?? currentCrawl
   const stablePreviousCrawl =
-    stableSortedCompletedCrawls.find((crawl) => crawl.id === previousCrawl?.id) ??
-    previousCrawl
+    stableSortedCompletedCrawls.find(
+      (crawl) => crawl.id === previousCrawl?.id
+    ) ?? previousCrawl
   const scoreSegments = useMemo(
     () => [
-      { key: "seo", label: "SEO", value: stableCurrentCrawl?.seo_score, color: getPillarChartColor("seo", 0) },
-      { key: "aeo", label: "AEO", value: stableCurrentCrawl?.aeo_score, color: getPillarChartColor("aeo", 0) },
-      { key: "pagespeed", label: "PageSpeed", value: stableCurrentCrawl?.pagespeed_score, color: getPillarChartColor("pagespeed", 0) },
+      {
+        key: "seo",
+        label: "SEO",
+        value: stableCurrentCrawl?.seo_score,
+        color: getPillarChartColor("seo", 0),
+      },
+      {
+        key: "aeo",
+        label: "AEO",
+        value: stableCurrentCrawl?.aeo_score,
+        color: getPillarChartColor("aeo", 0),
+      },
+      {
+        key: "pagespeed",
+        label: "PageSpeed",
+        value: stableCurrentCrawl?.pagespeed_score,
+        color: getPillarChartColor("pagespeed", 0),
+      },
     ],
     [
       stableCurrentCrawl?.seo_score,
@@ -262,22 +302,22 @@ export default function AppPage() {
 
   return (
     <main className="min-h-svh bg-background text-foreground">
-<AppNavbar
-  activeProjectId={activeProject?.id}
-  currentCrawl={currentCrawl}
-  projectCrawls={projectCrawls}
-  isCrawlRunning={isCrawlRunning}
-  onCrawlStart={() => setIsStartingCrawl(true)}
-  onViewChange={setView}
-  onSelectConversation={handleOpenAIConversation}
-  organizationId={me.active_org_id}
-  projects={projects}
-  organizations={me.organizations}
-  userEmail={me.user.email}
-  userName={me.user.name}
-  view={view}
-  isPlatformAdmin={me.is_platform_admin}
-/>
+      <AppNavbar
+        activeProjectId={activeProject?.id}
+        currentCrawl={currentCrawl}
+        projectCrawls={projectCrawls}
+        isCrawlRunning={isCrawlRunning}
+        onCrawlStart={() => setIsStartingCrawl(true)}
+        onViewChange={setView}
+        onSelectConversation={handleOpenAIConversation}
+        organizationId={me.active_org_id}
+        projects={projects}
+        organizations={me.organizations}
+        userEmail={me.user.email}
+        userName={me.user.name}
+        view={view}
+        isPlatformAdmin={me.is_platform_admin}
+      />
 
       {view === "revserp-audit" ? (
         <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
@@ -295,7 +335,10 @@ export default function AppPage() {
               }
               className="gap-6"
             >
-              <TabsContent value="summary" className="flex flex-col gap-4 md:gap-6">
+              <TabsContent
+                value="summary"
+                className="flex flex-col gap-4 md:gap-6"
+              >
                 <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
                   <ScoreRadialChart
                     centerLabel="Overall"
@@ -362,25 +405,34 @@ export default function AppPage() {
 
               <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 justify-center px-4">
                 <TabsList className="h-11 w-fit border border-foreground/20 bg-muted/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-md">
-                  <TabsTrigger className="px-4 text-sm" value="summary">Summary</TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="seo">SEO</TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="aeo">AEO</TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="pagespeed">PageSpeed</TabsTrigger>
+                  <TabsTrigger className="px-4 text-sm" value="summary">
+                    Summary
+                  </TabsTrigger>
+                  <TabsTrigger className="px-4 text-sm" value="seo">
+                    SEO
+                  </TabsTrigger>
+                  <TabsTrigger className="px-4 text-sm" value="aeo">
+                    AEO
+                  </TabsTrigger>
+                  <TabsTrigger className="px-4 text-sm" value="pagespeed">
+                    PageSpeed
+                  </TabsTrigger>
                 </TabsList>
               </div>
             </Tabs>
           </div>
 
           {isCrawlRunning ? (
-            <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-md">
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-md">
               <Card className="w-full max-w-md border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
                 <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
                   <CompileLoader className="text-foreground" size={56} />
                   <div className="flex flex-col gap-1">
                     <h2 className="text-lg font-medium">Crawl in progress</h2>
                     <p className="text-sm text-muted-foreground">
-                      {activeProject?.name || "This project"} is currently {crawlStatusLabel}.
-                      Scores will refresh automatically when the crawl finishes.
+                      {activeProject?.name || "This project"} is currently{" "}
+                      {crawlStatusLabel}. Scores will refresh automatically when
+                      the crawl finishes.
                     </p>
                   </div>
                 </CardContent>
@@ -420,7 +472,9 @@ export default function AppPage() {
 }
 
 function getCrawlTimestamp(crawl: CrawlResponse) {
-  return new Date(crawl.completed_at ?? crawl.started_at ?? crawl.created_at).getTime()
+  return new Date(
+    crawl.completed_at ?? crawl.started_at ?? crawl.created_at
+  ).getTime()
 }
 
 function getCrawlChartKey(crawl: CrawlResponse) {
