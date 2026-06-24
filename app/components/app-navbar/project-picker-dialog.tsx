@@ -17,7 +17,13 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "~/components/ui/context-menu"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "~/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
 import { CrawlContextRow } from "./crawl-context-row"
@@ -74,9 +80,11 @@ export function ProjectPickerDialog({
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Projects</DialogTitle>
-          <DialogDescription>Select a project or create a new one.</DialogDescription>
+          <DialogDescription>
+            Select a project or create a new one.
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid min-h-[460px] grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)] bg-popover">
+        <div className="grid h-[460px] grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)] bg-popover">
           <ProjectCommandList
             activeProjectId={activeProjectId}
             deletingProjectId={deletingProjectId}
@@ -136,10 +144,13 @@ function ProjectCommandList({
       <div className="border-b border-border/50 px-3 py-3">
         <CommandInput placeholder="Search projects..." />
       </div>
-      <CommandList className="max-h-[460px] py-2">
+      <CommandList className="max-h-none min-h-0 flex-1 py-2">
         <CommandEmpty>No projects found.</CommandEmpty>
         <CommandGroup heading="Projects">
-          <CommandItem className="mx-2 rounded-lg py-2.5" onSelect={onCreateProjectOpen}>
+          <CommandItem
+            className="mx-2 rounded-lg py-2.5"
+            onSelect={onCreateProjectOpen}
+          >
             <PlusIcon />
             Create new project
           </CommandItem>
@@ -191,7 +202,9 @@ function ProjectCommandItem({
         >
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="truncate font-medium">{project.name}</span>
-            <span className="truncate text-muted-foreground">{project.base_url}</span>
+            <span className="truncate text-muted-foreground">
+              {project.base_url}
+            </span>
           </div>
           {project.id === activeProjectId ? <CheckIcon /> : null}
         </CommandItem>
