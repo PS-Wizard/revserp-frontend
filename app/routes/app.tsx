@@ -372,7 +372,7 @@ export default function AppPage() {
           </div>
 
           {isCrawlRunning ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-md">
+            <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-md">
               <Card className="w-full max-w-md border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
                 <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
                   <CompileLoader className="text-foreground" size={56} />
