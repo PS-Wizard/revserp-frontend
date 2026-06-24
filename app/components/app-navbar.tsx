@@ -3,7 +3,13 @@
 import { useMemo, useReducer, useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
-import { Building2Icon, ChevronsUpDownIcon, DownloadIcon, PlayIcon, SearchIcon } from "lucide-react"
+import {
+  Building2Icon,
+  ChevronsUpDownIcon,
+  DownloadIcon,
+  PlayIcon,
+  SearchIcon,
+} from "lucide-react"
 import { CompileLoader } from "~/components/compile-loader"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
@@ -21,8 +27,15 @@ import { AiConversationsPopover } from "~/components/app-navbar/ai-conversations
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
 import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actions"
-import type { AppNavbarProps, DashboardView } from "~/components/app-navbar/types"
-import { formatCrawlDateTime, getCrawlValidationError, getInitials } from "~/components/app-navbar/utils"
+import type {
+  AppNavbarProps,
+  DashboardView,
+} from "~/components/app-navbar/types"
+import {
+  formatCrawlDateTime,
+  getCrawlValidationError,
+  getInitials,
+} from "~/components/app-navbar/utils"
 import { getCrawlTimestamp } from "~/lib/crawl"
 import { Button } from "~/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
@@ -61,7 +74,7 @@ type CreateProjectEvent =
 
 function createProjectReducer(
   state: CreateProjectState,
-  event: CreateProjectEvent,
+  event: CreateProjectEvent
 ): CreateProjectState {
   switch (event.type) {
     case "OPEN":
@@ -114,7 +127,10 @@ type RunCrawlEvent =
   | { type: "SET_STARTING" }
   | { type: "STARTED" }
 
-function runCrawlReducer(state: RunCrawlState, event: RunCrawlEvent): RunCrawlState {
+function runCrawlReducer(
+  state: RunCrawlState,
+  event: RunCrawlEvent
+): RunCrawlState {
   switch (event.type) {
     case "OPEN":
       return { ...state, isRunCrawlOpen: true, runCrawlError: "" }
@@ -182,33 +198,59 @@ export function AppNavbar({
   })
 
   const {
-    businessProfileProject, brandName, websiteUrl, primaryCategory,
-    primaryLocation, businessDescription, seedPrompts, businessProfileError,
-    isLoadingBusinessProfile, isSavingBusinessProfile, canManageBusinessProfile,
-    openBusinessProfileDrawer, closeBusinessProfileDrawer, updateSeedPrompt,
-    handleSaveBusinessProfile, setBrandName, setWebsiteUrl, setPrimaryCategory,
-    setPrimaryLocation, setBusinessDescription,
+    businessProfileProject,
+    brandName,
+    websiteUrl,
+    primaryCategory,
+    primaryLocation,
+    businessDescription,
+    seedPrompts,
+    businessProfileError,
+    isLoadingBusinessProfile,
+    isSavingBusinessProfile,
+    canManageBusinessProfile,
+    openBusinessProfileDrawer,
+    closeBusinessProfileDrawer,
+    updateSeedPrompt,
+    handleSaveBusinessProfile,
+    setBrandName,
+    setWebsiteUrl,
+    setPrimaryCategory,
+    setPrimaryLocation,
+    setBusinessDescription,
   } = useBusinessProfile()
 
-  const [createProject, createProjectDispatch] = useReducer(createProjectReducer, initialCreateProjectState)
-  const [runCrawl, runCrawlDispatch] = useReducer(runCrawlReducer, initialRunCrawlState)
+  const [createProject, createProjectDispatch] = useReducer(
+    createProjectReducer,
+    initialCreateProjectState
+  )
+  const [runCrawl, runCrawlDispatch] = useReducer(
+    runCrawlReducer,
+    initialRunCrawlState
+  )
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
     return getInitials(source, "R")
   }, [userEmail, userName])
 
-  const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0] ?? null
-  const crawlPanelProject = projects.find((project) => project.id === projectActions.hoveredProjectId) ?? activeProject
+  const activeProject =
+    projects.find((project) => project.id === activeProjectId) ??
+    projects[0] ??
+    null
+  const crawlPanelProject =
+    projects.find(
+      (project) => project.id === projectActions.hoveredProjectId
+    ) ?? activeProject
   const crawlPanelCrawls = crawlPanelProject
     ? [...(projectCrawls[crawlPanelProject.id] ?? [])].sort(
-        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left),
+        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       )
     : []
 
   const activeCrawls = activeProject
     ? [...(projectCrawls[activeProject.id] ?? [])].sort(
-        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left),
+        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       )
     : []
 
@@ -239,7 +281,10 @@ export function AppNavbar({
     const trimmedBaseUrl = createProject.projectBaseUrl.trim()
 
     if (!trimmedName || !trimmedBaseUrl) {
-      createProjectDispatch({ type: "SET_ERROR", error: "Project name and base URL are required." })
+      createProjectDispatch({
+        type: "SET_ERROR",
+        error: "Project name and base URL are required.",
+      })
       return
     }
 
@@ -248,7 +293,7 @@ export function AppNavbar({
     try {
       const createdProject = await clientApiPost<ProjectResponse>(
         `/organizations/${organizationId}/projects`,
-        { name: trimmedName, base_url: trimmedBaseUrl },
+        { name: trimmedName, base_url: trimmedBaseUrl }
       )
 
       createProjectDispatch({ type: "CREATED" })
@@ -260,7 +305,8 @@ export function AppNavbar({
     } catch (error) {
       createProjectDispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to create project.",
+        error:
+          error instanceof Error ? error.message : "Unable to create project.",
       })
     }
   }
@@ -271,7 +317,10 @@ export function AppNavbar({
 
     const parsedMaxDepth = Number(runCrawl.maxDepth)
     const parsedFetchTimeoutSeconds = Number(runCrawl.fetchTimeoutSeconds)
-    const validationError = getCrawlValidationError(parsedMaxDepth, parsedFetchTimeoutSeconds)
+    const validationError = getCrawlValidationError(
+      parsedMaxDepth,
+      parsedFetchTimeoutSeconds
+    )
     if (validationError) {
       runCrawlDispatch({ type: "SET_ERROR", error: validationError })
       return
@@ -280,19 +329,23 @@ export function AppNavbar({
     runCrawlDispatch({ type: "SET_STARTING" })
 
     try {
-      await clientApiPost<CrawlResponse>(`/projects/${activeProjectId}/crawls`, {
-        config_snapshot: {
-          max_depth: parsedMaxDepth,
-          fetch_timeout_seconds: parsedFetchTimeoutSeconds,
-        },
-      })
+      await clientApiPost<CrawlResponse>(
+        `/projects/${activeProjectId}/crawls`,
+        {
+          config_snapshot: {
+            max_depth: parsedMaxDepth,
+            fetch_timeout_seconds: parsedFetchTimeoutSeconds,
+          },
+        }
+      )
       onCrawlStart()
       runCrawlDispatch({ type: "STARTED" })
       revalidator.revalidate()
     } catch (error) {
       runCrawlDispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to start crawl.",
+        error:
+          error instanceof Error ? error.message : "Unable to start crawl.",
       })
     }
   }
@@ -302,7 +355,10 @@ export function AppNavbar({
       <header className="w-full">
         <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 py-4">
           <div className="flex min-w-0 items-center">
-            <Tabs onValueChange={(value) => onViewChange(value as DashboardView)} value={view}>
+            <Tabs
+              onValueChange={(value) => onViewChange(value as DashboardView)}
+              value={view}
+            >
               <TabsList>
                 <TabsTrigger value="revserp-audit">Revserp Audit</TabsTrigger>
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
@@ -317,19 +373,25 @@ export function AppNavbar({
           </div>
 
           <div className="flex items-center justify-center gap-3">
-            <Button className="w-72 justify-between" onClick={() => setIsProjectMenuOpen(true)} variant="outline">
+            <Button
+              className="w-72 justify-between"
+              onClick={() => setIsProjectMenuOpen(true)}
+              variant="outline"
+            >
               <span className="flex min-w-0 items-center gap-2 truncate">
                 <SearchIcon data-icon="inline-start" />
-                <span className="truncate">{activeProject?.name || "Search projects"}</span>
+                <span className="truncate">
+                  {activeProject?.name || "Search projects"}
+                </span>
               </span>
               <ChevronsUpDownIcon data-icon="inline-end" />
             </Button>
 
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="outline" />}
-              >
-                {isCrawlRunning ? <CompileLoader className="text-foreground" size={18} /> : null}
+              <DropdownMenuTrigger render={<Button variant="outline" />}>
+                {isCrawlRunning ? (
+                  <CompileLoader className="text-foreground" size={18} />
+                ) : null}
                 Run Crawl
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-56">
@@ -343,36 +405,66 @@ export function AppNavbar({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!activeProject}
-                    onClick={() => activeProject && handleOpenBusinessProfileDrawer(activeProject)}
+                    onClick={() =>
+                      activeProject &&
+                      handleOpenBusinessProfileDrawer(activeProject)
+                    }
                   >
                     <Building2Icon />
                     Business Profile
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuSub>
-                    <DropdownMenuSubTrigger disabled={activeCrawls.length === 0}>
+                    <DropdownMenuSubTrigger
+                      disabled={activeCrawls.length === 0}
+                    >
                       <DownloadIcon />
                       Export Crawl
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-52">
                       {activeCrawls.length === 0 ? (
-                        <DropdownMenuItem disabled>No crawls available</DropdownMenuItem>
+                        <DropdownMenuItem disabled>
+                          No crawls available
+                        </DropdownMenuItem>
                       ) : (
                         activeCrawls.map((crawl) => (
                           <DropdownMenuSub key={crawl.id}>
-                            <DropdownMenuSubTrigger disabled={crawl.status !== "completed" || projectActions.exportingCrawlId !== null}>
-                              <span className="truncate">{formatCrawlDateTime(crawl)}</span>
+                            <DropdownMenuSubTrigger
+                              disabled={
+                                crawl.status !== "completed" ||
+                                projectActions.exportingCrawlId !== null
+                              }
+                            >
+                              <span className="truncate">
+                                {formatCrawlDateTime(crawl)}
+                              </span>
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent className="w-24">
                               <DropdownMenuItem
-                                disabled={crawl.status !== "completed" || projectActions.exportingCrawlId !== null}
-                                onClick={() => { void projectActions.handleExportCrawl(crawl, "xlsx") }}
+                                disabled={
+                                  crawl.status !== "completed" ||
+                                  projectActions.exportingCrawlId !== null
+                                }
+                                onClick={() => {
+                                  void projectActions.handleExportCrawl(
+                                    crawl,
+                                    "xlsx"
+                                  )
+                                }}
                               >
                                 XLSX
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={crawl.status !== "completed" || projectActions.exportingCrawlId !== null}
-                                onClick={() => { void projectActions.handleExportCrawl(crawl, "csv") }}
+                                disabled={
+                                  crawl.status !== "completed" ||
+                                  projectActions.exportingCrawlId !== null
+                                }
+                                onClick={() => {
+                                  void projectActions.handleExportCrawl(
+                                    crawl,
+                                    "csv"
+                                  )
+                                }}
                               >
                                 CSV
                               </DropdownMenuItem>
@@ -390,7 +482,9 @@ export function AppNavbar({
           <div className="flex justify-end">
             <ProfileMenu
               initials={initials}
-              isActiveOrganizationOwner={workspaceActions.isActiveOrganizationOwner}
+              isActiveOrganizationOwner={
+                workspaceActions.isActiveOrganizationOwner
+              }
               workspaceState={workspaceActions.workspaceState}
               organizationId={organizationId}
               organizations={organizations}
@@ -400,7 +494,9 @@ export function AppNavbar({
               onInviteOpen={workspaceActions.openInviteDialog}
               onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
               onLogout={() => void workspaceActions.handleLogout()}
-              onSelectOrganization={(value) => void workspaceActions.handleSelectOrganization(value)}
+              onSelectOrganization={(value) =>
+                void workspaceActions.handleSelectOrganization(value)
+              }
             />
           </div>
         </div>
@@ -414,21 +510,40 @@ export function AppNavbar({
         isStartingCrawl={runCrawl.isStartingCrawl}
         maxDepth={runCrawl.maxDepth}
         runCrawlError={runCrawl.runCrawlError}
-        onFetchTimeoutSecondsChange={(value) => runCrawlDispatch({ type: "SET_FETCH_TIMEOUT", value })}
-        onMaxDepthChange={(value) => runCrawlDispatch({ type: "SET_MAX_DEPTH", value })}
-        onOpenChange={(open) => runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })}
+        onFetchTimeoutSecondsChange={(value) =>
+          runCrawlDispatch({ type: "SET_FETCH_TIMEOUT", value })
+        }
+        onMaxDepthChange={(value) =>
+          runCrawlDispatch({ type: "SET_MAX_DEPTH", value })
+        }
+        onOpenChange={(open) =>
+          runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })
+        }
         onSubmit={handleRunCrawl}
       />
 
       <AppNavbarDialogs
         activeProjectId={activeProjectId}
         businessProfile={{
-          businessProfileProject, brandName, websiteUrl, primaryCategory,
-          primaryLocation, businessDescription, seedPrompts, businessProfileError,
-          isLoadingBusinessProfile, isSavingBusinessProfile, canManageBusinessProfile,
-          closeBusinessProfileDrawer, updateSeedPrompt,
-          handleSaveBusinessProfile, setBrandName, setWebsiteUrl, setPrimaryCategory,
-          setPrimaryLocation, setBusinessDescription,
+          businessProfileProject,
+          brandName,
+          websiteUrl,
+          primaryCategory,
+          primaryLocation,
+          businessDescription,
+          seedPrompts,
+          businessProfileError,
+          isLoadingBusinessProfile,
+          isSavingBusinessProfile,
+          canManageBusinessProfile,
+          closeBusinessProfileDrawer,
+          updateSeedPrompt,
+          handleSaveBusinessProfile,
+          setBrandName,
+          setWebsiteUrl,
+          setPrimaryCategory,
+          setPrimaryLocation,
+          setBusinessDescription,
         }}
         crawlPanelCrawls={crawlPanelCrawls}
         createProject={createProject}
@@ -447,14 +562,14 @@ export function AppNavbar({
   )
 }
 
-
-
 // --- Dialogs ---
 
 type AppNavbarDialogsProps = {
   activeProjectId: AppNavbarProps["activeProjectId"]
   businessProfile: {
-    businessProfileProject: ReturnType<typeof useBusinessProfile>["businessProfileProject"]
+    businessProfileProject: ReturnType<
+      typeof useBusinessProfile
+    >["businessProfileProject"]
     brandName: string
     websiteUrl: string
     primaryCategory: string
@@ -467,7 +582,9 @@ type AppNavbarDialogsProps = {
     canManageBusinessProfile: boolean
     closeBusinessProfileDrawer: () => void
     updateSeedPrompt: (index: number, value: string) => void
-    handleSaveBusinessProfile: (event: FormEvent<HTMLFormElement>) => Promise<void>
+    handleSaveBusinessProfile: (
+      event: FormEvent<HTMLFormElement>
+    ) => Promise<void>
     setBrandName: (v: string) => void
     setWebsiteUrl: (v: string) => void
     setPrimaryCategory: (v: string) => void
@@ -505,12 +622,25 @@ function AppNavbarDialogs({
   workspaceActions,
 }: AppNavbarDialogsProps) {
   const {
-    businessProfileProject, brandName, websiteUrl, primaryCategory,
-    primaryLocation, businessDescription, seedPrompts, businessProfileError,
-    isLoadingBusinessProfile, isSavingBusinessProfile, canManageBusinessProfile,
-    closeBusinessProfileDrawer, updateSeedPrompt,
-    handleSaveBusinessProfile, setBrandName, setWebsiteUrl, setPrimaryCategory,
-    setPrimaryLocation, setBusinessDescription,
+    businessProfileProject,
+    brandName,
+    websiteUrl,
+    primaryCategory,
+    primaryLocation,
+    businessDescription,
+    seedPrompts,
+    businessProfileError,
+    isLoadingBusinessProfile,
+    isSavingBusinessProfile,
+    canManageBusinessProfile,
+    closeBusinessProfileDrawer,
+    updateSeedPrompt,
+    handleSaveBusinessProfile,
+    setBrandName,
+    setWebsiteUrl,
+    setPrimaryCategory,
+    setPrimaryLocation,
+    setBusinessDescription,
   } = businessProfile
 
   return (
@@ -519,6 +649,7 @@ function AppNavbarDialogs({
         activeProjectId={activeProjectId}
         crawlPanelCrawls={crawlPanelCrawls}
         currentCrawl={currentCrawl}
+        cancellingCrawlId={projectActions.cancellingCrawlId}
         deletingCrawlId={projectActions.deletingCrawlId}
         deletingProjectId={projectActions.deletingProjectId}
         exportFormat={projectActions.exportFormat}
@@ -526,15 +657,22 @@ function AppNavbarDialogs({
         isOpen={isProjectMenuOpen}
         projectActionError={projectActions.projectActionError}
         projects={projects}
+        onCancelCrawl={(crawl) => void projectActions.handleCancelCrawl(crawl)}
         onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
         onDeleteCrawl={projectActions.openDeleteCrawlDialog}
         onDeleteProject={projectActions.openDeleteProjectDialog}
-        onExportCrawl={(crawl, format) => void projectActions.handleExportCrawl(crawl, format)}
+        onExportCrawl={(crawl, format) =>
+          void projectActions.handleExportCrawl(crawl, format)
+        }
         onExportFormatChange={projectActions.onExportFormatChange}
-        onOpenBusinessProfile={(project) => void handleOpenBusinessProfileDrawer(project)}
+        onOpenBusinessProfile={(project) =>
+          void handleOpenBusinessProfileDrawer(project)
+        }
         onOpenChange={setIsProjectMenuOpen}
         onProjectHover={projectActions.onProjectHover}
-        onSelectProject={(projectId, crawlId) => void handleSelectProject(projectId, crawlId)}
+        onSelectProject={(projectId, crawlId) =>
+          void handleSelectProject(projectId, crawlId)
+        }
       />
 
       <BusinessProfileDrawer
@@ -565,9 +703,15 @@ function AppNavbarDialogs({
         isOpen={createProject.isCreateProjectOpen}
         projectBaseUrl={createProject.projectBaseUrl}
         projectName={createProject.projectName}
-        onBaseUrlChange={(value) => createProjectDispatch({ type: "SET_BASE_URL", value })}
-        onNameChange={(value) => createProjectDispatch({ type: "SET_NAME", value })}
-        onOpenChange={(open) => createProjectDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })}
+        onBaseUrlChange={(value) =>
+          createProjectDispatch({ type: "SET_BASE_URL", value })
+        }
+        onNameChange={(value) =>
+          createProjectDispatch({ type: "SET_NAME", value })
+        }
+        onOpenChange={(open) =>
+          createProjectDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })
+        }
         onSubmit={handleCreateProject}
       />
 
@@ -625,4 +769,3 @@ function AppNavbarDialogs({
 }
 
 export type { DashboardView }
-

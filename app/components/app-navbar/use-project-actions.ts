@@ -2,8 +2,14 @@
 
 import { useReducer } from "react"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
-import { buildApiUrl, clientApiDelete } from "~/lib/api"
-import { readExportError, getExportFilename, formatCrawlDate, getProjectFilenameSegment, downloadBlob } from "./utils"
+import { buildApiUrl, clientApiDelete, clientApiPost } from "~/lib/api"
+import {
+  readExportError,
+  getExportFilename,
+  formatCrawlDate,
+  getProjectFilenameSegment,
+  downloadBlob,
+} from "./utils"
 import type { ExportFormat } from "./types"
 
 // --- State ---
@@ -17,6 +23,7 @@ type ProjectActionState = {
   deletingProjectId: string | null
   crawlPendingDelete: CrawlResponse | null
   deletingCrawlId: string | null
+  cancellingCrawlId: string | null
   exportingCrawlId: string | null
   hoveredProjectId: string | null
   exportFormat: ExportFormat
@@ -29,6 +36,7 @@ const INITIAL_STATE: ProjectActionState = {
   deletingProjectId: null,
   crawlPendingDelete: null,
   deletingCrawlId: null,
+  cancellingCrawlId: null,
   exportingCrawlId: null,
   hoveredProjectId: null,
   exportFormat: "xlsx",
@@ -45,6 +53,8 @@ type ProjectActionEvent =
   | { type: "OPEN_DELETE_CRAWL"; crawl: CrawlResponse }
   | { type: "DELETE_CRAWL_START" }
   | { type: "DELETE_CRAWL_DONE" }
+  | { type: "CANCEL_CRAWL_START"; id: string }
+  | { type: "CANCEL_CRAWL_DONE" }
   | { type: "SET_EXPORTING_CRAWL_ID"; id: string | null }
   | { type: "SET_HOVERED_PROJECT_ID"; id: string | null }
   | { type: "SET_EXPORT_FORMAT"; format: ExportFormat }
@@ -52,7 +62,7 @@ type ProjectActionEvent =
 
 function projectActionReducer(
   state: ProjectActionState,
-  event: ProjectActionEvent,
+  event: ProjectActionEvent
 ): ProjectActionState {
   switch (event.type) {
     case "SET_ERROR":
@@ -68,7 +78,10 @@ function projectActionReducer(
         deletingProjectId: null,
       }
     case "DELETE_PROJECT_START":
-      return { ...state, deletingProjectId: state.projectPendingDelete?.id ?? null }
+      return {
+        ...state,
+        deletingProjectId: state.projectPendingDelete?.id ?? null,
+      }
     case "DELETE_PROJECT_DONE":
       return {
         ...state,
@@ -94,6 +107,10 @@ function projectActionReducer(
         crawlPendingDelete: null,
         deletingCrawlId: null,
       }
+    case "CANCEL_CRAWL_START":
+      return { ...state, projectActionError: "", cancellingCrawlId: event.id }
+    case "CANCEL_CRAWL_DONE":
+      return { ...state, cancellingCrawlId: null }
     case "SET_EXPORTING_CRAWL_ID":
       return { ...state, exportingCrawlId: event.id }
     case "SET_HOVERED_PROJECT_ID":
@@ -135,10 +152,12 @@ export function useProjectActions({
     dispatch({ type: "DELETE_PROJECT_START" })
 
     try {
-      await clientApiDelete<{ ok: boolean }>(`/projects/${state.projectPendingDelete.id}`)
+      await clientApiDelete<{ ok: boolean }>(
+        `/projects/${state.projectPendingDelete.id}`
+      )
 
       const remainingProjects = projects.filter(
-        (project) => project.id !== state.projectPendingDelete!.id,
+        (project) => project.id !== state.projectPendingDelete!.id
       )
 
       if (state.projectPendingDelete.id === activeProjectId) {
@@ -159,7 +178,8 @@ export function useProjectActions({
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to delete project.",
+        error:
+          error instanceof Error ? error.message : "Unable to delete project.",
       })
       dispatch({ type: "DELETE_PROJECT_DONE" })
     }
@@ -176,7 +196,9 @@ export function useProjectActions({
     dispatch({ type: "DELETE_CRAWL_START" })
 
     try {
-      await clientApiDelete<{ ok: boolean }>(`/crawls/${state.crawlPendingDelete.id}`)
+      await clientApiDelete<{ ok: boolean }>(
+        `/crawls/${state.crawlPendingDelete.id}`
+      )
       revalidator.revalidate()
 
       const searchParams = new URLSearchParams(location.search)
@@ -189,15 +211,40 @@ export function useProjectActions({
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to delete crawl.",
+        error:
+          error instanceof Error ? error.message : "Unable to delete crawl.",
       })
       dispatch({ type: "DELETE_CRAWL_DONE" })
     }
   }
 
+  async function handleCancelCrawl(crawl: CrawlResponse) {
+    if (state.cancellingCrawlId) return
+    if (crawl.status !== "queued" && crawl.status !== "running") return
+
+    dispatch({ type: "CLEAR_ERROR" })
+    dispatch({ type: "CANCEL_CRAWL_START", id: crawl.id })
+
+    try {
+      await clientApiPost<{ ok: boolean }>(`/crawls/${crawl.id}/cancel`, {})
+      revalidator.revalidate()
+      dispatch({ type: "CANCEL_CRAWL_DONE" })
+    } catch (error) {
+      dispatch({
+        type: "SET_ERROR",
+        error:
+          error instanceof Error ? error.message : "Unable to cancel crawl.",
+      })
+      dispatch({ type: "CANCEL_CRAWL_DONE" })
+    }
+  }
+
   async function handleExportCrawl(crawl: CrawlResponse, format: ExportFormat) {
     if (crawl.status !== "completed" || state.exportingCrawlId) {
-      dispatch({ type: "SET_ERROR", error: "Only completed crawls can be exported." })
+      dispatch({
+        type: "SET_ERROR",
+        error: "Only completed crawls can be exported.",
+      })
       return
     }
 
@@ -207,7 +254,7 @@ export function useProjectActions({
     try {
       const response = await fetch(
         buildApiUrl(`/crawls/${crawl.id}/score-breakdown/export.${format}`),
-        { credentials: "include" },
+        { credentials: "include" }
       )
 
       if (!response.ok) {
@@ -218,13 +265,16 @@ export function useProjectActions({
       const project = projects.find((item) => item.id === crawl.project_id)
       const filename = getExportFilename(
         response.headers.get("content-disposition"),
-        `${getProjectFilenameSegment(project)}-${formatCrawlDate(crawl)}-issues.${format}`,
+        `${getProjectFilenameSegment(project)}-${formatCrawlDate(crawl)}-issues.${format}`
       )
       downloadBlob(blob, filename)
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to export crawl issues.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to export crawl issues.",
       })
     } finally {
       dispatch({ type: "SET_EXPORTING_CRAWL_ID", id: null })
@@ -242,6 +292,7 @@ export function useProjectActions({
     crawlPendingDelete: state.crawlPendingDelete,
     isDeleteCrawlOpen,
     deletingCrawlId: state.deletingCrawlId,
+    cancellingCrawlId: state.cancellingCrawlId,
     exportingCrawlId: state.exportingCrawlId,
     hoveredProjectId: state.hoveredProjectId,
     exportFormat: state.exportFormat,
@@ -249,9 +300,12 @@ export function useProjectActions({
     handleDeleteProject,
     openDeleteCrawlDialog,
     handleDeleteCrawl,
+    handleCancelCrawl,
     handleExportCrawl,
-    onExportFormatChange: (format: ExportFormat) => dispatch({ type: "SET_EXPORT_FORMAT", format }),
-    onProjectHover: (id: string | null) => dispatch({ type: "SET_HOVERED_PROJECT_ID", id }),
+    onExportFormatChange: (format: ExportFormat) =>
+      dispatch({ type: "SET_EXPORT_FORMAT", format }),
+    onProjectHover: (id: string | null) =>
+      dispatch({ type: "SET_HOVERED_PROJECT_ID", id }),
     closeDialog: () => dispatch({ type: "CLOSE_DIALOG" }),
   }
 }

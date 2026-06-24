@@ -1,4 +1,4 @@
-import { CheckIcon, DownloadIcon, TrashIcon } from "lucide-react"
+import { BanIcon, CheckIcon, DownloadIcon, TrashIcon } from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
 import {
@@ -24,8 +24,10 @@ type CrawlContextRowProps = {
   disabled: boolean
   exportFormat: ExportFormat
   isActive: boolean
+  isCancelling: boolean
   isDeleting: boolean
   isExporting: boolean
+  onCancel: () => void
   onDelete: () => void
   onExport: (format: ExportFormat) => void
   onFormatChange: (format: ExportFormat) => void
@@ -37,14 +39,17 @@ export function CrawlContextRow({
   disabled,
   exportFormat,
   isActive,
+  isCancelling,
   isDeleting,
   isExporting,
+  onCancel,
   onDelete,
   onExport,
   onFormatChange,
   onSelect,
 }: CrawlContextRowProps) {
   const canExport = crawl.status === "completed"
+  const canCancel = crawl.status === "queued" || crawl.status === "running"
   const canDelete = crawl.status !== "queued" && crawl.status !== "running"
 
   return (
@@ -58,10 +63,14 @@ export function CrawlContextRow({
         >
           {isActive ? <CheckIcon className="size-4" /> : null}
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{formatCrawlDateTime(crawl)}</p>
-            <p className="truncate text-xs text-muted-foreground">{formatCrawlStats(crawl)}</p>
+            <p className="truncate text-sm font-medium">
+              {formatCrawlDateTime(crawl)}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {formatCrawlStats(crawl)}
+            </p>
           </div>
-          <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+          <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase">
             {crawl.status}
           </span>
         </button>
@@ -81,13 +90,18 @@ export function CrawlContextRow({
               <ContextMenuGroup>
                 <ContextMenuRadioGroup
                   value={exportFormat}
-                  onValueChange={(value) => onFormatChange(value as ExportFormat)}
+                  onValueChange={(value) =>
+                    onFormatChange(value as ExportFormat)
+                  }
                 >
                   <ContextMenuRadioItem value="xlsx">XLSX</ContextMenuRadioItem>
                   <ContextMenuRadioItem value="csv">CSV</ContextMenuRadioItem>
                 </ContextMenuRadioGroup>
                 <ContextMenuSeparator />
-                <ContextMenuItem disabled={!canExport || disabled} onClick={() => onExport(exportFormat)}>
+                <ContextMenuItem
+                  disabled={!canExport || disabled}
+                  onClick={() => onExport(exportFormat)}
+                >
                   {isExporting ? (
                     <CompileLoader className="text-foreground" size={16} />
                   ) : (
@@ -98,8 +112,25 @@ export function CrawlContextRow({
               </ContextMenuGroup>
             </ContextMenuSubContent>
           </ContextMenuSub>
+          {canCancel ? (
+            <>
+              <ContextMenuSeparator />
+              <ContextMenuItem disabled={isCancelling} onClick={onCancel}>
+                {isCancelling ? (
+                  <CompileLoader className="text-foreground" size={16} />
+                ) : (
+                  <BanIcon />
+                )}
+                Cancel crawl
+              </ContextMenuItem>
+            </>
+          ) : null}
           <ContextMenuSeparator />
-          <ContextMenuItem disabled={!canDelete || disabled} onClick={onDelete} variant="destructive">
+          <ContextMenuItem
+            disabled={!canDelete || disabled}
+            onClick={onDelete}
+            variant="destructive"
+          >
             {isDeleting ? (
               <CompileLoader className="text-destructive" size={16} />
             ) : (

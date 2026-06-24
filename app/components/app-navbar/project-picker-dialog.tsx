@@ -33,6 +33,7 @@ type ProjectPickerDialogProps = {
   activeProjectId?: string | null
   crawlPanelCrawls: CrawlResponse[]
   currentCrawl: CrawlResponse | null
+  cancellingCrawlId: string | null
   deletingCrawlId: string | null
   deletingProjectId: string | null
   exportFormat: ExportFormat
@@ -40,6 +41,7 @@ type ProjectPickerDialogProps = {
   isOpen: boolean
   projectActionError: string
   projects: ProjectResponse[]
+  onCancelCrawl: (crawl: CrawlResponse) => void
   onCreateProjectOpen: () => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onDeleteProject: (project: ProjectResponse) => void
@@ -55,6 +57,7 @@ export function ProjectPickerDialog({
   activeProjectId,
   crawlPanelCrawls,
   currentCrawl,
+  cancellingCrawlId,
   deletingCrawlId,
   deletingProjectId,
   exportFormat,
@@ -62,6 +65,7 @@ export function ProjectPickerDialog({
   isOpen,
   projectActionError,
   projects,
+  onCancelCrawl,
   onCreateProjectOpen,
   onDeleteCrawl,
   onDeleteProject,
@@ -99,9 +103,11 @@ export function ProjectPickerDialog({
           <CrawlPanel
             crawlPanelCrawls={crawlPanelCrawls}
             currentCrawl={currentCrawl}
+            cancellingCrawlId={cancellingCrawlId}
             deletingCrawlId={deletingCrawlId}
             exportFormat={exportFormat}
             exportingCrawlId={exportingCrawlId}
+            onCancelCrawl={onCancelCrawl}
             onDeleteCrawl={onDeleteCrawl}
             onExportCrawl={onExportCrawl}
             onExportFormatChange={onExportFormatChange}
@@ -237,9 +243,11 @@ function ProjectCommandItem({
 type CrawlPanelProps = {
   crawlPanelCrawls: CrawlResponse[]
   currentCrawl: CrawlResponse | null
+  cancellingCrawlId: string | null
   deletingCrawlId: string | null
   exportFormat: ExportFormat
   exportingCrawlId: string | null
+  onCancelCrawl: (crawl: CrawlResponse) => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
   onExportFormatChange: (format: ExportFormat) => void
@@ -249,9 +257,11 @@ type CrawlPanelProps = {
 function CrawlPanel({
   crawlPanelCrawls,
   currentCrawl,
+  cancellingCrawlId,
   deletingCrawlId,
   exportFormat,
   exportingCrawlId,
+  onCancelCrawl,
   onDeleteCrawl,
   onExportCrawl,
   onExportFormatChange,
@@ -268,9 +278,11 @@ function CrawlPanel({
                 disabled={deletingCrawlId !== null || exportingCrawlId !== null}
                 exportFormat={exportFormat}
                 isActive={crawl.id === currentCrawl?.id}
+                isCancelling={cancellingCrawlId === crawl.id}
                 isDeleting={deletingCrawlId === crawl.id}
                 isExporting={exportingCrawlId === crawl.id}
                 key={crawl.id}
+                onCancel={() => onCancelCrawl(crawl)}
                 onDelete={() => onDeleteCrawl(crawl)}
                 onExport={(format) => onExportCrawl(crawl, format)}
                 onFormatChange={onExportFormatChange}
