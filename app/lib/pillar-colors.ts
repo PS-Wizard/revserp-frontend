@@ -19,9 +19,9 @@ const PALETTES: Record<string, ColorStop[]> = {
     { h: 22, s: 60, l: 56 },
     { h: 10, s: 64, l: 56 },
     { h: 28, s: 58, l: 57 },
-    { h: 6,  s: 62, l: 55 },
+    { h: 6, s: 62, l: 55 },
     { h: 34, s: 56, l: 57 },
-    { h: 2,  s: 60, l: 54 },
+    { h: 2, s: 60, l: 54 },
   ],
   pagespeed: [
     { h: 162, s: 52, l: 47 },
@@ -52,5 +52,7 @@ export function getPillarChartColor(pillarId: string, index: number): string {
 
 /** Array of chart colors for all buckets in a pillar. */
 export function getPillarColors(pillarId: string, count: number): string[] {
-  return Array.from({ length: count }, (_, i) => getPillarChartColor(pillarId, i))
+  return Array.from({ length: count }, (_, i) =>
+    getPillarChartColor(pillarId, i)
+  )
 }

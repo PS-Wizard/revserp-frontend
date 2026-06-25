@@ -4,7 +4,10 @@ import { memo, useMemo, useRef } from "react"
 
 import type { ApexOptions } from "apexcharts"
 
-import type { CrawlResponse, ScoreBreakdownBucketResponse } from "~/lib/api.types"
+import type {
+  CrawlResponse,
+  ScoreBreakdownBucketResponse,
+} from "~/lib/api.types"
 import {
   Card,
   CardContent,
@@ -17,10 +20,11 @@ import { isNumber } from "~/components/trend-sparkline"
 import { formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 
-
 type CrawlBreakdown = {
   crawl: CrawlResponse
-  breakdown: { pillars: Array<{ id: string; buckets: ScoreBreakdownBucketResponse[] }> }
+  breakdown: {
+    pillars: Array<{ id: string; buckets: ScoreBreakdownBucketResponse[] }>
+  }
 }
 
 export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
@@ -38,32 +42,36 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
 
   const buckets = useMemo(
     () =>
-      crawlBreakdowns[0]?.breakdown.pillars.find((p) => p.id === pillarId)?.buckets ?? [],
+      crawlBreakdowns[0]?.breakdown.pillars.find((p) => p.id === pillarId)
+        ?.buckets ?? [],
     [crawlBreakdowns, pillarId]
   )
 
   const chartRows: Array<Record<string, number | null>> = useMemo(() => {
-    return [...crawlBreakdowns]
-      .reverse()
-      .map(({ crawl, breakdown }) => {
-        const pillar = breakdown.pillars.find((p) => p.id === pillarId)
-        const timestamp = new Date(crawl.completed_at ?? crawl.created_at).getTime()
-        return {
-          timestamp,
-          ...Object.fromEntries(
-            buckets.map((bucket) => [
-              bucket.id,
-              pillar?.buckets.find((b) => b.id === bucket.id)?.score ?? null,
-            ])
-          ),
-        }
-      })
+    return [...crawlBreakdowns].reverse().map(({ crawl, breakdown }) => {
+      const pillar = breakdown.pillars.find((p) => p.id === pillarId)
+      const timestamp = new Date(
+        crawl.completed_at ?? crawl.created_at
+      ).getTime()
+      return {
+        timestamp,
+        ...Object.fromEntries(
+          buckets.map((bucket) => [
+            bucket.id,
+            pillar?.buckets.find((b) => b.id === bucket.id)?.score ?? null,
+          ])
+        ),
+      }
+    })
   }, [crawlBreakdowns, pillarId, buckets])
 
   const series = useMemo(
     () =>
       buckets.map((bucket, index) => ({
-        name: formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, "")),
+        name: formatBucketLabel(
+          bucket.id,
+          bucket.label.replace(/^bucket_/, "")
+        ),
         color: getPillarChartColor(pillarId, index),
         data: chartRows.map((row) => ({ x: row.timestamp, y: row[bucket.id] })),
       })),
@@ -85,7 +93,10 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     const max = Math.min(100, Math.ceil(Math.max(...values) + 8))
     if (max - min < 18) {
       const mid = (min + max) / 2
-      return { min: Math.max(0, Math.floor(mid - 9)), max: Math.min(100, Math.ceil(mid + 9)) }
+      return {
+        min: Math.max(0, Math.floor(mid - 9)),
+        max: Math.min(100, Math.ceil(mid + 9)),
+      }
     }
     return { min, max }
   }, [chartRows, buckets])
@@ -140,7 +151,10 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
       },
       xaxis: {
         type: "datetime",
-        labels: { style: { colors: "rgba(255,255,255,0.45)" }, datetimeUTC: false },
+        labels: {
+          style: { colors: "rgba(255,255,255,0.45)" },
+          datetimeUTC: false,
+        },
         axisBorder: { show: false },
         axisTicks: { show: false },
         tooltip: { enabled: false },
@@ -158,7 +172,12 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     [buckets, yRange]
   )
 
-  useApexChart(chartContainerRef, chartOptions, series, chartRows.length > 0 && buckets.length > 0)
+  useApexChart(
+    chartContainerRef,
+    chartOptions,
+    series,
+    chartRows.length > 0 && buckets.length > 0
+  )
 
   return (
     <Card className="@container/card flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
@@ -180,18 +199,23 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
             <div className="min-h-[340px] w-full" ref={chartContainerRef} />
             <div className="mt-auto flex justify-center">
               <div className="flex flex-wrap justify-center gap-4 text-sm">
-              {buckets.map((bucket, index) => (
-                <div className="flex items-center gap-2" key={bucket.id}>
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: getPillarChartColor(pillarId, index) }}
-                  />
-                  <span className="truncate text-muted-foreground">
-                    {formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, ""))}
-                  </span>
-                </div>
-              ))}
-            </div>
+                {buckets.map((bucket, index) => (
+                  <div className="flex items-center gap-2" key={bucket.id}>
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{
+                        backgroundColor: getPillarChartColor(pillarId, index),
+                      }}
+                    />
+                    <span className="truncate text-muted-foreground">
+                      {formatBucketLabel(
+                        bucket.id,
+                        bucket.label.replace(/^bucket_/, "")
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -207,8 +231,6 @@ const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
   minute: "2-digit",
 })
-
-
 
 function formatTooltipDateTime(value: number) {
   return tooltipDateTimeFormatter.format(new Date(value))

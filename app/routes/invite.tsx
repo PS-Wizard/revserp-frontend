@@ -5,7 +5,13 @@ import { Asterisk } from "lucide-react"
 import { ApiError, clientApiPost, serverApiFetch } from "~/lib/api"
 import type { MeResponse } from "~/lib/api.types"
 import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card"
 
 export type InviteLookupResponse = {
   id: string
@@ -26,7 +32,13 @@ type LoaderData = {
   token: string
 }
 
-export async function loader({ params, request }: { params: { token?: string }; request: Request }) {
+export async function loader({
+  params,
+  request,
+}: {
+  params: { token?: string }
+  request: Request
+}) {
   if (!params.token) {
     throw redirect("/login")
   }
@@ -35,7 +47,10 @@ export async function loader({ params, request }: { params: { token?: string }; 
   let inviteErrorMessage = ""
 
   try {
-    invite = await serverApiFetch<InviteLookupResponse>(`/invites/${params.token}`, request)
+    invite = await serverApiFetch<InviteLookupResponse>(
+      `/invites/${params.token}`,
+      request
+    )
   } catch (error) {
     if (error instanceof ApiError) {
       inviteErrorMessage = error.message
@@ -63,7 +78,8 @@ export async function loader({ params, request }: { params: { token?: string }; 
 }
 
 export default function InvitePage() {
-  const { invite, inviteErrorMessage, me, token } = useLoaderData<typeof loader>()
+  const { invite, inviteErrorMessage, me, token } =
+    useLoaderData<typeof loader>()
   const navigate = useNavigate()
   const [errorMessage, setErrorMessage] = useState("")
   const [isAcceptingInvite, setIsAcceptingInvite] = useState(false)
@@ -72,7 +88,8 @@ export default function InvitePage() {
   const loginPath = `/login?next=${encodeURIComponent(nextPath)}`
   const signupPath = `/signup?next=${encodeURIComponent(nextPath)}`
   const isAuthenticated = me !== null
-  const canAcceptInvite = invite !== null && invite.status === "active" && isAuthenticated
+  const canAcceptInvite =
+    invite !== null && invite.status === "active" && isAuthenticated
   const statusMessage = getInviteStatusMessage(invite, inviteErrorMessage)
 
   async function acceptInvite() {
@@ -84,7 +101,10 @@ export default function InvitePage() {
     setIsAcceptingInvite(true)
 
     try {
-      await clientApiPost<{ ok: boolean; organization_id: string }>(`/invites/${token}/accept`, {})
+      await clientApiPost<{ ok: boolean; organization_id: string }>(
+        `/invites/${token}/accept`,
+        {}
+      )
       await navigate("/app", { replace: true })
     } catch (error) {
       if (error instanceof ApiError) {
@@ -95,7 +115,9 @@ export default function InvitePage() {
         return
       }
 
-      setErrorMessage(error instanceof Error ? error.message : "Unable to accept invite.")
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to accept invite."
+      )
     } finally {
       setIsAcceptingInvite(false)
     }
@@ -124,7 +146,9 @@ export default function InvitePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {errorMessage ? <p className="mb-6 text-sm text-destructive">{errorMessage}</p> : null}
+            {errorMessage ? (
+              <p className="mb-6 text-sm text-destructive">{errorMessage}</p>
+            ) : null}
 
             <div className="grid gap-3 sm:grid-cols-2">
               {!invite || invite.status !== "active" ? (
@@ -139,15 +163,29 @@ export default function InvitePage() {
                 />
               ) : !isAuthenticated ? (
                 <>
-                  <Button render={<Link to={loginPath}>Log in first</Link>} variant="outline" />
-                  <Button render={<Link to={signupPath}>Create account</Link>} />
+                  <Button
+                    render={<Link to={loginPath}>Log in first</Link>}
+                    variant="outline"
+                  />
+                  <Button
+                    render={<Link to={signupPath}>Create account</Link>}
+                  />
                 </>
               ) : (
                 <>
-                  <Button disabled={isAcceptingInvite} onClick={() => void acceptInvite()} type="button">
-                    {isAcceptingInvite ? "Accepting invite..." : "Accept invite"}
+                  <Button
+                    disabled={isAcceptingInvite}
+                    onClick={() => void acceptInvite()}
+                    type="button"
+                  >
+                    {isAcceptingInvite
+                      ? "Accepting invite..."
+                      : "Accept invite"}
                   </Button>
-                  <Button render={<Link to="/app">Reject / maybe later</Link>} variant="outline" />
+                  <Button
+                    render={<Link to="/app">Reject / maybe later</Link>}
+                    variant="outline"
+                  />
                 </>
               )}
             </div>
@@ -158,7 +196,10 @@ export default function InvitePage() {
   )
 }
 
-function getInviteStatusMessage(invite: InviteLookupResponse | null, inviteErrorMessage: string) {
+function getInviteStatusMessage(
+  invite: InviteLookupResponse | null,
+  inviteErrorMessage: string
+) {
   if (inviteErrorMessage) {
     return inviteErrorMessage
   }

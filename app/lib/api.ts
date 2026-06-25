@@ -11,7 +11,8 @@ export class ApiError extends Error {
 }
 
 export function buildApiUrl(path: string) {
-  const apiBaseUrl = import.meta.env.VITE_API_URL?.trim() || "http://localhost:8080"
+  const apiBaseUrl =
+    import.meta.env.VITE_API_URL?.trim() || "http://localhost:8080"
   return `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`
 }
 
@@ -83,7 +84,9 @@ async function parseApiResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const message =
-      extractErrorMessage(responseBody) || response.statusText || "Request failed"
+      extractErrorMessage(responseBody) ||
+      response.statusText ||
+      "Request failed"
     throw new ApiError(response.status, message, responseBody)
   }
 

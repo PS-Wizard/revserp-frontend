@@ -3,12 +3,14 @@ export function getTrendLabel(delta: number | null) {
     return "Flat since last crawl"
   }
 
-  return delta > 0 ? "Trending up since last crawl" : "Trending down since last crawl"
+  return delta > 0
+    ? "Trending up since last crawl"
+    : "Trending down since last crawl"
 }
 
 export function getTrendSummary(
   previousValue: number | undefined,
-  currentValue: number | undefined,
+  currentValue: number | undefined
 ) {
   if (currentValue === undefined) {
     return "Waiting for crawl data."
@@ -21,7 +23,10 @@ export function getTrendSummary(
   return `${formatScore(previousValue)} → ${formatScore(currentValue)}`
 }
 
-export function getRoundedDelta(value: number | undefined, previousValue: number | undefined) {
+export function getRoundedDelta(
+  value: number | undefined,
+  previousValue: number | undefined
+) {
   if (value === undefined || previousValue === undefined) {
     return null
   }

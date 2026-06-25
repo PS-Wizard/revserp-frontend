@@ -17,12 +17,15 @@ import { getCrawlTimestamp } from "~/lib/crawl"
 import { isNumber } from "~/components/trend-sparkline"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 
-
 const SCORE_SERIES = [
-  { key: "overall",   label: "Overall",    color: "rgba(255,255,255,0.50)" },
-  { key: "seo",       label: "SEO",        color: getPillarChartColor("seo", 0) },
-  { key: "aeo",       label: "AEO",        color: getPillarChartColor("aeo", 0) },
-  { key: "pagespeed", label: "PageSpeed",  color: getPillarChartColor("pagespeed", 0) },
+  { key: "overall", label: "Overall", color: "rgba(255,255,255,0.50)" },
+  { key: "seo", label: "SEO", color: getPillarChartColor("seo", 0) },
+  { key: "aeo", label: "AEO", color: getPillarChartColor("aeo", 0) },
+  {
+    key: "pagespeed",
+    label: "PageSpeed",
+    color: getPillarChartColor("pagespeed", 0),
+  },
 ] as const
 
 export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
@@ -37,7 +40,9 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
   const chartRows = useMemo(
     () =>
       [...crawls]
-        .sort((left, right) => getCrawlTimestamp(left) - getCrawlTimestamp(right))
+        .sort(
+          (left, right) => getCrawlTimestamp(left) - getCrawlTimestamp(right)
+        )
         .map((crawl) => ({
           timestamp: new Date(crawl.completed_at ?? crawl.created_at).getTime(),
           overall: crawl.overall_score ?? null,
@@ -154,16 +159,21 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
             <div className="min-h-[340px] w-full" ref={chartContainerRef} />
             <div className="mt-auto flex justify-center">
               <div className="flex flex-wrap justify-center gap-4 text-sm">
-              {SCORE_SERIES.map((scoreSeries) => (
-                <div className="flex items-center gap-2" key={scoreSeries.key}>
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: scoreSeries.color }}
-                  />
-                  <span className="truncate text-muted-foreground">{scoreSeries.label}</span>
-                </div>
-              ))}
-            </div>
+                {SCORE_SERIES.map((scoreSeries) => (
+                  <div
+                    className="flex items-center gap-2"
+                    key={scoreSeries.key}
+                  >
+                    <span
+                      className="size-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: scoreSeries.color }}
+                    />
+                    <span className="truncate text-muted-foreground">
+                      {scoreSeries.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -171,8 +181,6 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
     </Card>
   )
 })
-
-
 
 function getScoreRange(rows: Array<Record<string, number | null>>) {
   const values: number[] = []
@@ -211,10 +219,6 @@ const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 })
 
-
-
 function formatTooltipDateTime(value: number) {
   return tooltipDateTimeFormatter.format(new Date(value))
 }
-
-

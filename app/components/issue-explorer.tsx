@@ -1,6 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, useReducer } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useReducer,
+} from "react"
 import { ChevronLeftIcon, DownloadIcon } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,7 +43,6 @@ import { ApiError, buildApiUrl } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
 import { downloadBlob, getExportFilename } from "~/components/app-navbar/utils"
 
-
 // --- URL loading reducer ---
 
 type IssueUrlState = {
@@ -57,7 +63,10 @@ type IssueUrlAction =
   | { type: "LOAD_ERROR"; error: string }
   | { type: "CLEAR" }
 
-function issueUrlReducer(state: IssueUrlState, action: IssueUrlAction): IssueUrlState {
+function issueUrlReducer(
+  state: IssueUrlState,
+  action: IssueUrlAction
+): IssueUrlState {
   switch (action.type) {
     case "LOAD_START":
       return { urls: [], loading: true, error: "" }
@@ -92,7 +101,10 @@ type SelectionAction =
   | { type: "SET_ISSUE_URL_PAGE_SIZE"; payload: number }
   | { type: "CLEAR_ISSUE_TYPES"; payload?: undefined }
 
-function selectionReducer(state: SelectionState, action: SelectionAction): SelectionState {
+function selectionReducer(
+  state: SelectionState,
+  action: SelectionAction
+): SelectionState {
   switch (action.type) {
     case "SET_PILLAR_IDS":
       return { ...state, selectedPillarIds: action.payload }
@@ -146,10 +158,16 @@ export function IssueExplorer({
 }: {
   breakdown: ScoreBreakdownResponse | null
   initialPillarId?: string
-  onOpenAIConversation?: (conversationId: string, scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }) => void
+  onOpenAIConversation?: (
+    conversationId: string,
+    scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
+  ) => void
   projectId?: string
 }) {
-  const [selection, dispatchSelection] = useReducer(selectionReducer, initialSelectionState)
+  const [selection, dispatchSelection] = useReducer(
+    selectionReducer,
+    initialSelectionState
+  )
   const {
     selectedPillarIds,
     selectedBucketKeys,
@@ -160,8 +178,15 @@ export function IssueExplorer({
     issueUrlPageSize,
   } = selection
 
-  const [issueUrlState, dispatchIssueUrl] = useReducer(issueUrlReducer, initialIssueUrlState)
-  const { urls: mergedIssueUrls, loading: isLoadingIssueUrls, error: issueUrlsError } = issueUrlState
+  const [issueUrlState, dispatchIssueUrl] = useReducer(
+    issueUrlReducer,
+    initialIssueUrlState
+  )
+  const {
+    urls: mergedIssueUrls,
+    loading: isLoadingIssueUrls,
+    error: issueUrlsError,
+  } = issueUrlState
   const [pendingFixTargetKeys, setPendingFixTargetKeys] = useState<string[]>([])
 
   // Lazy-init refs to avoid creating objects on every render
@@ -183,7 +208,8 @@ export function IssueExplorer({
     initialPillarId,
     pillarOptions,
     selectedPillarIds,
-    setSelectedPillarIds: (ids: string[]) => dispatchSelection({ type: "SET_PILLAR_IDS", payload: ids }),
+    setSelectedPillarIds: (ids: string[]) =>
+      dispatchSelection({ type: "SET_PILLAR_IDS", payload: ids }),
   })
 
   const selectedPillars = useMemo(() => {
@@ -209,7 +235,8 @@ export function IssueExplorer({
     availableBucketScopes,
     initialPillarId,
     selectedBucketKeys,
-    setSelectedBucketKeys: (keys: string[]) => dispatchSelection({ type: "SET_BUCKET_KEYS", payload: keys }),
+    setSelectedBucketKeys: (keys: string[]) =>
+      dispatchSelection({ type: "SET_BUCKET_KEYS", payload: keys }),
   })
 
   const availableIssueScopes = useMemo<IssueScope[]>(() => {
@@ -247,7 +274,8 @@ export function IssueExplorer({
   syncSelectedIssueTypes({
     availableIssueScopes,
     selectedIssueTypeKeys,
-    onApply: (keys: string[]) => dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: keys }),
+    onApply: (keys: string[]) =>
+      dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: keys }),
   })
 
   const issueUrlCacheKey = [
@@ -265,16 +293,16 @@ export function IssueExplorer({
     dispatchIssueUrl({ type: "CLEAR" })
   }, [crawlId, dispatchIssueUrl, issueUrlsCache])
 
-  const onSelectedBucketKeysChange = useCallback(
-    (nextBucketKeys: string[]) => {
-      dispatchSelection({ type: "SET_BUCKET_KEYS", payload: nextBucketKeys })
-    },
-    []
-  )
+  const onSelectedBucketKeysChange = useCallback((nextBucketKeys: string[]) => {
+    dispatchSelection({ type: "SET_BUCKET_KEYS", payload: nextBucketKeys })
+  }, [])
 
   const onSelectedIssueTypeKeysChange = useCallback(
     (nextIssueTypeKeys: string[]) => {
-      dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: nextIssueTypeKeys })
+      dispatchSelection({
+        type: "SET_ISSUE_TYPE_KEYS",
+        payload: nextIssueTypeKeys,
+      })
     },
     []
   )
@@ -321,7 +349,10 @@ export function IssueExplorer({
         if (cancelled) return
         dispatchIssueUrl({
           type: "LOAD_ERROR",
-          error: error instanceof Error ? error.message : "Unable to load issue URLs.",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to load issue URLs.",
         })
       }
     }
@@ -399,11 +430,12 @@ export function IssueExplorer({
           action: onOpenAIConversation
             ? {
                 label: "Open chat",
-                onClick: () => onOpenAIConversation(conversation.id, {
-                  pillarId: target.pillarId,
-                  bucketIds: [target.bucketId],
-                  issueTypeIds: [target.issueTypeId],
-                }),
+                onClick: () =>
+                  onOpenAIConversation(conversation.id, {
+                    pillarId: target.pillarId,
+                    bucketIds: [target.bucketId],
+                    issueTypeIds: [target.issueTypeId],
+                  }),
               }
             : undefined,
         }),
@@ -454,15 +486,24 @@ export function IssueExplorer({
       selectedIssueTypeKeys={selectedIssueTypeKeys}
       selectedPillarIds={selectedPillarIds}
       selectedPillars={selectedPillars}
-      setIssueTypePageIndex={(v) => dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_INDEX", payload: v })}
-      setIssueTypePageSize={(v) => dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_SIZE", payload: v })}
-      setIssueUrlPageIndex={(v) => dispatchSelection({ type: "SET_ISSUE_URL_PAGE_INDEX", payload: v })}
-      setIssueUrlPageSize={(v) => dispatchSelection({ type: "SET_ISSUE_URL_PAGE_SIZE", payload: v })}
-      setSelectedPillarIds={(v) => dispatchSelection({ type: "SET_PILLAR_IDS", payload: v })}
+      setIssueTypePageIndex={(v) =>
+        dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_INDEX", payload: v })
+      }
+      setIssueTypePageSize={(v) =>
+        dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_SIZE", payload: v })
+      }
+      setIssueUrlPageIndex={(v) =>
+        dispatchSelection({ type: "SET_ISSUE_URL_PAGE_INDEX", payload: v })
+      }
+      setIssueUrlPageSize={(v) =>
+        dispatchSelection({ type: "SET_ISSUE_URL_PAGE_SIZE", payload: v })
+      }
+      setSelectedPillarIds={(v) =>
+        dispatchSelection({ type: "SET_PILLAR_IDS", payload: v })
+      }
     />
   )
 }
-
 
 // --- Sync helpers (pure computation, called from render) ---
 
@@ -566,18 +607,13 @@ function syncSelectedIssueTypes({
 }: SyncSelectedIssueTypesArgs) {
   const nextSelectedIssueTypeKeys = selectedIssueTypeKeys.filter(
     (issueTypeKey) =>
-      availableIssueScopes.some(
-        (issueScope) => issueScope.key === issueTypeKey
-      )
+      availableIssueScopes.some((issueScope) => issueScope.key === issueTypeKey)
   )
 
-  if (
-    !areStringArraysEqual(nextSelectedIssueTypeKeys, selectedIssueTypeKeys)
-  ) {
+  if (!areStringArraysEqual(nextSelectedIssueTypeKeys, selectedIssueTypeKeys)) {
     onApply(nextSelectedIssueTypeKeys)
   }
 }
-
 
 // --- Presentational sub-components ---
 
@@ -674,9 +710,12 @@ function IssueExplorerContent(props: IssueExplorerContentProps) {
     if (!crawlId) return
 
     const params = new URLSearchParams()
-    if (selectedPillarIds.length) params.set("pillar_ids", selectedPillarIds.join(","))
-    if (selectedBucketKeys.length) params.set("bucket_keys", selectedBucketKeys.join(","))
-    if (selectedIssueTypeKeys.length) params.set("issue_type_keys", selectedIssueTypeKeys.join(","))
+    if (selectedPillarIds.length)
+      params.set("pillar_ids", selectedPillarIds.join(","))
+    if (selectedBucketKeys.length)
+      params.set("bucket_keys", selectedBucketKeys.join(","))
+    if (selectedIssueTypeKeys.length)
+      params.set("issue_type_keys", selectedIssueTypeKeys.join(","))
 
     try {
       const response = await fetch(
@@ -705,7 +744,11 @@ function IssueExplorerContent(props: IssueExplorerContentProps) {
       )
       downloadBlob(blob, filename)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to export crawl issues.")
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to export crawl issues."
+      )
     }
   }, [crawlId, selectedPillarIds, selectedBucketKeys, selectedIssueTypeKeys])
 

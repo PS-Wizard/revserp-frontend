@@ -1,4 +1,9 @@
-import type { GSCDimensionTab, TableRow, TableSortColumn, TableSortDirection } from "./types"
+import type {
+  GSCDimensionTab,
+  TableRow,
+  TableSortColumn,
+  TableSortDirection,
+} from "./types"
 
 export type TableSortState = {
   column: TableSortColumn
@@ -8,7 +13,9 @@ export type TableSortState = {
 export function filterTableRows(rows: TableRow[], tableSearch: string) {
   const normalizedSearch = tableSearch.trim().toLowerCase()
   if (!normalizedSearch) return rows
-  return rows.filter((row) => row.label.toLowerCase().includes(normalizedSearch))
+  return rows.filter((row) =>
+    row.label.toLowerCase().includes(normalizedSearch)
+  )
 }
 
 export function sortTableRows(rows: TableRow[], tableSort: TableSortState) {
@@ -43,7 +50,10 @@ export function nextTableSortState(
   }
 }
 
-export function sortIndicator(currentSort: TableSortState, column: TableSortColumn) {
+export function sortIndicator(
+  currentSort: TableSortState,
+  column: TableSortColumn
+) {
   if (currentSort.column !== column) return "↕"
   return currentSort.direction === "asc" ? "↑" : "↓"
 }

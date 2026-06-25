@@ -70,7 +70,7 @@ export function getNextScopeState(
   breakdown: ScoreBreakdownResponse | null,
   selectedPillarId: string,
   selectedBucketIds: string[],
-  selectedIssueTypeIds: string[],
+  selectedIssueTypeIds: string[]
 ): AIScopeState | null {
   if (!breakdown?.pillars.length) {
     if (
@@ -128,7 +128,9 @@ export function getNextScopeState(
   }
 }
 
-export function newMessageFromResponse(message: AIMessageResponse): RevserpAIMessage {
+export function newMessageFromResponse(
+  message: AIMessageResponse
+): RevserpAIMessage {
   return {
     id: message.id,
     role: message.role,

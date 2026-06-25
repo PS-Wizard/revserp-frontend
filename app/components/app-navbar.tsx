@@ -113,6 +113,9 @@ const initialCreateProjectState: CreateProjectState = {
 type RunCrawlState = {
   isRunCrawlOpen: boolean
   maxDepth: string
+  maxPages: string
+  delayMs: string
+  jitterMs: string
   fetchTimeoutSeconds: string
   runCrawlError: string
   isStartingCrawl: boolean
@@ -122,6 +125,9 @@ type RunCrawlEvent =
   | { type: "OPEN" }
   | { type: "CLOSE" }
   | { type: "SET_MAX_DEPTH"; value: string }
+  | { type: "SET_MAX_PAGES"; value: string }
+  | { type: "SET_DELAY_MS"; value: string }
+  | { type: "SET_JITTER_MS"; value: string }
   | { type: "SET_FETCH_TIMEOUT"; value: string }
   | { type: "SET_ERROR"; error: string }
   | { type: "SET_STARTING" }
@@ -138,6 +144,12 @@ function runCrawlReducer(
       return { ...state, isRunCrawlOpen: false }
     case "SET_MAX_DEPTH":
       return { ...state, maxDepth: event.value }
+    case "SET_MAX_PAGES":
+      return { ...state, maxPages: event.value }
+    case "SET_DELAY_MS":
+      return { ...state, delayMs: event.value }
+    case "SET_JITTER_MS":
+      return { ...state, jitterMs: event.value }
     case "SET_FETCH_TIMEOUT":
       return { ...state, fetchTimeoutSeconds: event.value }
     case "SET_ERROR":
@@ -152,6 +164,9 @@ function runCrawlReducer(
 const initialRunCrawlState: RunCrawlState = {
   isRunCrawlOpen: false,
   maxDepth: "5",
+  maxPages: "",
+  delayMs: "",
+  jitterMs: "",
   fetchTimeoutSeconds: "10",
   runCrawlError: "",
   isStartingCrawl: false,
@@ -164,6 +179,7 @@ export function AppNavbar({
   currentCrawl,
   projectCrawls,
   isCrawlRunning,
+  crawlStatusLabel,
   onCrawlStart,
   organizationId,
   organizations,
@@ -326,6 +342,50 @@ export function AppNavbar({
       return
     }
 
+    // Max pages is optional: blank means unlimited; when provided it must be a positive integer.
+    const trimmedMaxPages = runCrawl.maxPages.trim()
+    let parsedMaxPages: number | undefined
+    if (trimmedMaxPages !== "") {
+      parsedMaxPages = Number(trimmedMaxPages)
+      if (!Number.isInteger(parsedMaxPages) || parsedMaxPages <= 0) {
+        runCrawlDispatch({
+          type: "SET_ERROR",
+          error: "Max pages must be a positive whole number, or left blank.",
+        })
+        return
+      }
+    }
+
+    // Delay is optional: blank means no delay; when provided it must be a positive integer.
+    const trimmedDelayMs = runCrawl.delayMs.trim()
+    let parsedDelayMs: number | undefined
+    if (trimmedDelayMs !== "") {
+      parsedDelayMs = Number(trimmedDelayMs)
+      if (!Number.isInteger(parsedDelayMs) || parsedDelayMs <= 0) {
+        runCrawlDispatch({
+          type: "SET_ERROR",
+          error:
+            "Delay must be a positive whole number of milliseconds, or left blank.",
+        })
+        return
+      }
+    }
+
+    // Jitter is optional: blank means no jitter; when provided it must be a positive integer.
+    const trimmedJitterMs = runCrawl.jitterMs.trim()
+    let parsedJitterMs: number | undefined
+    if (trimmedJitterMs !== "") {
+      parsedJitterMs = Number(trimmedJitterMs)
+      if (!Number.isInteger(parsedJitterMs) || parsedJitterMs <= 0) {
+        runCrawlDispatch({
+          type: "SET_ERROR",
+          error:
+            "Jitter must be a positive whole number of milliseconds, or left blank.",
+        })
+        return
+      }
+    }
+
     runCrawlDispatch({ type: "SET_STARTING" })
 
     try {
@@ -335,6 +395,15 @@ export function AppNavbar({
           config_snapshot: {
             max_depth: parsedMaxDepth,
             fetch_timeout_seconds: parsedFetchTimeoutSeconds,
+            ...(parsedMaxPages !== undefined
+              ? { max_pages: parsedMaxPages }
+              : {}),
+            ...(parsedDelayMs !== undefined
+              ? { request_delay_ms: parsedDelayMs }
+              : {}),
+            ...(parsedJitterMs !== undefined
+              ? { request_jitter_ms: parsedJitterMs }
+              : {}),
           },
         }
       )
@@ -392,7 +461,11 @@ export function AppNavbar({
                 {isCrawlRunning ? (
                   <CompileLoader className="text-foreground" size={18} />
                 ) : null}
-                Run Crawl
+                {isCrawlRunning
+                  ? crawlStatusLabel === "queued"
+                    ? "Queued"
+                    : "Crawling"
+                  : "Run Crawl"}
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-56">
                 <DropdownMenuGroup>
@@ -509,12 +582,24 @@ export function AppNavbar({
         isOpen={runCrawl.isRunCrawlOpen}
         isStartingCrawl={runCrawl.isStartingCrawl}
         maxDepth={runCrawl.maxDepth}
+        maxPages={runCrawl.maxPages}
+        delayMs={runCrawl.delayMs}
+        jitterMs={runCrawl.jitterMs}
         runCrawlError={runCrawl.runCrawlError}
         onFetchTimeoutSecondsChange={(value) =>
           runCrawlDispatch({ type: "SET_FETCH_TIMEOUT", value })
         }
         onMaxDepthChange={(value) =>
           runCrawlDispatch({ type: "SET_MAX_DEPTH", value })
+        }
+        onMaxPagesChange={(value) =>
+          runCrawlDispatch({ type: "SET_MAX_PAGES", value })
+        }
+        onDelayMsChange={(value) =>
+          runCrawlDispatch({ type: "SET_DELAY_MS", value })
+        }
+        onJitterMsChange={(value) =>
+          runCrawlDispatch({ type: "SET_JITTER_MS", value })
         }
         onOpenChange={(open) =>
           runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })

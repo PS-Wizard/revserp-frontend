@@ -229,6 +229,19 @@ export default function AppPage() {
       setIsStartingCrawl(false)
     }
   }, [activeRunningCrawl])
+
+  // Lock page scrolling while a crawl is in progress so the centered overlay
+  // stays put; the navbar remains interactive (it sits outside the dimmer).
+  useEffect(() => {
+    if (!isCrawlRunning) {
+      return
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isCrawlRunning])
   // Stabilize chart props so polling doesn't re-render charts when data is unchanged
   const chartCacheRef = useRef({
     crawlsKey: "",
@@ -307,6 +320,7 @@ export default function AppPage() {
         currentCrawl={currentCrawl}
         projectCrawls={projectCrawls}
         isCrawlRunning={isCrawlRunning}
+        crawlStatusLabel={crawlStatusLabel}
         onCrawlStart={() => setIsStartingCrawl(true)}
         onViewChange={setView}
         onSelectConversation={handleOpenAIConversation}
@@ -423,12 +437,21 @@ export default function AppPage() {
           </div>
 
           {isCrawlRunning ? (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-md">
-              <Card className="w-full max-w-md border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
+            <>
+              {/* Dimmer covers the content region only (below the navbar), so the
+                  navbar stays interactive while a crawl runs. */}
+              <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
+              {/* Card is fixed to the viewport center (~50vh) so it's visible without
+                  scrolling regardless of page height. */}
+              <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
                 <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
                   <CompileLoader className="text-foreground" size={56} />
                   <div className="flex flex-col gap-1">
-                    <h2 className="text-lg font-medium">Crawl in progress</h2>
+                    <h2 className="text-lg font-medium">
+                      {crawlStatusLabel === "queued"
+                        ? "Queued"
+                        : "Crawl in progress"}
+                    </h2>
                     <p className="text-sm text-muted-foreground">
                       {activeProject?.name || "This project"} is currently{" "}
                       {crawlStatusLabel}. Scores will refresh automatically when
@@ -437,7 +460,7 @@ export default function AppPage() {
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </>
           ) : null}
         </div>
       ) : view === "search-console" ? (

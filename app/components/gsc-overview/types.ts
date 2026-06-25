@@ -5,7 +5,12 @@ import type {
 
 export type GSCMetricKey = "clicks" | "impressions" | "ctr" | "position"
 export type GSCDimensionTab = "queries" | "pages" | "countries" | "devices"
-export type TableSortColumn = "label" | "clicks" | "impressions" | "ctr" | "position"
+export type TableSortColumn =
+  | "label"
+  | "clicks"
+  | "impressions"
+  | "ctr"
+  | "position"
 export type TableSortDirection = "asc" | "desc"
 
 export type TableRow = {
@@ -50,7 +55,8 @@ function metricValueForRows(
   rows: GSCSearchAnalyticsRowResponse[]
 ) {
   if (!rows.length) return 0
-  if (metricKey === "clicks") return rows.reduce((sum, row) => sum + row.clicks, 0)
+  if (metricKey === "clicks")
+    return rows.reduce((sum, row) => sum + row.clicks, 0)
   if (metricKey === "impressions") {
     return rows.reduce((sum, row) => sum + row.impressions, 0)
   }
@@ -62,7 +68,10 @@ function metricValueForRows(
 
   const totalImpressions = rows.reduce((sum, row) => sum + row.impressions, 0)
   if (totalImpressions <= 0) return 0
-  return rows.reduce((sum, row) => sum + row.position * row.impressions, 0) / totalImpressions
+  return (
+    rows.reduce((sum, row) => sum + row.position * row.impressions, 0) /
+    totalImpressions
+  )
 }
 
 export function buildMetricSummary(

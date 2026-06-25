@@ -15,8 +15,14 @@ import {
 } from "~/components/ui/dropdown-menu"
 import { TabsTrigger } from "~/components/ui/tabs"
 import { clientApiDelete, clientApiFetch } from "~/lib/api"
-import type { AIConversationResponse, AIConversationsResponse } from "~/lib/api.types"
-import { formatConversationTime, groupConversationsByDate } from "~/lib/ai-conversation"
+import type {
+  AIConversationResponse,
+  AIConversationsResponse,
+} from "~/lib/api.types"
+import {
+  formatConversationTime,
+  groupConversationsByDate,
+} from "~/lib/ai-conversation"
 
 import type { DashboardView } from "./types"
 
@@ -33,10 +39,15 @@ export function AiConversationsPopover({
   onSelectConversation,
   onDeleteConversation,
 }: AiConversationsPopoverProps) {
-  const [aiConversations, setAiConversations] = useState<AIConversationResponse[]>([])
-  const [isLoadingAiConversations, setIsLoadingAiConversations] = useState(false)
+  const [aiConversations, setAiConversations] = useState<
+    AIConversationResponse[]
+  >([])
+  const [isLoadingAiConversations, setIsLoadingAiConversations] =
+    useState(false)
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false)
-  const [deletingConversationId, setDeletingConversationId] = useState<string | null>(null)
+  const [deletingConversationId, setDeletingConversationId] = useState<
+    string | null
+  >(null)
 
   async function fetchAiConversations() {
     if (!activeProjectId) return

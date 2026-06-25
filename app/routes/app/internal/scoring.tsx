@@ -6,7 +6,11 @@ import type { LoaderFunctionArgs } from "react-router"
 import { clientApiPut } from "~/lib/api"
 import { serverApiFetch } from "~/lib/api"
 import { requireAuthenticatedUser } from "~/lib/auth.server"
-import type { ScoreBreakdownResponse, ScoringConfig, ScoringConfigResponse } from "~/lib/api.types"
+import type {
+  ScoreBreakdownResponse,
+  ScoringConfig,
+  ScoringConfigResponse,
+} from "~/lib/api.types"
 import { ScoringEditor } from "./scoring/editor"
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -16,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const scoringConfigResponse = await serverApiFetch<ScoringConfigResponse>(
     "/internal/scoring-config",
-    request,
+    request
   )
 
   let baselineBreakdown: ScoreBreakdownResponse | null = null
@@ -24,7 +28,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     try {
       baselineBreakdown = await serverApiFetch<ScoreBreakdownResponse>(
         `/crawls/${crawlId}/score-breakdown`,
-        request,
+        request
       )
     } catch {
       baselineBreakdown = null
@@ -62,7 +66,7 @@ export default function ScoringPage() {
           onSave={async (draftConfig) => {
             const response = await clientApiPut<ScoringConfigResponse>(
               "/internal/scoring-config",
-              { config: draftConfig },
+              { config: draftConfig }
             )
             return response.config
           }}

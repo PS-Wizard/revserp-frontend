@@ -15,10 +15,7 @@ import {
 import { Separator } from "~/components/ui/separator"
 import { GooglePSIDrawer } from "~/components/gsc-overview/google-psi-drawer"
 import type { GooglePSIStoredResult } from "~/lib/api.types"
-import type {
-  CrawlResponse,
-  ScoreBreakdownResponse,
-} from "~/lib/api.types"
+import type { CrawlResponse, ScoreBreakdownResponse } from "~/lib/api.types"
 import { formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import {
@@ -30,7 +27,6 @@ import {
   getTrendSummary,
 } from "~/components/trend-sparkline"
 
-
 export type CrawlBreakdown = {
   crawl: CrawlResponse
   breakdown: ScoreBreakdownResponse
@@ -40,7 +36,10 @@ type PillarAuditViewProps = {
   activeProjectName?: string
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
-  onOpenAIConversation?: (conversationId: string, scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }) => void
+  onOpenAIConversation?: (
+    conversationId: string,
+    scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
+  ) => void
   pillarId: string
   projectId?: string
   title: string
@@ -55,7 +54,9 @@ export const PillarAuditView = memo(function PillarAuditView({
   projectId,
   title,
 }: PillarAuditViewProps) {
-  const currentPillar = currentBreakdown?.pillars.find((pillar) => pillar.id === pillarId)
+  const currentPillar = currentBreakdown?.pillars.find(
+    (pillar) => pillar.id === pillarId
+  )
   const radialSegments =
     currentPillar?.buckets.map((bucket, index) => ({
       key: bucket.id,
@@ -79,7 +80,10 @@ export const PillarAuditView = memo(function PillarAuditView({
           pillarId={pillarId}
           psiResult={
             pillarId === "pagespeed"
-              ? (crawlBreakdowns[0]?.crawl?.google_psi_results as GooglePSIStoredResult[])?.[0] ?? null
+              ? ((
+                  crawlBreakdowns[0]?.crawl
+                    ?.google_psi_results as GooglePSIStoredResult[]
+                )?.[0] ?? null)
               : null
           }
         />
@@ -115,21 +119,30 @@ const BucketScoreCards = memo(function BucketScoreCards({
   psiResult: GooglePSIStoredResult | null
 }) {
   const [psiDrawerOpen, setPsiDrawerOpen] = useState(false)
-  const buckets = useMemo(() => getLatestPillarBuckets(crawlBreakdowns, pillarId), [crawlBreakdowns, pillarId])
-  const previousPillar = useMemo(
-    () => crawlBreakdowns[1]?.breakdown.pillars.find(
-      (pillar) => pillar.id === pillarId
-    ),
+  const buckets = useMemo(
+    () => getLatestPillarBuckets(crawlBreakdowns, pillarId),
     [crawlBreakdowns, pillarId]
   )
-  const chronologicalBreakdowns = useMemo(() => [...crawlBreakdowns].reverse(), [crawlBreakdowns])
+  const previousPillar = useMemo(
+    () =>
+      crawlBreakdowns[1]?.breakdown.pillars.find(
+        (pillar) => pillar.id === pillarId
+      ),
+    [crawlBreakdowns, pillarId]
+  )
+  const chronologicalBreakdowns = useMemo(
+    () => [...crawlBreakdowns].reverse(),
+    [crawlBreakdowns]
+  )
 
   if (!buckets.length) {
     return (
       <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader>
           <CardTitle>No bucket scores yet</CardTitle>
-          <CardDescription>Run a completed crawl to populate this view.</CardDescription>
+          <CardDescription>
+            Run a completed crawl to populate this view.
+          </CardDescription>
         </CardHeader>
       </Card>
     )
@@ -138,11 +151,14 @@ const BucketScoreCards = memo(function BucketScoreCards({
   return (
     <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       {buckets.map((bucket, index) => {
-        const previousBucket = previousPillar?.buckets.find((item) => item.id === bucket.id)
-        const series = chronologicalBreakdowns.map(({ breakdown }) =>
-          breakdown.pillars
-            .find((pillar) => pillar.id === pillarId)
-            ?.buckets.find((item) => item.id === bucket.id)?.score
+        const previousBucket = previousPillar?.buckets.find(
+          (item) => item.id === bucket.id
+        )
+        const series = chronologicalBreakdowns.map(
+          ({ breakdown }) =>
+            breakdown.pillars
+              .find((pillar) => pillar.id === pillarId)
+              ?.buckets.find((item) => item.id === bucket.id)?.score
         )
         const delta = getRoundedDelta(bucket.score, previousBucket?.score)
 
@@ -160,7 +176,9 @@ const BucketScoreCards = memo(function BucketScoreCards({
               }}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardDescription>{bucket.id === "psi_cwv" ? "Google PSI" : bucket.label}</CardDescription>
+                <CardDescription>
+                  {bucket.id === "psi_cwv" ? "Google PSI" : bucket.label}
+                </CardDescription>
                 {delta !== null && <TrendBadge delta={delta} />}
               </CardHeader>
               <div className="flex flex-1 items-center justify-center px-6 py-4">
@@ -192,12 +210,13 @@ const BucketScoreCards = memo(function BucketScoreCards({
   )
 })
 
-
-function getLatestPillarBuckets(crawlBreakdowns: CrawlBreakdown[], pillarId: string) {
+function getLatestPillarBuckets(
+  crawlBreakdowns: CrawlBreakdown[],
+  pillarId: string
+) {
   return (
-    crawlBreakdowns[0]?.breakdown.pillars.find((pillar) => pillar.id === pillarId)
-      ?.buckets ?? []
+    crawlBreakdowns[0]?.breakdown.pillars.find(
+      (pillar) => pillar.id === pillarId
+    )?.buckets ?? []
   )
 }
-
-

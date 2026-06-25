@@ -91,7 +91,11 @@ function useAIConversation({
   breakdown: ScoreBreakdownResponse | null
   openConversationId?: string | null
   projectId?: string
-  initialScope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] } | null
+  initialScope?: {
+    pillarId: string
+    bucketIds: string[]
+    issueTypeIds: string[]
+  } | null
 }) {
   const [scope, dispatchScope] = useReducer(scopeReducer, defaultScope)
   const {
@@ -355,7 +359,13 @@ function useAIConversation({
     }, 2000)
 
     return () => window.clearTimeout(timer)
-  }, [openConversationId, isLoadingMessages, messages.length, emptyPollCount, loadConversation])
+  }, [
+    openConversationId,
+    isLoadingMessages,
+    messages.length,
+    emptyPollCount,
+    loadConversation,
+  ])
 
   useEffect(() => {
     scrollContainerRef.current?.scrollTo({
@@ -503,7 +513,9 @@ function useAIConversation({
 
   const isLoadingConversation =
     isLoadingMessages ||
-    (messages.length === 0 && openConversationId !== null && emptyPollCount < MAX_EMPTY_POLLS)
+    (messages.length === 0 &&
+      openConversationId !== null &&
+      emptyPollCount < MAX_EMPTY_POLLS)
 
   return {
     prompt,
@@ -567,7 +579,11 @@ export function RevserpAIView({
   breakdown: ScoreBreakdownResponse | null
   openConversationId?: string | null
   projectId?: string
-  initialScope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] } | null
+  initialScope?: {
+    pillarId: string
+    bucketIds: string[]
+    issueTypeIds: string[]
+  } | null
 }) {
   const {
     prompt,
@@ -593,7 +609,12 @@ export function RevserpAIView({
     onPromptChange,
     scrollContainerRef,
     textareaRef,
-  } = useAIConversation({ breakdown, openConversationId, projectId, initialScope })
+  } = useAIConversation({
+    breakdown,
+    openConversationId,
+    projectId,
+    initialScope,
+  })
 
   if (!breakdown) {
     return <NoCrawlDataView />

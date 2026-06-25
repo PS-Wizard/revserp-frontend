@@ -48,8 +48,8 @@ export function GSCHeaderCard({
             Google Search Console
           </CardTitle>
           <CardDescription className="max-w-2xl pt-4 text-base leading-7">
-            Switch the connected property here, refresh the latest data, and work inside one
-            performance view.
+            Switch the connected property here, refresh the latest data, and
+            work inside one performance view.
           </CardDescription>
         </div>
 
@@ -70,7 +70,7 @@ export function GSCHeaderCard({
                       <div className="flex items-center gap-2">
                         <span className="truncate">{site.site_url}</span>
                         {site.site_url === selectedSite?.site_url ? (
-                          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
                             Connected
                           </span>
                         ) : null}
@@ -108,19 +108,25 @@ export function GSCHeaderCard({
         overviewErrorMessage) && (
         <CardContent className="space-y-2 text-sm">
           {isSavingGSCProjectSelection ? (
-            <p className="text-muted-foreground">Switching connected property...</p>
+            <p className="text-muted-foreground">
+              Switching connected property...
+            </p>
           ) : null}
           {selectedSite?.permission_level &&
-          !["siteOwner", "siteFullUser"].includes(selectedSite.permission_level) ? (
+          !["siteOwner", "siteFullUser"].includes(
+            selectedSite.permission_level
+          ) ? (
             <p className="text-amber-200">
-              This property is visible in Search Console, but Search Analytics usually needs Owner
-              or Full User access.
+              This property is visible in Search Console, but Search Analytics
+              usually needs Owner or Full User access.
             </p>
           ) : null}
           {gscProjectSelectionErrorMessage ? (
             <p className="text-red-200">{gscProjectSelectionErrorMessage}</p>
           ) : null}
-          {overviewErrorMessage ? <p className="text-red-200">{overviewErrorMessage}</p> : null}
+          {overviewErrorMessage ? (
+            <p className="text-red-200">{overviewErrorMessage}</p>
+          ) : null}
         </CardContent>
       )}
     </Card>

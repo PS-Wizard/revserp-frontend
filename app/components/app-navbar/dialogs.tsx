@@ -10,7 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
@@ -44,7 +50,9 @@ export function CreateProjectDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create project</DialogTitle>
-          <DialogDescription>Add a project to this workspace and start crawling it.</DialogDescription>
+          <DialogDescription>
+            Add a project to this workspace and start crawling it.
+          </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-6" onSubmit={onSubmit}>
           <FieldGroup>
@@ -65,14 +73,20 @@ export function CreateProjectDialog({
                 placeholder="https://revserp.ai"
                 value={projectBaseUrl}
               />
-              <FieldDescription>Use the canonical site URL you want to crawl.</FieldDescription>
+              <FieldDescription>
+                Use the canonical site URL you want to crawl.
+              </FieldDescription>
             </Field>
           </FieldGroup>
 
           <FieldError>{createProjectError}</FieldError>
 
           <DialogFooter>
-            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
               Cancel
             </Button>
             <Button disabled={isCreatingProject} type="submit">
@@ -110,13 +124,20 @@ export function DeleteProjectDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Delete project</DialogTitle>
-          <DialogDescription>{getDeleteProjectDescription(projectPendingDelete)}</DialogDescription>
+          <DialogDescription>
+            {getDeleteProjectDescription(projectPendingDelete)}
+          </DialogDescription>
         </DialogHeader>
 
         <FieldError>{projectActionError}</FieldError>
 
         <DialogFooter>
-          <Button disabled={deletingProjectId !== null} onClick={() => onOpenChange(false)} type="button" variant="outline">
+          <Button
+            disabled={deletingProjectId !== null}
+            onClick={() => onOpenChange(false)}
+            type="button"
+            variant="outline"
+          >
             Cancel
           </Button>
           <Button
@@ -126,7 +147,10 @@ export function DeleteProjectDialog({
             variant="destructive"
           >
             {deletingProjectId ? (
-              <CompileLoader className="text-destructive-foreground" size={18} />
+              <CompileLoader
+                className="text-destructive-foreground"
+                size={18}
+              />
             ) : null}
             {deletingProjectId ? "Deleting..." : "Delete"}
           </Button>
@@ -158,13 +182,20 @@ export function DeleteCrawlDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Delete crawl</DialogTitle>
-          <DialogDescription>{getDeleteCrawlDescription(crawlPendingDelete)}</DialogDescription>
+          <DialogDescription>
+            {getDeleteCrawlDescription(crawlPendingDelete)}
+          </DialogDescription>
         </DialogHeader>
 
         <FieldError>{projectActionError}</FieldError>
 
         <DialogFooter>
-          <Button disabled={deletingCrawlId !== null} onClick={() => onOpenChange(false)} type="button" variant="outline">
+          <Button
+            disabled={deletingCrawlId !== null}
+            onClick={() => onOpenChange(false)}
+            type="button"
+            variant="outline"
+          >
             Cancel
           </Button>
           <Button
@@ -174,7 +205,10 @@ export function DeleteCrawlDialog({
             variant="destructive"
           >
             {deletingCrawlId ? (
-              <CompileLoader className="text-destructive-foreground" size={18} />
+              <CompileLoader
+                className="text-destructive-foreground"
+                size={18}
+              />
             ) : null}
             {deletingCrawlId ? "Deleting..." : "Delete"}
           </Button>
@@ -221,7 +255,8 @@ export function InviteMembersDialog({
         <DialogHeader>
           <DialogTitle>Invite members</DialogTitle>
           <DialogDescription>
-            Create a reusable invite link for {activeOrganizationName ?? "this workspace"}.
+            Create a reusable invite link for{" "}
+            {activeOrganizationName ?? "this workspace"}.
           </DialogDescription>
         </DialogHeader>
 
@@ -251,15 +286,21 @@ export function InviteMembersDialog({
 
           {inviteLink ? (
             <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Invite link</p>
-              <p className="mt-2 break-all text-sm">{inviteLink}</p>
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Invite link
+              </p>
+              <p className="mt-2 text-sm break-all">{inviteLink}</p>
             </div>
           ) : null}
 
           <FieldError>{profileActionError}</FieldError>
 
           <DialogFooter>
-            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
               Close
             </Button>
             {inviteLink ? (
@@ -270,7 +311,10 @@ export function InviteMembersDialog({
             ) : (
               <Button disabled={isCreatingInvite} type="submit">
                 {isCreatingInvite ? (
-                  <CompileLoader className="text-primary-foreground" size={18} />
+                  <CompileLoader
+                    className="text-primary-foreground"
+                    size={18}
+                  />
                 ) : null}
                 {isCreatingInvite ? "Creating..." : "Create invite link"}
               </Button>
@@ -305,19 +349,33 @@ export function LeaveWorkspaceDialog({
         <DialogHeader>
           <DialogTitle>Leave workspace</DialogTitle>
           <DialogDescription>
-            Leave {activeOrganizationName ?? "this workspace"}? You will lose access to its projects, crawls, and invites.
+            Leave {activeOrganizationName ?? "this workspace"}? You will lose
+            access to its projects, crawls, and invites.
           </DialogDescription>
         </DialogHeader>
 
         <FieldError>{profileActionError}</FieldError>
 
         <DialogFooter>
-          <Button disabled={isLeavingWorkspace} onClick={() => onOpenChange(false)} type="button" variant="outline">
+          <Button
+            disabled={isLeavingWorkspace}
+            onClick={() => onOpenChange(false)}
+            type="button"
+            variant="outline"
+          >
             Cancel
           </Button>
-          <Button disabled={isLeavingWorkspace} onClick={onLeave} type="button" variant="destructive">
+          <Button
+            disabled={isLeavingWorkspace}
+            onClick={onLeave}
+            type="button"
+            variant="destructive"
+          >
             {isLeavingWorkspace ? (
-              <CompileLoader className="text-destructive-foreground" size={18} />
+              <CompileLoader
+                className="text-destructive-foreground"
+                size={18}
+              />
             ) : null}
             {isLeavingWorkspace ? "Leaving..." : "Leave workspace"}
           </Button>

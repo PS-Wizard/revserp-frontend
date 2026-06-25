@@ -1,4 +1,8 @@
-import { formatMetricDelta, formatMetricValue, metricDeltaTone } from "./formatters"
+import {
+  formatMetricDelta,
+  formatMetricValue,
+  metricDeltaTone,
+} from "./formatters"
 import type { GSCMetricKey, MetricConfig, MetricSummary } from "./types"
 
 export function GSCMetricGrid({
@@ -16,7 +20,11 @@ export function GSCMetricGrid({
     <div className="grid gap-px border-y border-border/50 bg-border/50 md:grid-cols-2 xl:grid-cols-4">
       {(Object.keys(metricConfig) as GSCMetricKey[]).map((metricKey) => {
         const summary = derivedMetricSummary[metricKey]
-        const delta = formatMetricDelta(metricKey, summary.current, summary.previous)
+        const delta = formatMetricDelta(
+          metricKey,
+          summary.current,
+          summary.previous
+        )
 
         return (
           <button
@@ -27,12 +35,16 @@ export function GSCMetricGrid({
             onClick={() => onToggleMetric(metricKey)}
             type="button"
           >
-            <p className="text-sm text-muted-foreground">{metricConfig[metricKey].label}</p>
+            <p className="text-sm text-muted-foreground">
+              {metricConfig[metricKey].label}
+            </p>
             <p className="pt-3 text-3xl font-medium tracking-[-0.05em] text-foreground">
               {formatMetricValue(metricKey, summary.current)}
             </p>
             {delta ? (
-              <p className={`pt-2 text-sm ${metricDeltaTone(metricKey, summary.current, summary.previous)}`}>
+              <p
+                className={`pt-2 text-sm ${metricDeltaTone(metricKey, summary.current, summary.previous)}`}
+              >
                 {delta}
               </p>
             ) : null}

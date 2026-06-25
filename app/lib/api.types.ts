@@ -335,7 +335,6 @@ export type CreateAIConversationMessageResponse = {
   }
 }
 
-
 // --- Admin types ---
 
 export type AdminUserResponse = {

@@ -47,7 +47,12 @@ function formReducer(state: FormState, action: FormAction): FormState {
     case "SUBMIT_END":
       return { ...state, isSubmitting: false }
     case "GOOGLE_START":
-      return { ...state, isGoogleSubmitting: true, errorMessage: "", infoMessage: "" }
+      return {
+        ...state,
+        isGoogleSubmitting: true,
+        errorMessage: "",
+        infoMessage: "",
+      }
     case "GOOGLE_END":
       return { ...state, isGoogleSubmitting: false }
     default:
@@ -92,7 +97,8 @@ export function AuthForm({
         if ("signup_completed_without_session" in response) {
           dispatch({
             type: "SET_INFO",
-            message: "Signup completed without a session. Verify your email if this is a new account, or log in if it already exists.",
+            message:
+              "Signup completed without a session. Verify your email if this is a new account, or log in if it already exists.",
           })
           dispatch({ type: "SUBMIT_END" })
           return
@@ -103,11 +109,12 @@ export function AuthForm({
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        message: error instanceof ApiError
-          ? error.message
-          : isLogin
-            ? "Unable to log in."
-            : "Unable to sign up.",
+        message:
+          error instanceof ApiError
+            ? error.message
+            : isLogin
+              ? "Unable to log in."
+              : "Unable to sign up.",
       })
     } finally {
       dispatch({ type: "SUBMIT_END" })
@@ -122,9 +129,10 @@ export function AuthForm({
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        message: error instanceof Error
-          ? error.message
-          : "Unable to start Google sign-in.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to start Google sign-in.",
       })
       dispatch({ type: "GOOGLE_END" })
     }
@@ -235,7 +243,9 @@ export function AuthForm({
             </FieldDescription>
           )}
           <FieldDescription className="text-center">
-            {isLogin ? "Don&apos;t have an account?" : "Already have an account?"}{" "}
+            {isLogin
+              ? "Don&apos;t have an account?"
+              : "Already have an account?"}{" "}
             <Link className="underline underline-offset-4" to={alternatePath}>
               {isLogin ? "Sign up" : "Login"}
             </Link>

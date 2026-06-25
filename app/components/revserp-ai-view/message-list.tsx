@@ -25,9 +25,7 @@ export function MessageList({
       <div className="flex h-full items-center justify-center text-center">
         <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-xl">
           <CompileLoader size={22} />
-          <span className="text-muted-foreground">
-            Loading conversation...
-          </span>
+          <span className="text-muted-foreground">Loading conversation...</span>
         </div>
       </div>
     )

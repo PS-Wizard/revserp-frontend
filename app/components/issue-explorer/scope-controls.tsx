@@ -24,7 +24,14 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { Input } from "~/components/ui/input"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select"
 
 import type { BucketScope, IssueScope } from "./types"
 import { getSelectionLabel, toggleSelection } from "./utils"
@@ -61,18 +68,34 @@ export function ScopeBreadcrumbs({
           <BreadcrumbList>
             <BreadcrumbItem>
               <ScopeMultiMenu
-                label={getSelectionLabel(selectedPillarLabels, "Select pillars")}
-                options={pillarOptions.map((pillar) => ({ value: pillar.id, label: pillar.label }))}
+                label={getSelectionLabel(
+                  selectedPillarLabels,
+                  "Select pillars"
+                )}
+                options={pillarOptions.map((pillar) => ({
+                  value: pillar.id,
+                  label: pillar.label,
+                }))}
                 selectedValues={selectedPillarIds}
                 title="Pillars"
-                onToggle={(value) => toggleSelection(value, selectedPillarIds, setSelectedPillarIds, false)}
+                onToggle={(value) =>
+                  toggleSelection(
+                    value,
+                    selectedPillarIds,
+                    setSelectedPillarIds,
+                    false
+                  )
+                }
               />
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               <ScopeMultiMenu
                 label={getSelectionLabel(
-                  getSelectedBucketLabels(availableBucketScopes, selectedBucketKeys),
+                  getSelectedBucketLabels(
+                    availableBucketScopes,
+                    selectedBucketKeys
+                  ),
                   "Select buckets"
                 )}
                 multiSelect={true}
@@ -84,14 +107,24 @@ export function ScopeBreadcrumbs({
                 }))}
                 selectedValues={selectedBucketKeys}
                 title="Buckets"
-                onToggle={(value) => toggleSelection(value, selectedBucketKeys, setSelectedBucketKeys, false)}
+                onToggle={(value) =>
+                  toggleSelection(
+                    value,
+                    selectedBucketKeys,
+                    setSelectedBucketKeys,
+                    false
+                  )
+                }
               />
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
               <ScopeMultiMenu
                 label={getSelectionLabel(
-                  getSelectedIssueTypeLabels(availableIssueScopes, selectedIssueTypeKeys),
+                  getSelectedIssueTypeLabels(
+                    availableIssueScopes,
+                    selectedIssueTypeKeys
+                  ),
                   "Issue Types"
                 )}
                 multiSelect={true}
@@ -102,7 +135,14 @@ export function ScopeBreadcrumbs({
                 }))}
                 selectedValues={selectedIssueTypeKeys}
                 title="Issue types"
-                onToggle={(value) => toggleSelection(value, selectedIssueTypeKeys, setSelectedIssueTypeKeys, true)}
+                onToggle={(value) =>
+                  toggleSelection(
+                    value,
+                    selectedIssueTypeKeys,
+                    setSelectedIssueTypeKeys,
+                    true
+                  )
+                }
               />
             </BreadcrumbItem>
           </BreadcrumbList>
@@ -123,7 +163,16 @@ type ScopeMultiMenuProps = {
   allowEmpty?: boolean
 }
 
-function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues, title, multiSelect, allowEmpty = true }: ScopeMultiMenuProps) {
+function ScopeMultiMenu({
+  label,
+  onToggle,
+  onToggleAll,
+  options,
+  selectedValues,
+  title,
+  multiSelect,
+  allowEmpty = true,
+}: ScopeMultiMenuProps) {
   const [query, setQuery] = useState("")
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -132,9 +181,13 @@ function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues,
       return options
     }
 
-    return options.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
+    return options.filter((option) =>
+      option.label.toLowerCase().includes(normalizedQuery)
+    )
   }, [options, query])
-  const allSelected = options.length > 0 && options.every((opt) => selectedValues.includes(opt.value))
+  const allSelected =
+    options.length > 0 &&
+    options.every((opt) => selectedValues.includes(opt.value))
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -166,7 +219,9 @@ function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues,
                 className="w-full text-left text-sm font-medium text-primary hover:underline"
                 onClick={() => {
                   if (allSelected) {
-                    onToggleAll?.(allowEmpty ? [] : options.slice(0, 1).map((o) => o.value))
+                    onToggleAll?.(
+                      allowEmpty ? [] : options.slice(0, 1).map((o) => o.value)
+                    )
                   } else {
                     onToggleAll?.(options.map((o) => o.value))
                   }
@@ -188,7 +243,9 @@ function ScopeMultiMenu({ label, onToggle, onToggleAll, options, selectedValues,
               </DropdownMenuCheckboxItem>
             ))
           ) : (
-            <div className="px-2 py-3 text-sm text-muted-foreground">No results.</div>
+            <div className="px-2 py-3 text-sm text-muted-foreground">
+              No results.
+            </div>
           )}
         </DropdownMenuGroup>
       </DropdownMenuContent>
@@ -218,7 +275,9 @@ export function TablePagination({
     <div className="mt-4 flex justify-end">
       <div className="flex items-center gap-8">
         <div className="hidden items-center gap-2 lg:flex">
-          <span className="text-sm font-medium text-muted-foreground">Rows per page</span>
+          <span className="text-sm font-medium text-muted-foreground">
+            Rows per page
+          </span>
           <Select
             value={`${pageSize}`}
             onValueChange={(value) => {
@@ -289,7 +348,10 @@ export function TablePagination({
   )
 }
 
-function getSelectedBucketLabels(bucketScopes: BucketScope[], selectedBucketKeys: string[]) {
+function getSelectedBucketLabels(
+  bucketScopes: BucketScope[],
+  selectedBucketKeys: string[]
+) {
   const labels: string[] = []
   const selectedBucketKeySet = new Set(selectedBucketKeys)
 
@@ -302,7 +364,10 @@ function getSelectedBucketLabels(bucketScopes: BucketScope[], selectedBucketKeys
   return labels
 }
 
-function getSelectedIssueTypeLabels(issueScopes: IssueScope[], selectedIssueTypeKeys: string[]) {
+function getSelectedIssueTypeLabels(
+  issueScopes: IssueScope[],
+  selectedIssueTypeKeys: string[]
+) {
   const labels: string[] = []
   const selectedIssueTypeKeySet = new Set(selectedIssueTypeKeys)
 

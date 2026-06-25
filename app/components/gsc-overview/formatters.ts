@@ -1,6 +1,8 @@
 import type { GSCMetricKey } from "./types"
 
-const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 })
+const numberFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+})
 
 export function formatNumber(value: number) {
   return numberFormatter.format(value)
@@ -46,7 +48,8 @@ export function metricDeltaTone(
   previousValue: number
 ) {
   if (currentValue === previousValue) return "text-muted-foreground"
-  if (metricKey === "position") return currentValue < previousValue ? "text-emerald-300" : "text-rose-300"
+  if (metricKey === "position")
+    return currentValue < previousValue ? "text-emerald-300" : "text-rose-300"
   return currentValue > previousValue ? "text-emerald-300" : "text-rose-300"
 }
 

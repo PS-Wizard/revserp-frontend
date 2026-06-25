@@ -2,7 +2,6 @@
 
 import { memo, useEffect, useMemo, useState } from "react"
 
-
 import {
   Card,
   CardContent,
@@ -31,7 +30,12 @@ type ScoreRadialChartProps = {
   title: string
 }
 
-export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, description, segments, title }: ScoreRadialChartProps) {
+export const ScoreRadialChart = memo(function ScoreRadialChart({
+  centerValue,
+  description,
+  segments,
+  title,
+}: ScoreRadialChartProps) {
   const [rechartsComponents, setRechartsComponents] = useState<{
     PolarGrid: React.ComponentType<any>
     RadialBar: React.ComponentType<any>
@@ -70,7 +74,11 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, de
           <>
             <div className="relative mx-auto h-[250px] w-[250px]">
               <ChartContainer config={chartConfig} className="h-full w-full">
-                <rechartsComponents.RadialBarChart data={chartData} innerRadius={34} outerRadius={108}>
+                <rechartsComponents.RadialBarChart
+                  data={chartData}
+                  innerRadius={34}
+                  outerRadius={108}
+                >
                   <ChartTooltip
                     cursor={false}
                     content={
@@ -82,9 +90,13 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, de
 
                           return (
                             <>
-                              <span className="text-muted-foreground">{label}</span>
+                              <span className="text-muted-foreground">
+                                {label}
+                              </span>
                               <span className="font-mono font-medium text-foreground tabular-nums">
-                                {typeof value === "number" ? `${value}%` : String(value)}
+                                {typeof value === "number"
+                                  ? `${value}%`
+                                  : String(value)}
                               </span>
                             </>
                           )
@@ -92,14 +104,18 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, de
                       />
                     }
                   />
-                  <rechartsComponents.PolarGrid gridType="circle" radialLines={false} />
+                  <rechartsComponents.PolarGrid
+                    gridType="circle"
+                    radialLines={false}
+                  />
                   <rechartsComponents.RadialBar background dataKey="value" />
                 </rechartsComponents.RadialBarChart>
               </ChartContainer>
-              {typeof centerValue === "number" && Number.isFinite(centerValue) ? (
+              {typeof centerValue === "number" &&
+              Number.isFinite(centerValue) ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="flex size-20 items-center justify-center rounded-full border border-border/50 bg-background/70 text-center shadow-sm backdrop-blur-sm">
-                    <span className="font-mono text-2xl font-semibold leading-none tabular-nums">
+                    <span className="font-mono text-2xl leading-none font-semibold tabular-nums">
                       {Math.round(centerValue)}%
                     </span>
                   </div>
@@ -108,7 +124,10 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, de
             </div>
             <div className="grid gap-2 text-sm">
               {chartData.map((segment) => (
-                <div className="flex items-center justify-between gap-3" key={segment.key}>
+                <div
+                  className="flex items-center justify-between gap-3"
+                  key={segment.key}
+                >
                   <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
                     <span
                       className="size-2.5 shrink-0 rounded-full"
@@ -116,7 +135,9 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({ centerValue, de
                     />
                     <span className="truncate">{segment.label}</span>
                   </span>
-                  <span className="font-mono font-medium tabular-nums">{segment.value}%</span>
+                  <span className="font-mono font-medium tabular-nums">
+                    {segment.value}%
+                  </span>
                 </div>
               ))}
             </div>
@@ -140,7 +161,8 @@ function getTooltipLabel(payload: unknown) {
 }
 
 function buildChartData(segments: ScoreRadialSegment[]) {
-  const chartData: Array<ScoreRadialSegment & { fill: string; value: number }> = []
+  const chartData: Array<ScoreRadialSegment & { fill: string; value: number }> =
+    []
 
   for (const segment of segments) {
     if (typeof segment.value !== "number" || !Number.isFinite(segment.value)) {
@@ -157,7 +179,9 @@ function buildChartData(segments: ScoreRadialSegment[]) {
   return chartData
 }
 
-function buildChartConfig(segments: Array<ScoreRadialSegment & { fill: string; value: number }>) {
+function buildChartConfig(
+  segments: Array<ScoreRadialSegment & { fill: string; value: number }>
+) {
   return Object.fromEntries(
     segments.map((segment) => [
       segment.key,

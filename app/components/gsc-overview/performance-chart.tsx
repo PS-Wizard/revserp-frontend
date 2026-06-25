@@ -12,10 +12,13 @@ import {
 } from "~/components/ui/card"
 import type { GSCOverviewWindowResponse } from "~/lib/api.types"
 
-import { formatNumber, formatPercentFromWholeNumber, formatPosition } from "./formatters"
+import {
+  formatNumber,
+  formatPercentFromWholeNumber,
+  formatPosition,
+} from "./formatters"
 import type { ChartSeries, GSCMetricKey, MetricConfig } from "./types"
 import { useApexChart } from "~/hooks/use-apex-chart"
-
 
 export const GSCPerformanceChart = memo(function GSCPerformanceChart({
   windowOverview,
@@ -41,7 +44,9 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
       visibleMetricKeys
         .map((metricKey) => {
           const seriesName = metricConfig[metricKey].seriesName
-          return chartSeries.find((series) => series.name === seriesName) ?? null
+          return (
+            chartSeries.find((series) => series.name === seriesName) ?? null
+          )
         })
         .filter((series): series is ChartSeries => series !== null),
     [chartSeries, metricConfig, visibleMetricKeys]
@@ -71,7 +76,9 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
         zoom: { enabled: true, type: "x", autoScaleYaxis: true },
         animations: { speed: 300 },
       },
-      colors: visibleMetricKeys.map((metricKey) => metricConfig[metricKey].color),
+      colors: visibleMetricKeys.map(
+        (metricKey) => metricConfig[metricKey].color
+      ),
       dataLabels: { enabled: false },
       fill: {
         type: "gradient",
@@ -96,9 +103,13 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
         x: { formatter: (value) => formatTooltipDate(Number(value)) },
         y: {
           formatter: (value, context) => {
-            const apexSeries = context?.w?.config?.series as Array<{ name?: string }> | undefined
-            const seriesName = apexSeries?.[context?.seriesIndex ?? -1]?.name ?? ""
-            if (seriesName === "CTR") return formatPercentFromWholeNumber(Number(value))
+            const apexSeries = context?.w?.config?.series as
+              | Array<{ name?: string }>
+              | undefined
+            const seriesName =
+              apexSeries?.[context?.seriesIndex ?? -1]?.name ?? ""
+            if (seriesName === "CTR")
+              return formatPercentFromWholeNumber(Number(value))
             if (seriesName === "Position") return formatPosition(Number(value))
             return formatNumber(Number(value))
           },
@@ -106,7 +117,10 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
       },
       xaxis: {
         type: "datetime",
-        labels: { style: { colors: "rgba(255,255,255,0.45)" }, datetimeUTC: false },
+        labels: {
+          style: { colors: "rgba(255,255,255,0.45)" },
+          datetimeUTC: false,
+        },
         axisBorder: { show: false },
         axisTicks: { show: false },
         tooltip: { enabled: false },
@@ -124,7 +138,12 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
     [metricConfig, visibleMetricKeys, yRange]
   )
 
-  useApexChart(chartContainerRef, chartOptions, visibleSeries, visibleSeries.length > 0)
+  useApexChart(
+    chartContainerRef,
+    chartOptions,
+    visibleSeries,
+    visibleSeries.length > 0
+  )
 
   return (
     <Card className="mx-4 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 text-foreground sm:mx-6 lg:mx-4">
@@ -187,7 +206,10 @@ function getMetricRange(series: ChartSeries[]) {
   const padding = Math.max(4, (maxValue - minValue) * 0.12)
 
   if (maxValue === minValue) {
-    return { min: Math.max(0, Math.floor(minValue - 4)), max: Math.ceil(maxValue + 4) }
+    return {
+      min: Math.max(0, Math.floor(minValue - 4)),
+      max: Math.ceil(maxValue + 4),
+    }
   }
 
   return {

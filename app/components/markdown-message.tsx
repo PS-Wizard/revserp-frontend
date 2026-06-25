@@ -52,7 +52,9 @@ function renderMarkdown(markdown: string) {
     if (/^[-*]\s+/.test(trimmedLine)) {
       const listItems: string[] = []
       while (index < lines.length && /^[-*]\s+/.test(lines[index].trim())) {
-        listItems.push(`<li>${renderInline(lines[index].trim().replace(/^[-*]\s+/, ""))}</li>`)
+        listItems.push(
+          `<li>${renderInline(lines[index].trim().replace(/^[-*]\s+/, ""))}</li>`
+        )
         index += 1
       }
       htmlParts.push(`<ul>${listItems.join("")}</ul>`)
@@ -62,7 +64,9 @@ function renderMarkdown(markdown: string) {
     if (/^\d+\.\s+/.test(trimmedLine)) {
       const listItems: string[] = []
       while (index < lines.length && /^\d+\.\s+/.test(lines[index].trim())) {
-        listItems.push(`<li>${renderInline(lines[index].trim().replace(/^\d+\.\s+/, ""))}</li>`)
+        listItems.push(
+          `<li>${renderInline(lines[index].trim().replace(/^\d+\.\s+/, ""))}</li>`
+        )
         index += 1
       }
       htmlParts.push(`<ol>${listItems.join("")}</ol>`)
@@ -71,7 +75,11 @@ function renderMarkdown(markdown: string) {
 
     const paragraphLines = [trimmedLine]
     index += 1
-    while (index < lines.length && lines[index].trim() && !startsBlock(lines, index)) {
+    while (
+      index < lines.length &&
+      lines[index].trim() &&
+      !startsBlock(lines, index)
+    ) {
       paragraphLines.push(lines[index].trim())
       index += 1
     }
@@ -145,9 +153,14 @@ function parseTableRow(line: string) {
 
 function renderTable(rows: string[][]) {
   const [headings, ...bodyRows] = rows
-  const headingHTML = headings.map((heading) => `<th>${renderInline(heading)}</th>`).join("")
+  const headingHTML = headings
+    .map((heading) => `<th>${renderInline(heading)}</th>`)
+    .join("")
   const bodyHTML = bodyRows
-    .map((row) => `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`)
+    .map(
+      (row) =>
+        `<tr>${row.map((cell) => `<td>${renderInline(cell)}</td>`).join("")}</tr>`
+    )
     .join("")
 
   return `<div class="markdown-table-wrap"><table><thead><tr>${headingHTML}</tr></thead><tbody>${bodyHTML}</tbody></table></div>`

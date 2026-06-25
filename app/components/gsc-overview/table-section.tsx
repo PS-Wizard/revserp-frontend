@@ -1,6 +1,13 @@
 import { Input } from "~/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow as UITableRow } from "~/components/ui/table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow as UITableRow,
+} from "~/components/ui/table"
 
 import { formatNumber, formatPercent, formatPosition } from "./formatters"
 import { dimensionTabLabel, sortIndicator, type TableSortState } from "./table"
@@ -61,9 +68,14 @@ export function GSCTableSection({
         </TabsList>
 
         {dimensionTabs.map((tab) => (
-          <TabsContent className="space-y-4 px-8 py-6" key={tab.key} value={tab.key}>
+          <TabsContent
+            className="space-y-4 px-8 py-6"
+            key={tab.key}
+            value={tab.key}
+          >
             <p className="text-xs text-muted-foreground">
-              Showing {activeTableRows.length} {dimensionTabLabel(tab.key).toLowerCase()}.
+              Showing {activeTableRows.length}{" "}
+              {dimensionTabLabel(tab.key).toLowerCase()}.
             </p>
             <RowsTable
               emptyMessage={emptyMessage(tab.key)}
@@ -105,19 +117,39 @@ function RowsTable({
       <Table>
         <TableHeader>
           <UITableRow className="border-border/50 text-muted-foreground">
-            <SortableHead column="label" onToggle={onToggleTableSort} tableSort={tableSort}>
+            <SortableHead
+              column="label"
+              onToggle={onToggleTableSort}
+              tableSort={tableSort}
+            >
               {primaryColumnLabel}
             </SortableHead>
-            <SortableHead column="clicks" onToggle={onToggleTableSort} tableSort={tableSort}>
+            <SortableHead
+              column="clicks"
+              onToggle={onToggleTableSort}
+              tableSort={tableSort}
+            >
               Clicks
             </SortableHead>
-            <SortableHead column="impressions" onToggle={onToggleTableSort} tableSort={tableSort}>
+            <SortableHead
+              column="impressions"
+              onToggle={onToggleTableSort}
+              tableSort={tableSort}
+            >
               Impressions
             </SortableHead>
-            <SortableHead column="ctr" onToggle={onToggleTableSort} tableSort={tableSort}>
+            <SortableHead
+              column="ctr"
+              onToggle={onToggleTableSort}
+              tableSort={tableSort}
+            >
               CTR
             </SortableHead>
-            <SortableHead column="position" onToggle={onToggleTableSort} tableSort={tableSort}>
+            <SortableHead
+              column="position"
+              onToggle={onToggleTableSort}
+              tableSort={tableSort}
+            >
               Position
             </SortableHead>
           </UITableRow>
@@ -153,7 +185,11 @@ function SortableHead({
 }) {
   return (
     <TableHead>
-      <button className="inline-flex items-center gap-2" onClick={() => onToggle(column)} type="button">
+      <button
+        className="inline-flex items-center gap-2"
+        onClick={() => onToggle(column)}
+        type="button"
+      >
         {children} <span>{sortIndicator(tableSort, column)}</span>
       </button>
     </TableHead>

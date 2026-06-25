@@ -1,4 +1,8 @@
-import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js"
+import {
+  createClient,
+  type Session,
+  type SupabaseClient,
+} from "@supabase/supabase-js"
 
 import { sanitizeNextPath } from "~/lib/auth-path"
 
@@ -56,7 +60,8 @@ export async function resolveOAuthSessionFromCallback(): Promise<Session> {
   const authCode = callbackURL.searchParams.get("code")?.trim()
 
   if (authCode) {
-    const { data, error } = await supabaseClient.auth.exchangeCodeForSession(authCode)
+    const { data, error } =
+      await supabaseClient.auth.exchangeCodeForSession(authCode)
 
     if (error) {
       throw error

@@ -8,7 +8,12 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "~/components/ui/drawer"
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "~/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
 import type { ProjectResponse } from "~/lib/api.types"
@@ -56,15 +61,27 @@ export function BusinessProfileDrawer({
   onSubmit,
   onWebsiteUrlChange,
 }: BusinessProfileDrawerProps) {
-  const fieldsDisabled = isLoadingBusinessProfile || isSavingBusinessProfile || !canManageBusinessProfile
+  const fieldsDisabled =
+    isLoadingBusinessProfile ||
+    isSavingBusinessProfile ||
+    !canManageBusinessProfile
 
   return (
-    <Drawer direction="bottom" onOpenChange={(open) => !open && onClose()} open={businessProfileProject !== null}>
+    <Drawer
+      direction="bottom"
+      onOpenChange={(open) => !open && onClose()}
+      open={businessProfileProject !== null}
+    >
       <DrawerContent className="max-h-[88vh]">
-        <form className="mx-auto flex w-full max-w-5xl min-h-0 flex-col" onSubmit={onSubmit}>
+        <form
+          className="mx-auto flex min-h-0 w-full max-w-5xl flex-col"
+          onSubmit={onSubmit}
+        >
           <DrawerHeader>
             <DrawerTitle>Business profile</DrawerTitle>
-            <DrawerDescription>{getDrawerDescription(businessProfileProject)}</DrawerDescription>
+            <DrawerDescription>
+              {getDrawerDescription(businessProfileProject)}
+            </DrawerDescription>
           </DrawerHeader>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
@@ -92,7 +109,9 @@ export function BusinessProfileDrawer({
             )}
 
             {businessProfileError ? (
-              <p className="pt-4 text-sm text-destructive">{businessProfileError}</p>
+              <p className="pt-4 text-sm text-destructive">
+                {businessProfileError}
+              </p>
             ) : null}
           </div>
 
@@ -101,7 +120,11 @@ export function BusinessProfileDrawer({
               Close
             </Button>
             <Button
-              disabled={!canManageBusinessProfile || isLoadingBusinessProfile || isSavingBusinessProfile}
+              disabled={
+                !canManageBusinessProfile ||
+                isLoadingBusinessProfile ||
+                isSavingBusinessProfile
+              }
               type="submit"
             >
               {isSavingBusinessProfile ? (
@@ -175,7 +198,9 @@ function BusinessProfileFields({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field>
-          <FieldLabel htmlFor="business-primary-category">Primary category</FieldLabel>
+          <FieldLabel htmlFor="business-primary-category">
+            Primary category
+          </FieldLabel>
           <Input
             disabled={disabled}
             id="business-primary-category"
@@ -186,7 +211,9 @@ function BusinessProfileFields({
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="business-primary-location">Primary location</FieldLabel>
+          <FieldLabel htmlFor="business-primary-location">
+            Primary location
+          </FieldLabel>
           <Input
             disabled={disabled}
             id="business-primary-location"
@@ -198,7 +225,9 @@ function BusinessProfileFields({
       </div>
 
       <Field>
-        <FieldLabel htmlFor="business-description">Business description</FieldLabel>
+        <FieldLabel htmlFor="business-description">
+          Business description
+        </FieldLabel>
         <Textarea
           className="min-h-32 resize-none"
           disabled={disabled}
@@ -211,13 +240,17 @@ function BusinessProfileFields({
 
       <Field>
         <FieldLabel>Seed prompts</FieldLabel>
-        <FieldDescription>Starting prompts used for AI audits. Fill up to 5 prompts.</FieldDescription>
+        <FieldDescription>
+          Starting prompts used for AI audits. Fill up to 5 prompts.
+        </FieldDescription>
         <div className="grid gap-3">
           {seedPrompts.map((prompt, index) => (
             <Input
               disabled={disabled}
               key={`seed-prompt-${index + 1}`}
-              onChange={(event) => onSeedPromptChange(index, event.target.value)}
+              onChange={(event) =>
+                onSeedPromptChange(index, event.target.value)
+              }
               placeholder={`Enter prompt ${index + 1}...`}
               value={prompt}
             />

@@ -1,6 +1,12 @@
 import { useNavigate } from "react-router"
 
-import { DoorOpenIcon, LogOutIcon, SendIcon, ShieldIcon, UsersIcon } from "lucide-react"
+import {
+  DoorOpenIcon,
+  LogOutIcon,
+  SendIcon,
+  ShieldIcon,
+  UsersIcon,
+} from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
@@ -28,7 +34,7 @@ type ProfileMenuProps = {
   currentCrawlId?: string | null
   initials: string
   isActiveOrganizationOwner: boolean
-  workspaceState: 'idle' | 'switching' | 'leaving' | 'logging-out'
+  workspaceState: "idle" | "switching" | "leaving" | "logging-out"
   organizationId: string
   organizations: MeResponse["organizations"]
   profileActionError: string
@@ -88,7 +94,10 @@ export function ProfileMenu({
               Switch workspace
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-56">
-              <DropdownMenuRadioGroup value={organizationId} onValueChange={onSelectOrganization}>
+              <DropdownMenuRadioGroup
+                value={organizationId}
+                onValueChange={onSelectOrganization}
+              >
                 {organizations.map((organization) => (
                   <DropdownMenuRadioItem
                     disabled={isSwitchingWorkspace}
@@ -137,7 +146,11 @@ export function ProfileMenu({
           ) : null}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled={isLoggingOut} onClick={onLogout} variant="default">
+        <DropdownMenuItem
+          disabled={isLoggingOut}
+          onClick={onLogout}
+          variant="default"
+        >
           {isLoggingOut ? (
             <CompileLoader className="text-foreground" size={16} />
           ) : (
@@ -148,7 +161,9 @@ export function ProfileMenu({
         {profileActionError ? (
           <>
             <DropdownMenuSeparator />
-            <p className="px-2 py-1.5 text-xs text-destructive">{profileActionError}</p>
+            <p className="px-2 py-1.5 text-xs text-destructive">
+              {profileActionError}
+            </p>
           </>
         ) : null}
       </DropdownMenuContent>

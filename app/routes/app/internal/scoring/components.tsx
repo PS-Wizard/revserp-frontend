@@ -38,11 +38,15 @@ export function StatusCard({
       size="sm"
       className={cn(
         "border-border/50 shadow-none",
-        tone === "destructive" && "border-destructive/30 bg-destructive/10 text-destructive"
+        tone === "destructive" &&
+          "border-destructive/30 bg-destructive/10 text-destructive"
       )}
     >
       <CardContent
-        className={cn("py-3 text-sm", tone === "destructive" ? "text-destructive" : "text-muted-foreground")}
+        className={cn(
+          "py-3 text-sm",
+          tone === "destructive" ? "text-destructive" : "text-muted-foreground"
+        )}
       >
         {children}
       </CardContent>
@@ -54,7 +58,13 @@ export function StatusCard({
 /*  Sections                                                           */
 /* ------------------------------------------------------------------ */
 
-export function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
+export function SidebarSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
   return (
     <FieldSet>
       <FieldLegend variant="label">{title}</FieldLegend>
@@ -63,7 +73,13 @@ export function SidebarSection({ title, children }: { title: string; children: R
   )
 }
 
-export function SectionHeading({ title, description }: { title: string; description: string }) {
+export function SectionHeading({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
   return (
     <header className="flex flex-col gap-1">
       <h3 className="text-base font-medium">{title}</h3>
@@ -95,7 +111,10 @@ export function ConfigRow({
           <FieldDescription>{description}</FieldDescription>
         </FieldContent>
         {children}
-        <Badge variant="outline" className="justify-self-start tabular-nums lg:justify-self-end">
+        <Badge
+          variant="outline"
+          className="justify-self-start tabular-nums lg:justify-self-end"
+        >
           {value}
         </Badge>
       </CardContent>

@@ -1,6 +1,13 @@
 "use client"
 
-import { memo, useCallback, useEffect, useReducer, useRef, useState } from "react"
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react"
 
 import { GSCOverview } from "~/components/gsc-overview/gsc-overview"
 import { Button } from "~/components/ui/button"
@@ -63,11 +70,19 @@ type AsyncAction =
 function asyncReducer(state: AsyncState, action: AsyncAction): AsyncState {
   switch (action.type) {
     case "START_CONNECT":
-      return { ...state, isStartingGSCConnect: true, gscConnectErrorMessage: "" }
+      return {
+        ...state,
+        isStartingGSCConnect: true,
+        gscConnectErrorMessage: "",
+      }
     case "FINISH_CONNECT":
       return { ...state, isStartingGSCConnect: false }
     case "START_SELECT":
-      return { ...state, isSavingGSCProjectSelection: true, gscProjectSelectionErrorMessage: "" }
+      return {
+        ...state,
+        isSavingGSCProjectSelection: true,
+        gscProjectSelectionErrorMessage: "",
+      }
     case "FINISH_SELECT":
       return { ...state, isSavingGSCProjectSelection: false }
     case "START_LOAD":
@@ -75,9 +90,17 @@ function asyncReducer(state: AsyncState, action: AsyncAction): AsyncState {
     case "FINISH_LOAD":
       return { ...state, isLoadingGSC: false }
     case "SET_CONNECT_ERROR":
-      return { ...state, gscConnectErrorMessage: action.message, isStartingGSCConnect: false }
+      return {
+        ...state,
+        gscConnectErrorMessage: action.message,
+        isStartingGSCConnect: false,
+      }
     case "SET_SELECT_ERROR":
-      return { ...state, gscProjectSelectionErrorMessage: action.message, isSavingGSCProjectSelection: false }
+      return {
+        ...state,
+        gscProjectSelectionErrorMessage: action.message,
+        isSavingGSCProjectSelection: false,
+      }
     case "SET_LOAD_ERROR":
       return { ...state, gscLoadErrorMessage: action.message }
     case "SET_GSC_STATUS":
@@ -85,7 +108,12 @@ function asyncReducer(state: AsyncState, action: AsyncAction): AsyncState {
     case "SET_GSC_OVERVIEW":
       return { ...state, gscOverview: action.overview }
     case "CLEAR_ERRORS":
-      return { ...state, gscConnectErrorMessage: "", gscProjectSelectionErrorMessage: "", gscLoadErrorMessage: "" }
+      return {
+        ...state,
+        gscConnectErrorMessage: "",
+        gscProjectSelectionErrorMessage: "",
+        gscLoadErrorMessage: "",
+      }
     default:
       return state
   }
@@ -116,7 +144,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     dispatch({ type: "START_LOAD" })
 
     try {
-      const nextStatus = await clientApiFetch<ProjectGSCStatusResponse >(
+      const nextStatus = await clientApiFetch<ProjectGSCStatusResponse>(
         `/projects/${activeProject.id}/gsc/status`
       )
       if (requestKey !== requestKeyRef.current) return
@@ -126,20 +154,25 @@ export const SearchConsoleView = memo(function SearchConsoleView({
       dispatch({ type: "SET_GSC_OVERVIEW", overview: null })
 
       if (nextStatus.has_google_connection && nextStatus.connected) {
-        const overview = await clientApiFetch<ProjectGSCOverviewResponse >(
+        const overview = await clientApiFetch<ProjectGSCOverviewResponse>(
           `/projects/${activeProject.id}/gsc/overview`
         )
-        if (requestKey === requestKeyRef.current) dispatch({ type: "SET_GSC_OVERVIEW", overview })
+        if (requestKey === requestKeyRef.current)
+          dispatch({ type: "SET_GSC_OVERVIEW", overview })
       }
     } catch (error) {
       if (requestKey === requestKeyRef.current) {
         dispatch({
           type: "SET_LOAD_ERROR",
-          message: error instanceof ApiError ? error.message : "Unable to load Google Search Console data.",
+          message:
+            error instanceof ApiError
+              ? error.message
+              : "Unable to load Google Search Console data.",
         })
       }
     } finally {
-      if (requestKey === requestKeyRef.current) dispatch({ type: "FINISH_LOAD" })
+      if (requestKey === requestKeyRef.current)
+        dispatch({ type: "FINISH_LOAD" })
     }
   }, [activeProject])
 
@@ -160,9 +193,10 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     } catch (error) {
       dispatch({
         type: "SET_CONNECT_ERROR",
-        message: error instanceof ApiError
-          ? error.message
-          : "Unable to start Google Search Console connection.",
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "Unable to start Google Search Console connection.",
       })
     }
   }
@@ -172,20 +206,23 @@ export const SearchConsoleView = memo(function SearchConsoleView({
 
     dispatch({ type: "START_SELECT" })
     try {
-      await clientApiPost<{ ok: boolean }>(`/projects/${activeProject.id}/gsc/select-site`, {
-        site_url: selectedGSCSiteURL,
-      })
+      await clientApiPost<{ ok: boolean }>(
+        `/projects/${activeProject.id}/gsc/select-site`,
+        {
+          site_url: selectedGSCSiteURL,
+        }
+      )
       await loadGSCData()
     } catch (error) {
       dispatch({
         type: "SET_SELECT_ERROR",
-        message: error instanceof ApiError
-          ? error.message
-          : "Unable to connect this project to Google Search Console.",
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "Unable to connect this project to Google Search Console.",
       })
     }
   }
-
 
   if (!activeProject) {
     return (
@@ -234,7 +271,10 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         action={
           <>
             <div className="pt-8 sm:max-w-xl">
-              <Select onValueChange={(value) => setSelectedGSCSiteURL(value ?? "")} value={selectedGSCSiteURL}>
+              <Select
+                onValueChange={(value) => setSelectedGSCSiteURL(value ?? "")}
+                value={selectedGSCSiteURL}
+              >
                 <SelectTrigger className="min-h-12 w-full">
                   <SelectValue placeholder="Select a Search Console property" />
                 </SelectTrigger>
@@ -256,14 +296,20 @@ export const SearchConsoleView = memo(function SearchConsoleView({
             </div>
             <div className="pt-5 sm:max-w-sm">
               <Button
-                disabled={!selectedGSCSiteURL || asyncState.isSavingGSCProjectSelection}
+                disabled={
+                  !selectedGSCSiteURL || asyncState.isSavingGSCProjectSelection
+                }
                 onClick={handleSelectGSCProject}
               >
-                {asyncState.isSavingGSCProjectSelection ? "Connecting project..." : "Connect project"}
+                {asyncState.isSavingGSCProjectSelection
+                  ? "Connecting project..."
+                  : "Connect project"}
               </Button>
             </div>
             {asyncState.gscProjectSelectionErrorMessage ? (
-              <p className="pt-4 text-sm text-red-200">{asyncState.gscProjectSelectionErrorMessage}</p>
+              <p className="pt-4 text-sm text-red-200">
+                {asyncState.gscProjectSelectionErrorMessage}
+              </p>
             ) : null}
           </>
         }
@@ -288,12 +334,19 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         action={
           <>
             <div className="pt-8 sm:max-w-sm">
-              <Button disabled={asyncState.isStartingGSCConnect} onClick={handleStartGSCConnect}>
-                {asyncState.isStartingGSCConnect ? "Redirecting to Google..." : "Connect now"}
+              <Button
+                disabled={asyncState.isStartingGSCConnect}
+                onClick={handleStartGSCConnect}
+              >
+                {asyncState.isStartingGSCConnect
+                  ? "Redirecting to Google..."
+                  : "Connect now"}
               </Button>
             </div>
             {asyncState.gscConnectErrorMessage ? (
-              <p className="pt-4 text-sm text-red-200">{asyncState.gscConnectErrorMessage}</p>
+              <p className="pt-4 text-sm text-red-200">
+                {asyncState.gscConnectErrorMessage}
+              </p>
             ) : null}
           </>
         }
@@ -339,7 +392,11 @@ function GSCStateCard({
           <CardTitle className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
             {title}
           </CardTitle>
-          <CardDescription className={descriptionClassName ?? "max-w-2xl pt-5 text-base leading-7"}>
+          <CardDescription
+            className={
+              descriptionClassName ?? "max-w-2xl pt-5 text-base leading-7"
+            }
+          >
             {description}
           </CardDescription>
         </CardHeader>

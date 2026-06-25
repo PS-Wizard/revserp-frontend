@@ -13,7 +13,6 @@ import type {
   PendingAIFixRequest,
 } from "./types"
 
-
 export function formatPenalty(value: number) {
   return Number(value.toFixed(2)).toString()
 }
@@ -101,7 +100,9 @@ export async function fetchAllIssueUrls(
   return rows
 }
 
-export function buildPendingAIFixRequest(target: AIFixTarget): PendingAIFixRequest {
+export function buildPendingAIFixRequest(
+  target: AIFixTarget
+): PendingAIFixRequest {
   return {
     requestId: `${Date.now()}:${target.key}`,
     target,

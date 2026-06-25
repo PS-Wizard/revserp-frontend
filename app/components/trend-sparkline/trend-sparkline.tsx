@@ -45,7 +45,7 @@ export function TrendSparkline({
           ? "text-muted-foreground"
           : trend > 0
             ? "text-emerald-400"
-            : "text-rose-400",
+            : "text-rose-400"
       )}
       viewBox={`0 0 ${width} ${height}`}
     >
@@ -67,7 +67,11 @@ export function TrendBadge({ delta }: { delta: number | null }) {
   return (
     <CardAction>
       <Badge variant="outline">
-        {delta > 0 ? <TrendingUpIcon /> : delta < 0 ? <TrendingDownIcon /> : null}
+        {delta > 0 ? (
+          <TrendingUpIcon />
+        ) : delta < 0 ? (
+          <TrendingDownIcon />
+        ) : null}
         {delta > 0 ? "+" : ""}
         {delta} pts
       </Badge>

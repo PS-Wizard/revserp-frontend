@@ -8,12 +8,14 @@ const crawlDateTimeFormatter = new Intl.DateTimeFormat("en", {
 })
 
 export function getInitials(source: string, fallback: string) {
-  return source
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((value) => value[0]?.toUpperCase() ?? "")
-    .join("") || fallback
+  return (
+    source
+      .split(/[\s._-]+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((value) => value[0]?.toUpperCase() ?? "")
+      .join("") || fallback
+  )
 }
 
 export function getWorkspaceInitials(name: string) {
@@ -34,7 +36,10 @@ export function getDefaultInviteExpiryValue() {
 }
 
 export function formatCrawlStats(crawl: CrawlResponse) {
-  const score = crawl.overall_score === undefined ? "No score" : `${crawl.overall_score}/100`
+  const score =
+    crawl.overall_score === undefined
+      ? "No score"
+      : `${crawl.overall_score}/100`
   return `${score} · ${crawl.urls_crawled} crawled · ${crawl.urls_discovered} discovered`
 }
 
@@ -44,9 +49,10 @@ export function formatCrawlDate(crawl: CrawlResponse) {
 }
 
 export function formatCrawlDateTime(crawl: CrawlResponse) {
-  return crawlDateTimeFormatter.format(new Date(getCrawlReferenceTimestamp(crawl)))
+  return crawlDateTimeFormatter.format(
+    new Date(getCrawlReferenceTimestamp(crawl))
+  )
 }
-
 
 export async function readExportError(response: Response) {
   const responseText = await response.text()
@@ -66,7 +72,10 @@ export async function readExportError(response: Response) {
   return "Unable to export crawl issues."
 }
 
-export function getExportFilename(contentDispositionHeader: string | null, fallbackFilename: string) {
+export function getExportFilename(
+  contentDispositionHeader: string | null,
+  fallbackFilename: string
+) {
   if (!contentDispositionHeader) {
     return fallbackFilename
   }
@@ -84,8 +93,11 @@ export function getExportFilename(contentDispositionHeader: string | null, fallb
   return fallbackFilename
 }
 
-
-export function getInviteValidationError(inviteExpiresAt: string, expiresAtDate: Date, maxUses: number) {
+export function getInviteValidationError(
+  inviteExpiresAt: string,
+  expiresAtDate: Date,
+  maxUses: number
+) {
   if (!inviteExpiresAt.trim() || Number.isNaN(expiresAtDate.getTime())) {
     return "Expiry must be a valid date and time."
   }
@@ -101,7 +113,10 @@ export function getInviteValidationError(inviteExpiresAt: string, expiresAtDate:
   return ""
 }
 
-export function getCrawlValidationError(maxDepth: number, fetchTimeoutSeconds: number) {
+export function getCrawlValidationError(
+  maxDepth: number,
+  fetchTimeoutSeconds: number
+) {
   if (!Number.isInteger(maxDepth) || maxDepth < 0) {
     return "Max depth must be zero or greater."
   }
@@ -113,9 +128,14 @@ export function getCrawlValidationError(maxDepth: number, fetchTimeoutSeconds: n
   return ""
 }
 
-export function getProjectFilenameSegment(project: ProjectResponse | undefined) {
+export function getProjectFilenameSegment(
+  project: ProjectResponse | undefined
+) {
   const projectName = project?.name ?? "project"
-  const normalizedProjectName = projectName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-")
+  const normalizedProjectName = projectName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
   return normalizedProjectName || "project"
 }
 

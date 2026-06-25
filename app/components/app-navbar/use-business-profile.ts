@@ -13,7 +13,8 @@ import { clientApiFetch, clientApiPut } from "~/lib/api"
 const EMPTY_SEED_PROMPTS = ["", "", "", "", ""]
 
 export function useBusinessProfile() {
-  const [businessProfileProject, setBusinessProfileProject] = useState<ProjectResponse | null>(null)
+  const [businessProfileProject, setBusinessProfileProject] =
+    useState<ProjectResponse | null>(null)
   const [businessProfileStatus, setBusinessProfileStatus] =
     useState<ProjectBusinessProfileStatusResponse | null>(null)
   const [brandName, setBrandName] = useState("")
@@ -23,18 +24,28 @@ export function useBusinessProfile() {
   const [businessDescription, setBusinessDescription] = useState("")
   const [seedPrompts, setSeedPrompts] = useState(EMPTY_SEED_PROMPTS)
   const [businessProfileError, setBusinessProfileError] = useState("")
-  const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] = useState(false)
+  const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] =
+    useState(false)
   const [isSavingBusinessProfile, setIsSavingBusinessProfile] = useState(false)
 
-  const canManageBusinessProfile = businessProfileStatus?.can_manage_profile === true
+  const canManageBusinessProfile =
+    businessProfileStatus?.can_manage_profile === true
 
-  function applyBusinessProfile(profile: ProjectBusinessProfileResponse | undefined, project: ProjectResponse) {
+  function applyBusinessProfile(
+    profile: ProjectBusinessProfileResponse | undefined,
+    project: ProjectResponse
+  ) {
     setBrandName(profile?.brand_name ?? "")
     setWebsiteUrl(profile?.website_url?.trim() || project.base_url)
     setPrimaryCategory(profile?.primary_category ?? "")
     setPrimaryLocation(profile?.primary_location ?? "")
     setBusinessDescription(profile?.business_description ?? "")
-    setSeedPrompts(Array.from({ length: 5 }, (_, index) => profile?.seed_prompts?.[index] ?? ""))
+    setSeedPrompts(
+      Array.from(
+        { length: 5 },
+        (_, index) => profile?.seed_prompts?.[index] ?? ""
+      )
+    )
   }
 
   async function openBusinessProfileDrawer(project: ProjectResponse) {
@@ -51,7 +62,11 @@ export function useBusinessProfile() {
       setBusinessProfileStatus(status)
       applyBusinessProfile(status.business_profile, project)
     } catch (error) {
-      setBusinessProfileError(error instanceof Error ? error.message : "Unable to load business profile.")
+      setBusinessProfileError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load business profile."
+      )
     } finally {
       setIsLoadingBusinessProfile(false)
     }
@@ -65,13 +80,19 @@ export function useBusinessProfile() {
 
   function updateSeedPrompt(index: number, value: string) {
     setSeedPrompts((current) =>
-      current.map((prompt, promptIndex) => (promptIndex === index ? value : prompt))
+      current.map((prompt, promptIndex) =>
+        promptIndex === index ? value : prompt
+      )
     )
   }
 
   async function handleSaveBusinessProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!businessProfileProject || !businessProfileStatus?.can_manage_profile || isSavingBusinessProfile) {
+    if (
+      !businessProfileProject ||
+      !businessProfileStatus?.can_manage_profile ||
+      isSavingBusinessProfile
+    ) {
       return
     }
 
@@ -102,7 +123,11 @@ export function useBusinessProfile() {
       applyBusinessProfile(profile, businessProfileProject)
       closeBusinessProfileDrawer()
     } catch (error) {
-      setBusinessProfileError(error instanceof Error ? error.message : "Unable to save business profile.")
+      setBusinessProfileError(
+        error instanceof Error
+          ? error.message
+          : "Unable to save business profile."
+      )
     } finally {
       setIsSavingBusinessProfile(false)
     }

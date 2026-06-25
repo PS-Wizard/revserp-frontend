@@ -32,7 +32,14 @@ import type {
   ScoringConfig,
   ScoringPreviewResponse,
 } from "~/lib/api.types"
-import { deepClone, deepEqual, humanize, fmtNum, sortedEntries, buildIssueMap } from "./helpers"
+import {
+  deepClone,
+  deepEqual,
+  humanize,
+  fmtNum,
+  sortedEntries,
+  buildIssueMap,
+} from "./helpers"
 import {
   StatusCard,
   SidebarSection,
@@ -58,23 +65,42 @@ type ConfigAction =
   | { type: "SET_TOP_LEVEL"; key: TopLevelNumericKey; value: number }
   | { type: "SET_SEVERITY"; severity: string; value: number }
   | { type: "SET_OVERALL_WEIGHT"; pillarId: string; value: number }
-  | { type: "SET_BUCKET_WEIGHT"; pillarId: string; bucketId: string; value: number }
-  | { type: "SET_ISSUE_PENALTY"; pillarId: string; issueType: string; value: number }
+  | {
+      type: "SET_BUCKET_WEIGHT"
+      pillarId: string
+      bucketId: string
+      value: number
+    }
+  | {
+      type: "SET_ISSUE_PENALTY"
+      pillarId: string
+      issueType: string
+      value: number
+    }
   | { type: "REPLACE"; config: ScoringConfig }
 
-function configReducer(state: ScoringConfig, action: ConfigAction): ScoringConfig {
+function configReducer(
+  state: ScoringConfig,
+  action: ConfigAction
+): ScoringConfig {
   switch (action.type) {
     case "SET_TOP_LEVEL":
       return { ...state, [action.key]: action.value }
     case "SET_SEVERITY":
       return {
         ...state,
-        severity_multipliers: { ...state.severity_multipliers, [action.severity]: action.value },
+        severity_multipliers: {
+          ...state.severity_multipliers,
+          [action.severity]: action.value,
+        },
       }
     case "SET_OVERALL_WEIGHT":
       return {
         ...state,
-        overall_weights: { ...state.overall_weights, [action.pillarId]: action.value },
+        overall_weights: {
+          ...state.overall_weights,
+          [action.pillarId]: action.value,
+        },
       }
     case "SET_BUCKET_WEIGHT":
       return {
@@ -83,7 +109,10 @@ function configReducer(state: ScoringConfig, action: ConfigAction): ScoringConfi
           ...state.pillars,
           [action.pillarId]: {
             ...state.pillars[action.pillarId],
-            bucket_weights: { ...state.pillars[action.pillarId].bucket_weights, [action.bucketId]: action.value },
+            bucket_weights: {
+              ...state.pillars[action.pillarId].bucket_weights,
+              [action.bucketId]: action.value,
+            },
           },
         },
       }
@@ -164,18 +193,36 @@ function ScoringHeader({
     <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="space-y-2">
         {children}
-        <p className="text-xs text-muted-foreground">{Object.keys(draftConfig.pillars).length} pillars configured</p>
+        <p className="text-xs text-muted-foreground">
+          {Object.keys(draftConfig.pillars).length} pillars configured
+        </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {extraActions}
-        <Button type="button" variant="outline" onClick={onResetSaved} disabled={!hasDraftChanges || isSaving}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onResetSaved}
+          disabled={!hasDraftChanges || isSaving}
+        >
           Reset to saved
         </Button>
-        <Button type="button" variant="outline" onClick={onResetDefaults} disabled={isSaving}>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onResetDefaults}
+          disabled={isSaving}
+        >
           Reset to defaults
         </Button>
-        <Button type="button" onClick={onSave} disabled={!hasDraftChanges || isSaving}>
-          {isSaving ? <CompileLoader size={16} className="text-primary-foreground" /> : null}
+        <Button
+          type="button"
+          onClick={onSave}
+          disabled={!hasDraftChanges || isSaving}
+        >
+          {isSaving ? (
+            <CompileLoader size={16} className="text-primary-foreground" />
+          ) : null}
           Save
         </Button>
       </div>
@@ -200,27 +247,61 @@ function ScoringSidebar({
     <Card className="border-border/50">
       <CardHeader>
         <CardTitle>Global controls</CardTitle>
-        <CardDescription>These settings affect all pillars and issue calculations.</CardDescription>
+        <CardDescription>
+          These settings affect all pillars and issue calculations.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <SidebarSection title="Global weights">
-          <SliderRow label="Minimum overall score" value={draftConfig.minimum_overall_score} min={0} max={100} step={1} onChange={(value) => updateTopLevel("minimum_overall_score", value)} />
-          <SliderRow label="Coverage scale" value={draftConfig.coverage_scale} min={0} max={5} step={0.05} onChange={(value) => updateTopLevel("coverage_scale", value)} />
-          <SliderRow label="Volume pressure scale" value={draftConfig.volume_pressure_scale} min={0} max={5} step={0.05} onChange={(value) => updateTopLevel("volume_pressure_scale", value)} />
-          <SliderRow label="Maximum volume pressure" value={draftConfig.maximum_volume_pressure} min={0} max={100} step={1} onChange={(value) => updateTopLevel("maximum_volume_pressure", value)} />
+          <SliderRow
+            label="Minimum overall score"
+            value={draftConfig.minimum_overall_score}
+            min={0}
+            max={100}
+            step={1}
+            onChange={(value) => updateTopLevel("minimum_overall_score", value)}
+          />
+          <SliderRow
+            label="Coverage scale"
+            value={draftConfig.coverage_scale}
+            min={0}
+            max={5}
+            step={0.05}
+            onChange={(value) => updateTopLevel("coverage_scale", value)}
+          />
+          <SliderRow
+            label="Volume pressure scale"
+            value={draftConfig.volume_pressure_scale}
+            min={0}
+            max={5}
+            step={0.05}
+            onChange={(value) => updateTopLevel("volume_pressure_scale", value)}
+          />
+          <SliderRow
+            label="Maximum volume pressure"
+            value={draftConfig.maximum_volume_pressure}
+            min={0}
+            max={100}
+            step={1}
+            onChange={(value) =>
+              updateTopLevel("maximum_volume_pressure", value)
+            }
+          />
         </SidebarSection>
         <SidebarSection title="Severity multipliers">
-          {sortedEntries(draftConfig.severity_multipliers).map(([severity, value]) => (
-            <SliderRow
-              key={severity}
-              label={humanize(severity)}
-              value={value}
-              min={0}
-              max={5}
-              step={0.05}
-              onChange={(nextValue) => updateSeverity(severity, nextValue)}
-            />
-          ))}
+          {sortedEntries(draftConfig.severity_multipliers).map(
+            ([severity, value]) => (
+              <SliderRow
+                key={severity}
+                label={humanize(severity)}
+                value={value}
+                min={0}
+                max={5}
+                step={0.05}
+                onChange={(nextValue) => updateSeverity(severity, nextValue)}
+              />
+            )
+          )}
         </SidebarSection>
       </CardContent>
     </Card>
@@ -241,8 +322,16 @@ type PillarCardProps = {
   issueMap: Map<string, ScoreBreakdownIssueTypeResponse>
   overallWeight: number
   onUpdateOverallWeight: (pillarId: string, value: number) => void
-  onUpdateBucketWeight: (pillarId: string, bucketId: string, value: number) => void
-  onUpdateIssuePenalty: (pillarId: string, issueType: string, value: number) => void
+  onUpdateBucketWeight: (
+    pillarId: string,
+    bucketId: string,
+    value: number
+  ) => void
+  onUpdateIssuePenalty: (
+    pillarId: string,
+    issueType: string,
+    value: number
+  ) => void
 }
 
 function PillarCard({
@@ -294,7 +383,9 @@ function PillarCard({
             />
             <div className="flex flex-col gap-2">
               {bucketEntries.map(([bucketId, weight]) => {
-                const bucket = pillarBreakdown?.buckets.find((b) => b.id === bucketId)
+                const bucket = pillarBreakdown?.buckets.find(
+                  (b) => b.id === bucketId
+                )
                 return (
                   <ConfigRow
                     key={bucketId}
@@ -311,7 +402,9 @@ function PillarCard({
                       min={0}
                       max={1}
                       step={0.01}
-                      onChange={(v) => onUpdateBucketWeight(pillarId, bucketId, v)}
+                      onChange={(v) =>
+                        onUpdateBucketWeight(pillarId, bucketId, v)
+                      }
                     />
                   </ConfigRow>
                 )
@@ -343,7 +436,9 @@ function PillarCard({
                         min={0}
                         max={30}
                         step={0.5}
-                        onChange={(v) => onUpdateIssuePenalty(pillarId, issueTypeId, v)}
+                        onChange={(v) =>
+                          onUpdateIssuePenalty(pillarId, issueTypeId, v)
+                        }
                       />
                     </ConfigRow>
                   )
@@ -406,10 +501,13 @@ export function ScoringEditor({
   headerExtraActions,
 }: ScoringEditorProps) {
   const [savedConfig, setSavedConfig] = useState(() => deepClone(initialConfig))
-  const [draftConfig, dispatchConfig] = useReducer(configReducer, initialConfig, deepClone)
-  const [previewBreakdown, setPreviewBreakdown] = useState<ScoreBreakdownResponse | null>(
-    initialBaselineBreakdown ?? null,
+  const [draftConfig, dispatchConfig] = useReducer(
+    configReducer,
+    initialConfig,
+    deepClone
   )
+  const [previewBreakdown, setPreviewBreakdown] =
+    useState<ScoreBreakdownResponse | null>(initialBaselineBreakdown ?? null)
   const [ui, dispatchUi] = useReducer(uiReducer, {
     isSaving: false,
     isPreviewing: false,
@@ -419,16 +517,17 @@ export function ScoringEditor({
   const abortRef = useRef<AbortController | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const displayedBreakdown = previewBreakdown ?? initialBaselineBreakdown ?? null
+  const displayedBreakdown =
+    previewBreakdown ?? initialBaselineBreakdown ?? null
 
   const configuredPillarIds = useMemo(
     () => Object.keys(draftConfig.pillars),
-    [draftConfig.pillars],
+    [draftConfig.pillars]
   )
 
   const hasDraftChanges = useMemo(
     () => !deepEqual(savedConfig, draftConfig),
-    [savedConfig, draftConfig],
+    [savedConfig, draftConfig]
   )
 
   /* ---- preview ---- */
@@ -449,7 +548,7 @@ export function ScoringEditor({
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ crawl_id: crawlId, config: draftConfig }),
-        },
+        }
       )
       if (seq === previewSeqRef.current) {
         setPreviewBreakdown(response.breakdown)
@@ -458,7 +557,10 @@ export function ScoringEditor({
     } catch (error) {
       if (controller.signal.aborted) return
       if (seq === previewSeqRef.current) {
-        dispatchUi({ type: "PREVIEW_ERROR", message: error instanceof ApiError ? error.message : "Preview failed" })
+        dispatchUi({
+          type: "PREVIEW_ERROR",
+          message: error instanceof ApiError ? error.message : "Preview failed",
+        })
       }
     }
   })
@@ -496,11 +598,18 @@ export function ScoringEditor({
       }
       dispatchUi({ type: "SAVING_DONE" })
     } catch (error) {
-      dispatchUi({ type: "SAVING_ERROR", message: error instanceof ApiError ? error.message : "Unable to save scoring config." })
+      dispatchUi({
+        type: "SAVING_ERROR",
+        message:
+          error instanceof ApiError
+            ? error.message
+            : "Unable to save scoring config.",
+      })
     }
   }
 
-  const resetToSaved = () => dispatchConfig({ type: "REPLACE", config: deepClone(savedConfig) })
+  const resetToSaved = () =>
+    dispatchConfig({ type: "REPLACE", config: deepClone(savedConfig) })
 
   const resetToDefaults = () => {
     onResetToDefaults?.()
@@ -516,28 +625,40 @@ export function ScoringEditor({
   const updateOverallWeight = (pillarId: string, value: number) => {
     dispatchConfig({ type: "SET_OVERALL_WEIGHT", pillarId, value })
   }
-  const updateBucketWeight = (pillarId: string, bucketId: string, value: number) => {
+  const updateBucketWeight = (
+    pillarId: string,
+    bucketId: string,
+    value: number
+  ) => {
     dispatchConfig({ type: "SET_BUCKET_WEIGHT", pillarId, bucketId, value })
   }
-  const updateIssuePenalty = (pillarId: string, issueType: string, value: number) => {
+  const updateIssuePenalty = (
+    pillarId: string,
+    issueType: string,
+    value: number
+  ) => {
     dispatchConfig({ type: "SET_ISSUE_PENALTY", pillarId, issueType, value })
   }
 
-  const findPillar = (pillarId: string): ScoreBreakdownPillarResponse | undefined =>
+  const findPillar = (
+    pillarId: string
+  ): ScoreBreakdownPillarResponse | undefined =>
     displayedBreakdown?.pillars.find((p) => p.id === pillarId)
 
   const scoreDelta = (pillarId: string): number | null => {
     const current = findPillar(pillarId)?.score
-    const baseline = initialBaselineBreakdown?.pillars.find((p) => p.id === pillarId)?.score
+    const baseline = initialBaselineBreakdown?.pillars.find(
+      (p) => p.id === pillarId
+    )?.score
     return current != null && baseline != null ? current - baseline : null
   }
 
   if (loading) {
-    return <p className="text-muted-foreground text-sm">Loading...</p>
+    return <p className="text-sm text-muted-foreground">Loading...</p>
   }
 
   if (!draftConfig) {
-    return <p className="text-muted-foreground text-sm">No config loaded</p>
+    return <p className="text-sm text-muted-foreground">No config loaded</p>
   }
 
   return (
@@ -560,9 +681,12 @@ export function ScoringEditor({
           headerChildren
         ) : (
           <>
-            <h1 className="text-3xl font-medium tracking-[-0.06em] sm:text-4xl">Scoring config</h1>
+            <h1 className="text-3xl font-medium tracking-[-0.06em] sm:text-4xl">
+              Scoring config
+            </h1>
             <p className="text-sm text-muted-foreground">
-              Tune global scoring weights, severity multipliers, and issue penalties.
+              Tune global scoring weights, severity multipliers, and issue
+              penalties.
             </p>
           </>
         )}
@@ -574,7 +698,9 @@ export function ScoringEditor({
         ) : null}
       </ScoringHeader>
 
-      {ui.loadError && <StatusCard tone="destructive">{ui.loadError}</StatusCard>}
+      {ui.loadError && (
+        <StatusCard tone="destructive">{ui.loadError}</StatusCard>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] xl:items-start">
         <aside className="xl:sticky xl:top-4">
@@ -588,7 +714,8 @@ export function ScoringEditor({
         <div className="flex min-w-0 flex-col gap-6">
           {!crawlId && showCrawlMessage && (
             <StatusCard>
-              Select a crawl to preview score changes. Controls still edit the global draft config.
+              Select a crawl to preview score changes. Controls still edit the
+              global draft config.
             </StatusCard>
           )}
 
@@ -605,7 +732,11 @@ export function ScoringEditor({
                   key={pillarId}
                   label={pillarConfig.label}
                   value={findPillar(pillarId)?.score ?? null}
-                  baseline={initialBaselineBreakdown?.pillars.find((p) => p.id === pillarId)?.score}
+                  baseline={
+                    initialBaselineBreakdown?.pillars.find(
+                      (p) => p.id === pillarId
+                    )?.score
+                  }
                 />
               )
             })}
@@ -617,8 +748,12 @@ export function ScoringEditor({
               const pillarBreakdown = findPillar(pillarId)
               const delta = scoreDelta(pillarId)
               const bucketEntries = sortedEntries(pillarConfig.bucket_weights)
-              const issueEntries = sortedEntries(pillarConfig.issue_penalty_by_type)
-              const issueMap = pillarBreakdown ? buildIssueMap(pillarBreakdown) : new Map()
+              const issueEntries = sortedEntries(
+                pillarConfig.issue_penalty_by_type
+              )
+              const issueMap = pillarBreakdown
+                ? buildIssueMap(pillarBreakdown)
+                : new Map()
 
               return (
                 <PillarCard

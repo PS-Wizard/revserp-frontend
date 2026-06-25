@@ -12,7 +12,12 @@ import { GSCHeaderCard } from "./header-card"
 import { GSCMetricGrid } from "./metric-grid"
 import { GSCPerformanceChart } from "./performance-chart"
 import { GSCTableSection } from "./table-section"
-import { filterTableRows, nextTableSortState, sortTableRows, type TableSortState } from "./table"
+import {
+  filterTableRows,
+  nextTableSortState,
+  sortTableRows,
+  type TableSortState,
+} from "./table"
 import {
   buildChartSeries,
   buildMetricSummary,
@@ -23,10 +28,19 @@ import {
 } from "./types"
 import { capitalize, dateTimestamp, formatCountryLabel } from "./formatters"
 
-const chartMetricOrder: GSCMetricKey[] = ["impressions", "clicks", "ctr", "position"]
+const chartMetricOrder: GSCMetricKey[] = [
+  "impressions",
+  "clicks",
+  "ctr",
+  "position",
+]
 const metricConfig: Record<GSCMetricKey, MetricConfig> = {
   clicks: { label: "Clicks", color: "#7dd3fc", seriesName: "Clicks" },
-  impressions: { label: "Impressions", color: "#c084fc", seriesName: "Impressions" },
+  impressions: {
+    label: "Impressions",
+    color: "#c084fc",
+    seriesName: "Impressions",
+  },
   ctr: { label: "CTR", color: "#34d399", seriesName: "CTR" },
   position: { label: "Position", color: "#fbbf24", seriesName: "Position" },
 }
@@ -69,15 +83,24 @@ function overviewReducer(state: OverviewState, action: Action): OverviewState {
     case "SET_TABLE_SEARCH":
       return { ...state, tableSearch: action.value }
     case "SET_TABLE_SORT":
-      return { ...state, tableSort: nextTableSortState(state.tableSort, action.value) }
+      return {
+        ...state,
+        tableSort: nextTableSortState(state.tableSort, action.value),
+      }
     case "TOGGLE_METRIC": {
       const metricKey = action.value
-      if (state.visibleMetrics[metricKey] && Object.values(state.visibleMetrics).filter(Boolean).length === 1) {
+      if (
+        state.visibleMetrics[metricKey] &&
+        Object.values(state.visibleMetrics).filter(Boolean).length === 1
+      ) {
         return state
       }
       return {
         ...state,
-        visibleMetrics: { ...state.visibleMetrics, [metricKey]: !state.visibleMetrics[metricKey] },
+        visibleMetrics: {
+          ...state.visibleMetrics,
+          [metricKey]: !state.visibleMetrics[metricKey],
+        },
       }
     }
     case "RESET_TABLE":
@@ -124,8 +147,11 @@ export function GSCOverview({
   isOrganizationOwner: boolean
   onRefreshOverview: () => Promise<void>
 }) {
-  const [state, dispatch] = useReducer(overviewReducer, status, createInitialState)
-
+  const [state, dispatch] = useReducer(
+    overviewReducer,
+    status,
+    createInitialState
+  )
 
   const countryDisplayNames = useMemo(
     () =>
@@ -135,12 +161,17 @@ export function GSCOverview({
     []
   )
   const selectedSite =
-    status.available_sites.find((site) => site.site_url === state.selectedGSCSiteURL) ??
+    status.available_sites.find(
+      (site) => site.site_url === state.selectedGSCSiteURL
+    ) ??
     status.selected_site ??
     null
   const overview = overviewResponse?.overview ?? null
   const selectedWindowOverview = overview?.windows["180"] ?? null
-  const trendRows = useMemo(() => selectedWindowOverview?.trend ?? [], [selectedWindowOverview])
+  const trendRows = useMemo(
+    () => selectedWindowOverview?.trend ?? [],
+    [selectedWindowOverview]
+  )
   // Reset table state when overview data changes (replaces useEffect sync)
   const prevOverviewRef = useRef(selectedWindowOverview)
   if (selectedWindowOverview !== prevOverviewRef.current) {
@@ -154,32 +185,63 @@ export function GSCOverview({
 
   const previousVisibleTrendRows = useMemo(() => {
     if (!trendRows.length || !currentVisibleTrendRows.length) return []
-    const currentStartTimestamp = dateTimestamp(currentVisibleTrendRows[0]?.date)
+    const currentStartTimestamp = dateTimestamp(
+      currentVisibleTrendRows[0]?.date
+    )
     const previousEndTimestamp = currentStartTimestamp - dayInMilliseconds
     const previousStartTimestamp =
-      previousEndTimestamp - (Math.max(1, currentVisibleTrendRows.length) - 1) * dayInMilliseconds
+      previousEndTimestamp -
+      (Math.max(1, currentVisibleTrendRows.length) - 1) * dayInMilliseconds
 
     return trendRows.filter((row) => {
       const timestamp = dateTimestamp(row.date)
-      return timestamp >= previousStartTimestamp && timestamp <= previousEndTimestamp
+      return (
+        timestamp >= previousStartTimestamp && timestamp <= previousEndTimestamp
+      )
     })
   }, [currentVisibleTrendRows, trendRows])
 
-
-  const derivedMetricSummary = useMemo(() => ({
-    clicks: buildMetricSummary("clicks", currentVisibleTrendRows, previousVisibleTrendRows),
-    impressions: buildMetricSummary("impressions", currentVisibleTrendRows, previousVisibleTrendRows),
-    ctr: buildMetricSummary("ctr", currentVisibleTrendRows, previousVisibleTrendRows),
-    position: buildMetricSummary("position", currentVisibleTrendRows, previousVisibleTrendRows),
-  }), [currentVisibleTrendRows, previousVisibleTrendRows])
-
-  const queryRows = toTableRows(selectedWindowOverview?.top_queries ?? [], (row) => row.query ?? "")
-  const pageRows = toTableRows(selectedWindowOverview?.top_pages ?? [], (row) => row.page ?? "")
-  const countryRows = toTableRows(selectedWindowOverview?.country_breakdown ?? [], (row) =>
-    formatCountryLabel(row.country ?? "", countryDisplayNames)
+  const derivedMetricSummary = useMemo(
+    () => ({
+      clicks: buildMetricSummary(
+        "clicks",
+        currentVisibleTrendRows,
+        previousVisibleTrendRows
+      ),
+      impressions: buildMetricSummary(
+        "impressions",
+        currentVisibleTrendRows,
+        previousVisibleTrendRows
+      ),
+      ctr: buildMetricSummary(
+        "ctr",
+        currentVisibleTrendRows,
+        previousVisibleTrendRows
+      ),
+      position: buildMetricSummary(
+        "position",
+        currentVisibleTrendRows,
+        previousVisibleTrendRows
+      ),
+    }),
+    [currentVisibleTrendRows, previousVisibleTrendRows]
   )
-  const deviceRows = toTableRows(selectedWindowOverview?.device_breakdown ?? [], (row) =>
-    capitalize(row.device ?? "")
+
+  const queryRows = toTableRows(
+    selectedWindowOverview?.top_queries ?? [],
+    (row) => row.query ?? ""
+  )
+  const pageRows = toTableRows(
+    selectedWindowOverview?.top_pages ?? [],
+    (row) => row.page ?? ""
+  )
+  const countryRows = toTableRows(
+    selectedWindowOverview?.country_breakdown ?? [],
+    (row) => formatCountryLabel(row.country ?? "", countryDisplayNames)
+  )
+  const deviceRows = toTableRows(
+    selectedWindowOverview?.device_breakdown ?? [],
+    (row) => capitalize(row.device ?? "")
   )
   const activeTableSourceRows =
     state.activeDimensionTab === "queries"
@@ -189,7 +251,10 @@ export function GSCOverview({
         : state.activeDimensionTab === "countries"
           ? countryRows
           : deviceRows
-  const activeTableRows = sortTableRows(filterTableRows(activeTableSourceRows, state.tableSearch), state.tableSort)
+  const activeTableRows = sortTableRows(
+    filterTableRows(activeTableSourceRows, state.tableSearch),
+    state.tableSort
+  )
   const chartSeries = useMemo(
     () =>
       buildChartSeries(
@@ -200,7 +265,6 @@ export function GSCOverview({
       ),
     [selectedWindowOverview]
   )
-
 
   const handleRefreshOverview = async () => {
     dispatch({ type: "SET_REFRESHING", value: true })
@@ -225,14 +289,20 @@ export function GSCOverview({
     dispatch({ type: "SET_SELECTION_ERROR", value: "" })
     dispatch({ type: "SET_SAVING", value: true })
     try {
-      await clientApiPost<{ ok: boolean }>(`/projects/${activeProjectID}/gsc/select-site`, {
-        site_url: nextSiteURL,
-      })
+      await clientApiPost<{ ok: boolean }>(
+        `/projects/${activeProjectID}/gsc/select-site`,
+        {
+          site_url: nextSiteURL,
+        }
+      )
       await onRefreshOverview()
     } catch (error) {
       dispatch({
         type: "SET_SELECTION_ERROR",
-        value: error instanceof ApiError ? error.message : "Unable to switch the Search Console property.",
+        value:
+          error instanceof ApiError
+            ? error.message
+            : "Unable to switch the Search Console property.",
       })
     } finally {
       dispatch({ type: "SET_SAVING", value: false })
@@ -240,7 +310,10 @@ export function GSCOverview({
   }
 
   const toggleMetric = (metricKey: GSCMetricKey) => {
-    if (state.visibleMetrics[metricKey] && Object.values(state.visibleMetrics).filter(Boolean).length === 1) {
+    if (
+      state.visibleMetrics[metricKey] &&
+      Object.values(state.visibleMetrics).filter(Boolean).length === 1
+    ) {
       return
     }
     dispatch({ type: "TOGGLE_METRIC", value: metricKey })
@@ -279,9 +352,18 @@ export function GSCOverview({
           <GSCTableSection
             activeDimensionTab={state.activeDimensionTab}
             activeTableRows={activeTableRows}
-            onDimensionTabChange={(value) => dispatch({ type: "SET_DIMENSION_TAB", value: value as GSCDimensionTab })}
-            onTableSearchChange={(value) => dispatch({ type: "SET_TABLE_SEARCH", value })}
-            onToggleTableSort={(column) => dispatch({ type: "SET_TABLE_SORT", value: column })}
+            onDimensionTabChange={(value) =>
+              dispatch({
+                type: "SET_DIMENSION_TAB",
+                value: value as GSCDimensionTab,
+              })
+            }
+            onTableSearchChange={(value) =>
+              dispatch({ type: "SET_TABLE_SEARCH", value })
+            }
+            onToggleTableSort={(column) =>
+              dispatch({ type: "SET_TABLE_SORT", value: column })
+            }
             tableSearch={state.tableSearch}
             tableSort={state.tableSort}
           />
@@ -294,4 +376,3 @@ export function GSCOverview({
     </div>
   )
 }
-

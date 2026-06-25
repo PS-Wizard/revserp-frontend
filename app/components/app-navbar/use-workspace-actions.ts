@@ -9,11 +9,7 @@ import { getDefaultInviteExpiryValue, getInviteValidationError } from "./utils"
 
 // --- State ---
 
-type WorkspaceAction =
-  | "idle"
-  | "switching"
-  | "leaving"
-  | "logging-out"
+type WorkspaceAction = "idle" | "switching" | "leaving" | "logging-out"
 
 type WorkspaceActionState = {
   profileActionError: string
@@ -61,7 +57,7 @@ type WorkspaceActionEvent =
 
 function workspaceActionReducer(
   state: WorkspaceActionState,
-  event: WorkspaceActionEvent,
+  event: WorkspaceActionEvent
 ): WorkspaceActionState {
   switch (event.type) {
     case "SET_ERROR":
@@ -124,7 +120,11 @@ export function useWorkspaceActions({
   navigate,
   revalidator,
 }: UseWorkspaceActionsParams) {
-  const [state, dispatch] = useReducer(workspaceActionReducer, undefined, initialWorkspaceState)
+  const [state, dispatch] = useReducer(
+    workspaceActionReducer,
+    undefined,
+    initialWorkspaceState
+  )
 
   async function handleSelectOrganization(nextOrganizationId: string) {
     if (
@@ -139,15 +139,21 @@ export function useWorkspaceActions({
     dispatch({ type: "SET_WORKSPACE_ACTION", action: "switching" })
 
     try {
-      await clientApiPost<{ ok: boolean; active_org_id: string }>("/me/active-organization", {
-        organization_id: nextOrganizationId,
-      })
+      await clientApiPost<{ ok: boolean; active_org_id: string }>(
+        "/me/active-organization",
+        {
+          organization_id: nextOrganizationId,
+        }
+      )
       await navigate("/app")
       revalidator.revalidate()
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to switch workspace.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to switch workspace.",
       })
     } finally {
       dispatch({ type: "RESET_WORKSPACE_ACTION" })
@@ -173,7 +179,11 @@ export function useWorkspaceActions({
 
     const expiresAtDate = new Date(state.inviteExpiresAt)
     const maxUses = Number(state.inviteMaxUses)
-    const validationError = getInviteValidationError(state.inviteExpiresAt, expiresAtDate, maxUses)
+    const validationError = getInviteValidationError(
+      state.inviteExpiresAt,
+      expiresAtDate,
+      maxUses
+    )
     if (validationError) {
       dispatch({ type: "SET_ERROR", error: validationError })
       return
@@ -188,11 +198,17 @@ export function useWorkspaceActions({
         expires_at: expiresAtDate.toISOString(),
         max_uses: maxUses,
       })
-      dispatch({ type: "SET_INVITE_LINK", value: `${window.location.origin}/invite/${invite.token}` })
+      dispatch({
+        type: "SET_INVITE_LINK",
+        value: `${window.location.origin}/invite/${invite.token}`,
+      })
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to create invite link.",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to create invite link.",
       })
     } finally {
       dispatch({ type: "SET_CREATING_INVITE", value: false })
@@ -217,14 +233,18 @@ export function useWorkspaceActions({
     dispatch({ type: "SET_WORKSPACE_ACTION", action: "leaving" })
 
     try {
-      await clientApiPost<{ ok: boolean }>(`/organizations/${organizationId}/leave`, {})
+      await clientApiPost<{ ok: boolean }>(
+        `/organizations/${organizationId}/leave`,
+        {}
+      )
       dispatch({ type: "CLOSE_LEAVE_DIALOG" })
       await navigate("/app")
       revalidator.revalidate()
     } catch (error) {
       dispatch({
         type: "SET_ERROR",
-        error: error instanceof Error ? error.message : "Unable to leave workspace.",
+        error:
+          error instanceof Error ? error.message : "Unable to leave workspace.",
       })
     } finally {
       dispatch({ type: "RESET_WORKSPACE_ACTION" })
@@ -251,7 +271,9 @@ export function useWorkspaceActions({
   }
 
   const activeOrganization =
-    organizations.find((org) => org.id === organizationId) ?? organizations[0] ?? null
+    organizations.find((org) => org.id === organizationId) ??
+    organizations[0] ??
+    null
 
   return {
     profileActionError: state.profileActionError,
@@ -273,10 +295,14 @@ export function useWorkspaceActions({
     openLeaveWorkspaceDialog,
     handleLeaveOrganization,
     handleLogout,
-    setInviteExpiresAt: (value: string) => dispatch({ type: "SET_INVITE_EXPIRES_AT", value }),
-    setInviteMaxUses: (value: string) => dispatch({ type: "SET_INVITE_MAX_USES", value }),
+    setInviteExpiresAt: (value: string) =>
+      dispatch({ type: "SET_INVITE_EXPIRES_AT", value }),
+    setInviteMaxUses: (value: string) =>
+      dispatch({ type: "SET_INVITE_MAX_USES", value }),
     setLeaveWorkspaceOpen: (open: boolean) => {
-      dispatch(open ? { type: "OPEN_LEAVE_DIALOG" } : { type: "CLOSE_LEAVE_DIALOG" })
+      dispatch(
+        open ? { type: "OPEN_LEAVE_DIALOG" } : { type: "CLOSE_LEAVE_DIALOG" }
+      )
     },
   }
 }

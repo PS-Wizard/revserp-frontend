@@ -8,7 +8,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import type { ProjectResponse } from "~/lib/api.types"
 
@@ -20,9 +26,15 @@ type RunCrawlDialogProps = {
   isOpen: boolean
   isStartingCrawl: boolean
   maxDepth: string
+  maxPages: string
+  delayMs: string
+  jitterMs: string
   runCrawlError: string
   onFetchTimeoutSecondsChange: (value: string) => void
   onMaxDepthChange: (value: string) => void
+  onMaxPagesChange: (value: string) => void
+  onDelayMsChange: (value: string) => void
+  onJitterMsChange: (value: string) => void
   onOpenChange: (open: boolean) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
 }
@@ -35,9 +47,15 @@ export function RunCrawlDialog({
   isOpen,
   isStartingCrawl,
   maxDepth,
+  maxPages,
+  delayMs,
+  jitterMs,
   runCrawlError,
   onFetchTimeoutSecondsChange,
   onMaxDepthChange,
+  onMaxPagesChange,
+  onDelayMsChange,
+  onJitterMsChange,
   onOpenChange,
   onSubmit,
 }: RunCrawlDialogProps) {
@@ -48,7 +66,8 @@ export function RunCrawlDialog({
           <DialogHeader>
             <DialogTitle>Run Crawl</DialogTitle>
             <DialogDescription>
-              Queue a new crawl for {activeProject?.name || "the selected project"}.
+              Queue a new crawl for{" "}
+              {activeProject?.name || "the selected project"}.
             </DialogDescription>
           </DialogHeader>
 
@@ -65,26 +84,86 @@ export function RunCrawlDialog({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="fetch-timeout-seconds">Fetch timeout seconds</FieldLabel>
+              <FieldLabel htmlFor="max-pages">Max pages</FieldLabel>
+              <Input
+                id="max-pages"
+                min="1"
+                onChange={(event) => onMaxPagesChange(event.target.value)}
+                placeholder="Unlimited"
+                step="1"
+                type="number"
+                value={maxPages}
+              />
+              <FieldDescription>
+                Leave blank to crawl every discovered page.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="delay-ms">Delay (ms)</FieldLabel>
+              <Input
+                id="delay-ms"
+                min="1"
+                onChange={(event) => onDelayMsChange(event.target.value)}
+                placeholder="No delay"
+                step="1"
+                type="number"
+                value={delayMs}
+              />
+              <FieldDescription>
+                Time each worker waits between requests. Leave blank for no
+                delay.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="jitter-ms">Jitter (ms)</FieldLabel>
+              <Input
+                id="jitter-ms"
+                min="1"
+                onChange={(event) => onJitterMsChange(event.target.value)}
+                placeholder="None"
+                step="1"
+                type="number"
+                value={jitterMs}
+              />
+              <FieldDescription>
+                Randomizes the delay by ± this amount so requests look less
+                robotic. Leave blank for none.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="fetch-timeout-seconds">
+                Fetch timeout seconds
+              </FieldLabel>
               <Input
                 id="fetch-timeout-seconds"
                 min="1"
-                onChange={(event) => onFetchTimeoutSecondsChange(event.target.value)}
+                onChange={(event) =>
+                  onFetchTimeoutSecondsChange(event.target.value)
+                }
                 step="1"
                 type="number"
                 value={fetchTimeoutSeconds}
               />
-              <FieldDescription>Recommended defaults are already filled in.</FieldDescription>
+              <FieldDescription>
+                Recommended defaults are already filled in.
+              </FieldDescription>
             </Field>
           </FieldGroup>
 
           <FieldError>{runCrawlError}</FieldError>
 
           <DialogFooter>
-            <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="outline"
+            >
               Cancel
             </Button>
-            <Button disabled={isStartingCrawl || !activeProjectId || isCrawlRunning} type="submit">
+            <Button
+              disabled={isStartingCrawl || !activeProjectId || isCrawlRunning}
+              type="submit"
+            >
               {isStartingCrawl ? (
                 <CompileLoader className="text-primary-foreground" size={18} />
               ) : null}

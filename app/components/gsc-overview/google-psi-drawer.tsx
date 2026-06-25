@@ -23,7 +23,12 @@ export function GooglePSIDrawer({
   const mobile = psiResult?.mobile
 
   return (
-    <Drawer open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+    <Drawer
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onClose()
+      }}
+    >
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader>
           <DrawerTitle>Google PageSpeed Insights</DrawerTitle>
@@ -46,7 +51,8 @@ export function GooglePSIDrawer({
             <div className="flex items-center gap-3 rounded-md border border-red-300/15 bg-red-400/[0.045] px-4 py-4 text-sm text-red-100">
               <InfoIcon className="size-4 shrink-0" />
               <span>
-                {mobile?.error ?? "Google PageSpeed Insights data is not available for this crawl."}
+                {mobile?.error ??
+                  "Google PageSpeed Insights data is not available for this crawl."}
               </span>
             </div>
           ) : (
@@ -64,13 +70,17 @@ export function GooglePSIDrawer({
                     {mobile.performance_score ?? "—"}
                   </div>
                   <p className="text-sm font-medium">Performance Score</p>
-                  <p className="text-xs text-muted-foreground">{scoreLabel(mobile.performance_score)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {scoreLabel(mobile.performance_score)}
+                  </p>
                 </div>
               </div>
 
               {/* Core Web Vitals */}
               <div>
-                <h3 className="mb-3 text-sm font-medium">Core Web Vitals · Mobile</h3>
+                <h3 className="mb-3 text-sm font-medium">
+                  Core Web Vitals · Mobile
+                </h3>
                 <div className="space-y-2">
                   <MetricRow
                     label="Largest Contentful Paint"
@@ -166,18 +176,30 @@ function MetricRow({
         : value < poorThreshold
       : null
   const tone =
-    isGood === true ? "text-emerald-200" : isPoor === true ? "text-red-200" : "text-amber-200"
+    isGood === true
+      ? "text-emerald-200"
+      : isPoor === true
+        ? "text-red-200"
+        : "text-amber-200"
 
   return (
     <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 px-4 py-3">
       <div>
         <p className="text-sm">{label}</p>
         <p className="text-xs text-muted-foreground">
-          {value != null ? `${resolvedDisplay?.toLocaleString() ?? "—"} ${unit}`.trim() : "—"}
+          {value != null
+            ? `${resolvedDisplay?.toLocaleString() ?? "—"} ${unit}`.trim()
+            : "—"}
         </p>
       </div>
       <span className={`text-xs font-medium ${tone}`}>
-        {isGood === true ? "Good" : isPoor === true ? "Poor" : value != null ? "Needs work" : "—"}
+        {isGood === true
+          ? "Good"
+          : isPoor === true
+            ? "Poor"
+            : value != null
+              ? "Needs work"
+              : "—"}
       </span>
     </div>
   )

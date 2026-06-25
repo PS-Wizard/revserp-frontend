@@ -60,7 +60,8 @@ export default function AuthCallbackPage() {
       <div className="w-full max-w-md rounded-xl border border-border bg-card px-8 py-10 text-center shadow-xs">
         <h1 className="text-3xl font-medium tracking-tight">Signing you in</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          {errorMessage || "Finishing the Google sign-in flow and opening your workspace."}
+          {errorMessage ||
+            "Finishing the Google sign-in flow and opening your workspace."}
         </p>
         {errorMessage && (
           <p className="mt-6 text-sm">

@@ -1,4 +1,8 @@
-import type { CrawlResponse, MeResponse, ProjectResponse } from "~/lib/api.types"
+import type {
+  CrawlResponse,
+  MeResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 
 export type DashboardView = "revserp-audit" | "search-console" | "revserp-ai"
 export type ExportFormat = "csv" | "xlsx"
@@ -8,6 +12,7 @@ export type AppNavbarProps = {
   currentCrawl: CrawlResponse | null
   projectCrawls: Record<string, CrawlResponse[]>
   isCrawlRunning: boolean
+  crawlStatusLabel: string
   onCrawlStart: () => void
   organizationId: string
   organizations: MeResponse["organizations"]

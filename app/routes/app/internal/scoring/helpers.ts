@@ -1,4 +1,7 @@
-import type { ScoreBreakdownIssueTypeResponse, ScoreBreakdownPillarResponse } from "~/lib/api.types"
+import type {
+  ScoreBreakdownIssueTypeResponse,
+  ScoreBreakdownPillarResponse,
+} from "~/lib/api.types"
 
 export function deepClone<T>(value: T): T {
   return structuredClone(value)
@@ -22,7 +25,10 @@ export function deepEqual(a: unknown, b: unknown): boolean {
     const keysB = Object.keys(b as Record<string, unknown>)
     if (keysA.length !== keysB.length) return false
     return keysA.every((key) =>
-      deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+      deepEqual(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key]
+      )
     )
   }
 
@@ -46,13 +52,17 @@ export function fmtNum(value: number | undefined | null, digits = 2) {
   return value.toFixed(digits).replace(/\.00$/, "")
 }
 
-export function sortedEntries(record: Record<string, number>): [string, number][] {
+export function sortedEntries(
+  record: Record<string, number>
+): [string, number][] {
   return Object.entries(record).sort(([a], [b]) =>
     humanize(a).localeCompare(humanize(b))
   )
 }
 
-export function buildIssueMap(pillar: ScoreBreakdownPillarResponse): Map<string, ScoreBreakdownIssueTypeResponse> {
+export function buildIssueMap(
+  pillar: ScoreBreakdownPillarResponse
+): Map<string, ScoreBreakdownIssueTypeResponse> {
   const map = new Map<string, ScoreBreakdownIssueTypeResponse>()
   for (const bucket of pillar.buckets) {
     for (const issue of bucket.issues) {
