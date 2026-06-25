@@ -28,16 +28,20 @@ import type { DashboardView } from "./types"
 
 type AiConversationsPopoverProps = {
   activeProjectId?: string | null
+  isCrawlRunning?: boolean
   onViewChange: (value: DashboardView) => void
   onSelectConversation?: (conversationId: string) => void
   onDeleteConversation?: (conversationId: string) => void
+  onNewChat?: () => void
 }
 
 export function AiConversationsPopover({
   activeProjectId,
+  isCrawlRunning,
   onViewChange,
   onSelectConversation,
   onDeleteConversation,
+  onNewChat,
 }: AiConversationsPopoverProps) {
   const [aiConversations, setAiConversations] = useState<
     AIConversationResponse[]
@@ -66,6 +70,7 @@ export function AiConversationsPopover({
   }
 
   function handleMouseEnter() {
+    if (isCrawlRunning) return
     setIsAiChatMenuOpen(true)
     void fetchAiConversations()
   }
@@ -98,14 +103,22 @@ export function AiConversationsPopover({
   }
 
   return (
-    <DropdownMenu open={isAiChatMenuOpen} onOpenChange={setIsAiChatMenuOpen}>
+    <DropdownMenu
+      open={isCrawlRunning ? false : isAiChatMenuOpen}
+      onOpenChange={setIsAiChatMenuOpen}
+    >
       <DropdownMenuTrigger
         render={
           <TabsTrigger
             value="revserp-ai"
+            disabled={isCrawlRunning}
+            className={
+              isCrawlRunning ? "pointer-events-none opacity-50" : undefined
+            }
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
             onClick={() => {
+              if (isCrawlRunning) return
               onViewChange("revserp-ai")
               if (aiConversations.length > 0) {
                 onSelectConversation?.(aiConversations[0].id)
@@ -123,9 +136,10 @@ export function AiConversationsPopover({
         onMouseLeave={handleMouseLeave}
       >
         <DropdownMenuItem
+          disabled={isCrawlRunning}
           onClick={() => {
             setIsAiChatMenuOpen(false)
-            onViewChange("revserp-ai")
+            onNewChat?.()
           }}
         >
           <PlusIcon className="size-4" />

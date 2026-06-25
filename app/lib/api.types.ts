@@ -90,6 +90,19 @@ export type CrawlsResponse = {
   pagination?: PaginationResponse
 }
 
+export type ActiveCrawlResponse = {
+  id: string
+  project_id: string
+  status: string
+  urls_discovered: number
+  urls_crawled: number
+  created_at: string
+}
+
+export type ActiveCrawlsResponse = {
+  crawls: ActiveCrawlResponse[]
+}
+
 export type ScoreBreakdownIssueTypeResponse = {
   id: string
   label: string
@@ -372,4 +385,27 @@ export type AdminAIAppConfigResponse = {
   config: AdminAIAppConfig
   default_config: AdminAIAppConfig
   updated_at?: string
+}
+
+// --- Auto-crawl types ---
+
+export type AutoCrawlConfigSnapshot = {
+  max_depth: number
+  max_pages?: number
+  fetch_timeout_seconds: number
+  request_delay_ms?: number
+  request_jitter_ms?: number
+}
+
+export type AutoCrawlResponse = {
+  enabled: boolean
+  config_snapshot?: AutoCrawlConfigSnapshot | null
+  last_enqueued_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type AutoCrawlPutBody = {
+  enabled: boolean
+  config_snapshot?: AutoCrawlConfigSnapshot | null
 }

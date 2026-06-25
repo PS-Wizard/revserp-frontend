@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useLoaderData, useLocation, useRevalidator } from "react-router"
+import {
+  useLoaderData,
+  useLocation,
+  useNavigate,
+  useRevalidator,
+} from "react-router"
+import { toast } from "sonner"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
@@ -22,10 +28,12 @@ import {
 } from "~/components/ui/card"
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import { serverApiFetch } from "~/lib/api"
+import { clientApiFetch, serverApiFetch } from "~/lib/api"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
+  ActiveCrawlResponse,
+  ActiveCrawlsResponse,
   CrawlResponse,
   CrawlsResponse,
   MeResponse,
@@ -153,6 +161,7 @@ export default function AppPage() {
   } = useLoaderData() as AppLoaderData
   const revalidator = useRevalidator()
   const location = useLocation()
+  const navigate = useNavigate()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<
     "summary" | "seo" | "aeo" | "pagespeed"
@@ -164,14 +173,62 @@ export default function AppPage() {
   const [pendingAIScope, setPendingAIScope] = useState<AIScopeState | null>(
     null
   )
+  const [isNewChat, setIsNewChat] = useState(false)
+  const [activeCrawls, setActiveCrawls] = useState<ActiveCrawlResponse[]>([])
 
   const handleOpenAIConversation = useCallback(
     (conversationId: string, scope?: AIScopeState) => {
       setOpenAIConversationId(conversationId)
+      setIsNewChat(false)
       setPendingAIScope(scope ?? null)
       setView("revserp-ai")
     },
     []
+  )
+
+  const handleNewAIChat = useCallback(() => {
+    setOpenAIConversationId(null)
+    setIsNewChat(true)
+    setPendingAIScope(null)
+    setView("revserp-ai")
+  }, [])
+
+  // Navigate to a project (and optionally a specific crawl) by updating the
+  // URL search params, matching how the navbar's project picker switches
+  // projects. Used by the clickable crawl toasts.
+  const goToCrawl = useCallback(
+    (projectId: string, crawlId?: string) => {
+      const params = new URLSearchParams(location.search)
+      params.set("project", projectId)
+      if (crawlId) {
+        params.set("crawl", crawlId)
+      } else {
+        params.delete("crawl")
+      }
+      void navigate(`${location.pathname}?${params.toString()}`)
+    },
+    [navigate, location.pathname, location.search]
+  )
+
+  const projectNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const project of projects) {
+      map.set(project.id, project.name)
+    }
+    return map
+  }, [projects])
+
+  // Org-wide "is any crawl in flight" signal (across every project, not just the
+  // selected one) — gates the active-crawl poll so toasts for other projects'
+  // crawls keep updating even after you switch projects.
+  const hasActiveCrawlAnywhere = useMemo(
+    () =>
+      Object.values(projectCrawls).some((crawls) =>
+        crawls.some(
+          (crawl) => crawl.status === "queued" || crawl.status === "running"
+        )
+      ),
+    [projectCrawls]
   )
 
   const sortedCrawls = useMemo(
@@ -208,27 +265,184 @@ export default function AppPage() {
   const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
   const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
 
+  const lastActiveSignatureRef = useRef<string | null>(null)
+
+  // Poll the org-wide active-crawls endpoint whenever any crawl is in flight
+  // anywhere in the org. Its result drives the stack of per-crawl loading toasts
+  // below; a change to the active set (queued→running, or a crawl finishing)
+  // also triggers a single full revalidate so loader data (projectCrawls,
+  // scores, and the completion toasts that key off it) refreshes off real data.
   useEffect(() => {
-    if (!isCrawlRunning) {
+    if (
+      !hasActiveCrawlAnywhere &&
+      activeCrawls.length === 0 &&
+      !isStartingCrawl
+    ) {
+      lastActiveSignatureRef.current = null
       return
     }
 
-    const interval = window.setInterval(() => {
-      if (revalidator.state === "idle") {
-        revalidator.revalidate()
+    let cancelled = false
+
+    async function pollActiveCrawls() {
+      try {
+        const response = await clientApiFetch<ActiveCrawlsResponse>(
+          `/organizations/${me.active_org_id}/crawls/active`
+        )
+        if (cancelled) return
+        const signature = response.crawls
+          .map((crawl) => `${crawl.id}:${crawl.status}`)
+          .sort()
+          .join("|")
+        if (signature !== lastActiveSignatureRef.current) {
+          setActiveCrawls(response.crawls)
+          // Skip the revalidate on the first poll (baseline) — loader data is
+          // already fresh from the action that started the crawl. Thereafter,
+          // any change to the active set refreshes loader data once.
+          if (
+            lastActiveSignatureRef.current !== null &&
+            revalidator.state === "idle"
+          ) {
+            revalidator.revalidate()
+          }
+          lastActiveSignatureRef.current = signature
+        }
+      } catch (error) {
+        console.error("Failed to poll active crawls:", error)
       }
+    }
+
+    void pollActiveCrawls()
+    const interval = window.setInterval(() => {
+      void pollActiveCrawls()
     }, 3000)
 
     return () => {
+      cancelled = true
       window.clearInterval(interval)
     }
-  }, [isCrawlRunning, revalidator])
+  }, [
+    hasActiveCrawlAnywhere,
+    activeCrawls.length,
+    isStartingCrawl,
+    revalidator,
+    me.active_org_id,
+  ])
 
   useEffect(() => {
     if (activeRunningCrawl) {
       setIsStartingCrawl(false)
     }
   }, [activeRunningCrawl])
+
+  useEffect(() => {
+    if (isCrawlRunning && view === "revserp-ai") {
+      setView("revserp-audit")
+    }
+  }, [isCrawlRunning, view])
+
+  const shownCrawlToastIdsRef = useRef<Set<string>>(new Set())
+
+  // Reconcile one persistent loading toast per active crawl, org-wide. Toasts
+  // are keyed by crawl id so they stack (and expand on hover) like the AI chat,
+  // survive project switches, and update in place on a status change. A crawl
+  // that drops out of the active set has its loading toast dismissed here; the
+  // matching completion/failure toast fires separately off refreshed loader
+  // data. No dismiss happens on a mere label change — only on real removal — so
+  // there's no exit-animation race that would make a toast vanish mid-crawl.
+  useEffect(() => {
+    const nextIds = new Set<string>()
+    for (const crawl of activeCrawls) {
+      nextIds.add(crawl.id)
+      const isQueued = crawl.status === "queued"
+      const projectName = projectNameById.get(crawl.project_id)
+      toast.loading(isQueued ? "Queued…" : "Crawling…", {
+        id: crawl.id,
+        description: isQueued
+          ? projectName
+            ? `${projectName} is waiting for another crawl to finish.`
+            : "Waiting for another crawl to finish."
+          : projectName
+            ? `${projectName} crawl in progress.`
+            : "Crawl in progress.",
+        duration: Infinity,
+        action: {
+          label: "View",
+          // Take the user to the crawling project, but keep the toast open
+          // (preventDefault) — it should persist until the crawl actually ends.
+          onClick: (event) => {
+            event.preventDefault()
+            goToCrawl(crawl.project_id)
+          },
+        },
+      })
+    }
+    for (const id of shownCrawlToastIdsRef.current) {
+      if (!nextIds.has(id)) {
+        toast.dismiss(id)
+      }
+    }
+    shownCrawlToastIdsRef.current = nextIds
+  }, [activeCrawls, projectNameById, goToCrawl])
+
+  // Dismiss any lingering crawl toasts only when this view unmounts (e.g. logout
+  // / route change). Kept separate from the reconcile effect above so it never
+  // fires on a dependency change.
+  useEffect(() => {
+    return () => {
+      for (const id of shownCrawlToastIdsRef.current) {
+        toast.dismiss(id)
+      }
+    }
+  }, [])
+
+  const prevCrawlStatusesRef = useRef<Map<string, string>>(new Map())
+
+  // Fire completion/failure toasts org-wide by diffing every project's crawls
+  // (refreshed on revalidate), so the toast lands even when you've switched away
+  // from the project that was crawling. On first run it only records a baseline
+  // (no prior status) so already-finished crawls don't toast on load.
+  useEffect(() => {
+    const prevStatuses = prevCrawlStatusesRef.current
+    const nextStatuses = new Map<string, string>()
+
+    for (const crawls of Object.values(projectCrawls)) {
+      for (const crawl of crawls) {
+        nextStatuses.set(crawl.id, crawl.status)
+        const prevStatus = prevStatuses.get(crawl.id)
+        if (prevStatus === undefined) {
+          continue
+        }
+        const wasActive = prevStatus === "running" || prevStatus === "queued"
+        if (!wasActive) {
+          continue
+        }
+        const projectName = projectNameById.get(crawl.project_id)
+        if (crawl.status === "completed") {
+          const completedCrawlId = crawl.id
+          const completedProjectId = crawl.project_id
+          toast.success("Crawl complete", {
+            description: projectName
+              ? `${projectName} is ready to review.`
+              : undefined,
+            action: {
+              label: "View",
+              // Open the finished crawl's results; let the toast auto-close.
+              onClick: () => goToCrawl(completedProjectId, completedCrawlId),
+            },
+          })
+        } else if (crawl.status === "failed") {
+          toast.error("Crawl failed", {
+            description: projectName
+              ? `${projectName} crawl encountered an error.`
+              : undefined,
+          })
+        }
+      }
+    }
+
+    prevCrawlStatusesRef.current = nextStatuses
+  }, [projectCrawls, projectNameById, goToCrawl])
 
   // Lock page scrolling while a crawl is in progress so the centered overlay
   // stays put; the navbar remains interactive (it sits outside the dimmer).
@@ -324,6 +538,7 @@ export default function AppPage() {
         onCrawlStart={() => setIsStartingCrawl(true)}
         onViewChange={setView}
         onSelectConversation={handleOpenAIConversation}
+        onNewChat={handleNewAIChat}
         organizationId={me.active_org_id}
         projects={projects}
         organizations={me.organizations}
@@ -474,6 +689,7 @@ export default function AppPage() {
           initialScope={pendingAIScope}
           openConversationId={openAIConversationId}
           projectId={activeProject?.id}
+          forceNewConversation={isNewChat}
         />
       ) : (
         <div className="p-6">

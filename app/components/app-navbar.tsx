@@ -6,6 +6,7 @@ import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
   Building2Icon,
   ChevronsUpDownIcon,
+  CogIcon,
   DownloadIcon,
   PlayIcon,
   SearchIcon,
@@ -24,6 +25,8 @@ import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { ProjectPickerDialog } from "~/components/app-navbar/project-picker-dialog"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { AiConversationsPopover } from "~/components/app-navbar/ai-conversations-popover"
+import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
+import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
 import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actions"
@@ -44,6 +47,8 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -190,6 +195,7 @@ export function AppNavbar({
   onViewChange,
   onSelectConversation,
   onDeleteConversation,
+  onNewChat,
   isPlatformAdmin,
 }: AppNavbarProps) {
   const navigate = useNavigate()
@@ -244,6 +250,7 @@ export function AppNavbar({
     runCrawlReducer,
     initialRunCrawlState
   )
+  const autoCrawl = useAutoCrawlSettings(activeProjectId)
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
@@ -433,9 +440,11 @@ export function AppNavbar({
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
                 <AiConversationsPopover
                   activeProjectId={activeProjectId}
+                  isCrawlRunning={isCrawlRunning}
                   onViewChange={onViewChange}
                   onSelectConversation={onSelectConversation}
                   onDeleteConversation={onDeleteConversation}
+                  onNewChat={onNewChat}
                 />
               </TabsList>
             </Tabs>
@@ -476,6 +485,30 @@ export function AppNavbar({
                     <PlayIcon />
                     Run Crawl
                   </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      disabled={!activeProjectId}
+                    >
+                      <CogIcon />
+                      Configure Crawl
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-52">
+                      <DropdownMenuRadioGroup
+                        value={autoCrawl.enabled ? "enable" : "disable"}
+                        onValueChange={(v) => {
+                          if (v === "enable") void autoCrawl.openDialog()
+                          else void autoCrawl.handleDisable()
+                        }}
+                      >
+                        <DropdownMenuRadioItem value="enable">
+                          Enable Auto Crawl
+                        </DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="disable">
+                          Disable Auto Crawl
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                   <DropdownMenuItem
                     disabled={!activeProject}
                     onClick={() =>
@@ -605,6 +638,17 @@ export function AppNavbar({
           runCrawlDispatch(open ? { type: "OPEN" } : { type: "CLOSE" })
         }
         onSubmit={handleRunCrawl}
+      />
+      <AutoCrawlDialog
+        config={autoCrawl.config}
+        error={autoCrawl.error}
+        isOpen={autoCrawl.isDialogOpen}
+        isSaving={autoCrawl.isSaving}
+        onConfigChange={autoCrawl.setConfig}
+        onOpenChange={(open) =>
+          open ? void autoCrawl.openDialog() : autoCrawl.closeDialog()
+        }
+        onSubmit={() => void autoCrawl.handleSaveConfig()}
       />
 
       <AppNavbarDialogs

@@ -87,6 +87,7 @@ function useAIConversation({
   openConversationId,
   projectId,
   initialScope,
+  forceNewConversation,
 }: {
   breakdown: ScoreBreakdownResponse | null
   openConversationId?: string | null
@@ -96,6 +97,7 @@ function useAIConversation({
     bucketIds: string[]
     issueTypeIds: string[]
   } | null
+  forceNewConversation?: boolean
 }) {
   const [scope, dispatchScope] = useReducer(scopeReducer, defaultScope)
   const {
@@ -286,9 +288,10 @@ function useAIConversation({
         if (cancelled) return
         setConversations(response.conversations)
 
-        const firstConversation = hasExternalConversationRequest
-          ? null
-          : response.conversations[0]
+        const firstConversation =
+          hasExternalConversationRequest || forceNewConversation
+            ? null
+            : response.conversations[0]
 
         if (firstConversation) {
           const detail = await clientApiFetch<AIConversationDetailResponse>(
@@ -318,7 +321,7 @@ function useAIConversation({
     return () => {
       cancelled = true
     }
-  }, [crawlId, projectId, hasExternalConversationRequest])
+  }, [crawlId, projectId, hasExternalConversationRequest, forceNewConversation])
 
   // Apply external scope (e.g. from Recommend Fixes) when opening a conversation
   useEffect(() => {
@@ -575,6 +578,7 @@ export function RevserpAIView({
   openConversationId,
   projectId,
   initialScope,
+  forceNewConversation,
 }: {
   breakdown: ScoreBreakdownResponse | null
   openConversationId?: string | null
@@ -584,6 +588,7 @@ export function RevserpAIView({
     bucketIds: string[]
     issueTypeIds: string[]
   } | null
+  forceNewConversation?: boolean
 }) {
   const {
     prompt,
@@ -614,6 +619,7 @@ export function RevserpAIView({
     openConversationId,
     projectId,
     initialScope,
+    forceNewConversation,
   })
 
   if (!breakdown) {

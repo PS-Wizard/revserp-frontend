@@ -3,6 +3,7 @@
 import { useReducer } from "react"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 import { buildApiUrl, clientApiDelete, clientApiPost } from "~/lib/api"
+import { toast } from "sonner"
 import {
   readExportError,
   getExportFilename,
@@ -207,6 +208,7 @@ export function useProjectActions({
         await navigate(`${location.pathname}?${searchParams.toString()}`)
       }
 
+      toast.success("Crawl deleted")
       dispatch({ type: "DELETE_CRAWL_DONE" })
     } catch (error) {
       dispatch({
@@ -214,6 +216,9 @@ export function useProjectActions({
         error:
           error instanceof Error ? error.message : "Unable to delete crawl.",
       })
+      toast.error(
+        error instanceof Error ? error.message : "Unable to delete crawl."
+      )
       dispatch({ type: "DELETE_CRAWL_DONE" })
     }
   }
@@ -228,6 +233,7 @@ export function useProjectActions({
     try {
       await clientApiPost<{ ok: boolean }>(`/crawls/${crawl.id}/cancel`, {})
       revalidator.revalidate()
+      toast.success("Crawl cancelled")
       dispatch({ type: "CANCEL_CRAWL_DONE" })
     } catch (error) {
       dispatch({
@@ -235,6 +241,9 @@ export function useProjectActions({
         error:
           error instanceof Error ? error.message : "Unable to cancel crawl.",
       })
+      toast.error(
+        error instanceof Error ? error.message : "Unable to cancel crawl."
+      )
       dispatch({ type: "CANCEL_CRAWL_DONE" })
     }
   }

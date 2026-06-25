@@ -150,7 +150,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
 
   return (
     <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      {buckets.map((bucket, index) => {
+      {buckets.map((bucket) => {
         const previousBucket = previousPillar?.buckets.find(
           (item) => item.id === bucket.id
         )
