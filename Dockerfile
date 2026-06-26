@@ -14,9 +14,12 @@ COPY . /app/
 COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 RUN bun run build
 
-FROM base
+# React Router's SSR server imports react-dom's renderToPipeableStream, which only
+# exists under node's export condition (server.node.js). Bun would resolve react-dom/server
+# to server.bun.js (renderToReadableStream only) and crash, so the runtime is node.
+FROM node:22-alpine AS runtime
 WORKDIR /app
 COPY package.json bun.lock /app/
 COPY --from=production-dependencies-env /app/node_modules /app/node_modules
 COPY --from=build-env /app/build /app/build
-CMD ["bun", "run", "start"]
+CMD ["node", "./node_modules/.bin/react-router-serve", "./build/server/index.js"]
