@@ -58,8 +58,7 @@ import {
 type TopLevelNumericKey =
   | "minimum_overall_score"
   | "coverage_scale"
-  | "volume_pressure_scale"
-  | "maximum_volume_pressure"
+  | "soft_sum_decay"
 
 type ConfigAction =
   | { type: "SET_TOP_LEVEL"; key: TopLevelNumericKey; value: number }
@@ -270,22 +269,13 @@ function ScoringSidebar({
             onChange={(value) => updateTopLevel("coverage_scale", value)}
           />
           <SliderRow
-            label="Volume pressure scale"
-            value={draftConfig.volume_pressure_scale}
-            min={0}
-            max={5}
+            label="Soft-sum decay"
+            value={draftConfig.soft_sum_decay}
+            min={0.1}
+            max={0.9}
             step={0.05}
-            onChange={(value) => updateTopLevel("volume_pressure_scale", value)}
-          />
-          <SliderRow
-            label="Maximum volume pressure"
-            value={draftConfig.maximum_volume_pressure}
-            min={0}
-            max={100}
-            step={1}
-            onChange={(value) =>
-              updateTopLevel("maximum_volume_pressure", value)
-            }
+            hint="How coexisting issue types in a bucket combine: the worst counts in full, each lower one is scaled by this factor. Higher = harsher stacking; lower = only the worst issue matters."
+            onChange={(value) => updateTopLevel("soft_sum_decay", value)}
           />
         </SidebarSection>
         <SidebarSection title="Severity multipliers">

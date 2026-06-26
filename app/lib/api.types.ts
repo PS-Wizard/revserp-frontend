@@ -252,8 +252,7 @@ export type ScoringConfig = {
   version: string
   minimum_overall_score: number
   coverage_scale: number
-  volume_pressure_scale: number
-  maximum_volume_pressure: number
+  soft_sum_decay: number
   severity_multipliers: Record<string, number>
   overall_weights: Record<string, number>
   pillars: Record<string, PillarScoringConfig>

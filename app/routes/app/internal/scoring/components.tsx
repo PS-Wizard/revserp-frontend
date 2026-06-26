@@ -129,6 +129,7 @@ export function SliderRow({
   max,
   step,
   onChange,
+  hint,
 }: {
   label: string
   value: number
@@ -136,6 +137,7 @@ export function SliderRow({
   max: number
   step: number
   onChange: (value: number) => void
+  hint?: string
 }) {
   const id = `slider-${label.replace(/\s+/g, "-").toLowerCase()}`
   return (
@@ -146,6 +148,9 @@ export function SliderRow({
           {fmtNum(value, 2)}
         </Badge>
       </div>
+      {hint ? (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      ) : null}
       <Slider
         id={id}
         value={[value]}
