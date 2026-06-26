@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useReducer, useState } from "react"
+import { useMemo, useReducer, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
@@ -55,8 +55,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { clientApiPost } from "~/lib/api"
-import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
+import { clientApiFetch, clientApiPost } from "~/lib/api"
+import type { CrawlResponse, CrawlsResponse, ProjectResponse } from "~/lib/api.types"
 
 // --- Create project form reducer ---
 
@@ -212,6 +212,44 @@ export function AppNavbar({
     revalidator,
   })
 
+  // Lazily-fetched crawls for non-active projects (hover panel). Keyed by
+  // project id. The active project's crawls come from the loader via
+  // projectCrawls prop and are not re-fetched here.
+  const [fetchedProjectCrawls, setFetchedProjectCrawls] = useState<
+    Record<string, CrawlResponse[]>
+  >({})
+  const fetchingProjectIds = useRef<Set<string>>(new Set())
+
+  const mergedProjectCrawls: Record<string, CrawlResponse[]> = {
+    ...fetchedProjectCrawls,
+    ...projectCrawls,
+  }
+
+  function handleProjectHover(id: string | null) {
+    projectActions.onProjectHover(id)
+    if (
+      id === null ||
+      id === activeProjectId ||
+      mergedProjectCrawls[id] !== undefined ||
+      fetchingProjectIds.current.has(id)
+    ) {
+      return
+    }
+    fetchingProjectIds.current.add(id)
+    void clientApiFetch<CrawlsResponse>(
+      `/projects/${id}/crawls?limit=50&offset=0`
+    )
+      .then((response) => {
+        setFetchedProjectCrawls((prev) => ({ ...prev, [id]: response.crawls }))
+      })
+      .catch(() => {
+        // Leave the entry absent so a future hover can retry.
+      })
+      .finally(() => {
+        fetchingProjectIds.current.delete(id)
+      })
+  }
+
   const workspaceActions = useWorkspaceActions({
     organizationId,
     organizations,
@@ -266,13 +304,13 @@ export function AppNavbar({
       (project) => project.id === projectActions.hoveredProjectId
     ) ?? activeProject
   const crawlPanelCrawls = crawlPanelProject
-    ? [...(projectCrawls[crawlPanelProject.id] ?? [])].sort(
+    ? [...(mergedProjectCrawls[crawlPanelProject.id] ?? [])].sort(
         (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       )
     : []
 
   const activeCrawls = activeProject
-    ? [...(projectCrawls[activeProject.id] ?? [])].sort(
+    ? [...(mergedProjectCrawls[activeProject.id] ?? [])].sort(
         (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       )
     : []
@@ -682,6 +720,7 @@ export function AppNavbar({
         handleOpenBusinessProfileDrawer={handleOpenBusinessProfileDrawer}
         handleSelectProject={handleSelectProject}
         isProjectMenuOpen={isProjectMenuOpen}
+        onProjectHover={handleProjectHover}
         projectActions={projectActions}
         projects={projects}
         setIsProjectMenuOpen={setIsProjectMenuOpen}
@@ -728,6 +767,7 @@ type AppNavbarDialogsProps = {
   handleOpenBusinessProfileDrawer: (project: ProjectResponse) => void
   handleSelectProject: (projectId: string, crawlId?: string) => void
   isProjectMenuOpen: boolean
+  onProjectHover: (id: string | null) => void
   projectActions: ReturnType<typeof useProjectActions>
   projects: AppNavbarProps["projects"]
   setIsProjectMenuOpen: (v: boolean) => void
@@ -745,6 +785,7 @@ function AppNavbarDialogs({
   handleOpenBusinessProfileDrawer,
   handleSelectProject,
   isProjectMenuOpen,
+  onProjectHover,
   projectActions,
   projects,
   setIsProjectMenuOpen,
@@ -798,7 +839,7 @@ function AppNavbarDialogs({
           void handleOpenBusinessProfileDrawer(project)
         }
         onOpenChange={setIsProjectMenuOpen}
-        onProjectHover={projectActions.onProjectHover}
+        onProjectHover={onProjectHover}
         onSelectProject={(projectId, crawlId) =>
           void handleSelectProject(projectId, crawlId)
         }

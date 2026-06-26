@@ -260,11 +260,9 @@ export function useWorkspaceActions({
     try {
       await clientApiPost<unknown>("/auth/logout", {})
     } finally {
-      try {
-        await clearSupabaseBrowserSession()
-      } catch {
-        // Backend session is already gone.
-      }
+      // Navigate immediately; Supabase local-storage cleanup doesn't need to
+      // block the redirect since the backend session is already gone.
+      void clearSupabaseBrowserSession().catch(() => undefined)
       await navigate("/login")
       dispatch({ type: "RESET_WORKSPACE_ACTION" })
     }

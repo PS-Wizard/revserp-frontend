@@ -65,27 +65,14 @@ export async function loader({ request }: { request: Request }) {
   let currentBreakdown: ScoreBreakdownResponse | null = null
   let crawlBreakdowns: CrawlBreakdown[] = []
 
-  if (projectsResponse.projects.length > 0) {
-    const projectCrawlResults = await Promise.allSettled(
-      projectsResponse.projects.map(async (project) => {
-        const crawlsResponse = await serverApiFetch<CrawlsResponse>(
-          `/projects/${project.id}/crawls?limit=50&offset=0`,
-          request
-        )
-
-        return [project.id, crawlsResponse.crawls] as const
-      })
-    )
-
-    projectCrawls = Object.fromEntries(
-      projectCrawlResults.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : []
-      )
-    )
-  }
-
   if (activeProject) {
-    recentCrawls = projectCrawls[activeProject.id] ?? []
+    const crawlsResponse = await serverApiFetch<CrawlsResponse>(
+      `/projects/${activeProject.id}/crawls?limit=50&offset=0`,
+      request
+    ).catch(() => ({ crawls: [] as CrawlResponse[] }))
+
+    recentCrawls = crawlsResponse.crawls
+    projectCrawls = { [activeProject.id]: recentCrawls }
 
     const sortedCompletedCrawls = [...recentCrawls]
       .filter((crawl) => crawl.status === "completed")
@@ -104,7 +91,7 @@ export async function loader({ request }: { request: Request }) {
       : sortedCompletedCrawls
 
     const breakdownResults = await Promise.allSettled(
-      breakdownSourceCrawls.map(async (crawl) => ({
+      breakdownSourceCrawls.slice(0, 10).map(async (crawl) => ({
         crawl,
         breakdown: await serverApiFetch<ScoreBreakdownResponse>(
           `/crawls/${crawl.id}/score-breakdown`,

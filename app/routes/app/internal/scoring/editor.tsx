@@ -557,6 +557,13 @@ export function ScoringEditor({
 
   useEffect(() => {
     if (!draftConfig || !crawlId) return
+    // Until the admin actually edits the config, show the crawl's stored scores
+    // exactly as-is. Don't recompute a preview for the unchanged saved config —
+    // that would silently replace the real scores with a live re-score.
+    if (!hasDraftChanges) {
+      setPreviewBreakdown(initialBaselineBreakdown ?? null)
+      return
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       previewScoringConfig()
@@ -564,7 +571,7 @@ export function ScoringEditor({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [draftConfig, crawlId])
+  }, [draftConfig, crawlId, hasDraftChanges, initialBaselineBreakdown])
 
   const onCrawlChange = useEffectEvent(() => {
     setPreviewBreakdown(initialBaselineBreakdown ?? null)

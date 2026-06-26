@@ -193,20 +193,25 @@ function ScoringTab() {
   }, [selectedCrawlId])
 
   useEffect(() => {
-    loadGlobal()
     loadOrgs()
-  }, [loadGlobal, loadOrgs])
+  }, [loadOrgs])
   useEffect(() => {
     loadBaselineBreakdown()
   }, [loadBaselineBreakdown])
 
+  // Load the GLOBAL config on mount and when switching back to global mode.
+  // Deliberately NOT dependent on selectedPreviewOrgId: choosing a preview crawl
+  // must not reload or remount the global config editor (it would discard draft edits).
+  useEffect(() => {
+    if (mode === "global") loadGlobal()
+  }, [mode, loadGlobal])
+
+  // Load the ORG override config only when an org is selected in org mode.
   useEffect(() => {
     if (mode === "org" && selectedPreviewOrgId) {
       loadOrgOverride(selectedPreviewOrgId)
-    } else if (mode === "global") {
-      loadGlobal()
     }
-  }, [mode, selectedPreviewOrgId, loadGlobal, loadOrgOverride])
+  }, [mode, selectedPreviewOrgId, loadOrgOverride])
 
   useEffect(() => {
     loadProjects(selectedPreviewOrgId)
@@ -317,7 +322,7 @@ function ScoringTab() {
   return (
     <div className="space-y-6">
       <ScoringEditor
-        key={`${mode}-${mode === "org" ? selectedPreviewOrgId || "none" : "global"}-${editorVersion}-${baselineBreakdown?.crawl_id ?? "no-crawl"}`}
+        key={`${mode}-${mode === "org" ? selectedPreviewOrgId || "none" : "global"}-${editorVersion}`}
         config={config}
         defaultConfig={defaultConfig ?? config}
         crawlId={selectedCrawlId}
