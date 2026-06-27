@@ -246,7 +246,7 @@ export function AuthForm({
             {isLogin
               ? "Don&apos;t have an account?"
               : "Already have an account?"}{" "}
-            <Link className="underline underline-offset-4" to={alternatePath}>
+            <Link className="underline underline-offset-4" to={alternatePath} prefetch="intent">
               {isLogin ? "Sign up" : "Login"}
             </Link>
           </FieldDescription>

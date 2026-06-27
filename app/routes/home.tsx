@@ -203,14 +203,14 @@ function Header() {
 
         <div className="flex items-center gap-2">
           <Button
-            render={<Link to="/login" />}
+            render={<Link to="/login" prefetch="intent" />}
             variant="ghost"
             size="sm"
             className="hidden sm:inline-flex"
           >
             Log in
           </Button>
-          <Button render={<Link to="/signup" />} size="sm">
+          <Button render={<Link to="/signup" prefetch="intent" />} size="sm">
             Get started
           </Button>
         </div>
@@ -248,7 +248,7 @@ function Hero() {
 
         <HeroBounce delay={450}>
           <div className="mt-10 flex flex-col items-center gap-3 sm:flex-row">
-            <Button render={<Link to="/signup" />} size="lg">
+            <Button render={<Link to="/signup" prefetch="intent" />} size="lg">
               Start free trial
             </Button>
             <a
@@ -659,10 +659,10 @@ function FinalCTA() {
         </Reveal>
         <Reveal delay={200}>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button render={<Link to="/signup" />} size="lg">
+            <Button render={<Link to="/signup" prefetch="intent" />} size="lg">
               Start free trial
             </Button>
-            <Button render={<Link to="/login" />} size="lg" variant="outline">
+            <Button render={<Link to="/login" prefetch="intent" />} size="lg" variant="outline">
               Log in
             </Button>
           </div>
@@ -734,6 +734,7 @@ function Footer() {
                 <li>
                   <Link
                     to="/login"
+                    prefetch="intent"
                     className="text-muted-foreground hover:text-foreground"
                   >
                     Log in
@@ -742,6 +743,7 @@ function Footer() {
                 <li>
                   <Link
                     to="/signup"
+                    prefetch="intent"
                     className="text-muted-foreground hover:text-foreground"
                   >
                     Sign up

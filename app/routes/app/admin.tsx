@@ -1011,6 +1011,7 @@ export default function AdminPage() {
       <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-3">
         <Link
           to="/app"
+          prefetch="intent"
           className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />

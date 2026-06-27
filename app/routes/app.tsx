@@ -81,32 +81,16 @@ export async function loader({ request }: { request: Request }) {
       sortedCompletedCrawls.find((crawl) => crawl.id === requestedCrawlId) ??
       sortedCompletedCrawls[0] ??
       null
-    const breakdownSourceCrawls = selectedCompletedCrawl
-      ? [
-          selectedCompletedCrawl,
-          ...sortedCompletedCrawls.filter(
-            (crawl) => crawl.id !== selectedCompletedCrawl.id
-          ),
-        ]
-      : sortedCompletedCrawls
-
-    const breakdownResults = await Promise.allSettled(
-      breakdownSourceCrawls.slice(0, 10).map(async (crawl) => ({
-        crawl,
-        breakdown: await serverApiFetch<ScoreBreakdownResponse>(
-          `/crawls/${crawl.id}/score-breakdown`,
-          request
-        ),
-      }))
-    )
-
-    crawlBreakdowns = breakdownResults.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : []
-    )
-    currentBreakdown =
-      crawlBreakdowns.find(
-        (item) => item.crawl.id === selectedCompletedCrawl?.id
-      )?.breakdown ?? null
+    if (selectedCompletedCrawl) {
+      const breakdown = await serverApiFetch<ScoreBreakdownResponse>(
+        `/crawls/${selectedCompletedCrawl.id}/score-breakdown`,
+        request
+      ).catch(() => null)
+      if (breakdown) {
+        currentBreakdown = breakdown
+        crawlBreakdowns = [{ crawl: selectedCompletedCrawl, breakdown }]
+      }
+    }
   }
 
   return {
@@ -162,6 +146,40 @@ export default function AppPage() {
   )
   const [isNewChat, setIsNewChat] = useState(false)
   const [activeCrawls, setActiveCrawls] = useState<ActiveCrawlResponse[]>([])
+  const [extraBreakdowns, setExtraBreakdowns] = useState<CrawlBreakdown[]>([])
+
+  useEffect(() => {
+    setExtraBreakdowns([])
+    const alreadyFetched = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
+    const toFetch = sortedCompletedCrawls
+      .filter((crawl) => !alreadyFetched.has(crawl.id))
+      .slice(0, 2)
+    if (toFetch.length === 0) return
+    let cancelled = false
+    void Promise.allSettled(
+      toFetch.map((crawl) =>
+        clientApiFetch<ScoreBreakdownResponse>(`/crawls/${crawl.id}/score-breakdown`)
+          .then((breakdown) => ({ crawl, breakdown }))
+      )
+    ).then((results) => {
+      if (cancelled) return
+      const fetched = results.flatMap((r) =>
+        r.status === "fulfilled" ? [r.value] : []
+      )
+      if (fetched.length > 0) setExtraBreakdowns(fetched)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const allCrawlBreakdowns = useMemo(() => {
+    const seen = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
+    const extras = extraBreakdowns.filter(({ crawl }) => !seen.has(crawl.id))
+    return [...crawlBreakdowns, ...extras].sort(
+      (a, b) => getCrawlTimestamp(b.crawl) - getCrawlTimestamp(a.crawl)
+    )
+  }, [crawlBreakdowns, extraBreakdowns])
 
   const handleOpenAIConversation = useCallback(
     (conversationId: string, scope?: AIScopeState) => {
@@ -461,10 +479,10 @@ export default function AppPage() {
     chartCacheRef.current.crawls = sortedCompletedCrawls
   }
 
-  const breakdownKey = crawlBreakdowns.map(getBreakdownChartKey).join(",")
+  const breakdownKey = allCrawlBreakdowns.map(getBreakdownChartKey).join(",")
   if (breakdownKey !== chartCacheRef.current.breakdownsKey) {
     chartCacheRef.current.breakdownsKey = breakdownKey
-    chartCacheRef.current.breakdowns = crawlBreakdowns
+    chartCacheRef.current.breakdowns = allCrawlBreakdowns
   }
 
   const currentKey = currentBreakdown
