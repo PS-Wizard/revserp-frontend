@@ -58,7 +58,12 @@ export function useApexChart(
     if (chartOptions !== lastOptionsRef.current) {
       lastOptionsRef.current = chartOptions
       // updateOptions(options, redrawPaths, animate, updateSyncedCharts)
-      void chartInstanceRef.current.updateOptions(chartOptions, false, true, false)
+      void chartInstanceRef.current.updateOptions(
+        chartOptions,
+        false,
+        true,
+        false
+      )
     }
   }, [chartOptions, enabled, series])
 }

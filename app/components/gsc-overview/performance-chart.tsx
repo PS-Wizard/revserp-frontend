@@ -104,8 +104,7 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
         y: {
           formatter: (value, context) => {
             const apexSeries = context?.w?.config?.series as
-              | Array<{ name?: string }>
-              | undefined
+              Array<{ name?: string }> | undefined
             const seriesName =
               apexSeries?.[context?.seriesIndex ?? -1]?.name ?? ""
             if (seriesName === "CTR")

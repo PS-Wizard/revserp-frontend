@@ -6,11 +6,7 @@ import type {
 export type GSCMetricKey = "clicks" | "impressions" | "ctr" | "position"
 export type GSCDimensionTab = "queries" | "pages" | "countries" | "devices"
 export type TableSortColumn =
-  | "label"
-  | "clicks"
-  | "impressions"
-  | "ctr"
-  | "position"
+  "label" | "clicks" | "impressions" | "ctr" | "position"
 export type TableSortDirection = "asc" | "desc"
 
 export type TableRow = {

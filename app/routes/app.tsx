@@ -6,6 +6,7 @@ import {
   useRevalidator,
 } from "react-router"
 import { redirect } from "react-router"
+import { useQueryClient } from "@tanstack/react-query"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
@@ -143,6 +144,7 @@ export default function AppPage() {
   const revalidator = useRevalidator()
   const location = useLocation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<
     "summary" | "seo" | "aeo" | "pagespeed"
@@ -225,12 +227,18 @@ export default function AppPage() {
 
   const handleOpenAIConversation = useCallback(
     (conversationId: string, scope?: AIScopeState) => {
+      if (activeProject?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ["ai-conversations", activeProject.id],
+          exact: true,
+        })
+      }
       setOpenAIConversationId(conversationId)
       setIsNewChat(false)
       setPendingAIScope(scope ?? null)
       setView("revserp-ai")
     },
-    []
+    [queryClient, activeProject?.id]
   )
 
   const handleNewAIChat = useCallback(() => {

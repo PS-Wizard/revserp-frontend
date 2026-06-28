@@ -521,6 +521,10 @@ function useAIConversation({
                 messages: [response.user_message, response.assistant_message],
               }
       )
+      queryClient.invalidateQueries({
+        queryKey: ["ai-conversations", projectId],
+        exact: true,
+      })
     } catch (error) {
       if (!isActiveSendRequest(sendRequestId)) return
       setMessages(baseMessages)

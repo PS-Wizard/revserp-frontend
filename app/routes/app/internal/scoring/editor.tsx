@@ -56,9 +56,7 @@ import {
 /* ------------------------------------------------------------------ */
 
 type TopLevelNumericKey =
-  | "minimum_overall_score"
-  | "coverage_scale"
-  | "soft_sum_decay"
+  "minimum_overall_score" | "coverage_scale" | "soft_sum_decay"
 
 type ConfigAction =
   | { type: "SET_TOP_LEVEL"; key: TopLevelNumericKey; value: number }
