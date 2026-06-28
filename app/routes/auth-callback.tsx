@@ -65,7 +65,11 @@ export default function AuthCallbackPage() {
         </p>
         {errorMessage && (
           <p className="mt-6 text-sm">
-            <Link className="underline underline-offset-4" to="/login" prefetch="intent">
+            <Link
+              className="underline underline-offset-4"
+              to="/login"
+              prefetch="intent"
+            >
               Back to login
             </Link>
           </p>

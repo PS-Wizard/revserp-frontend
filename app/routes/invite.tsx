@@ -125,7 +125,11 @@ export default function InvitePage() {
 
   return (
     <div className="flex min-h-svh flex-col bg-background px-6 py-8 text-foreground">
-      <Link to="/" prefetch="intent" className="flex w-fit items-center gap-2 font-medium">
+      <Link
+        to="/"
+        prefetch="intent"
+        className="flex w-fit items-center gap-2 font-medium"
+      >
         <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Asterisk />
         </div>
@@ -155,7 +159,10 @@ export default function InvitePage() {
                 <Button
                   className="sm:col-span-2"
                   render={
-                    <Link to={isAuthenticated ? "/app" : "/login"} prefetch="intent">
+                    <Link
+                      to={isAuthenticated ? "/app" : "/login"}
+                      prefetch="intent"
+                    >
                       {isAuthenticated ? "Open app" : "Back to login"}
                     </Link>
                   }
@@ -164,11 +171,19 @@ export default function InvitePage() {
               ) : !isAuthenticated ? (
                 <>
                   <Button
-                    render={<Link to={loginPath} prefetch="intent">Log in first</Link>}
+                    render={
+                      <Link to={loginPath} prefetch="intent">
+                        Log in first
+                      </Link>
+                    }
                     variant="outline"
                   />
                   <Button
-                    render={<Link to={signupPath} prefetch="intent">Create account</Link>}
+                    render={
+                      <Link to={signupPath} prefetch="intent">
+                        Create account
+                      </Link>
+                    }
                   />
                 </>
               ) : (
@@ -183,7 +198,11 @@ export default function InvitePage() {
                       : "Accept invite"}
                   </Button>
                   <Button
-                    render={<Link to="/app" prefetch="intent">Reject / maybe later</Link>}
+                    render={
+                      <Link to="/app" prefetch="intent">
+                        Reject / maybe later
+                      </Link>
+                    }
                     variant="outline"
                   />
                 </>

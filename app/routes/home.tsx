@@ -662,7 +662,11 @@ function FinalCTA() {
             <Button render={<Link to="/signup" prefetch="intent" />} size="lg">
               Start free trial
             </Button>
-            <Button render={<Link to="/login" prefetch="intent" />} size="lg" variant="outline">
+            <Button
+              render={<Link to="/login" prefetch="intent" />}
+              size="lg"
+              variant="outline"
+            >
               Log in
             </Button>
           </div>

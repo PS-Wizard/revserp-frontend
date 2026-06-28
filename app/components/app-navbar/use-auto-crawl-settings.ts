@@ -22,7 +22,9 @@ export const DEFAULT_AUTO_CRAWL_CONFIG: AutoCrawlConfig = {
 export function useAutoCrawlSettings(activeProjectId?: string | null) {
   const [enabled, setEnabled] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  const [config, setConfig] = useState<AutoCrawlConfig>(DEFAULT_AUTO_CRAWL_CONFIG)
+  const [config, setConfig] = useState<AutoCrawlConfig>(
+    DEFAULT_AUTO_CRAWL_CONFIG
+  )
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState("")
@@ -52,7 +54,9 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
             data.config_snapshot.request_jitter_ms !== undefined
               ? String(data.config_snapshot.request_jitter_ms)
               : "",
-          fetchTimeoutSeconds: String(data.config_snapshot.fetch_timeout_seconds),
+          fetchTimeoutSeconds: String(
+            data.config_snapshot.fetch_timeout_seconds
+          ),
         })
       } else {
         setConfig(DEFAULT_AUTO_CRAWL_CONFIG)
@@ -101,41 +105,41 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
     }
   }, [activeProjectId, enabled])
 
-  const validateConfig = useCallback(
-    (cfg: AutoCrawlConfig): string | null => {
-      const parsedMaxDepth = Number(cfg.maxDepth)
-      const parsedFetchTimeoutSeconds = Number(cfg.fetchTimeoutSeconds)
-      const baseError = getCrawlValidationError(parsedMaxDepth, parsedFetchTimeoutSeconds)
-      if (baseError) return baseError
+  const validateConfig = useCallback((cfg: AutoCrawlConfig): string | null => {
+    const parsedMaxDepth = Number(cfg.maxDepth)
+    const parsedFetchTimeoutSeconds = Number(cfg.fetchTimeoutSeconds)
+    const baseError = getCrawlValidationError(
+      parsedMaxDepth,
+      parsedFetchTimeoutSeconds
+    )
+    if (baseError) return baseError
 
-      const trimmedMaxPages = cfg.maxPages.trim()
-      if (trimmedMaxPages !== "") {
-        const n = Number(trimmedMaxPages)
-        if (!Number.isInteger(n) || n <= 0) {
-          return "Max pages must be a positive whole number, or left blank."
-        }
+    const trimmedMaxPages = cfg.maxPages.trim()
+    if (trimmedMaxPages !== "") {
+      const n = Number(trimmedMaxPages)
+      if (!Number.isInteger(n) || n <= 0) {
+        return "Max pages must be a positive whole number, or left blank."
       }
+    }
 
-      const trimmedDelayMs = cfg.delayMs.trim()
-      if (trimmedDelayMs !== "") {
-        const n = Number(trimmedDelayMs)
-        if (!Number.isInteger(n) || n <= 0) {
-          return "Delay must be a positive whole number of milliseconds, or left blank."
-        }
+    const trimmedDelayMs = cfg.delayMs.trim()
+    if (trimmedDelayMs !== "") {
+      const n = Number(trimmedDelayMs)
+      if (!Number.isInteger(n) || n <= 0) {
+        return "Delay must be a positive whole number of milliseconds, or left blank."
       }
+    }
 
-      const trimmedJitterMs = cfg.jitterMs.trim()
-      if (trimmedJitterMs !== "") {
-        const n = Number(trimmedJitterMs)
-        if (!Number.isInteger(n) || n <= 0) {
-          return "Jitter must be a positive whole number of milliseconds, or left blank."
-        }
+    const trimmedJitterMs = cfg.jitterMs.trim()
+    if (trimmedJitterMs !== "") {
+      const n = Number(trimmedJitterMs)
+      if (!Number.isInteger(n) || n <= 0) {
+        return "Jitter must be a positive whole number of milliseconds, or left blank."
       }
+    }
 
-      return null
-    },
-    []
-  )
+    return null
+  }, [])
 
   const handleSaveConfig = useCallback(async () => {
     const validationError = validateConfig(config)
@@ -175,7 +179,9 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
         config_snapshot: {
           max_depth: parsedMaxDepth,
           fetch_timeout_seconds: parsedFetchTimeoutSeconds,
-          ...(parsedMaxPages !== undefined ? { max_pages: parsedMaxPages } : {}),
+          ...(parsedMaxPages !== undefined
+            ? { max_pages: parsedMaxPages }
+            : {}),
           ...(parsedDelayMs !== undefined
             ? { request_delay_ms: parsedDelayMs }
             : {}),
@@ -188,7 +194,9 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
       setIsDialogOpen(false)
       setError("")
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to save auto-crawl settings.")
+      setError(
+        e instanceof Error ? e.message : "Unable to save auto-crawl settings."
+      )
     } finally {
       setIsSaving(false)
     }

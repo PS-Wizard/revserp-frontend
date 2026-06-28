@@ -148,9 +148,7 @@ export function SliderRow({
           {fmtNum(value, 2)}
         </Badge>
       </div>
-      {hint ? (
-        <p className="text-xs text-muted-foreground">{hint}</p>
-      ) : null}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       <Slider
         id={id}
         value={[value]}
