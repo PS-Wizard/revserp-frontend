@@ -1,13 +1,7 @@
 "use client"
 
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useReducer,
-  useRef,
-  useState,
-} from "react"
+import { memo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { GSCOverview } from "~/components/gsc-overview/gsc-overview"
 import { Button } from "~/components/ui/button"
@@ -31,92 +25,13 @@ import type {
   ProjectGSCStatusResponse,
   ProjectResponse,
 } from "~/lib/api.types"
-type AsyncState = {
-  isStartingGSCConnect: boolean
-  isSavingGSCProjectSelection: boolean
-  isLoadingGSC: boolean
-  gscConnectErrorMessage: string
-  gscProjectSelectionErrorMessage: string
-  gscLoadErrorMessage: string
-  gscStatus: ProjectGSCStatusResponse | null
-  gscOverview: ProjectGSCOverviewResponse | null
+
+export function gscStatusQueryKey(projectId: string) {
+  return ["gsc-status", projectId] as const
 }
 
-const initialAsyncState: AsyncState = {
-  isStartingGSCConnect: false,
-  isSavingGSCProjectSelection: false,
-  isLoadingGSC: false,
-  gscConnectErrorMessage: "",
-  gscProjectSelectionErrorMessage: "",
-  gscLoadErrorMessage: "",
-  gscStatus: null,
-  gscOverview: null,
-}
-
-type AsyncAction =
-  | { type: "START_CONNECT" }
-  | { type: "FINISH_CONNECT" }
-  | { type: "START_SELECT" }
-  | { type: "FINISH_SELECT" }
-  | { type: "START_LOAD" }
-  | { type: "FINISH_LOAD" }
-  | { type: "SET_CONNECT_ERROR"; message: string }
-  | { type: "SET_SELECT_ERROR"; message: string }
-  | { type: "SET_LOAD_ERROR"; message: string }
-  | { type: "SET_GSC_STATUS"; status: ProjectGSCStatusResponse | null }
-  | { type: "SET_GSC_OVERVIEW"; overview: ProjectGSCOverviewResponse | null }
-  | { type: "CLEAR_ERRORS" }
-
-function asyncReducer(state: AsyncState, action: AsyncAction): AsyncState {
-  switch (action.type) {
-    case "START_CONNECT":
-      return {
-        ...state,
-        isStartingGSCConnect: true,
-        gscConnectErrorMessage: "",
-      }
-    case "FINISH_CONNECT":
-      return { ...state, isStartingGSCConnect: false }
-    case "START_SELECT":
-      return {
-        ...state,
-        isSavingGSCProjectSelection: true,
-        gscProjectSelectionErrorMessage: "",
-      }
-    case "FINISH_SELECT":
-      return { ...state, isSavingGSCProjectSelection: false }
-    case "START_LOAD":
-      return { ...state, isLoadingGSC: true, gscLoadErrorMessage: "" }
-    case "FINISH_LOAD":
-      return { ...state, isLoadingGSC: false }
-    case "SET_CONNECT_ERROR":
-      return {
-        ...state,
-        gscConnectErrorMessage: action.message,
-        isStartingGSCConnect: false,
-      }
-    case "SET_SELECT_ERROR":
-      return {
-        ...state,
-        gscProjectSelectionErrorMessage: action.message,
-        isSavingGSCProjectSelection: false,
-      }
-    case "SET_LOAD_ERROR":
-      return { ...state, gscLoadErrorMessage: action.message }
-    case "SET_GSC_STATUS":
-      return { ...state, gscStatus: action.status }
-    case "SET_GSC_OVERVIEW":
-      return { ...state, gscOverview: action.overview }
-    case "CLEAR_ERRORS":
-      return {
-        ...state,
-        gscConnectErrorMessage: "",
-        gscProjectSelectionErrorMessage: "",
-        gscLoadErrorMessage: "",
-      }
-    default:
-      return state
-  }
+export function gscOverviewQueryKey(projectId: string) {
+  return ["gsc-overview", projectId] as const
 }
 
 type SearchConsoleViewProps = {
@@ -128,62 +43,82 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   activeProject,
   isOrganizationOwner,
 }: SearchConsoleViewProps) {
-  const [asyncState, dispatch] = useReducer(asyncReducer, initialAsyncState)
-  const [selectedGSCSiteURL, setSelectedGSCSiteURL] = useState("")
-  const { gscStatus, gscOverview } = asyncState
-  const requestKeyRef = useRef(0)
+  const queryClient = useQueryClient()
+  const projectId = activeProject?.id
 
-  const loadGSCData = useCallback(async () => {
-    if (!activeProject) {
-      dispatch({ type: "SET_GSC_STATUS", status: null })
-      dispatch({ type: "SET_GSC_OVERVIEW", overview: null })
-      return
-    }
+  const {
+    data: gscStatus,
+    isLoading: isLoadingStatus,
+    error: statusError,
+  } = useQuery({
+    queryKey: projectId
+      ? gscStatusQueryKey(projectId)
+      : ["gsc-status-disabled"],
+    queryFn: () =>
+      clientApiFetch<ProjectGSCStatusResponse>(
+        `/projects/${projectId!}/gsc/status`
+      ),
+    enabled: Boolean(projectId),
+    placeholderData: (prev) => prev,
+  })
 
-    const requestKey = ++requestKeyRef.current
-    dispatch({ type: "START_LOAD" })
+  const overviewEnabled =
+    Boolean(projectId) &&
+    Boolean(gscStatus?.has_google_connection) &&
+    Boolean(gscStatus?.connected)
 
-    try {
-      const nextStatus = await clientApiFetch<ProjectGSCStatusResponse>(
-        `/projects/${activeProject.id}/gsc/status`
-      )
-      if (requestKey !== requestKeyRef.current) return
+  const {
+    data: gscOverview,
+    isLoading: isLoadingOverview,
+    error: overviewError,
+  } = useQuery({
+    queryKey: projectId
+      ? gscOverviewQueryKey(projectId)
+      : ["gsc-overview-disabled"],
+    queryFn: () =>
+      clientApiFetch<ProjectGSCOverviewResponse>(
+        `/projects/${projectId!}/gsc/overview`
+      ),
+    enabled: overviewEnabled,
+    placeholderData: (prev) => prev,
+  })
 
-      dispatch({ type: "SET_GSC_STATUS", status: nextStatus })
-      setSelectedGSCSiteURL(nextStatus.selected_site?.site_url ?? "")
-      dispatch({ type: "SET_GSC_OVERVIEW", overview: null })
+  const isLoadingGSC = isLoadingStatus || (overviewEnabled && isLoadingOverview)
 
-      if (nextStatus.has_google_connection && nextStatus.connected) {
-        const overview = await clientApiFetch<ProjectGSCOverviewResponse>(
-          `/projects/${activeProject.id}/gsc/overview`
-        )
-        if (requestKey === requestKeyRef.current)
-          dispatch({ type: "SET_GSC_OVERVIEW", overview })
-      }
-    } catch (error) {
-      if (requestKey === requestKeyRef.current) {
-        dispatch({
-          type: "SET_LOAD_ERROR",
-          message:
-            error instanceof ApiError
-              ? error.message
-              : "Unable to load Google Search Console data.",
-        })
-      }
-    } finally {
-      if (requestKey === requestKeyRef.current)
-        dispatch({ type: "FINISH_LOAD" })
-    }
-  }, [activeProject])
+  const gscLoadErrorMessage =
+    (statusError instanceof ApiError
+      ? statusError.message
+      : statusError
+        ? "Unable to load Google Search Console data."
+        : "") ||
+    (overviewError instanceof ApiError
+      ? overviewError.message
+      : overviewError
+        ? "Unable to load Google Search Console data."
+        : "")
 
-  useEffect(() => {
-    void loadGSCData()
-  }, [loadGSCData])
+  const [selectedGSCSiteURL, setSelectedGSCSiteURL] = useState(
+    gscStatus?.selected_site?.site_url ?? ""
+  )
+  const [isStartingGSCConnect, setIsStartingGSCConnect] = useState(false)
+  const [gscConnectErrorMessage, setGscConnectErrorMessage] = useState("")
+  const [isSavingGSCProjectSelection, setIsSavingGSCProjectSelection] =
+    useState(false)
+  const [gscProjectSelectionErrorMessage, setGscProjectSelectionErrorMessage] =
+    useState("")
+
+  async function handleRefreshOverview() {
+    if (!projectId) return
+    await queryClient.invalidateQueries({
+      queryKey: gscOverviewQueryKey(projectId),
+    })
+  }
 
   async function handleStartGSCConnect() {
     if (!activeProject) return
 
-    dispatch({ type: "START_CONNECT" })
+    setIsStartingGSCConnect(true)
+    setGscConnectErrorMessage("")
     try {
       const response = await clientApiPost<{ auth_url: string }>(
         `/projects/${activeProject.id}/gsc/connect/start`,
@@ -191,20 +126,20 @@ export const SearchConsoleView = memo(function SearchConsoleView({
       )
       window.location.href = response.auth_url
     } catch (error) {
-      dispatch({
-        type: "SET_CONNECT_ERROR",
-        message:
-          error instanceof ApiError
-            ? error.message
-            : "Unable to start Google Search Console connection.",
-      })
+      setGscConnectErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to start Google Search Console connection."
+      )
+      setIsStartingGSCConnect(false)
     }
   }
 
   async function handleSelectGSCProject() {
     if (!activeProject || !selectedGSCSiteURL) return
 
-    dispatch({ type: "START_SELECT" })
+    setIsSavingGSCProjectSelection(true)
+    setGscProjectSelectionErrorMessage("")
     try {
       await clientApiPost<{ ok: boolean }>(
         `/projects/${activeProject.id}/gsc/select-site`,
@@ -212,15 +147,21 @@ export const SearchConsoleView = memo(function SearchConsoleView({
           site_url: selectedGSCSiteURL,
         }
       )
-      await loadGSCData()
-    } catch (error) {
-      dispatch({
-        type: "SET_SELECT_ERROR",
-        message:
-          error instanceof ApiError
-            ? error.message
-            : "Unable to connect this project to Google Search Console.",
+      // Invalidate both so they refetch with updated state
+      await queryClient.invalidateQueries({
+        queryKey: gscStatusQueryKey(activeProject.id),
       })
+      await queryClient.invalidateQueries({
+        queryKey: gscOverviewQueryKey(activeProject.id),
+      })
+    } catch (error) {
+      setGscProjectSelectionErrorMessage(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to connect this project to Google Search Console."
+      )
+    } finally {
+      setIsSavingGSCProjectSelection(false)
     }
   }
 
@@ -233,7 +174,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     )
   }
 
-  if (asyncState.isLoadingGSC && !gscStatus) {
+  if (isLoadingGSC && !gscStatus) {
     return (
       <GSCStateCard
         description="Fetching GSC only because this tab is open."
@@ -242,10 +183,10 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     )
   }
 
-  if (asyncState.gscLoadErrorMessage && !gscStatus) {
+  if (gscLoadErrorMessage && !gscStatus) {
     return (
       <GSCStateCard
-        description={asyncState.gscLoadErrorMessage}
+        description={gscLoadErrorMessage}
         descriptionClassName="text-red-200"
         title="Unable to load Search Console"
       />
@@ -257,9 +198,9 @@ export const SearchConsoleView = memo(function SearchConsoleView({
       <GSCOverview
         activeProjectID={activeProject.id}
         isOrganizationOwner={isOrganizationOwner}
-        onRefreshOverview={loadGSCData}
-        overviewErrorMessage={asyncState.gscLoadErrorMessage}
-        overviewResponse={gscOverview}
+        onRefreshOverview={handleRefreshOverview}
+        overviewErrorMessage={gscLoadErrorMessage}
+        overviewResponse={gscOverview ?? null}
         status={gscStatus}
       />
     )
@@ -296,19 +237,17 @@ export const SearchConsoleView = memo(function SearchConsoleView({
             </div>
             <div className="pt-5 sm:max-w-sm">
               <Button
-                disabled={
-                  !selectedGSCSiteURL || asyncState.isSavingGSCProjectSelection
-                }
+                disabled={!selectedGSCSiteURL || isSavingGSCProjectSelection}
                 onClick={handleSelectGSCProject}
               >
-                {asyncState.isSavingGSCProjectSelection
+                {isSavingGSCProjectSelection
                   ? "Connecting project..."
                   : "Connect project"}
               </Button>
             </div>
-            {asyncState.gscProjectSelectionErrorMessage ? (
+            {gscProjectSelectionErrorMessage ? (
               <p className="pt-4 text-sm text-red-200">
-                {asyncState.gscProjectSelectionErrorMessage}
+                {gscProjectSelectionErrorMessage}
               </p>
             ) : null}
           </>
@@ -335,17 +274,17 @@ export const SearchConsoleView = memo(function SearchConsoleView({
           <>
             <div className="pt-8 sm:max-w-sm">
               <Button
-                disabled={asyncState.isStartingGSCConnect}
+                disabled={isStartingGSCConnect}
                 onClick={handleStartGSCConnect}
               >
-                {asyncState.isStartingGSCConnect
+                {isStartingGSCConnect
                   ? "Redirecting to Google..."
                   : "Connect now"}
               </Button>
             </div>
-            {asyncState.gscConnectErrorMessage ? (
+            {gscConnectErrorMessage ? (
               <p className="pt-4 text-sm text-red-200">
-                {asyncState.gscConnectErrorMessage}
+                {gscConnectErrorMessage}
               </p>
             ) : null}
           </>

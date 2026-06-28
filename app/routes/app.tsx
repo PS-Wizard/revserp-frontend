@@ -5,7 +5,7 @@ import {
   useNavigate,
   useRevalidator,
 } from "react-router"
-import { toast } from "sonner"
+import { redirect } from "react-router"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
@@ -28,74 +28,84 @@ import {
 } from "~/components/ui/card"
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import { clientApiFetch, serverApiFetch } from "~/lib/api"
+import { useActiveCrawlsPoll } from "~/hooks/use-active-crawls-poll"
+import { useCrawlToasts } from "~/hooks/use-crawl-toasts"
+import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
   ActiveCrawlResponse,
-  ActiveCrawlsResponse,
+  AppBootstrapResponse,
   CrawlResponse,
-  CrawlsResponse,
   MeResponse,
   ProjectResponse,
-  ProjectsResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
-import { requireAuthenticatedUser } from "~/lib/auth.server"
 
 export async function loader({ request }: { request: Request }) {
-  const me = await requireAuthenticatedUser(request)
-  const projectsResponse = await serverApiFetch<ProjectsResponse>(
-    `/organizations/${me.active_org_id}/projects`,
-    request
-  )
-
   const requestUrl = new URL(request.url)
   const requestedProjectId = requestUrl.searchParams.get("project")
   const requestedCrawlId = requestUrl.searchParams.get("crawl")
-  const activeProject =
-    projectsResponse.projects.find(
-      (project) => project.id === requestedProjectId
-    ) ??
-    projectsResponse.projects[0] ??
-    null
 
-  let projectCrawls: Record<string, CrawlResponse[]> = {}
-  let recentCrawls: CrawlResponse[] = []
-  let currentBreakdown: ScoreBreakdownResponse | null = null
+  const qs = new URLSearchParams()
+  if (requestedProjectId) qs.set("project", requestedProjectId)
+  if (requestedCrawlId) qs.set("crawl", requestedCrawlId)
+  const qsStr = qs.toString()
+
+  let bootstrap: AppBootstrapResponse
+  try {
+    bootstrap = await serverApiFetch<AppBootstrapResponse>(
+      `/app-bootstrap${qsStr ? `?${qsStr}` : ""}`,
+      request
+    )
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      const nextPath = `${requestUrl.pathname}${requestUrl.search}`
+      throw redirect(`/login?next=${encodeURIComponent(nextPath)}`)
+    }
+    if (error instanceof ApiError) {
+      throw redirect("/account-suspended")
+    }
+    throw error
+  }
+
+  const {
+    me,
+    projects,
+    active_project: activeProject,
+    crawls,
+    selected_crawl_id,
+    breakdown,
+  } = bootstrap
+
+  const recentCrawls: CrawlResponse[] = crawls
+  const projectCrawls: Record<string, CrawlResponse[]> = activeProject
+    ? { [activeProject.id]: recentCrawls }
+    : {}
+
+  let currentBreakdown: ScoreBreakdownResponse | null = breakdown ?? null
   let crawlBreakdowns: CrawlBreakdown[] = []
 
-  if (activeProject) {
-    const crawlsResponse = await serverApiFetch<CrawlsResponse>(
-      `/projects/${activeProject.id}/crawls?limit=50&offset=0`,
-      request
-    ).catch(() => ({ crawls: [] as CrawlResponse[] }))
-
-    recentCrawls = crawlsResponse.crawls
-    projectCrawls = { [activeProject.id]: recentCrawls }
-
-    const sortedCompletedCrawls = [...recentCrawls]
-      .filter((crawl) => crawl.status === "completed")
-      .sort((left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left))
-    const selectedCompletedCrawl =
-      sortedCompletedCrawls.find((crawl) => crawl.id === requestedCrawlId) ??
-      sortedCompletedCrawls[0] ??
-      null
-    if (selectedCompletedCrawl) {
-      const breakdown = await serverApiFetch<ScoreBreakdownResponse>(
-        `/crawls/${selectedCompletedCrawl.id}/score-breakdown`,
-        request
-      ).catch(() => null)
-      if (breakdown) {
-        currentBreakdown = breakdown
-        crawlBreakdowns = [{ crawl: selectedCompletedCrawl, breakdown }]
-      }
+  if (currentBreakdown && selected_crawl_id) {
+    const selectedCrawl = crawls.find((c) => c.id === selected_crawl_id) ?? null
+    if (selectedCrawl) {
+      crawlBreakdowns = [{ crawl: selectedCrawl, breakdown: currentBreakdown }]
+    }
+  } else if (currentBreakdown) {
+    // breakdown present but no selected_crawl_id — find the most recent completed crawl
+    const sortedCompleted = [...crawls]
+      .filter((c) => c.status === "completed")
+      .sort((a, b) => getCrawlTimestamp(b) - getCrawlTimestamp(a))
+    if (sortedCompleted[0]) {
+      crawlBreakdowns = [
+        { crawl: sortedCompleted[0], breakdown: currentBreakdown },
+      ]
     }
   }
 
   return {
     me,
-    projects: projectsResponse.projects,
+    projects,
     activeProject,
     recentCrawls,
     projectCrawls,
@@ -145,41 +155,73 @@ export default function AppPage() {
     null
   )
   const [isNewChat, setIsNewChat] = useState(false)
-  const [activeCrawls, setActiveCrawls] = useState<ActiveCrawlResponse[]>([])
   const [extraBreakdowns, setExtraBreakdowns] = useState<CrawlBreakdown[]>([])
+  // Cache fetched extra breakdowns by crawl id to avoid re-fetching on project revisit.
+  const extraBreakdownCacheRef = useRef<Map<string, CrawlBreakdown>>(new Map())
 
-  useEffect(() => {
-    setExtraBreakdowns([])
-    const alreadyFetched = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
-    const toFetch = sortedCompletedCrawls
-      .filter((crawl) => !alreadyFetched.has(crawl.id))
-      .slice(0, 2)
-    if (toFetch.length === 0) return
-    let cancelled = false
-    void Promise.allSettled(
-      toFetch.map((crawl) =>
-        clientApiFetch<ScoreBreakdownResponse>(`/crawls/${crawl.id}/score-breakdown`)
-          .then((breakdown) => ({ crawl, breakdown }))
-      )
-    ).then((results) => {
-      if (cancelled) return
-      const fetched = results.flatMap((r) =>
-        r.status === "fulfilled" ? [r.value] : []
-      )
-      if (fetched.length > 0) setExtraBreakdowns(fetched)
-    })
-    return () => {
-      cancelled = true
+  // Track the most recently settled crawl to pass into useCrawlToasts.
+  const [settledCrawl, setSettledCrawl] = useState<ActiveCrawlResponse | null>(
+    null
+  )
+
+  const sortedCrawls = useMemo(
+    () =>
+      [...recentCrawls].sort(
+        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
+      ),
+    [recentCrawls]
+  )
+  const sortedCompletedCrawls = useMemo(
+    () => sortedCrawls.filter((crawl) => crawl.status === "completed"),
+    [sortedCrawls]
+  )
+
+  // Memoize selectedCrawlId (parse once per location.search change).
+  const selectedCrawlId = useMemo(
+    () => new URLSearchParams(location.search).get("crawl"),
+    [location.search]
+  )
+  // Memoize currentCrawl.
+  const currentCrawl = useMemo(
+    () =>
+      sortedCrawls.find((crawl) => crawl.id === selectedCrawlId) ??
+      sortedCompletedCrawls[0] ??
+      null,
+    [sortedCrawls, sortedCompletedCrawls, selectedCrawlId]
+  )
+
+  // Org-wide "is any crawl in flight" signal — gates the poll.
+  const hasActiveCrawlAnywhere = useMemo(
+    () =>
+      Object.values(projectCrawls).some((crawls) =>
+        crawls.some(
+          (crawl) => crawl.status === "queued" || crawl.status === "running"
+        )
+      ),
+    [projectCrawls]
+  )
+
+  const pollEnabled = hasActiveCrawlAnywhere || isStartingCrawl
+
+  // Stable revalidate ref — the poll callback uses this so the interval never
+  // depends on the revalidator object and thus never tears down on revalidation.
+  const revalidateRef = useRef(revalidator.revalidate)
+  revalidateRef.current = revalidator.revalidate
+  const revalidatorStateRef = useRef(revalidator.state)
+  revalidatorStateRef.current = revalidator.state
+
+  const handleCrawlSettled = useCallback((crawl: ActiveCrawlResponse) => {
+    setSettledCrawl(crawl)
+    if (revalidatorStateRef.current === "idle") {
+      revalidateRef.current()
     }
-  }, [activeProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
-  const allCrawlBreakdowns = useMemo(() => {
-    const seen = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
-    const extras = extraBreakdowns.filter(({ crawl }) => !seen.has(crawl.id))
-    return [...crawlBreakdowns, ...extras].sort(
-      (a, b) => getCrawlTimestamp(b.crawl) - getCrawlTimestamp(a.crawl)
-    )
-  }, [crawlBreakdowns, extraBreakdowns])
+  const { activeCrawls } = useActiveCrawlsPoll({
+    orgId: me.active_org_id,
+    enabled: pollEnabled,
+    onCrawlSettled: handleCrawlSettled,
+  })
 
   const handleOpenAIConversation = useCallback(
     (conversationId: string, scope?: AIScopeState) => {
@@ -198,9 +240,6 @@ export default function AppPage() {
     setView("revserp-ai")
   }, [])
 
-  // Navigate to a project (and optionally a specific crawl) by updating the
-  // URL search params, matching how the navbar's project picker switches
-  // projects. Used by the clickable crawl toasts.
   const goToCrawl = useCallback(
     (projectId: string, crawlId?: string) => {
       const params = new URLSearchParams(location.search)
@@ -223,41 +262,83 @@ export default function AppPage() {
     return map
   }, [projects])
 
-  // Org-wide "is any crawl in flight" signal (across every project, not just the
-  // selected one) — gates the active-crawl poll so toasts for other projects'
-  // crawls keep updating even after you switch projects.
-  const hasActiveCrawlAnywhere = useMemo(
-    () =>
-      Object.values(projectCrawls).some((crawls) =>
-        crawls.some(
-          (crawl) => crawl.status === "queued" || crawl.status === "running"
-        )
-      ),
-    [projectCrawls]
-  )
+  useCrawlToasts({
+    activeCrawls,
+    settledCrawl,
+    projectNameById,
+    goToCrawl,
+  })
 
-  const sortedCrawls = useMemo(
-    () =>
-      [...recentCrawls].sort(
-        (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
-      ),
-    [recentCrawls]
-  )
-  const sortedCompletedCrawls = useMemo(
-    () => sortedCrawls.filter((crawl) => crawl.status === "completed"),
-    [sortedCrawls]
-  )
-  const selectedCrawlId = new URLSearchParams(location.search).get("crawl")
-  const currentCrawl =
-    sortedCrawls.find((crawl) => crawl.id === selectedCrawlId) ??
-    sortedCompletedCrawls[0] ??
-    null
+  // Fetch up to 2 extra score-breakdowns for chart history — gated to the
+  // summary tab only (sole consumer). Uses an AbortController to cancel on
+  // cleanup. Caches by crawl id across project revisits.
+  useEffect(() => {
+    if (view !== "revserp-audit" || auditTab !== "summary") return
+
+    const alreadyFetched = new Set([
+      ...crawlBreakdowns.map(({ crawl }) => crawl.id),
+      ...extraBreakdownCacheRef.current.keys(),
+    ])
+    const toFetch = sortedCompletedCrawls
+      .filter((crawl) => !alreadyFetched.has(crawl.id))
+      .slice(0, 2)
+
+    if (toFetch.length === 0) {
+      // Populate from cache for this project.
+      const cached = sortedCompletedCrawls
+        .map((crawl) => extraBreakdownCacheRef.current.get(crawl.id))
+        .filter((bd): bd is CrawlBreakdown => bd !== undefined)
+      setExtraBreakdowns(cached)
+      return
+    }
+
+    const controller = new AbortController()
+    void Promise.allSettled(
+      toFetch.map((crawl) =>
+        clientApiFetch<ScoreBreakdownResponse>(
+          `/crawls/${crawl.id}/score-breakdown`,
+          { signal: controller.signal }
+        ).then((breakdown) => ({ crawl, breakdown }))
+      )
+    ).then((results) => {
+      if (controller.signal.aborted) return
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          extraBreakdownCacheRef.current.set(r.value.crawl.id, r.value)
+        }
+      }
+      const cached = sortedCompletedCrawls
+        .map((crawl) => extraBreakdownCacheRef.current.get(crawl.id))
+        .filter((bd): bd is CrawlBreakdown => bd !== undefined)
+      setExtraBreakdowns(cached)
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [activeProject?.id, view, auditTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset extra breakdowns and cache on project change.
+  useEffect(() => {
+    setExtraBreakdowns([])
+    extraBreakdownCacheRef.current = new Map()
+  }, [activeProject?.id])
+
+  const allCrawlBreakdowns = useMemo(() => {
+    const seen = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
+    const extras = extraBreakdowns.filter(({ crawl }) => !seen.has(crawl.id))
+    return [...crawlBreakdowns, ...extras].sort(
+      (a, b) => getCrawlTimestamp(b.crawl) - getCrawlTimestamp(a.crawl)
+    )
+  }, [crawlBreakdowns, extraBreakdowns])
+
   const previousCrawl = useMemo(() => {
     const idx = sortedCompletedCrawls.findIndex(
       (crawl) => crawl.id === currentCrawl?.id
     )
     return idx >= 0 ? (sortedCompletedCrawls[idx + 1] ?? null) : null
   }, [currentCrawl, sortedCompletedCrawls])
+
   const activeOrganization = me.organizations.find(
     (organization) => organization.id === me.active_org_id
   )
@@ -270,69 +351,13 @@ export default function AppPage() {
   const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
   const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
 
-  const lastActiveSignatureRef = useRef<string | null>(null)
-
-  // Poll the org-wide active-crawls endpoint whenever any crawl is in flight
-  // anywhere in the org. Its result drives the stack of per-crawl loading toasts
-  // below; a change to the active set (queued→running, or a crawl finishing)
-  // also triggers a single full revalidate so loader data (projectCrawls,
-  // scores, and the completion toasts that key off it) refreshes off real data.
-  useEffect(() => {
-    if (
-      !hasActiveCrawlAnywhere &&
-      activeCrawls.length === 0 &&
-      !isStartingCrawl
-    ) {
-      lastActiveSignatureRef.current = null
-      return
-    }
-
-    let cancelled = false
-
-    async function pollActiveCrawls() {
-      try {
-        const response = await clientApiFetch<ActiveCrawlsResponse>(
-          `/organizations/${me.active_org_id}/crawls/active`
-        )
-        if (cancelled) return
-        const signature = response.crawls
-          .map((crawl) => `${crawl.id}:${crawl.status}`)
-          .sort()
-          .join("|")
-        if (signature !== lastActiveSignatureRef.current) {
-          setActiveCrawls(response.crawls)
-          // Skip the revalidate on the first poll (baseline) — loader data is
-          // already fresh from the action that started the crawl. Thereafter,
-          // any change to the active set refreshes loader data once.
-          if (
-            lastActiveSignatureRef.current !== null &&
-            revalidator.state === "idle"
-          ) {
-            revalidator.revalidate()
-          }
-          lastActiveSignatureRef.current = signature
-        }
-      } catch (error) {
-        console.error("Failed to poll active crawls:", error)
-      }
-    }
-
-    void pollActiveCrawls()
-    const interval = window.setInterval(() => {
-      void pollActiveCrawls()
-    }, 3000)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
-  }, [
-    hasActiveCrawlAnywhere,
-    activeCrawls.length,
-    isStartingCrawl,
-    revalidator,
-    me.active_org_id,
-  ])
+  // The blocking overlay + AI-tab lock should appear ONLY when the crawl the
+  // user currently has selected is the one in flight. A crawl running in the
+  // background (while the user views an already-completed crawl) must not block
+  // the UI — that data already exists. We only auto-switch to a running crawl
+  // once it completes, so normally this stays false during a background crawl.
+  const isViewingRunningCrawl =
+    currentCrawl?.status === "running" || currentCrawl?.status === "queued"
 
   useEffect(() => {
     if (activeRunningCrawl) {
@@ -341,127 +366,24 @@ export default function AppPage() {
   }, [activeRunningCrawl])
 
   useEffect(() => {
-    if (isCrawlRunning && view === "revserp-ai") {
+    if (isViewingRunningCrawl && view === "revserp-ai") {
       setView("revserp-audit")
     }
-  }, [isCrawlRunning, view])
+  }, [isViewingRunningCrawl, view])
 
-  const shownCrawlToastIdsRef = useRef<Set<string>>(new Set())
-
-  // Reconcile one persistent loading toast per active crawl, org-wide. Toasts
-  // are keyed by crawl id so they stack (and expand on hover) like the AI chat,
-  // survive project switches, and update in place on a status change. A crawl
-  // that drops out of the active set has its loading toast dismissed here; the
-  // matching completion/failure toast fires separately off refreshed loader
-  // data. No dismiss happens on a mere label change — only on real removal — so
-  // there's no exit-animation race that would make a toast vanish mid-crawl.
+  // Lock page scrolling only while viewing the running crawl (overlay is up).
   useEffect(() => {
-    const nextIds = new Set<string>()
-    for (const crawl of activeCrawls) {
-      nextIds.add(crawl.id)
-      const isQueued = crawl.status === "queued"
-      const projectName = projectNameById.get(crawl.project_id)
-      toast.loading(isQueued ? "Queued…" : "Crawling…", {
-        id: crawl.id,
-        description: isQueued
-          ? projectName
-            ? `${projectName} is waiting for another crawl to finish.`
-            : "Waiting for another crawl to finish."
-          : projectName
-            ? `${projectName} crawl in progress.`
-            : "Crawl in progress.",
-        duration: Infinity,
-        action: {
-          label: "View",
-          // Take the user to the crawling project, but keep the toast open
-          // (preventDefault) — it should persist until the crawl actually ends.
-          onClick: (event) => {
-            event.preventDefault()
-            goToCrawl(crawl.project_id)
-          },
-        },
-      })
-    }
-    for (const id of shownCrawlToastIdsRef.current) {
-      if (!nextIds.has(id)) {
-        toast.dismiss(id)
-      }
-    }
-    shownCrawlToastIdsRef.current = nextIds
-  }, [activeCrawls, projectNameById, goToCrawl])
-
-  // Dismiss any lingering crawl toasts only when this view unmounts (e.g. logout
-  // / route change). Kept separate from the reconcile effect above so it never
-  // fires on a dependency change.
-  useEffect(() => {
-    return () => {
-      for (const id of shownCrawlToastIdsRef.current) {
-        toast.dismiss(id)
-      }
-    }
-  }, [])
-
-  const prevCrawlStatusesRef = useRef<Map<string, string>>(new Map())
-
-  // Fire completion/failure toasts org-wide by diffing every project's crawls
-  // (refreshed on revalidate), so the toast lands even when you've switched away
-  // from the project that was crawling. On first run it only records a baseline
-  // (no prior status) so already-finished crawls don't toast on load.
-  useEffect(() => {
-    const prevStatuses = prevCrawlStatusesRef.current
-    const nextStatuses = new Map<string, string>()
-
-    for (const crawls of Object.values(projectCrawls)) {
-      for (const crawl of crawls) {
-        nextStatuses.set(crawl.id, crawl.status)
-        const prevStatus = prevStatuses.get(crawl.id)
-        if (prevStatus === undefined) {
-          continue
-        }
-        const wasActive = prevStatus === "running" || prevStatus === "queued"
-        if (!wasActive) {
-          continue
-        }
-        const projectName = projectNameById.get(crawl.project_id)
-        if (crawl.status === "completed") {
-          const completedCrawlId = crawl.id
-          const completedProjectId = crawl.project_id
-          toast.success("Crawl complete", {
-            description: projectName
-              ? `${projectName} is ready to review.`
-              : undefined,
-            action: {
-              label: "View",
-              // Open the finished crawl's results; let the toast auto-close.
-              onClick: () => goToCrawl(completedProjectId, completedCrawlId),
-            },
-          })
-        } else if (crawl.status === "failed") {
-          toast.error("Crawl failed", {
-            description: projectName
-              ? `${projectName} crawl encountered an error.`
-              : undefined,
-          })
-        }
-      }
-    }
-
-    prevCrawlStatusesRef.current = nextStatuses
-  }, [projectCrawls, projectNameById, goToCrawl])
-
-  // Lock page scrolling while a crawl is in progress so the centered overlay
-  // stays put; the navbar remains interactive (it sits outside the dimmer).
-  useEffect(() => {
-    if (!isCrawlRunning) {
-      return
-    }
+    if (!isViewingRunningCrawl) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [isCrawlRunning])
-  // Stabilize chart props so polling doesn't re-render charts when data is unchanged
+  }, [isViewingRunningCrawl])
+
+  // Stabilize chart props so polling doesn't re-render charts when data is unchanged.
+  // Kept because chart components receive arrays by reference; even after the poll
+  // teardown fix the loader still returns new array references on each navigation.
   const chartCacheRef = useRef({
     crawlsKey: "",
     breakdownsKey: "",
@@ -504,6 +426,7 @@ export default function AppPage() {
     stableSortedCompletedCrawls.find(
       (crawl) => crawl.id === previousCrawl?.id
     ) ?? previousCrawl
+
   const scoreSegments = useMemo(
     () => [
       {
@@ -532,6 +455,8 @@ export default function AppPage() {
     ]
   )
 
+  const handleCrawlStart = useCallback(() => setIsStartingCrawl(true), [])
+
   return (
     <main className="min-h-svh bg-background text-foreground">
       <AppNavbar
@@ -539,8 +464,9 @@ export default function AppPage() {
         currentCrawl={currentCrawl}
         projectCrawls={projectCrawls}
         isCrawlRunning={isCrawlRunning}
+        isViewingRunningCrawl={isViewingRunningCrawl}
         crawlStatusLabel={crawlStatusLabel}
-        onCrawlStart={() => setIsStartingCrawl(true)}
+        onCrawlStart={handleCrawlStart}
         onViewChange={setView}
         onSelectConversation={handleOpenAIConversation}
         onNewChat={handleNewAIChat}
@@ -557,7 +483,7 @@ export default function AppPage() {
         <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
           <div
             className={
-              isCrawlRunning
+              isViewingRunningCrawl
                 ? "pointer-events-none blur-sm transition duration-200"
                 : "transition duration-200"
             }
@@ -656,7 +582,7 @@ export default function AppPage() {
             </Tabs>
           </div>
 
-          {isCrawlRunning ? (
+          {isViewingRunningCrawl ? (
             <>
               {/* Dimmer covers the content region only (below the navbar), so the
                   navbar stays interactive while a crawl runs. */}

@@ -12,6 +12,9 @@ export type AppNavbarProps = {
   currentCrawl: CrawlResponse | null
   projectCrawls: Record<string, CrawlResponse[]>
   isCrawlRunning: boolean
+  // True only when the currently-selected crawl is the one in flight. Locks the
+  // Revserp AI tab; isCrawlRunning still drives the Run Crawl button.
+  isViewingRunningCrawl: boolean
   crawlStatusLabel: string
   onCrawlStart: () => void
   organizationId: string

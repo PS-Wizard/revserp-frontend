@@ -326,7 +326,8 @@ export function IssueExplorer({
       return
     }
 
-    let cancelled = false
+    const controller = new AbortController()
+    const { signal } = controller
 
     async function loadIssueUrls() {
       dispatchIssueUrl({ type: "LOAD_START" })
@@ -334,11 +335,11 @@ export function IssueExplorer({
       try {
         const rowsByScope = await Promise.all(
           selectedIssueScopes.map((issueScope) =>
-            fetchAllIssueUrls(crawlId, issueScope)
+            fetchAllIssueUrls(crawlId, issueScope, signal)
           )
         )
 
-        if (cancelled) return
+        if (signal.aborted) return
 
         const nextRows = rowsByScope
           .flat()
@@ -346,7 +347,7 @@ export function IssueExplorer({
         issueUrlsCache.set(cacheKey, nextRows)
         dispatchIssueUrl({ type: "LOAD_SUCCESS", urls: nextRows })
       } catch (error) {
-        if (cancelled) return
+        if (signal.aborted) return
         dispatchIssueUrl({
           type: "LOAD_ERROR",
           error:
@@ -360,7 +361,7 @@ export function IssueExplorer({
     void loadIssueUrls()
 
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [
     breakdown,

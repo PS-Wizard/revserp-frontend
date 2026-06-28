@@ -10,6 +10,7 @@ import {
   useReducer,
 } from "react"
 import { LightbulbIcon, SparklesIcon, ZapIcon } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
@@ -82,6 +83,17 @@ function scopeReducer(state: ScopeState, action: ScopeAction): ScopeState {
   }
 }
 
+export function aiConversationsListQueryKey(
+  projectId: string,
+  crawlId: string
+) {
+  return ["ai-conversations", projectId, crawlId] as const
+}
+
+export function aiConversationDetailQueryKey(conversationId: string) {
+  return ["ai-conversation", conversationId] as const
+}
+
 function useAIConversation({
   breakdown,
   openConversationId,
@@ -99,6 +111,7 @@ function useAIConversation({
   } | null
   forceNewConversation?: boolean
 }) {
+  const queryClient = useQueryClient()
   const [scope, dispatchScope] = useReducer(scopeReducer, defaultScope)
   const {
     pillarId: selectedPillarId,
@@ -106,9 +119,6 @@ function useAIConversation({
     issueTypeIds: selectedIssueTypeIds,
   } = scope
   const [prompt, setPrompt] = useState("")
-  const [conversations, setConversations] = useState<AIConversationResponse[]>(
-    []
-  )
   const [activeConversationId, setActiveConversationId] = useState<
     string | null
   >(null)
@@ -131,6 +141,21 @@ function useAIConversation({
   const openConversationIdRef = useRef(openConversationId)
   openConversationIdRef.current = openConversationId ?? null
   const crawlId = breakdown?.crawl_id ?? ""
+
+  // Conversations list — cached, shared with popover's per-crawl slice
+  const conversationsEnabled = Boolean(projectId && crawlId)
+  const { data: conversationsData } = useQuery({
+    queryKey: conversationsEnabled
+      ? aiConversationsListQueryKey(projectId!, crawlId)
+      : ["ai-conversations-disabled"],
+    queryFn: () =>
+      clientApiFetch<AIConversationsResponse>(
+        `/projects/${projectId!}/ai/conversations?crawl_id=${encodeURIComponent(crawlId)}&limit=50&offset=0`
+      ).then((r) => r.conversations),
+    enabled: conversationsEnabled,
+    placeholderData: (prev) => prev,
+  })
+  const conversations: AIConversationResponse[] = conversationsData ?? []
 
   const selectedPillar = useMemo(() => {
     return (
@@ -176,7 +201,7 @@ function useAIConversation({
         ? selectedIssueTypes[0].label
         : `${selectedIssueTypes.length} issue types`
   const selectedScopeLabel = selectedPillar
-    ? `${selectedPillar.label} \u00b7 ${issueTypeLabel}`
+    ? `${selectedPillar.label} · ${issueTypeLabel}`
     : "Choose crawl context"
   const activeConversation =
     conversations.find(
@@ -222,9 +247,21 @@ function useAIConversation({
         setActiveConversationId(response.conversation.id)
         const loadedMessages = response.messages.map(newMessageFromResponse)
         setMessages(loadedMessages)
-        setConversations((current) =>
-          upsertConversation(current, response.conversation)
+        // Update the detail cache
+        queryClient.setQueryData(
+          aiConversationDetailQueryKey(conversationId),
+          response
         )
+        // Update the conversations list cache entry for this conversation
+        if (projectId && crawlId) {
+          queryClient.setQueryData<AIConversationResponse[]>(
+            aiConversationsListQueryKey(projectId, crawlId),
+            (current) =>
+              current
+                ? upsertConversation(current, response.conversation)
+                : [response.conversation]
+          )
+        }
         if (loadedMessages.length > 0) {
           setEmptyPollCount(0)
         }
@@ -238,7 +275,7 @@ function useAIConversation({
         setIsLoadingMessages(false)
       }
     },
-    [cancelSending]
+    [cancelSending, crawlId, projectId, queryClient]
   )
 
   // Sync scope when breakdown changes (no-derived-state fix)
@@ -265,63 +302,64 @@ function useAIConversation({
     syncScope()
   }, [breakdown])
 
-  // Load conversations on mount / crawl change
+  // When conversations are loaded (from cache or fresh), pick the first one
+  // if no external conversation was requested and forceNewConversation is off.
   const hasExternalConversationRequest = Boolean(openConversationId)
-  useEffect(() => {
-    let cancelled = false
+  const prevCrawlIdRef = useRef(crawlId)
+  const prevProjectIdRef = useRef(projectId)
 
-    void (async () => {
+  useEffect(() => {
+    const crawlChanged = crawlId !== prevCrawlIdRef.current
+    const projectChanged = projectId !== prevProjectIdRef.current
+    prevCrawlIdRef.current = crawlId
+    prevProjectIdRef.current = projectId
+
+    // Reset local state on project/crawl change
+    if (crawlChanged || projectChanged) {
       cancelSending()
-      setConversations([])
       setErrorMessage("")
       setIsLoadingMessages(false)
       if (!projectId || !crawlId) {
         setMessages([])
         setActiveConversationId(null)
-        return
       }
-
-      try {
-        const response = await clientApiFetch<AIConversationsResponse>(
-          `/projects/${projectId}/ai/conversations?crawl_id=${encodeURIComponent(crawlId)}&limit=50&offset=0`
-        )
-        if (cancelled) return
-        setConversations(response.conversations)
-
-        const firstConversation =
-          hasExternalConversationRequest || forceNewConversation
-            ? null
-            : response.conversations[0]
-
-        if (firstConversation) {
-          const detail = await clientApiFetch<AIConversationDetailResponse>(
-            `/ai/conversations/${firstConversation.id}`
-          )
-          if (cancelled) return
-          setActiveConversationId(detail.conversation.id)
-          setMessages(detail.messages.map(newMessageFromResponse))
-          setConversations((current) =>
-            upsertConversation(current, detail.conversation)
-          )
-        } else if (!hasExternalConversationRequest) {
-          setMessages([])
-          setActiveConversationId(null)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setErrorMessage(
-            error instanceof ApiError
-              ? error.message
-              : "Unable to load AI history."
-          )
-        }
-      }
-    })()
-
-    return () => {
-      cancelled = true
     }
-  }, [crawlId, projectId, hasExternalConversationRequest, forceNewConversation])
+  }, [crawlId, projectId, cancelSending])
+
+  // Once conversations are loaded (and no external open request), auto-open first
+  const conversationsLoadedRef = useRef(false)
+  useEffect(() => {
+    if (hasExternalConversationRequest || forceNewConversation) {
+      conversationsLoadedRef.current = false
+      return
+    }
+    if (!conversationsEnabled) {
+      conversationsLoadedRef.current = false
+      return
+    }
+    if (!conversationsData) return
+    if (conversationsLoadedRef.current) return
+
+    conversationsLoadedRef.current = true
+    const firstConversation = conversationsData[0]
+    if (firstConversation) {
+      void loadConversation(firstConversation.id)
+    } else {
+      setMessages([])
+      setActiveConversationId(null)
+    }
+  }, [
+    conversationsData,
+    conversationsEnabled,
+    hasExternalConversationRequest,
+    forceNewConversation,
+    loadConversation,
+  ])
+
+  // Reset auto-load flag when crawl/project/forceNew changes
+  useEffect(() => {
+    conversationsLoadedRef.current = false
+  }, [crawlId, projectId, forceNewConversation])
 
   // Apply external scope (e.g. from Recommend Fixes) when opening a conversation
   useEffect(() => {
@@ -343,8 +381,21 @@ function useAIConversation({
 
   useEffect(() => {
     if (!openConversationId) return
+    // Check if we already have this conversation detail cached
+    const cached = queryClient.getQueryData<AIConversationDetailResponse>(
+      aiConversationDetailQueryKey(openConversationId)
+    )
+    if (cached) {
+      cancelSending()
+      setActiveConversationId(cached.conversation.id)
+      setMessages(cached.messages.map(newMessageFromResponse))
+      setErrorMessage("")
+      setIsLoadingMessages(false)
+      if (cached.messages.length > 0) setEmptyPollCount(0)
+      return
+    }
     void loadConversation(openConversationId)
-  }, [loadConversation, openConversationId])
+  }, [loadConversation, openConversationId, queryClient, cancelSending])
 
   // Poll when a conversation is open but has no messages yet (AI response in flight)
   useEffect(() => {
@@ -418,8 +469,10 @@ function useAIConversation({
         if (!isActiveSendRequest(sendRequestId)) return
         conversationId = created.conversation.id
         setActiveConversationId(conversationId)
-        setConversations((current) =>
-          upsertConversation(current, created.conversation)
+        // Update conversations list cache
+        queryClient.setQueryData<AIConversationResponse[]>(
+          aiConversationsListQueryKey(projectId, crawlId),
+          (current) => upsertConversation(current ?? [], created.conversation)
         )
       }
 
@@ -438,13 +491,35 @@ function useAIConversation({
         }
       )
       if (!isActiveSendRequest(sendRequestId)) return
-      setMessages([
+      const nextMessages = [
         ...baseMessages,
         newMessageFromResponse(response.user_message),
         newMessageFromResponse(response.assistant_message),
-      ])
-      setConversations((current) =>
-        upsertConversation(current, response.conversation)
+      ]
+      setMessages(nextMessages)
+      // Update conversation list cache
+      queryClient.setQueryData<AIConversationResponse[]>(
+        aiConversationsListQueryKey(projectId, crawlId),
+        (current) => upsertConversation(current ?? [], response.conversation)
+      )
+      // Update detail cache
+      queryClient.setQueryData<AIConversationDetailResponse>(
+        aiConversationDetailQueryKey(conversationId),
+        (current) =>
+          current
+            ? {
+                ...current,
+                conversation: response.conversation,
+                messages: [
+                  ...current.messages,
+                  response.user_message,
+                  response.assistant_message,
+                ],
+              }
+            : {
+                conversation: response.conversation,
+                messages: [response.user_message, response.assistant_message],
+              }
       )
     } catch (error) {
       if (!isActiveSendRequest(sendRequestId)) return

@@ -408,3 +408,12 @@ export type AutoCrawlPutBody = {
   enabled: boolean
   config_snapshot?: AutoCrawlConfigSnapshot | null
 }
+
+export type AppBootstrapResponse = {
+  me: MeResponse
+  projects: ProjectResponse[]
+  active_project: ProjectResponse | null
+  crawls: CrawlResponse[]
+  selected_crawl_id?: string
+  breakdown?: ScoreBreakdownResponse
+}

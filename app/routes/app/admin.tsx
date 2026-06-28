@@ -694,59 +694,72 @@ function AccountsTab() {
   const selectedCount = selectedIds.size
 
   const bulkSuspend = async () => {
-    let ok = false
-    for (const user of selectedUsers) {
+    const eligible = selectedUsers.filter((user) => {
       if (user.is_platform_admin) {
         toast.error(`Cannot suspend admin: ${user.email}`)
-        continue
+        return false
       }
-      try {
-        await clientApiPost(`/admin/users/${user.id}/suspend`, {})
-        ok = true
-      } catch {
-        toast.error(`Failed to suspend ${user.email}`)
-      }
+      return true
+    })
+    const results = await Promise.allSettled(
+      eligible.map((user) =>
+        clientApiPost(`/admin/users/${user.id}/suspend`, {})
+      )
+    )
+    const failed = results.filter((r) => r.status === "rejected")
+    const succeeded = results.length - failed.length
+    if (succeeded > 0)
+      toast.success(`${succeeded} user${succeeded > 1 ? "s" : ""} suspended`)
+    for (let i = 0; i < failed.length; i++) {
+      toast.error(`Failed to suspend ${eligible[i]?.email ?? "user"}`)
     }
-    if (ok) toast.success("Users suspended")
     setSelectedIds(new Set())
     loadUsers()
   }
 
   const bulkUnsuspend = async () => {
-    let ok = false
-    for (const user of selectedUsers) {
+    const eligible = selectedUsers.filter((user) => {
       if (user.is_platform_admin) {
         toast.error(`Cannot unsuspend admin: ${user.email}`)
-        continue
+        return false
       }
-      try {
-        await clientApiPost(`/admin/users/${user.id}/unsuspend`, {})
-        ok = true
-      } catch {
-        toast.error(`Failed to unsuspend ${user.email}`)
-      }
+      return true
+    })
+    const results = await Promise.allSettled(
+      eligible.map((user) =>
+        clientApiPost(`/admin/users/${user.id}/unsuspend`, {})
+      )
+    )
+    const failed = results.filter((r) => r.status === "rejected")
+    const succeeded = results.length - failed.length
+    if (succeeded > 0)
+      toast.success(`${succeeded} user${succeeded > 1 ? "s" : ""} unsuspended`)
+    for (let i = 0; i < failed.length; i++) {
+      toast.error(`Failed to unsuspend ${eligible[i]?.email ?? "user"}`)
     }
-    if (ok) toast.success("Users unsuspended")
     setSelectedIds(new Set())
     loadUsers()
   }
 
   const confirmDisable = async () => {
     if (disableTarget === "bulk") {
-      let ok = false
-      for (const user of selectedUsers) {
+      const eligible = selectedUsers.filter((user) => {
         if (user.is_platform_admin) {
           toast.error(`Cannot disable admin: ${user.email}`)
-          continue
+          return false
         }
-        try {
-          await clientApiDelete(`/admin/users/${user.id}`)
-          ok = true
-        } catch {
-          toast.error(`Failed to disable ${user.email}`)
-        }
+        return true
+      })
+      const results = await Promise.allSettled(
+        eligible.map((user) => clientApiDelete(`/admin/users/${user.id}`))
+      )
+      const failed = results.filter((r) => r.status === "rejected")
+      const succeeded = results.length - failed.length
+      if (succeeded > 0)
+        toast.success(`${succeeded} user${succeeded > 1 ? "s" : ""} disabled`)
+      for (let i = 0; i < failed.length; i++) {
+        toast.error(`Failed to disable ${eligible[i]?.email ?? "user"}`)
       }
-      if (ok) toast.success("Users disabled")
       setSelectedIds(new Set())
     } else if (disableTarget) {
       try {

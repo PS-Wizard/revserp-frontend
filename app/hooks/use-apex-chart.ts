@@ -43,23 +43,22 @@ export function useApexChart(
         chartInstanceRef.current = null
       }
     }
-  }, [chartContainerRef, chartOptions, enabled, series])
+  }, [chartContainerRef, enabled])
 
   useEffect(() => {
     if (!enabled || !chartInstanceRef.current) return
 
     if (series !== lastSeriesRef.current) {
       lastSeriesRef.current = series
-      void chartInstanceRef.current.updateSeries(series, false)
+      // animate=true so switching crawls morphs the chart in place instead of
+      // snapping. The chart instance persists across data changes (the mount
+      // effect no longer recreates it), so the animation is the data transition.
+      void chartInstanceRef.current.updateSeries(series, true)
     }
     if (chartOptions !== lastOptionsRef.current) {
       lastOptionsRef.current = chartOptions
-      void chartInstanceRef.current.updateOptions(
-        chartOptions,
-        false,
-        false,
-        false
-      )
+      // updateOptions(options, redrawPaths, animate, updateSyncedCharts)
+      void chartInstanceRef.current.updateOptions(chartOptions, false, true, false)
     }
   }, [chartOptions, enabled, series])
 }

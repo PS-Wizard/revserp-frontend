@@ -65,7 +65,8 @@ export function toggleSelection(
 
 export async function fetchAllIssueUrls(
   crawlId: string,
-  issueScope: IssueScope
+  issueScope: IssueScope,
+  signal?: AbortSignal
 ) {
   const pageSize = 100
   let offset = 0
@@ -73,8 +74,11 @@ export async function fetchAllIssueUrls(
   const rows: MergedIssueUrlRow[] = []
 
   while (offset < total) {
+    if (signal?.aborted) break
+
     const response = await clientApiFetch<ScoreBreakdownIssueURLsResponse>(
-      `/crawls/${crawlId}/score-breakdown/${issueScope.pillarId}/${issueScope.bucketId}/${issueScope.issueTypeId}/urls?limit=${pageSize}&offset=${offset}`
+      `/crawls/${crawlId}/score-breakdown/${issueScope.pillarId}/${issueScope.bucketId}/${issueScope.issueTypeId}/urls?limit=${pageSize}&offset=${offset}`,
+      { signal }
     )
 
     total = response.pagination.total

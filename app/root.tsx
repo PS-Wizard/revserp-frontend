@@ -7,8 +7,12 @@ import {
   isRouteErrorResponse,
 } from "react-router"
 
+import { QueryClientProvider } from "@tanstack/react-query"
+import { useState } from "react"
+
 import { TooltipProvider } from "~/components/ui/tooltip"
 import { Toaster } from "~/components/ui/sonner"
+import { makeQueryClient } from "~/lib/query-client"
 
 import type { Route } from "./+types/root"
 import "./app.css"
@@ -34,7 +38,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 // react-doctor-disable-next-line react-doctor/no-multi-comp
 export default function App() {
-  return <Outlet />
+  // useState initializer runs once per component instance — safe for SSR because
+  // each server request gets its own React tree (and thus its own QueryClient).
+  const [queryClient] = useState(() => makeQueryClient())
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Outlet />
+    </QueryClientProvider>
+  )
 }
 
 // react-doctor-disable-next-line react-doctor/no-multi-comp

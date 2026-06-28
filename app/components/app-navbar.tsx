@@ -56,7 +56,11 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { clientApiFetch, clientApiPost } from "~/lib/api"
-import type { CrawlResponse, CrawlsResponse, ProjectResponse } from "~/lib/api.types"
+import type {
+  CrawlResponse,
+  CrawlsResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 
 // --- Create project form reducer ---
 
@@ -184,6 +188,7 @@ export function AppNavbar({
   currentCrawl,
   projectCrawls,
   isCrawlRunning,
+  isViewingRunningCrawl,
   crawlStatusLabel,
   onCrawlStart,
   organizationId,
@@ -478,7 +483,7 @@ export function AppNavbar({
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
                 <AiConversationsPopover
                   activeProjectId={activeProjectId}
-                  isCrawlRunning={isCrawlRunning}
+                  isCrawlRunning={isViewingRunningCrawl}
                   onViewChange={onViewChange}
                   onSelectConversation={onSelectConversation}
                   onDeleteConversation={onDeleteConversation}
@@ -524,9 +529,7 @@ export function AppNavbar({
                     Run Crawl
                   </DropdownMenuItem>
                   <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={!activeProjectId}
-                    >
+                    <DropdownMenuSubTrigger disabled={!activeProjectId}>
                       <CogIcon />
                       Configure Crawl
                     </DropdownMenuSubTrigger>

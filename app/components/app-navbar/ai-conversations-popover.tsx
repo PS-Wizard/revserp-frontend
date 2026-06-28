@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Loader2Icon, PlusIcon, TrashIcon } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { Button } from "~/components/ui/button"
 import {
@@ -14,7 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { TabsTrigger } from "~/components/ui/tabs"
-import { clientApiDelete, clientApiFetch } from "~/lib/api"
+import { clientApiDelete } from "~/lib/api"
 import type {
   AIConversationResponse,
   AIConversationsResponse,
@@ -23,8 +24,13 @@ import {
   formatConversationTime,
   groupConversationsByDate,
 } from "~/lib/ai-conversation"
+import { clientApiFetch } from "~/lib/api"
 
 import type { DashboardView } from "./types"
+
+export function aiConversationsQueryKey(projectId: string) {
+  return ["ai-conversations", projectId] as const
+}
 
 type AiConversationsPopoverProps = {
   activeProjectId?: string | null
@@ -43,36 +49,32 @@ export function AiConversationsPopover({
   onDeleteConversation,
   onNewChat,
 }: AiConversationsPopoverProps) {
-  const [aiConversations, setAiConversations] = useState<
-    AIConversationResponse[]
-  >([])
-  const [isLoadingAiConversations, setIsLoadingAiConversations] =
-    useState(false)
+  const queryClient = useQueryClient()
   const [isAiChatMenuOpen, setIsAiChatMenuOpen] = useState(false)
   const [deletingConversationId, setDeletingConversationId] = useState<
     string | null
   >(null)
 
-  async function fetchAiConversations() {
-    if (!activeProjectId) return
-    setIsLoadingAiConversations(true)
-    try {
-      const response = await clientApiFetch<AIConversationsResponse>(
-        `/projects/${activeProjectId}/ai/conversations`
-      )
-      setAiConversations(response.conversations)
-    } catch (error) {
-      console.error("Failed to fetch AI conversations:", error)
-      setAiConversations([])
-    } finally {
-      setIsLoadingAiConversations(false)
-    }
-  }
+  const { data: conversationsData, isFetching: isLoadingAiConversations } =
+    useQuery({
+      queryKey: activeProjectId
+        ? aiConversationsQueryKey(activeProjectId)
+        : ["ai-conversations-disabled"],
+      queryFn: () =>
+        clientApiFetch<AIConversationsResponse>(
+          `/projects/${activeProjectId!}/ai/conversations`
+        ).then((r) => r.conversations),
+      enabled: Boolean(activeProjectId) && !isCrawlRunning,
+      // Don't show stale-loading flicker while cached data is present
+      placeholderData: (prev) => prev,
+    })
+
+  const aiConversations: AIConversationResponse[] = conversationsData ?? []
 
   function handleMouseEnter() {
     if (isCrawlRunning) return
     setIsAiChatMenuOpen(true)
-    void fetchAiConversations()
+    // useQuery will serve from cache; a refetch only happens if data is stale
   }
 
   function handleMouseLeave() {
@@ -91,9 +93,16 @@ export function AiConversationsPopover({
     setDeletingConversationId(conversationId)
     try {
       await clientApiDelete<null>(`/ai/conversations/${conversationId}`)
-      setAiConversations((current) =>
-        current.filter((conversation) => conversation.id !== conversationId)
-      )
+      // Update cache optimistically
+      if (activeProjectId) {
+        queryClient.setQueryData<AIConversationResponse[]>(
+          aiConversationsQueryKey(activeProjectId),
+          (current) =>
+            current?.filter(
+              (conversation) => conversation.id !== conversationId
+            ) ?? []
+        )
+      }
       onDeleteConversation?.(conversationId)
     } catch (error) {
       console.error("Failed to delete AI conversation:", error)
@@ -101,6 +110,9 @@ export function AiConversationsPopover({
       setDeletingConversationId(null)
     }
   }
+
+  // Only show loading indicator when there's no cached data yet
+  const showLoading = isLoadingAiConversations && aiConversations.length === 0
 
   return (
     <DropdownMenu
@@ -146,7 +158,7 @@ export function AiConversationsPopover({
           New chat
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {isLoadingAiConversations ? (
+        {showLoading ? (
           <div className="px-2 py-4 text-center text-sm text-muted-foreground">
             Loading chats...
           </div>
