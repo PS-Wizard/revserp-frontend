@@ -611,8 +611,13 @@ function syncSelectedIssueTypes({
       availableIssueScopes.some((issueScope) => issueScope.key === issueTypeKey)
   )
 
-  if (!areStringArraysEqual(nextSelectedIssueTypeKeys, selectedIssueTypeKeys)) {
-    onApply(nextSelectedIssueTypeKeys)
+  const resolvedKeys =
+    nextSelectedIssueTypeKeys.length === 0 && availableIssueScopes.length > 0
+      ? availableIssueScopes.map((s) => s.key)
+      : nextSelectedIssueTypeKeys
+
+  if (!areStringArraysEqual(resolvedKeys, selectedIssueTypeKeys)) {
+    onApply(resolvedKeys)
   }
 }
 

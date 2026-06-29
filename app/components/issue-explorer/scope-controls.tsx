@@ -128,6 +128,7 @@ export function ScopeBreadcrumbs({
                   "Issue Types"
                 )}
                 multiSelect={true}
+                allowEmpty={false}
                 onToggleAll={(values) => setSelectedIssueTypeKeys(values)}
                 options={availableIssueScopes.map((issueScope) => ({
                   value: issueScope.key,
@@ -140,7 +141,7 @@ export function ScopeBreadcrumbs({
                     value,
                     selectedIssueTypeKeys,
                     setSelectedIssueTypeKeys,
-                    true
+                    false
                   )
                 }
               />
