@@ -3,11 +3,15 @@ WORKDIR /app
 
 FROM base AS development-dependencies-env
 COPY package.json bun.lock /app/
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile || \
+    (bun pm cache rm && bun install --frozen-lockfile) || \
+    (bun pm cache rm && bun install --frozen-lockfile)
 
 FROM base AS production-dependencies-env
 COPY package.json bun.lock /app/
-RUN bun install --frozen-lockfile --production
+RUN bun install --frozen-lockfile --production || \
+    (bun pm cache rm && bun install --frozen-lockfile --production) || \
+    (bun pm cache rm && bun install --frozen-lockfile --production)
 
 FROM base AS build-env
 COPY . /app/
