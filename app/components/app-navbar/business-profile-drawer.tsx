@@ -16,15 +16,19 @@ import {
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
-import type { ProjectResponse } from "~/lib/api.types"
+import type { ProjectAIQuestionsResponse, ProjectResponse } from "~/lib/api.types"
 
 type BusinessProfileDrawerProps = {
+  aiQuestions: ProjectAIQuestionsResponse | null
   brandName: string
   businessDescription: string
   businessProfileError: string
   businessProfileProject: ProjectResponse | null
   canManageBusinessProfile: boolean
+  hasUnsavedChanges: boolean
+  isLoadingAIQuestions: boolean
   isLoadingBusinessProfile: boolean
+  isRegeneratingAIQuestions: boolean
   isSavingBusinessProfile: boolean
   primaryCategory: string
   primaryLocation: string
@@ -41,12 +45,16 @@ type BusinessProfileDrawerProps = {
 }
 
 export function BusinessProfileDrawer({
+  aiQuestions,
   brandName,
   businessDescription,
   businessProfileError,
   businessProfileProject,
   canManageBusinessProfile,
+  hasUnsavedChanges,
+  isLoadingAIQuestions,
   isLoadingBusinessProfile,
+  isRegeneratingAIQuestions,
   isSavingBusinessProfile,
   primaryCategory,
   primaryLocation,
@@ -90,22 +98,30 @@ export function BusinessProfileDrawer({
                 <CompileLoader className="text-foreground" size={24} />
               </div>
             ) : (
-              <BusinessProfileFields
-                brandName={brandName}
-                businessDescription={businessDescription}
-                canManageBusinessProfile={canManageBusinessProfile}
-                disabled={fieldsDisabled}
-                primaryCategory={primaryCategory}
-                primaryLocation={primaryLocation}
-                seedPrompts={seedPrompts}
-                websiteUrl={websiteUrl}
-                onBrandNameChange={onBrandNameChange}
-                onBusinessDescriptionChange={onBusinessDescriptionChange}
-                onPrimaryCategoryChange={onPrimaryCategoryChange}
-                onPrimaryLocationChange={onPrimaryLocationChange}
-                onSeedPromptChange={onSeedPromptChange}
-                onWebsiteUrlChange={onWebsiteUrlChange}
-              />
+              <>
+                <BusinessProfileFields
+                  brandName={brandName}
+                  businessDescription={businessDescription}
+                  canManageBusinessProfile={canManageBusinessProfile}
+                  disabled={fieldsDisabled}
+                  primaryCategory={primaryCategory}
+                  primaryLocation={primaryLocation}
+                  seedPrompts={seedPrompts}
+                  websiteUrl={websiteUrl}
+                  onBrandNameChange={onBrandNameChange}
+                  onBusinessDescriptionChange={onBusinessDescriptionChange}
+                  onPrimaryCategoryChange={onPrimaryCategoryChange}
+                  onPrimaryLocationChange={onPrimaryLocationChange}
+                  onSeedPromptChange={onSeedPromptChange}
+                  onWebsiteUrlChange={onWebsiteUrlChange}
+                />
+
+                <AIGeneratedQuestions
+                  aiQuestions={aiQuestions}
+                  isLoading={isLoadingAIQuestions}
+                  isRegenerating={isRegeneratingAIQuestions}
+                />
+              </>
             )}
 
             {businessProfileError ? (
@@ -122,6 +138,7 @@ export function BusinessProfileDrawer({
             <Button
               disabled={
                 !canManageBusinessProfile ||
+                !hasUnsavedChanges ||
                 isLoadingBusinessProfile ||
                 isSavingBusinessProfile
               }
@@ -136,6 +153,73 @@ export function BusinessProfileDrawer({
         </form>
       </DrawerContent>
     </Drawer>
+  )
+}
+
+type AIGeneratedQuestionsProps = {
+  aiQuestions: ProjectAIQuestionsResponse | null
+  isLoading: boolean
+  isRegenerating: boolean
+}
+
+function AIGeneratedQuestions({
+  aiQuestions,
+  isLoading,
+  isRegenerating,
+}: AIGeneratedQuestionsProps) {
+  return (
+    <div className="mt-6 border-t border-border/50 pt-6">
+      <div className="mb-4 flex items-center gap-3">
+        <div>
+          <p className="text-sm font-medium">AI generated questions</p>
+          <p className="text-xs text-muted-foreground">
+            Generated from your seed prompts and business context. Used to check
+            your visibility across AI models.
+          </p>
+        </div>
+        {isRegenerating ? (
+          <span className="ml-auto shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">
+            Regenerating…
+          </span>
+        ) : null}
+      </div>
+
+      {isLoading ? (
+        <div className="flex h-24 items-center justify-center">
+          <CompileLoader className="text-foreground" size={20} />
+        </div>
+      ) : isRegenerating && !aiQuestions ? (
+        <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-border">
+          <p className="text-sm text-muted-foreground">Generating questions…</p>
+        </div>
+      ) : !aiQuestions || aiQuestions.questions.length === 0 ? (
+        <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-border">
+          <p className="text-sm text-muted-foreground">
+            Save your profile with seed prompts to generate questions.
+          </p>
+        </div>
+      ) : (
+        <ol className="space-y-2">
+          {aiQuestions.questions.map((question, index) => (
+            <li
+              className="flex gap-3 rounded-lg bg-muted/50 px-3 py-2.5"
+              key={index}
+            >
+              <span className="mt-px shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                {index + 1}.
+              </span>
+              <span className="text-sm leading-relaxed">{question}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {aiQuestions && !isRegenerating ? (
+        <p className="mt-3 text-xs text-muted-foreground">
+          Generated {new Date(aiQuestions.generated_at).toLocaleString()}
+        </p>
+      ) : null}
+    </div>
   )
 }
 

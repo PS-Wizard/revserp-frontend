@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { FormEvent } from "react"
 
 import type {
+  ProjectAIQuestionsResponse,
   ProjectBusinessProfileResponse,
   ProjectBusinessProfileStatusResponse,
   ProjectResponse,
@@ -12,11 +13,23 @@ import { clientApiFetch, clientApiPut } from "~/lib/api"
 
 const EMPTY_SEED_PROMPTS = ["", "", "", "", ""]
 
+type ProfileSnapshot = {
+  brandName: string
+  websiteUrl: string
+  primaryCategory: string
+  primaryLocation: string
+  businessDescription: string
+  seedPrompts: string[]
+}
+
 export function useBusinessProfile() {
   const [businessProfileProject, setBusinessProfileProject] =
     useState<ProjectResponse | null>(null)
   const [businessProfileStatus, setBusinessProfileStatus] =
     useState<ProjectBusinessProfileStatusResponse | null>(null)
+  const [savedSnapshot, setSavedSnapshot] = useState<ProfileSnapshot | null>(
+    null
+  )
   const [brandName, setBrandName] = useState("")
   const [websiteUrl, setWebsiteUrl] = useState("")
   const [primaryCategory, setPrimaryCategory] = useState("")
@@ -27,38 +40,89 @@ export function useBusinessProfile() {
   const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] =
     useState(false)
   const [isSavingBusinessProfile, setIsSavingBusinessProfile] = useState(false)
+  const [aiQuestions, setAIQuestions] =
+    useState<ProjectAIQuestionsResponse | null>(null)
+  const [isLoadingAIQuestions, setIsLoadingAIQuestions] = useState(false)
+  const [isRegeneratingAIQuestions, setIsRegeneratingAIQuestions] =
+    useState(false)
 
   const canManageBusinessProfile =
     businessProfileStatus?.can_manage_profile === true
+
+  const hasUnsavedChanges =
+    savedSnapshot === null ||
+    brandName !== savedSnapshot.brandName ||
+    websiteUrl !== savedSnapshot.websiteUrl ||
+    primaryCategory !== savedSnapshot.primaryCategory ||
+    primaryLocation !== savedSnapshot.primaryLocation ||
+    businessDescription !== savedSnapshot.businessDescription ||
+    seedPrompts.some((p, i) => p !== savedSnapshot.seedPrompts[i])
 
   function applyBusinessProfile(
     profile: ProjectBusinessProfileResponse | undefined,
     project: ProjectResponse
   ) {
-    setBrandName(profile?.brand_name ?? "")
-    setWebsiteUrl(profile?.website_url?.trim() || project.base_url)
-    setPrimaryCategory(profile?.primary_category ?? "")
-    setPrimaryLocation(profile?.primary_location ?? "")
-    setBusinessDescription(profile?.business_description ?? "")
-    setSeedPrompts(
-      Array.from(
+    const snapshot: ProfileSnapshot = {
+      brandName: profile?.brand_name ?? "",
+      websiteUrl: profile?.website_url?.trim() || project.base_url,
+      primaryCategory: profile?.primary_category ?? "",
+      primaryLocation: profile?.primary_location ?? "",
+      businessDescription: profile?.business_description ?? "",
+      seedPrompts: Array.from(
         { length: 5 },
         (_, index) => profile?.seed_prompts?.[index] ?? ""
+      ),
+    }
+    setSavedSnapshot(snapshot)
+    setBrandName(snapshot.brandName)
+    setWebsiteUrl(snapshot.websiteUrl)
+    setPrimaryCategory(snapshot.primaryCategory)
+    setPrimaryLocation(snapshot.primaryLocation)
+    setBusinessDescription(snapshot.businessDescription)
+    setSeedPrompts(snapshot.seedPrompts)
+  }
+
+  async function fetchAIQuestions(projectId: string) {
+    try {
+      const data = await clientApiFetch<ProjectAIQuestionsResponse>(
+        `/projects/${projectId}/ai-questions`
       )
-    )
+      setAIQuestions(data)
+      return true
+    } catch {
+      setAIQuestions(null)
+      return false
+    }
+  }
+
+  async function pollAIQuestions(projectId: string) {
+    setIsRegeneratingAIQuestions(true)
+    const maxAttempts = 10
+    const intervalMs = 3000
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      const found = await fetchAIQuestions(projectId)
+      if (found) break
+    }
+    setIsRegeneratingAIQuestions(false)
   }
 
   async function openBusinessProfileDrawer(project: ProjectResponse) {
     setBusinessProfileProject(project)
     setBusinessProfileStatus(null)
     setBusinessProfileError("")
+    setAIQuestions(null)
     applyBusinessProfile(undefined, project)
     setIsLoadingBusinessProfile(true)
+    setIsLoadingAIQuestions(true)
 
     try {
-      const status = await clientApiFetch<ProjectBusinessProfileStatusResponse>(
-        `/projects/${project.id}/business-profile`
-      )
+      const [status] = await Promise.all([
+        clientApiFetch<ProjectBusinessProfileStatusResponse>(
+          `/projects/${project.id}/business-profile`
+        ),
+        fetchAIQuestions(project.id),
+      ])
       setBusinessProfileStatus(status)
       applyBusinessProfile(status.business_profile, project)
     } catch (error) {
@@ -69,6 +133,7 @@ export function useBusinessProfile() {
       )
     } finally {
       setIsLoadingBusinessProfile(false)
+      setIsLoadingAIQuestions(false)
     }
   }
 
@@ -76,6 +141,9 @@ export function useBusinessProfile() {
     setBusinessProfileProject(null)
     setBusinessProfileStatus(null)
     setBusinessProfileError("")
+    setSavedSnapshot(null)
+    setAIQuestions(null)
+    setIsRegeneratingAIQuestions(false)
   }
 
   function updateSeedPrompt(index: number, value: string) {
@@ -122,6 +190,7 @@ export function useBusinessProfile() {
       })
       applyBusinessProfile(profile, businessProfileProject)
       closeBusinessProfileDrawer()
+      pollAIQuestions(businessProfileProject.id)
     } catch (error) {
       setBusinessProfileError(
         error instanceof Error
@@ -145,6 +214,10 @@ export function useBusinessProfile() {
     isLoadingBusinessProfile,
     isSavingBusinessProfile,
     canManageBusinessProfile,
+    aiQuestions,
+    isLoadingAIQuestions,
+    isRegeneratingAIQuestions,
+    hasUnsavedChanges,
     openBusinessProfileDrawer,
     closeBusinessProfileDrawer,
     updateSeedPrompt,

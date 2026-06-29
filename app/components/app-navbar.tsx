@@ -276,6 +276,10 @@ export function AppNavbar({
     isLoadingBusinessProfile,
     isSavingBusinessProfile,
     canManageBusinessProfile,
+    aiQuestions,
+    isLoadingAIQuestions,
+    isRegeneratingAIQuestions,
+    hasUnsavedChanges,
     openBusinessProfileDrawer,
     closeBusinessProfileDrawer,
     updateSeedPrompt,
@@ -722,6 +726,10 @@ export function AppNavbar({
           isLoadingBusinessProfile,
           isSavingBusinessProfile,
           canManageBusinessProfile,
+          aiQuestions,
+          isLoadingAIQuestions,
+          isRegeneratingAIQuestions,
+          hasUnsavedChanges,
           closeBusinessProfileDrawer,
           updateSeedPrompt,
           handleSaveBusinessProfile,
@@ -767,6 +775,10 @@ type AppNavbarDialogsProps = {
     isLoadingBusinessProfile: boolean
     isSavingBusinessProfile: boolean
     canManageBusinessProfile: boolean
+    aiQuestions: ReturnType<typeof useBusinessProfile>["aiQuestions"]
+    isLoadingAIQuestions: boolean
+    isRegeneratingAIQuestions: boolean
+    hasUnsavedChanges: boolean
     closeBusinessProfileDrawer: () => void
     updateSeedPrompt: (index: number, value: string) => void
     handleSaveBusinessProfile: (
@@ -822,6 +834,10 @@ function AppNavbarDialogs({
     isLoadingBusinessProfile,
     isSavingBusinessProfile,
     canManageBusinessProfile,
+    aiQuestions,
+    isLoadingAIQuestions,
+    isRegeneratingAIQuestions,
+    hasUnsavedChanges,
     closeBusinessProfileDrawer,
     updateSeedPrompt,
     handleSaveBusinessProfile,
@@ -865,12 +881,16 @@ function AppNavbarDialogs({
       />
 
       <BusinessProfileDrawer
+        aiQuestions={aiQuestions}
         brandName={brandName}
         businessDescription={businessDescription}
         businessProfileError={businessProfileError}
         businessProfileProject={businessProfileProject}
         canManageBusinessProfile={canManageBusinessProfile}
+        hasUnsavedChanges={hasUnsavedChanges}
+        isLoadingAIQuestions={isLoadingAIQuestions}
         isLoadingBusinessProfile={isLoadingBusinessProfile}
+        isRegeneratingAIQuestions={isRegeneratingAIQuestions}
         isSavingBusinessProfile={isSavingBusinessProfile}
         primaryCategory={primaryCategory}
         primaryLocation={primaryLocation}

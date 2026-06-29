@@ -55,6 +55,12 @@ export type ProjectBusinessProfileStatusResponse = {
   business_profile?: ProjectBusinessProfileResponse
 }
 
+export type ProjectAIQuestionsResponse = {
+  questions: string[]
+  generation_model: string
+  generated_at: string
+}
+
 export type ProjectsResponse = {
   projects: ProjectResponse[]
 }
