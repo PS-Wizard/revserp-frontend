@@ -202,6 +202,8 @@ export function AppNavbar({
   onDeleteConversation,
   onNewChat,
   isPlatformAdmin,
+  onExportAudit,
+  isExportingAudit,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -562,63 +564,77 @@ export function AppNavbar({
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuSub>
-                    <DropdownMenuSubTrigger
-                      disabled={activeCrawls.length === 0}
-                    >
+                    <DropdownMenuSubTrigger disabled={!activeProject}>
                       <DownloadIcon />
-                      Export Crawl
+                      Export
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-52">
-                      {activeCrawls.length === 0 ? (
-                        <DropdownMenuItem disabled>
-                          No crawls available
-                        </DropdownMenuItem>
-                      ) : (
-                        activeCrawls.map((crawl) => (
-                          <DropdownMenuSub key={crawl.id}>
-                            <DropdownMenuSubTrigger
-                              disabled={
-                                crawl.status !== "completed" ||
-                                projectActions.exportingCrawlId !== null
-                              }
-                            >
-                              <span className="truncate">
-                                {formatCrawlDateTime(crawl)}
-                              </span>
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent className="w-24">
-                              <DropdownMenuItem
-                                disabled={
-                                  crawl.status !== "completed" ||
-                                  projectActions.exportingCrawlId !== null
-                                }
-                                onClick={() => {
-                                  void projectActions.handleExportCrawl(
-                                    crawl,
-                                    "xlsx"
-                                  )
-                                }}
-                              >
-                                XLSX
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                disabled={
-                                  crawl.status !== "completed" ||
-                                  projectActions.exportingCrawlId !== null
-                                }
-                                onClick={() => {
-                                  void projectActions.handleExportCrawl(
-                                    crawl,
-                                    "csv"
-                                  )
-                                }}
-                              >
-                                CSV
-                              </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                        ))
-                      )}
+                      <DropdownMenuItem
+                        disabled={!activeProject || isExportingAudit}
+                        onClick={() => onExportAudit()}
+                      >
+                        {isExportingAudit ? "Generating audit…" : "Export Audit"}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger
+                          disabled={activeCrawls.length === 0}
+                        >
+                          Export Specific Crawl
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-52">
+                          {activeCrawls.length === 0 ? (
+                            <DropdownMenuItem disabled>
+                              No crawls available
+                            </DropdownMenuItem>
+                          ) : (
+                            activeCrawls.map((crawl) => (
+                              <DropdownMenuSub key={crawl.id}>
+                                <DropdownMenuSubTrigger
+                                  disabled={
+                                    crawl.status !== "completed" ||
+                                    projectActions.exportingCrawlId !== null
+                                  }
+                                >
+                                  <span className="truncate">
+                                    {formatCrawlDateTime(crawl)}
+                                  </span>
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-24">
+                                  <DropdownMenuItem
+                                    disabled={
+                                      crawl.status !== "completed" ||
+                                      projectActions.exportingCrawlId !== null
+                                    }
+                                    onClick={() => {
+                                      void projectActions.handleExportCrawl(
+                                        crawl,
+                                        "xlsx"
+                                      )
+                                    }}
+                                  >
+                                    XLSX
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    disabled={
+                                      crawl.status !== "completed" ||
+                                      projectActions.exportingCrawlId !== null
+                                    }
+                                    onClick={() => {
+                                      void projectActions.handleExportCrawl(
+                                        crawl,
+                                        "csv"
+                                      )
+                                    }}
+                                  >
+                                    CSV
+                                  </DropdownMenuItem>
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            ))
+                          )}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
                 </DropdownMenuGroup>

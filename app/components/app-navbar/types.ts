@@ -28,4 +28,6 @@ export type AppNavbarProps = {
   onDeleteConversation?: (conversationId: string) => void
   onNewChat?: () => void
   isPlatformAdmin: boolean
+  onExportAudit: () => void
+  isExportingAudit: boolean
 }

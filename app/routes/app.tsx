@@ -9,6 +9,8 @@ import { redirect } from "react-router"
 import { useQueryClient } from "@tanstack/react-query"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
+import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
+import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { CompileLoader } from "~/components/compile-loader"
 import { IssueExplorer } from "~/components/issue-explorer"
@@ -29,6 +31,7 @@ import {
 } from "~/components/ui/card"
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
+
 import { useActiveCrawlsPoll } from "~/hooks/use-active-crawls-poll"
 import { useCrawlToasts } from "~/hooks/use-crawl-toasts"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
@@ -463,6 +466,24 @@ export default function AppPage() {
     ]
   )
 
+  const overallRef = useRef<HTMLDivElement>(null)
+  const seoRef = useRef<HTMLDivElement>(null)
+  const aeoRef = useRef<HTMLDivElement>(null)
+  const pagespeedRef = useRef<HTMLDivElement>(null)
+  const [showPrintSections, setShowPrintSections] = useState(false)
+
+  const { exportPdf, isExporting } = usePdfExport({
+    crawlId: currentCrawl?.id ?? null,
+    projectName: activeProject?.name ?? "audit",
+    currentCrawl: stableCurrentCrawl,
+    overallRef,
+    seoRef,
+    aeoRef,
+    pagespeedRef,
+    onSectionsReady: () => setShowPrintSections(true),
+    onDone: () => setShowPrintSections(false),
+  })
+
   const handleCrawlStart = useCallback(() => setIsStartingCrawl(true), [])
 
   return (
@@ -478,6 +499,8 @@ export default function AppPage() {
         onViewChange={setView}
         onSelectConversation={handleOpenAIConversation}
         onNewChat={handleNewAIChat}
+        onExportAudit={() => void exportPdf()}
+        isExportingAudit={isExporting}
         organizationId={me.active_org_id}
         projects={projects}
         organizations={me.organizations}
@@ -644,6 +667,20 @@ export default function AppPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+      {showPrintSections && (
+        <PdfPrintSections
+          overallRef={overallRef}
+          seoRef={seoRef}
+          aeoRef={aeoRef}
+          pagespeedRef={pagespeedRef}
+          crawlBreakdowns={stableCrawlBreakdowns}
+          recentCrawls={stableSortedCompletedCrawls}
+          currentCrawl={stableCurrentCrawl}
+          previousCrawl={stablePreviousCrawl}
+          currentBreakdown={stableCurrentBreakdown}
+          activeProjectName={activeProject?.name}
+        />
       )}
     </main>
   )
