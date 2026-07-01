@@ -415,6 +415,48 @@ export type AutoCrawlPutBody = {
   config_snapshot?: AutoCrawlConfigSnapshot | null
 }
 
+export type AIAuditRunResponse = {
+  id: string
+  audit_id: string
+  question_text: string
+  display_order: number
+  model_name: string
+  status: "pending" | "running" | "success" | "failed"
+  raw_response?: string
+  mentioned_target?: boolean
+  target_rank?: number
+  visibility_score?: number
+  error_message?: string
+  started_at?: string
+  completed_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export type AIAuditResponse = {
+  id: string
+  project_id: string
+  crawl_id?: string
+  status: "queued" | "running" | "completed" | "completed_with_failures" | "failed"
+  score?: number
+  error_message?: string
+  started_at?: string
+  completed_at?: string
+  created_at: string
+  updated_at: string
+  runs?: AIAuditRunResponse[]
+}
+
+export type AIAuditListResponse = {
+  ai_audits: AIAuditResponse[]
+  pagination: {
+    limit: number
+    offset: number
+    count: number
+    total: number
+  }
+}
+
 export type AppBootstrapResponse = {
   me: MeResponse
   projects: ProjectResponse[]

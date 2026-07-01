@@ -130,6 +130,8 @@ export function SliderRow({
   step,
   onChange,
   hint,
+  ticks,
+  normalizedPercent,
 }: {
   label: string
   value: number
@@ -138,15 +140,25 @@ export function SliderRow({
   step: number
   onChange: (value: number) => void
   hint?: string
+  ticks?: number[]
+  /** When set (weight sliders), shows the live normalized share next to the raw value. */
+  normalizedPercent?: number
 }) {
   const id = `slider-${label.replace(/\s+/g, "-").toLowerCase()}`
   return (
     <Field className="rounded-lg border border-border/50 bg-muted/20 p-3.5">
       <div className="flex items-center justify-between gap-3">
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
-        <Badge variant="outline" className="tabular-nums">
-          {fmtNum(value, 2)}
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge variant="outline" className="tabular-nums">
+            {fmtNum(value, 2)}
+          </Badge>
+          {normalizedPercent != null && (
+            <Badge variant="secondary" className="tabular-nums">
+              → {fmtNum(normalizedPercent * 100, 1)}%
+            </Badge>
+          )}
+        </div>
       </div>
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       <Slider
@@ -155,6 +167,7 @@ export function SliderRow({
         min={min}
         max={max}
         step={step}
+        ticks={ticks}
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
       />
       <FieldDescription className="flex items-center justify-between text-xs">
@@ -171,20 +184,36 @@ export function InlineSlider({
   max,
   step,
   onChange,
+  ticks,
+  normalizedPercent,
 }: {
   value: number
   min: number
   max: number
   step: number
   onChange: (value: number) => void
+  ticks?: number[]
+  /** When set (bucket weight sliders), shows the live normalized share next to the raw value. */
+  normalizedPercent?: number
 }) {
   return (
     <Field className="gap-2">
+      {normalizedPercent != null && (
+        <div className="flex items-center justify-between gap-3">
+          <Badge variant="outline" className="tabular-nums">
+            {fmtNum(value, 2)}
+          </Badge>
+          <Badge variant="secondary" className="tabular-nums">
+            → {fmtNum(normalizedPercent * 100, 1)}%
+          </Badge>
+        </div>
+      )}
       <Slider
         value={[value]}
         min={min}
         max={max}
         step={step}
+        ticks={ticks}
         onValueChange={(v) => onChange(Array.isArray(v) ? v[0] : v)}
       />
       <FieldDescription className="flex items-center justify-between text-xs">
@@ -204,7 +233,7 @@ export function DeltaBadge({ delta }: { delta: number }) {
   return (
     <Badge variant={variant} className="tabular-nums">
       {delta > 0 ? "+" : ""}
-      {delta}
+      {fmtNum(delta)}
     </Badge>
   )
 }

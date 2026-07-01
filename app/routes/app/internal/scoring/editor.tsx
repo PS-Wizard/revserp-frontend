@@ -58,6 +58,9 @@ import {
 type TopLevelNumericKey =
   "minimum_overall_score" | "coverage_scale" | "soft_sum_decay"
 
+/** Tick marks for 0-1 weight sliders, every 0.1, to make manual tweaking easier. */
+const WEIGHT_TICKS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+
 type ConfigAction =
   | { type: "SET_TOP_LEVEL"; key: TopLevelNumericKey; value: number }
   | { type: "SET_SEVERITY"; severity: string; value: number }
@@ -129,6 +132,41 @@ function configReducer(
       }
     case "REPLACE":
       return action.config
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Weight normalization                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Normalizes a group of weights to sum to 1, preserving relative proportions.
+ * If the group sums to 0, the weights are left untouched (there's no
+ * proportion to preserve, and dividing by 0 would produce NaN).
+ */
+function normalizeWeights(
+  weights: Record<string, number>
+): Record<string, number> {
+  const sum = Object.values(weights).reduce((total, w) => total + w, 0)
+  if (sum === 0) return weights
+  return Object.fromEntries(
+    Object.entries(weights).map(([key, w]) => [key, w / sum])
+  )
+}
+
+function normalizeScoringConfig(config: ScoringConfig): ScoringConfig {
+  return {
+    ...config,
+    overall_weights: normalizeWeights(config.overall_weights),
+    pillars: Object.fromEntries(
+      Object.entries(config.pillars).map(([pillarId, pillar]) => [
+        pillarId,
+        {
+          ...pillar,
+          bucket_weights: normalizeWeights(pillar.bucket_weights),
+        },
+      ])
+    ),
   }
 }
 
@@ -309,6 +347,8 @@ type PillarCardProps = {
   issueEntries: [string, number][]
   issueMap: Map<string, ScoreBreakdownIssueTypeResponse>
   overallWeight: number
+  overallWeightSum: number
+  bucketWeightSum: number
   onUpdateOverallWeight: (pillarId: string, value: number) => void
   onUpdateBucketWeight: (
     pillarId: string,
@@ -331,6 +371,8 @@ function PillarCard({
   issueEntries,
   issueMap,
   overallWeight,
+  overallWeightSum,
+  bucketWeightSum,
   onUpdateOverallWeight,
   onUpdateBucketWeight,
   onUpdateIssuePenalty,
@@ -343,7 +385,8 @@ function PillarCard({
         </CardTitle>
         <CardDescription>
           Score {fmtNum(pillarBreakdown?.score, 0)} · penalty{" "}
-          {fmtNum(pillarBreakdown?.total_penalty)}
+          {fmtNum(pillarBreakdown?.total_penalty)} · weighted average of bucket
+          scores
         </CardDescription>
         {delta != null && (
           <CardAction>
@@ -359,6 +402,15 @@ function PillarCard({
             min={0}
             max={1}
             step={0.01}
+            ticks={WEIGHT_TICKS}
+            normalizedPercent={
+              overallWeightSum > 0 ? overallWeight / overallWeightSum : 0
+            }
+            hint={
+              pillarBreakdown
+                ? `Contributes ${fmtNum(pillarBreakdown.weighted_contribution)} to the overall score`
+                : undefined
+            }
             onChange={(v) => onUpdateOverallWeight(pillarId, v)}
           />
         </div>
@@ -380,7 +432,7 @@ function PillarCard({
                     title={bucket?.label ?? humanize(bucketId)}
                     description={
                       bucket
-                        ? `${bucket.issue_type_count} active issues · ${bucket.affected_url_count} URLs`
+                        ? `${bucket.issue_type_count} active issues · ${bucket.affected_url_count} URLs · penalty ${fmtNum(bucket.total_penalty)} · contributes ${fmtNum(bucket.weighted_contribution)} to ${pillarConfig.label}`
                         : "No active issues in selected crawl"
                     }
                     value={fmtNum(bucket?.score, 0)}
@@ -390,6 +442,10 @@ function PillarCard({
                       min={0}
                       max={1}
                       step={0.01}
+                      ticks={WEIGHT_TICKS}
+                      normalizedPercent={
+                        bucketWeightSum > 0 ? weight / bucketWeightSum : 0
+                      }
                       onChange={(v) =>
                         onUpdateBucketWeight(pillarId, bucketId, v)
                       }
@@ -513,6 +569,11 @@ export function ScoringEditor({
     [draftConfig.pillars]
   )
 
+  const overallWeightSum = useMemo(
+    () => Object.values(draftConfig.overall_weights).reduce((s, w) => s + w, 0),
+    [draftConfig.overall_weights]
+  )
+
   const hasDraftChanges = useMemo(
     () => !deepEqual(savedConfig, draftConfig),
     [savedConfig, draftConfig]
@@ -535,7 +596,13 @@ export function ScoringEditor({
           method: "POST",
           signal: controller.signal,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ crawl_id: crawlId, config: draftConfig }),
+          body: JSON.stringify({
+            crawl_id: crawlId,
+            // Preview the SAME normalized config that Save persists and a recrawl
+            // will use — otherwise off-by-1 weight sums distort the preview and it
+            // no longer predicts the real (normalized) result.
+            config: normalizeScoringConfig(draftConfig),
+          }),
         }
       )
       if (seq === previewSeqRef.current) {
@@ -584,12 +651,14 @@ export function ScoringEditor({
     if (!draftConfig) return
     dispatchUi({ type: "SAVING_START" })
     try {
-      const result = await onSave(draftConfig)
+      const normalizedConfig = normalizeScoringConfig(draftConfig)
+      const result = await onSave(normalizedConfig)
       if (result && typeof result === "object" && "version" in result) {
         dispatchConfig({ type: "REPLACE", config: deepClone(result) })
         setSavedConfig(deepClone(result))
       } else {
-        setSavedConfig(deepClone(draftConfig))
+        dispatchConfig({ type: "REPLACE", config: normalizedConfig })
+        setSavedConfig(deepClone(normalizedConfig))
       }
       dispatchUi({ type: "SAVING_DONE" })
     } catch (error) {
@@ -743,6 +812,9 @@ export function ScoringEditor({
               const pillarBreakdown = findPillar(pillarId)
               const delta = scoreDelta(pillarId)
               const bucketEntries = sortedEntries(pillarConfig.bucket_weights)
+              const bucketWeightSum = Object.values(
+                pillarConfig.bucket_weights
+              ).reduce((s, w) => s + w, 0)
               const issueEntries = sortedEntries(
                 pillarConfig.issue_penalty_by_type
               )
@@ -761,6 +833,8 @@ export function ScoringEditor({
                   issueEntries={issueEntries}
                   issueMap={issueMap}
                   overallWeight={draftConfig.overall_weights[pillarId] ?? 0}
+                  overallWeightSum={overallWeightSum}
+                  bucketWeightSum={bucketWeightSum}
                   onUpdateOverallWeight={updateOverallWeight}
                   onUpdateBucketWeight={updateBucketWeight}
                   onUpdateIssuePenalty={updateIssuePenalty}

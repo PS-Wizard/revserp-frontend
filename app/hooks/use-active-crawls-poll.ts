@@ -38,16 +38,19 @@ export function useActiveCrawlsPoll({
   // onCrawlSettled for already-finished crawls on mount).
   const isBaselineRef = useRef(true)
 
-  // Stable ref for the org id to avoid re-creating the interval on org change
-  // (unlikely, but safer).
+  // Ref mirror of orgId so the poll closure always reads the latest value
+  // even between effect re-runs.
   const orgIdRef = useRef(orgId)
   orgIdRef.current = orgId
 
   useEffect(() => {
+    // Reset baseline whenever the effect (re-)starts — either because
+    // polling stopped/starts, or because the org changed — so a fresh
+    // baseline poll never fires settle events for the previous org's ids.
+    isBaselineRef.current = true
+    prevCrawlMapRef.current = new Map()
+
     if (!enabled) {
-      // Reset baseline flag when polling stops so next enable is treated fresh.
-      isBaselineRef.current = true
-      prevCrawlMapRef.current = new Map()
       return
     }
 
@@ -88,7 +91,7 @@ export function useActiveCrawlsPoll({
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [enabled]) // stable — only re-runs when enabled flips
+  }, [enabled, orgId]) // re-runs on enabled flip or org switch, to re-baseline
 
   return { activeCrawls }
 }

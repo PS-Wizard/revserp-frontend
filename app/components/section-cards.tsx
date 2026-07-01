@@ -23,10 +23,14 @@ export const SectionCards = memo(function SectionCards({
   crawls,
   currentCrawl,
   previousCrawl,
+  overallValue,
+  overallPreviousValue,
 }: {
   crawls: CrawlResponse[]
   currentCrawl: CrawlResponse | null
   previousCrawl: CrawlResponse | null
+  overallValue?: number | null
+  overallPreviousValue?: number | null
 }) {
   const cardCrawls = useMemo(() => [...crawls].reverse(), [crawls])
   const cards = useMemo(
@@ -34,8 +38,14 @@ export const SectionCards = memo(function SectionCards({
       [
         {
           label: "Overall Score",
-          value: currentCrawl?.overall_score,
-          previousValue: previousCrawl?.overall_score,
+          value:
+            overallValue !== undefined
+              ? (overallValue ?? undefined)
+              : currentCrawl?.overall_score,
+          previousValue:
+            overallValue !== undefined
+              ? (overallPreviousValue ?? undefined)
+              : previousCrawl?.overall_score,
           series: cardCrawls.map((crawl) => crawl.overall_score),
         },
         {
@@ -57,7 +67,13 @@ export const SectionCards = memo(function SectionCards({
           series: cardCrawls.map((crawl) => crawl.pagespeed_score),
         },
       ] as const,
-    [cardCrawls, currentCrawl, previousCrawl]
+    [
+      cardCrawls,
+      currentCrawl,
+      previousCrawl,
+      overallValue,
+      overallPreviousValue,
+    ]
   )
 
   return (

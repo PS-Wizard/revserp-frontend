@@ -28,12 +28,13 @@ import { clientApiFetch } from "~/lib/api"
 
 import type { DashboardView } from "./types"
 
-export function aiConversationsQueryKey(projectId: string) {
-  return ["ai-conversations", projectId] as const
+export function aiConversationsQueryKey(projectId: string, crawlId: string) {
+  return ["ai-conversations", projectId, crawlId] as const
 }
 
 type AiConversationsPopoverProps = {
   activeProjectId?: string | null
+  crawlId?: string | null
   isCrawlRunning?: boolean
   onViewChange: (value: DashboardView) => void
   onSelectConversation?: (conversationId: string) => void
@@ -43,6 +44,7 @@ type AiConversationsPopoverProps = {
 
 export function AiConversationsPopover({
   activeProjectId,
+  crawlId,
   isCrawlRunning,
   onViewChange,
   onSelectConversation,
@@ -57,14 +59,15 @@ export function AiConversationsPopover({
 
   const { data: conversationsData, isFetching: isLoadingAiConversations } =
     useQuery({
-      queryKey: activeProjectId
-        ? aiConversationsQueryKey(activeProjectId)
-        : ["ai-conversations-disabled"],
+      queryKey:
+        activeProjectId && crawlId
+          ? aiConversationsQueryKey(activeProjectId, crawlId)
+          : ["ai-conversations-disabled"],
       queryFn: () =>
         clientApiFetch<AIConversationsResponse>(
-          `/projects/${activeProjectId!}/ai/conversations`
+          `/projects/${activeProjectId!}/ai/conversations?crawl_id=${encodeURIComponent(crawlId!)}&limit=50&offset=0`
         ).then((r) => r.conversations),
-      enabled: Boolean(activeProjectId) && !isCrawlRunning,
+      enabled: Boolean(activeProjectId) && Boolean(crawlId) && !isCrawlRunning,
       // Don't show stale-loading flicker while cached data is present
       placeholderData: (prev) => prev,
     })
@@ -94,9 +97,9 @@ export function AiConversationsPopover({
     try {
       await clientApiDelete<null>(`/ai/conversations/${conversationId}`)
       // Update cache optimistically
-      if (activeProjectId) {
+      if (activeProjectId && crawlId) {
         queryClient.setQueryData<AIConversationResponse[]>(
-          aiConversationsQueryKey(activeProjectId),
+          aiConversationsQueryKey(activeProjectId, crawlId),
           (current) =>
             current?.filter(
               (conversation) => conversation.id !== conversationId

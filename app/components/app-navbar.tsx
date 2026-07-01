@@ -486,9 +486,13 @@ export function AppNavbar({
             >
               <TabsList>
                 <TabsTrigger value="revserp-audit">Revserp Audit</TabsTrigger>
+                <TabsTrigger value="revserp-visibility">
+                  Revserp Visibility
+                </TabsTrigger>
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
                 <AiConversationsPopover
                   activeProjectId={activeProjectId}
+                  crawlId={currentCrawl?.id}
                   isCrawlRunning={isViewingRunningCrawl}
                   onViewChange={onViewChange}
                   onSelectConversation={onSelectConversation}
@@ -577,7 +581,9 @@ export function AppNavbar({
                         disabled={!activeProject || isExportingAudit}
                         onClick={() => onExportAudit()}
                       >
-                        {isExportingAudit ? "Generating audit…" : "Export Audit"}
+                        {isExportingAudit
+                          ? "Generating audit…"
+                          : "Export Audit"}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuSub>

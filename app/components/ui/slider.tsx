@@ -8,13 +8,16 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  ticks,
   ...props
-}: SliderPrimitive.Root.Props) {
+}: SliderPrimitive.Root.Props & { ticks?: number[] }) {
   const _values = Array.isArray(value)
     ? value
     : Array.isArray(defaultValue)
       ? defaultValue
-      : [min, max]
+      : typeof value === "number" || typeof defaultValue === "number"
+        ? [value ?? defaultValue]
+        : [min, max]
 
   return (
     <SliderPrimitive.Root
@@ -36,11 +39,22 @@ function Slider({
             data-slot="slider-range"
             className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
           />
+          {ticks?.map((tick) => (
+            <span
+              key={`tick-${tick}`}
+              data-slot="slider-tick"
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 h-1 w-px -translate-y-1/2 bg-foreground/30"
+              style={{
+                left: `${((tick - min) / (max - min)) * 100}%`,
+              }}
+            />
+          ))}
         </SliderPrimitive.Track>
-        {_values.map((val) => (
+        {_values.map((_val, index) => (
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
-            key={`thumb-${val}`}
+            key={`thumb-${index}`}
             className="block size-4 shrink-0 rounded-full border border-primary bg-white shadow-sm ring-ring/50 transition-[color,box-shadow] select-none hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
           />
         ))}

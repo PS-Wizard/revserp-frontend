@@ -4,7 +4,7 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 
-export type DashboardView = "revserp-audit" | "search-console" | "revserp-ai"
+export type DashboardView = "revserp-audit" | "revserp-visibility" | "search-console" | "revserp-ai"
 export type ExportFormat = "csv" | "xlsx"
 
 export type AppNavbarProps = {

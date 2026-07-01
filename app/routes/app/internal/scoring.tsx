@@ -5,7 +5,7 @@ import type { LoaderFunctionArgs } from "react-router"
 
 import { clientApiPut } from "~/lib/api"
 import { serverApiFetch } from "~/lib/api"
-import { requireAuthenticatedUser } from "~/lib/auth.server"
+import { requirePlatformAdmin } from "~/lib/auth.server"
 import type {
   ScoreBreakdownResponse,
   ScoringConfig,
@@ -14,7 +14,7 @@ import type {
 import { ScoringEditor } from "./scoring/editor"
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const me = await requireAuthenticatedUser(request)
+  const me = await requirePlatformAdmin(request)
   const requestUrl = new URL(request.url)
   const crawlId = requestUrl.searchParams.get("crawl")
 
@@ -59,6 +59,7 @@ export default function ScoringPage() {
     <main className="min-h-svh bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-[104rem] flex-col gap-6 px-4 py-10 sm:px-6 lg:px-4">
         <ScoringEditor
+          key={JSON.stringify(config)}
           config={config}
           defaultConfig={defaultConfig}
           baselineBreakdown={baselineBreakdown}

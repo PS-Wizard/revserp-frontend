@@ -4,7 +4,13 @@ export function sanitizeNextPath(
 ) {
   const value = nextPath?.trim() ?? ""
 
-  if (!value.startsWith("/") || value.startsWith("//")) {
+  if (
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    value.includes("\\") ||
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x1f\x7f\s]/.test(value)
+  ) {
     return fallbackPath
   }
 

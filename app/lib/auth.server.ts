@@ -4,6 +4,16 @@ import { ApiError, serverApiFetch } from "~/lib/api"
 import type { MeResponse } from "~/lib/api.types"
 import { sanitizeNextPath } from "~/lib/auth-path"
 
+// The backend signals a suspended account with 403 + {"error":"account suspended"}
+// (see the auth middleware). Any other error must not be mistaken for suspension.
+export function isAccountSuspended(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 403 &&
+    error.message === "account suspended"
+  )
+}
+
 export async function redirectAuthenticatedUser(request: Request) {
   const url = new URL(request.url)
   const redirectPath = sanitizeNextPath(url.searchParams.get("next"))
@@ -16,7 +26,7 @@ export async function redirectAuthenticatedUser(request: Request) {
       return null
     }
 
-    if (error instanceof ApiError) {
+    if (isAccountSuspended(error)) {
       throw redirect("/account-suspended")
     }
 
@@ -34,10 +44,22 @@ export async function requireAuthenticatedUser(request: Request) {
       throw redirect(`/login?next=${encodeURIComponent(nextPath)}`)
     }
 
-    if (error instanceof ApiError) {
+    if (isAccountSuspended(error)) {
       throw redirect("/account-suspended")
     }
 
     throw error
   }
+}
+
+// requirePlatformAdmin gates a loader to platform admins only. It is a drop-in
+// replacement for requireAuthenticatedUser (returns the same MeResponse) that
+// additionally redirects non-admins away, providing the server-side gate the
+// admin/internal routes previously lacked.
+export async function requirePlatformAdmin(request: Request) {
+  const me = await requireAuthenticatedUser(request)
+  if (!me.is_platform_admin) {
+    throw redirect("/app")
+  }
+  return me
 }

@@ -6,7 +6,7 @@ import {
   useRevalidator,
 } from "react-router"
 import { redirect } from "react-router"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
@@ -21,6 +21,7 @@ import {
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpAIView } from "~/components/revserp-ai-view"
+import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { SearchConsoleView } from "~/components/search-console-view"
 import {
   Card,
@@ -35,10 +36,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { useActiveCrawlsPoll } from "~/hooks/use-active-crawls-poll"
 import { useCrawlToasts } from "~/hooks/use-crawl-toasts"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
+import { isAccountSuspended } from "~/lib/auth.server"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
   ActiveCrawlResponse,
+  AIAuditListResponse,
+  AIAuditResponse,
   AppBootstrapResponse,
   CrawlResponse,
   MeResponse,
@@ -67,7 +71,7 @@ export async function loader({ request }: { request: Request }) {
       const nextPath = `${requestUrl.pathname}${requestUrl.search}`
       throw redirect(`/login?next=${encodeURIComponent(nextPath)}`)
     }
-    if (error instanceof ApiError) {
+    if (isAccountSuspended(error)) {
       throw redirect("/account-suspended")
     }
     throw error
@@ -130,6 +134,7 @@ type AppLoaderData = {
 
 const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
+  "revserp-visibility": "Revserp Visibility",
   "search-console": "Search Console",
   "revserp-ai": "Revserp AI",
 }
@@ -233,7 +238,6 @@ export default function AppPage() {
       if (activeProject?.id) {
         queryClient.invalidateQueries({
           queryKey: ["ai-conversations", activeProject.id],
-          exact: true,
         })
       }
       setOpenAIConversationId(conversationId)
@@ -438,31 +442,173 @@ export default function AppPage() {
       (crawl) => crawl.id === previousCrawl?.id
     ) ?? previousCrawl
 
+  const { data: visibilityAuditsList } = useQuery({
+    queryKey: activeProject?.id
+      ? ["ai-audits-list", activeProject.id]
+      : ["ai-audits-list-disabled"],
+    queryFn: () =>
+      clientApiFetch<AIAuditListResponse>(
+        `/projects/${activeProject!.id}/ai-audits?limit=50&offset=0`
+      ),
+    enabled: Boolean(activeProject?.id),
+  })
+
+  const visibilityAuditId = visibilityAuditsList?.ai_audits.find(
+    (a) => a.crawl_id === stableCurrentCrawl?.id
+  )?.id
+
+  const { data: visibilityAudit } = useQuery({
+    queryKey: visibilityAuditId
+      ? ["ai-audit", visibilityAuditId]
+      : ["ai-audit-disabled"],
+    queryFn: () =>
+      clientApiFetch<AIAuditResponse>(`/ai-audits/${visibilityAuditId!}`),
+    enabled: Boolean(visibilityAuditId),
+  })
+
+  const visibilitySuccessRuns = (visibilityAudit?.runs ?? []).filter(
+    (r) => r.status === "success"
+  )
+  const hasVisibility = visibilitySuccessRuns.length > 0
+  const currentVisibilityRate = hasVisibility
+    ? Math.round(
+        (visibilitySuccessRuns.filter((r) => r.mentioned_target).length /
+          visibilitySuccessRuns.length) *
+          100
+      )
+    : undefined
+
+  const previousVisibilityAuditId = visibilityAuditsList?.ai_audits.find(
+    (a) => a.crawl_id === stablePreviousCrawl?.id
+  )?.id
+
+  const { data: previousVisibilityAudit } = useQuery({
+    queryKey: previousVisibilityAuditId
+      ? ["ai-audit", previousVisibilityAuditId]
+      : ["ai-audit-disabled"],
+    queryFn: () =>
+      clientApiFetch<AIAuditResponse>(
+        `/ai-audits/${previousVisibilityAuditId!}`
+      ),
+    enabled: Boolean(previousVisibilityAuditId),
+  })
+
+  const previousVisibilitySuccessRuns = (
+    previousVisibilityAudit?.runs ?? []
+  ).filter((r) => r.status === "success")
+  const hasPreviousVisibility = previousVisibilitySuccessRuns.length > 0
+  const previousVisibilityRate = hasPreviousVisibility
+    ? Math.round(
+        (previousVisibilitySuccessRuns.filter((r) => r.mentioned_target)
+          .length /
+          previousVisibilitySuccessRuns.length) *
+          100
+      )
+    : undefined
+
+  const currentOverall = useMemo(
+    () =>
+      computeBlendedOverall({
+        seo: stableCurrentCrawl?.seo_score,
+        aeo: stableCurrentCrawl?.aeo_score,
+        pagespeed: stableCurrentCrawl?.pagespeed_score,
+        visibility: currentVisibilityRate,
+      }),
+    [
+      stableCurrentCrawl?.seo_score,
+      stableCurrentCrawl?.aeo_score,
+      stableCurrentCrawl?.pagespeed_score,
+      currentVisibilityRate,
+    ]
+  )
+
+  const previousOverall = useMemo(
+    () =>
+      computeBlendedOverall({
+        seo: stablePreviousCrawl?.seo_score,
+        aeo: stablePreviousCrawl?.aeo_score,
+        pagespeed: stablePreviousCrawl?.pagespeed_score,
+        visibility: previousVisibilityRate,
+      }),
+    [
+      stablePreviousCrawl?.seo_score,
+      stablePreviousCrawl?.aeo_score,
+      stablePreviousCrawl?.pagespeed_score,
+      previousVisibilityRate,
+    ]
+  )
+
+  const currentBlendWeights = useMemo(
+    () =>
+      getNormalizedBlendWeights({
+        seo: stableCurrentCrawl?.seo_score,
+        aeo: stableCurrentCrawl?.aeo_score,
+        pagespeed: stableCurrentCrawl?.pagespeed_score,
+        visibility: currentVisibilityRate,
+      }),
+    [
+      stableCurrentCrawl?.seo_score,
+      stableCurrentCrawl?.aeo_score,
+      stableCurrentCrawl?.pagespeed_score,
+      currentVisibilityRate,
+    ]
+  )
+
   const scoreSegments = useMemo(
     () => [
+      // First entry renders as the innermost ring in recharts RadialBarChart.
+      ...(hasVisibility
+        ? [
+            {
+              key: "visibility",
+              label: "Visibility",
+              value: currentVisibilityRate,
+              color: "hsl(265, 60%, 62%)",
+              contribution: computeContribution(
+                currentBlendWeights.visibility,
+                currentVisibilityRate
+              ),
+            },
+          ]
+        : []),
       {
         key: "seo",
         label: "SEO",
         value: stableCurrentCrawl?.seo_score,
         color: getPillarChartColor("seo", 0),
+        contribution: computeContribution(
+          currentBlendWeights.seo,
+          stableCurrentCrawl?.seo_score
+        ),
       },
       {
         key: "aeo",
         label: "AEO",
         value: stableCurrentCrawl?.aeo_score,
         color: getPillarChartColor("aeo", 0),
+        contribution: computeContribution(
+          currentBlendWeights.aeo,
+          stableCurrentCrawl?.aeo_score
+        ),
       },
       {
         key: "pagespeed",
         label: "PageSpeed",
         value: stableCurrentCrawl?.pagespeed_score,
         color: getPillarChartColor("pagespeed", 0),
+        contribution: computeContribution(
+          currentBlendWeights.pagespeed,
+          stableCurrentCrawl?.pagespeed_score
+        ),
       },
     ],
     [
       stableCurrentCrawl?.seo_score,
       stableCurrentCrawl?.aeo_score,
       stableCurrentCrawl?.pagespeed_score,
+      hasVisibility,
+      currentVisibilityRate,
+      currentBlendWeights,
     ]
   )
 
@@ -533,7 +679,7 @@ export default function AppPage() {
                 <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
                   <ScoreRadialChart
                     centerLabel="Overall"
-                    centerValue={stableCurrentCrawl?.overall_score}
+                    centerValue={currentOverall}
                     description="Current crawl pillar scores"
                     segments={scoreSegments}
                     title="Overall Score"
@@ -547,6 +693,8 @@ export default function AppPage() {
                   crawls={stableSortedCompletedCrawls}
                   currentCrawl={stableCurrentCrawl}
                   previousCrawl={stablePreviousCrawl}
+                  overallValue={currentOverall}
+                  overallPreviousValue={previousOverall}
                 />
                 <div className="px-4 lg:px-6">
                   <Separator />
@@ -640,6 +788,11 @@ export default function AppPage() {
             </>
           ) : null}
         </div>
+      ) : view === "revserp-visibility" ? (
+        <RevserpVisibilityView
+          activeProject={activeProject}
+          currentCrawl={stableCurrentCrawl}
+        />
       ) : view === "search-console" ? (
         <SearchConsoleView
           activeProject={activeProject}
@@ -684,6 +837,72 @@ export default function AppPage() {
       )}
     </main>
   )
+}
+
+const OVERALL_BLEND_WEIGHTS = {
+  seo: 0.55,
+  aeo: 0.2,
+  pagespeed: 0.15,
+  visibility: 0.1,
+}
+
+type BlendScores = {
+  seo?: number | null
+  aeo?: number | null
+  pagespeed?: number | null
+  visibility?: number | null
+}
+
+function getNormalizedBlendWeights(scores: BlendScores) {
+  const weights: Record<keyof BlendScores, number> = {
+    seo: 0,
+    aeo: 0,
+    pagespeed: 0,
+    visibility: 0,
+  }
+  let weightSum = 0
+  for (const key of Object.keys(OVERALL_BLEND_WEIGHTS) as Array<
+    keyof BlendScores
+  >) {
+    const score = scores[key]
+    if (typeof score === "number" && Number.isFinite(score)) {
+      weightSum += OVERALL_BLEND_WEIGHTS[key]
+    }
+  }
+  if (weightSum === 0) return weights
+  for (const key of Object.keys(OVERALL_BLEND_WEIGHTS) as Array<
+    keyof BlendScores
+  >) {
+    const score = scores[key]
+    if (typeof score === "number" && Number.isFinite(score)) {
+      weights[key] = OVERALL_BLEND_WEIGHTS[key] / weightSum
+    }
+  }
+  return weights
+}
+
+function computeBlendedOverall(scores: BlendScores): number | null {
+  const weights = getNormalizedBlendWeights(scores)
+  let total = 0
+  let hasTerm = false
+  for (const key of Object.keys(OVERALL_BLEND_WEIGHTS) as Array<
+    keyof BlendScores
+  >) {
+    const score = scores[key]
+    if (typeof score === "number" && Number.isFinite(score)) {
+      total += weights[key] * score
+      hasTerm = true
+    }
+  }
+  return hasTerm ? Math.round(total) : null
+}
+
+function computeContribution(
+  normalizedWeight: number,
+  score?: number | null
+): number | null {
+  if (typeof score !== "number" || !Number.isFinite(score)) return null
+  return Math.round(normalizedWeight * score)
 }
 
 function getCrawlTimestamp(crawl: CrawlResponse) {

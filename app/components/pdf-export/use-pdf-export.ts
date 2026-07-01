@@ -32,8 +32,16 @@ export type UsePdfExportOptions = {
 
 function loadImageAspectRatio(dataUrl: string): Promise<number> {
   return new Promise((resolve) => {
+    const timeout = setTimeout(() => resolve(1), 5000)
     const img = new Image()
-    img.onload = () => resolve(img.height / img.width)
+    img.onload = () => {
+      clearTimeout(timeout)
+      resolve(img.height / img.width)
+    }
+    img.onerror = () => {
+      clearTimeout(timeout)
+      resolve(1)
+    }
     img.src = dataUrl
   })
 }
@@ -77,7 +85,11 @@ export function usePdfExport({
         toPng(pagespeedRef.current!, captureOpts),
       ])
 
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      })
       const dateStr = new Date().toISOString().slice(0, 10)
 
       // Cover page
@@ -207,7 +219,12 @@ export function usePdfExport({
         pdf.text(section.label, MARGIN, MARGIN + 8)
 
         if (section.score != null) {
-          pdf.text(`${Math.round(section.score)}%`, PAGE_W - MARGIN, MARGIN + 8, { align: "right" })
+          pdf.text(
+            `${Math.round(section.score)}%`,
+            PAGE_W - MARGIN,
+            MARGIN + 8,
+            { align: "right" }
+          )
         }
 
         pdf.setDrawColor(220, 220, 220)
@@ -220,9 +237,15 @@ export function usePdfExport({
         pdf.setFont("helvetica", "normal")
         pdf.setFontSize(10)
         pdf.setTextColor(50, 50, 50)
-        const summaryLines = pdf.splitTextToSize(section.commentary.summary, CONTENT_W)
+        const summaryLines = pdf.splitTextToSize(
+          section.commentary.summary,
+          CONTENT_W
+        )
         for (const line of summaryLines) {
-          if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+          if (cursorY > PAGE_H - MARGIN) {
+            pdf.addPage()
+            cursorY = MARGIN + 8
+          }
           pdf.text(line, MARGIN, cursorY)
           cursorY += 5
         }
@@ -230,7 +253,10 @@ export function usePdfExport({
 
         // Strengths
         if (section.commentary.strengths.length > 0) {
-          if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+          if (cursorY > PAGE_H - MARGIN) {
+            pdf.addPage()
+            cursorY = MARGIN + 8
+          }
           pdf.setFont("helvetica", "bold")
           pdf.setFontSize(9)
           pdf.setTextColor(30, 30, 30)
@@ -243,7 +269,10 @@ export function usePdfExport({
             pdf.setTextColor(50, 50, 50)
             const itemLines = pdf.splitTextToSize(`•  ${item}`, CONTENT_W - 8)
             for (const line of itemLines) {
-              if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+              if (cursorY > PAGE_H - MARGIN) {
+                pdf.addPage()
+                cursorY = MARGIN + 8
+              }
               pdf.text(line, MARGIN + 8, cursorY)
               cursorY += 5
             }
@@ -253,7 +282,10 @@ export function usePdfExport({
 
         // Concerns
         if (section.commentary.concerns.length > 0) {
-          if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+          if (cursorY > PAGE_H - MARGIN) {
+            pdf.addPage()
+            cursorY = MARGIN + 8
+          }
           pdf.setFont("helvetica", "bold")
           pdf.setFontSize(9)
           pdf.setTextColor(30, 30, 30)
@@ -266,7 +298,10 @@ export function usePdfExport({
             pdf.setTextColor(50, 50, 50)
             const itemLines = pdf.splitTextToSize(`•  ${item}`, CONTENT_W - 8)
             for (const line of itemLines) {
-              if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+              if (cursorY > PAGE_H - MARGIN) {
+                pdf.addPage()
+                cursorY = MARGIN + 8
+              }
               pdf.text(line, MARGIN + 8, cursorY)
               cursorY += 5
             }
@@ -276,7 +311,10 @@ export function usePdfExport({
 
         // Recommendations
         if (section.commentary.recommendations.length > 0) {
-          if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+          if (cursorY > PAGE_H - MARGIN) {
+            pdf.addPage()
+            cursorY = MARGIN + 8
+          }
           pdf.setFont("helvetica", "bold")
           pdf.setFontSize(9)
           pdf.setTextColor(30, 30, 30)
@@ -288,9 +326,15 @@ export function usePdfExport({
             pdf.setFont("helvetica", "normal")
             pdf.setFontSize(9.5)
             pdf.setTextColor(50, 50, 50)
-            const itemLines = pdf.splitTextToSize(`${i + 1}.  ${item}`, CONTENT_W - 8)
+            const itemLines = pdf.splitTextToSize(
+              `${i + 1}.  ${item}`,
+              CONTENT_W - 8
+            )
             for (const line of itemLines) {
-              if (cursorY > PAGE_H - MARGIN) { pdf.addPage(); cursorY = MARGIN + 8 }
+              if (cursorY > PAGE_H - MARGIN) {
+                pdf.addPage()
+                cursorY = MARGIN + 8
+              }
               pdf.text(line, MARGIN + 8, cursorY)
               cursorY += 5
             }
@@ -299,7 +343,9 @@ export function usePdfExport({
         }
       }
 
-      pdf.save(`audit-${projectName.toLowerCase().replace(/\s+/g, "-")}-${dateStr}.pdf`)
+      pdf.save(
+        `audit-${projectName.toLowerCase().replace(/\s+/g, "-")}-${dateStr}.pdf`
+      )
     } finally {
       onDone()
       setIsExporting(false)

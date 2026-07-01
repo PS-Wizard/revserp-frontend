@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useSearchParams } from "react-router"
 
 import { clientApiPost, ApiError } from "~/lib/api"
@@ -6,20 +6,19 @@ import type { MeResponse } from "~/lib/api.types"
 import { resolveOAuthSessionFromCallback } from "~/lib/auth.client"
 import { sanitizeNextPath } from "~/lib/auth-path"
 
-let hasStartedOAuthExchange = false
-
 export default function AuthCallbackPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [errorMessage, setErrorMessage] = useState("")
   const nextPath = sanitizeNextPath(searchParams.get("next"))
+  const hasStartedOAuthExchange = useRef(false)
 
   useEffect(() => {
-    if (hasStartedOAuthExchange) {
+    if (hasStartedOAuthExchange.current) {
       return
     }
 
-    hasStartedOAuthExchange = true
+    hasStartedOAuthExchange.current = true
     let isMounted = true
 
     async function exchangeOAuthSession() {
@@ -44,7 +43,7 @@ export default function AuthCallbackPage() {
         return
       }
 
-      hasStartedOAuthExchange = false
+      hasStartedOAuthExchange.current = false
 
       const nextErrorMessage = getOAuthExchangeErrorMessage(error)
       setErrorMessage(nextErrorMessage)

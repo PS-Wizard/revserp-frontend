@@ -523,7 +523,6 @@ function useAIConversation({
       )
       queryClient.invalidateQueries({
         queryKey: ["ai-conversations", projectId],
-        exact: true,
       })
     } catch (error) {
       if (!isActiveSendRequest(sendRequestId)) return

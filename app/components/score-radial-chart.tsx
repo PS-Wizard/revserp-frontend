@@ -20,6 +20,7 @@ export type ScoreRadialSegment = {
   label: string
   value?: number | null
   color?: string
+  contribution?: number | null
 }
 
 type ScoreRadialChartProps = {
@@ -87,18 +88,27 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
                         nameKey="key"
                         formatter={(value, _name, _item, _index, payload) => {
                           const label = getTooltipLabel(payload)
+                          const contribution = getTooltipContribution(payload)
 
                           return (
-                            <>
-                              <span className="text-muted-foreground">
-                                {label}
-                              </span>
-                              <span className="font-mono font-medium text-foreground tabular-nums">
-                                {typeof value === "number"
-                                  ? `${value}%`
-                                  : String(value)}
-                              </span>
-                            </>
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-muted-foreground">
+                                  {label}
+                                </span>
+                                <span className="font-mono font-medium text-foreground tabular-nums">
+                                  {typeof value === "number"
+                                    ? `${value}%`
+                                    : String(value)}
+                                </span>
+                              </div>
+                              {typeof contribution === "number" &&
+                              Number.isFinite(contribution) ? (
+                                <div className="text-xs text-muted-foreground/70">
+                                  Contributes: {contribution}%
+                                </div>
+                              ) : null}
+                            </div>
                           )
                         }}
                       />
@@ -158,6 +168,15 @@ function getTooltipLabel(payload: unknown) {
   }
 
   return "Score"
+}
+
+function getTooltipContribution(payload: unknown) {
+  if (payload && typeof payload === "object" && "contribution" in payload) {
+    const contribution = (payload as { contribution?: unknown }).contribution
+    return typeof contribution === "number" ? contribution : null
+  }
+
+  return null
 }
 
 function buildChartData(segments: ScoreRadialSegment[]) {

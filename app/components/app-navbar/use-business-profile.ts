@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import type { FormEvent } from "react"
 
 import type {
@@ -45,6 +45,7 @@ export function useBusinessProfile() {
   const [isLoadingAIQuestions, setIsLoadingAIQuestions] = useState(false)
   const [isRegeneratingAIQuestions, setIsRegeneratingAIQuestions] =
     useState(false)
+  const activeProjectIdRef = useRef<string | null>(null)
 
   const canManageBusinessProfile =
     businessProfileStatus?.can_manage_profile === true
@@ -101,17 +102,21 @@ export function useBusinessProfile() {
     const intervalMs = 3000
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
+      if (activeProjectIdRef.current !== projectId) return
       const found = await fetchAIQuestions(projectId)
+      if (activeProjectIdRef.current !== projectId) return
       if (found) break
     }
     setIsRegeneratingAIQuestions(false)
   }
 
   async function openBusinessProfileDrawer(project: ProjectResponse) {
+    activeProjectIdRef.current = project.id
     setBusinessProfileProject(project)
     setBusinessProfileStatus(null)
     setBusinessProfileError("")
     setAIQuestions(null)
+    setIsRegeneratingAIQuestions(false)
     applyBusinessProfile(undefined, project)
     setIsLoadingBusinessProfile(true)
     setIsLoadingAIQuestions(true)

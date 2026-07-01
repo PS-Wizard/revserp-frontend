@@ -1,5 +1,6 @@
 "use client"
 import { Link } from "react-router"
+import type { LoaderFunctionArgs } from "react-router"
 import { useEffect, useState, useCallback } from "react"
 import {
   ArrowLeft,
@@ -65,11 +66,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog"
+import { requirePlatformAdmin } from "~/lib/auth.server"
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  await requirePlatformAdmin(request)
+  return null
+}
 
 type AiConfig = {
   context_prompt: string
   guidelines_prompt: string
   other_notes_prompt: string
+  question_generation_prompt: string
 }
 
 // --- Scoring Tab ---
@@ -480,11 +488,13 @@ function AIConfigTab() {
     context_prompt: "",
     guidelines_prompt: "",
     other_notes_prompt: "",
+    question_generation_prompt: "",
   })
   const [defaultConfig, setDefaultConfig] = useState<AiConfig>({
     context_prompt: "",
     guidelines_prompt: "",
     other_notes_prompt: "",
+    question_generation_prompt: "",
   })
   const [saving, setSaving] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -603,6 +613,32 @@ function AIConfigTab() {
             />
           </CardContent>
         </Card>
+
+        <div className="mt-2">
+          <span className="text-sm font-semibold text-foreground">
+            LLM Visibility Question Generation
+          </span>
+        </div>
+
+        <Card size="sm">
+          <CardContent className="flex flex-col gap-1.5">
+            <Label>Question Generation Prompt</Label>
+            <Textarea
+              className="min-h-[260px] font-mono text-xs"
+              value={config.question_generation_prompt}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  question_generation_prompt: e.target.value,
+                })
+              }
+              placeholder={
+                defaultConfig.question_generation_prompt ||
+                "Prompt used to generate visibility questions..."
+              }
+            />
+          </CardContent>
+        </Card>
       </div>
 
       {previewOpen && (
@@ -703,15 +739,17 @@ function AccountsTab() {
     })
     const results = await Promise.allSettled(
       eligible.map((user) =>
-        clientApiPost(`/admin/users/${user.id}/suspend`, {})
+        clientApiPost(`/admin/users/${user.id}/suspend`, {}).catch((err) => {
+          throw { email: user.email, err }
+        })
       )
     )
     const failed = results.filter((r) => r.status === "rejected")
     const succeeded = results.length - failed.length
     if (succeeded > 0)
       toast.success(`${succeeded} user${succeeded > 1 ? "s" : ""} suspended`)
-    for (let i = 0; i < failed.length; i++) {
-      toast.error(`Failed to suspend ${eligible[i]?.email ?? "user"}`)
+    for (const r of failed) {
+      toast.error(`Failed to suspend ${r.reason?.email ?? "user"}`)
     }
     setSelectedIds(new Set())
     loadUsers()
@@ -727,15 +765,17 @@ function AccountsTab() {
     })
     const results = await Promise.allSettled(
       eligible.map((user) =>
-        clientApiPost(`/admin/users/${user.id}/unsuspend`, {})
+        clientApiPost(`/admin/users/${user.id}/unsuspend`, {}).catch((err) => {
+          throw { email: user.email, err }
+        })
       )
     )
     const failed = results.filter((r) => r.status === "rejected")
     const succeeded = results.length - failed.length
     if (succeeded > 0)
       toast.success(`${succeeded} user${succeeded > 1 ? "s" : ""} unsuspended`)
-    for (let i = 0; i < failed.length; i++) {
-      toast.error(`Failed to unsuspend ${eligible[i]?.email ?? "user"}`)
+    for (const r of failed) {
+      toast.error(`Failed to unsuspend ${r.reason?.email ?? "user"}`)
     }
     setSelectedIds(new Set())
     loadUsers()
@@ -751,14 +791,18 @@ function AccountsTab() {
         return true
       })
       const results = await Promise.allSettled(
-        eligible.map((user) => clientApiDelete(`/admin/users/${user.id}`))
+        eligible.map((user) =>
+          clientApiDelete(`/admin/users/${user.id}`).catch((err) => {
+            throw { email: user.email, err }
+          })
+        )
       )
       const failed = results.filter((r) => r.status === "rejected")
       const succeeded = results.length - failed.length
       if (succeeded > 0)
         toast.success(`${succeeded} user${succeeded > 1 ? "s" : ""} disabled`)
-      for (let i = 0; i < failed.length; i++) {
-        toast.error(`Failed to disable ${eligible[i]?.email ?? "user"}`)
+      for (const r of failed) {
+        toast.error(`Failed to disable ${r.reason?.email ?? "user"}`)
       }
       setSelectedIds(new Set())
     } else if (disableTarget) {
