@@ -33,14 +33,12 @@ import {
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 
-import { useActiveCrawlsPoll } from "~/hooks/use-active-crawls-poll"
-import { useCrawlToasts } from "~/hooks/use-crawl-toasts"
+import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
-  ActiveCrawlResponse,
   AIAuditListResponse,
   AIAuditResponse,
   AppBootstrapResponse,
@@ -169,11 +167,6 @@ export default function AppPage() {
   // Cache fetched extra breakdowns by crawl id to avoid re-fetching on project revisit.
   const extraBreakdownCacheRef = useRef<Map<string, CrawlBreakdown>>(new Map())
 
-  // Track the most recently settled crawl to pass into useCrawlToasts.
-  const [settledCrawl, setSettledCrawl] = useState<ActiveCrawlResponse | null>(
-    null
-  )
-
   const sortedCrawls = useMemo(
     () =>
       [...recentCrawls].sort(
@@ -213,25 +206,18 @@ export default function AppPage() {
 
   const pollEnabled = hasActiveCrawlAnywhere || isStartingCrawl
 
-  // Stable revalidate ref — the poll callback uses this so the interval never
-  // depends on the revalidator object and thus never tears down on revalidation.
+  // Stable revalidate ref so the tracking hook's poll never depends on the
+  // revalidator object and thus never tears down on revalidation.
   const revalidateRef = useRef(revalidator.revalidate)
   revalidateRef.current = revalidator.revalidate
   const revalidatorStateRef = useRef(revalidator.state)
   revalidatorStateRef.current = revalidator.state
 
-  const handleCrawlSettled = useCallback((crawl: ActiveCrawlResponse) => {
-    setSettledCrawl(crawl)
+  const revalidateIfIdle = useCallback(() => {
     if (revalidatorStateRef.current === "idle") {
       revalidateRef.current()
     }
   }, [])
-
-  const { activeCrawls } = useActiveCrawlsPoll({
-    orgId: me.active_org_id,
-    enabled: pollEnabled,
-    onCrawlSettled: handleCrawlSettled,
-  })
 
   const handleOpenAIConversation = useCallback(
     (conversationId: string, scope?: AIScopeState) => {
@@ -277,11 +263,12 @@ export default function AppPage() {
     return map
   }, [projects])
 
-  useCrawlToasts({
-    activeCrawls,
-    settledCrawl,
+  const { trackCrawl } = useCrawlTracking({
+    orgId: me.active_org_id,
+    enabled: pollEnabled,
     projectNameById,
     goToCrawl,
+    revalidate: revalidateIfIdle,
   })
 
   // Fetch up to 2 extra score-breakdowns for chart history — gated to the
@@ -630,7 +617,13 @@ export default function AppPage() {
     onDone: () => setShowPrintSections(false),
   })
 
-  const handleCrawlStart = useCallback(() => setIsStartingCrawl(true), [])
+  const handleCrawlStart = useCallback(
+    (crawl: CrawlResponse) => {
+      setIsStartingCrawl(true)
+      trackCrawl(crawl.id)
+    },
+    [trackCrawl]
+  )
 
   return (
     <main className="min-h-svh bg-background text-foreground">

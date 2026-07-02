@@ -445,7 +445,7 @@ export function AppNavbar({
     runCrawlDispatch({ type: "SET_STARTING" })
 
     try {
-      await clientApiPost<CrawlResponse>(
+      const crawl = await clientApiPost<CrawlResponse>(
         `/projects/${activeProjectId}/crawls`,
         {
           config_snapshot: {
@@ -463,7 +463,7 @@ export function AppNavbar({
           },
         }
       )
-      onCrawlStart()
+      onCrawlStart(crawl)
       runCrawlDispatch({ type: "STARTED" })
       revalidator.revalidate()
     } catch (error) {

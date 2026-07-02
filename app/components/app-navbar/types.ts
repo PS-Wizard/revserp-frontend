@@ -16,7 +16,7 @@ export type AppNavbarProps = {
   // Revserp AI tab; isCrawlRunning still drives the Run Crawl button.
   isViewingRunningCrawl: boolean
   crawlStatusLabel: string
-  onCrawlStart: () => void
+  onCrawlStart: (crawl: CrawlResponse) => void
   organizationId: string
   organizations: MeResponse["organizations"]
   projects: ProjectResponse[]

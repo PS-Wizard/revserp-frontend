@@ -65,10 +65,20 @@ export type ProjectsResponse = {
   projects: ProjectResponse[]
 }
 
+export type CrawlStatus =
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled"
+
+export type CrawlPhase = "crawling" | "analyzing"
+
 export type CrawlResponse = {
   id: string
   project_id: string
-  status: string
+  status: CrawlStatus
+  phase?: CrawlPhase | null
   config_snapshot?: unknown
   urls_discovered: number
   urls_crawled: number

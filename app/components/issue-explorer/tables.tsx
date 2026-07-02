@@ -170,8 +170,10 @@ export function UrlIssueTable({
                     {row.source}
                   </TableCell>
                 ) : null}
-                <TableCell className="max-w-[18rem] font-medium break-all whitespace-normal text-foreground">
-                  {row.url}
+                <TableCell className="max-w-[18rem] font-medium text-foreground">
+                  <div className="truncate" title={row.url}>
+                    {row.url}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <SeverityBadge severity={row.severity} />
