@@ -263,7 +263,7 @@ export default function AppPage() {
     return map
   }, [projects])
 
-  const { trackCrawl } = useCrawlTracking({
+  const { trackCrawl, cancelDialog } = useCrawlTracking({
     orgId: me.active_org_id,
     enabled: pollEnabled,
     projectNameById,
@@ -627,6 +627,7 @@ export default function AppPage() {
 
   return (
     <main className="min-h-svh bg-background text-foreground">
+      {cancelDialog}
       <AppNavbar
         activeProjectId={activeProject?.id}
         currentCrawl={currentCrawl}
