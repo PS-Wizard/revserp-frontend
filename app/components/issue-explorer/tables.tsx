@@ -11,8 +11,10 @@ import {
 } from "~/components/ui/table"
 
 import type { BucketScope, MergedIssueUrlRow } from "./types"
+import { formatScore } from "~/components/trend-sparkline"
+
 import type { RowSelectionProps } from "./use-drag-selection"
-import { formatPenalty, urlRowKey } from "./utils"
+import { urlRowKey } from "./utils"
 
 type HeaderCheckboxProps = {
   checkedCount: number
@@ -81,9 +83,10 @@ export function BucketTable({
             />
             {hasMultiplePillars ? <TableHead>Pillar</TableHead> : null}
             <TableHead>Bucket</TableHead>
+            <TableHead className="text-right">Score</TableHead>
             <TableHead className="text-right">Issue Types</TableHead>
+            <TableHead className="text-right">Issues</TableHead>
             <TableHead className="text-right">Affected URLs</TableHead>
-            <TableHead className="text-right">Penalty</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -111,13 +114,16 @@ export function BucketTable({
                 {row.bucketLabel}
               </TableCell>
               <TableCell className="text-right tabular-nums">
+                {formatScore(row.bucket.score)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
                 {row.bucket.issue_type_count}
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                {row.bucket.affected_url_count}
+                {row.bucket.issue_row_count}
               </TableCell>
               <TableCell className="text-right tabular-nums">
-                {formatPenalty(row.bucket.total_penalty)}
+                {row.bucket.affected_url_count}
               </TableCell>
             </TableRow>
           ))}

@@ -8,10 +8,6 @@ import type {
 
 import type { BucketScope, FixSelection, MergedIssueUrlRow } from "./types"
 
-export function formatPenalty(value: number) {
-  return Number(value.toFixed(2)).toString()
-}
-
 /** Stable selection key for a URL row (a URL may appear under multiple issue types). */
 export function urlRowKey(row: MergedIssueUrlRow) {
   return `${row.issueTypeId}::${row.url}`
