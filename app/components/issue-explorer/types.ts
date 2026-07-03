@@ -1,5 +1,5 @@
 import type {
-  ScoreBreakdownIssueTypeResponse,
+  ScoreBreakdownBucketResponse,
   ScoreBreakdownIssueURLsResponse,
 } from "~/lib/api.types"
 
@@ -9,35 +9,17 @@ export type BucketScope = {
   pillarLabel: string
   bucketId: string
   bucketLabel: string
+  bucket: ScoreBreakdownBucketResponse
 }
 
-export type IssueScope = {
-  key: string
+/** A single fix request scoped to one pillar (the AI message API is per-pillar). */
+export type FixSelection = {
   pillarId: string
   pillarLabel: string
-  bucketId: string
-  bucketLabel: string
-  issueTypeId: string
-  issueTypeLabel: string
-  issueType: ScoreBreakdownIssueTypeResponse
-}
-
-export type AIFixTarget = {
-  key: string
-  pillarId: string
-  pillarLabel: string
-  bucketId: string
-  bucketLabel: string
-  issueTypeId: string
-  issueTypeLabel: string
-  urls?: string[]
-}
-
-export type PendingAIFixRequest = {
-  requestId: string
-  target: AIFixTarget
-  title: string
-  prompt: string
+  bucketIds: string[]
+  bucketLabels: string[]
+  issueTypeIds: string[]
+  urls: string[]
 }
 
 export type MergedIssueUrlRow =

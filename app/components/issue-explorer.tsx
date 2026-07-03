@@ -1,36 +1,28 @@
 "use client"
 
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useReducer,
-} from "react"
-import { ChevronLeftIcon, DownloadIcon } from "lucide-react"
+  ChevronLeftIcon,
+  DownloadIcon,
+  Loader2Icon,
+  SparklesIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
-import {
-  ScopeBreadcrumbs,
-  TablePagination,
-} from "~/components/issue-explorer/scope-controls"
-import {
-  IssueTypeTable,
-  UrlIssueTable,
-} from "~/components/issue-explorer/tables"
+import { TablePagination } from "~/components/issue-explorer/scope-controls"
+import { BucketTable, UrlIssueTable } from "~/components/issue-explorer/tables"
 import type {
-  AIFixTarget,
   BucketScope,
-  IssueScope,
+  FixSelection,
   MergedIssueUrlRow,
 } from "~/components/issue-explorer/types"
 import {
   areStringArraysEqual,
-  buildPendingAIFixRequest,
-  fetchAllIssueUrls,
-  generateQueuedAIFix,
+  fetchBucketUrls,
+  generateBatchAIFix,
+  urlRowKey,
 } from "~/components/issue-explorer/utils"
+import { useDragSelection } from "~/components/issue-explorer/use-drag-selection"
 import { formatBucketLabel } from "~/lib/utils"
 import { Button } from "~/components/ui/button"
 import {
@@ -43,109 +35,82 @@ import { ApiError, buildApiUrl } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
 import { downloadBlob, getExportFilename } from "~/components/app-navbar/utils"
 
-// --- URL loading reducer ---
-
-type IssueUrlState = {
-  urls: MergedIssueUrlRow[]
-  loading: boolean
-  error: string
-}
-
-const initialIssueUrlState: IssueUrlState = {
-  urls: [],
-  loading: false,
-  error: "",
-}
-
-type IssueUrlAction =
-  | { type: "LOAD_START" }
-  | { type: "LOAD_SUCCESS"; urls: MergedIssueUrlRow[] }
-  | { type: "LOAD_ERROR"; error: string }
-  | { type: "CLEAR" }
-
-function issueUrlReducer(
-  state: IssueUrlState,
-  action: IssueUrlAction
-): IssueUrlState {
-  switch (action.type) {
-    case "LOAD_START":
-      return { urls: [], loading: true, error: "" }
-    case "LOAD_SUCCESS":
-      return { urls: action.urls, loading: false, error: "" }
-    case "LOAD_ERROR":
-      return { ...state, loading: false, error: action.error }
-    case "CLEAR":
-      return { urls: [], loading: false, error: "" }
-  }
-}
-
 // --- Selection reducer ---
 
-type SelectionState = {
+type State = {
   selectedPillarIds: string[]
-  selectedBucketKeys: string[]
-  selectedIssueTypeKeys: string[]
-  issueTypePageIndex: number
-  issueTypePageSize: number
-  issueUrlPageIndex: number
-  issueUrlPageSize: number
+  drilledBucketKey: string | null
+  checkedBucketKeys: string[]
+  checkedUrlKeys: string[]
+  bucketPageIndex: number
+  bucketPageSize: number
+  urlPageIndex: number
+  urlPageSize: number
 }
 
-type SelectionAction =
+type Action =
   | { type: "SET_PILLAR_IDS"; payload: string[] }
-  | { type: "SET_BUCKET_KEYS"; payload: string[] }
-  | { type: "SET_ISSUE_TYPE_KEYS"; payload: string[] }
-  | { type: "SET_ISSUE_TYPE_PAGE_INDEX"; payload: number }
-  | { type: "SET_ISSUE_TYPE_PAGE_SIZE"; payload: number }
-  | { type: "SET_ISSUE_URL_PAGE_INDEX"; payload: number }
-  | { type: "SET_ISSUE_URL_PAGE_SIZE"; payload: number }
-  | { type: "CLEAR_ISSUE_TYPES"; payload?: undefined }
+  | { type: "DRILL_IN"; payload: string }
+  | { type: "DRILL_OUT" }
+  | { type: "SET_CHECKED_BUCKETS"; payload: string[] }
+  | { type: "SET_CHECKED_URLS"; payload: string[] }
+  | { type: "SET_BUCKET_PAGE_INDEX"; payload: number }
+  | { type: "SET_BUCKET_PAGE_SIZE"; payload: number }
+  | { type: "SET_URL_PAGE_INDEX"; payload: number }
+  | { type: "SET_URL_PAGE_SIZE"; payload: number }
+  | { type: "RESET" }
 
-function selectionReducer(
-  state: SelectionState,
-  action: SelectionAction
-): SelectionState {
+const initialState: State = {
+  selectedPillarIds: [],
+  drilledBucketKey: null,
+  checkedBucketKeys: [],
+  checkedUrlKeys: [],
+  bucketPageIndex: 0,
+  bucketPageSize: 10,
+  urlPageIndex: 0,
+  urlPageSize: 10,
+}
+
+function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "SET_PILLAR_IDS":
-      return { ...state, selectedPillarIds: action.payload }
-    case "SET_BUCKET_KEYS":
       return {
         ...state,
-        selectedBucketKeys: action.payload,
-        selectedIssueTypeKeys: [],
-        issueTypePageIndex: 0,
+        selectedPillarIds: action.payload,
+        checkedBucketKeys: [],
+        checkedUrlKeys: [],
+        drilledBucketKey: null,
+        bucketPageIndex: 0,
       }
-    case "SET_ISSUE_TYPE_KEYS":
+    case "DRILL_IN":
       return {
         ...state,
-        selectedIssueTypeKeys: action.payload,
-        issueUrlPageIndex: 0,
+        drilledBucketKey: action.payload,
+        checkedUrlKeys: [],
+        urlPageIndex: 0,
       }
-    case "SET_ISSUE_TYPE_PAGE_INDEX":
-      return { ...state, issueTypePageIndex: action.payload }
-    case "SET_ISSUE_TYPE_PAGE_SIZE":
-      return { ...state, issueTypePageSize: action.payload }
-    case "SET_ISSUE_URL_PAGE_INDEX":
-      return { ...state, issueUrlPageIndex: action.payload }
-    case "SET_ISSUE_URL_PAGE_SIZE":
-      return { ...state, issueUrlPageSize: action.payload }
-    case "CLEAR_ISSUE_TYPES":
+    case "DRILL_OUT":
       return {
         ...state,
-        selectedIssueTypeKeys: [],
-        issueUrlPageIndex: 0,
+        drilledBucketKey: null,
+        checkedUrlKeys: [],
+        urlPageIndex: 0,
       }
+    case "SET_CHECKED_BUCKETS":
+      return { ...state, checkedBucketKeys: action.payload }
+    case "SET_CHECKED_URLS":
+      return { ...state, checkedUrlKeys: action.payload }
+    case "SET_BUCKET_PAGE_INDEX":
+      return { ...state, bucketPageIndex: action.payload }
+    case "SET_BUCKET_PAGE_SIZE":
+      return { ...state, bucketPageSize: action.payload }
+    case "SET_URL_PAGE_INDEX":
+      return { ...state, urlPageIndex: action.payload }
+    case "SET_URL_PAGE_SIZE":
+      return { ...state, urlPageSize: action.payload }
+    case "RESET":
+      return initialState
   }
-}
-
-const initialSelectionState: SelectionState = {
-  selectedPillarIds: [],
-  selectedBucketKeys: [],
-  selectedIssueTypeKeys: [],
-  issueTypePageIndex: 0,
-  issueTypePageSize: 10,
-  issueUrlPageIndex: 0,
-  issueUrlPageSize: 10,
 }
 
 const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
@@ -164,59 +129,42 @@ export function IssueExplorer({
   ) => void
   projectId?: string
 }) {
-  const [selection, dispatchSelection] = useReducer(
-    selectionReducer,
-    initialSelectionState
-  )
+  const [state, dispatch] = useReducer(reducer, initialState)
   const {
     selectedPillarIds,
-    selectedBucketKeys,
-    selectedIssueTypeKeys,
-    issueTypePageIndex,
-    issueTypePageSize,
-    issueUrlPageIndex,
-    issueUrlPageSize,
-  } = selection
+    drilledBucketKey,
+    checkedBucketKeys,
+    checkedUrlKeys,
+    bucketPageIndex,
+    bucketPageSize,
+    urlPageIndex,
+    urlPageSize,
+  } = state
 
-  const [issueUrlState, dispatchIssueUrl] = useReducer(
-    issueUrlReducer,
-    initialIssueUrlState
-  )
-  const {
-    urls: mergedIssueUrls,
-    loading: isLoadingIssueUrls,
-    error: issueUrlsError,
-  } = issueUrlState
-  const [pendingFixTargetKeys, setPendingFixTargetKeys] = useState<string[]>([])
-
-  // Lazy-init refs to avoid creating objects on every render
-  const pendingFixTargetKeysRef = useRef<Set<string>>(null!)
-  if (!pendingFixTargetKeysRef.current) {
-    pendingFixTargetKeysRef.current = new Set<string>()
-  }
-  const issueUrlsCacheRef = useRef<Map<string, MergedIssueUrlRow[]>>(null!)
-  if (!issueUrlsCacheRef.current) {
-    issueUrlsCacheRef.current = new Map<string, MergedIssueUrlRow[]>()
-  }
-  const issueUrlsCache = issueUrlsCacheRef.current
+  const [isSubmittingFix, setIsSubmittingFix] = useState(false)
+  const [urlState, setUrlState] = useState<{
+    key: string
+    urls: MergedIssueUrlRow[]
+    loading: boolean
+    error: string
+  }>({ key: "", urls: [], loading: false, error: "" })
 
   const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
+  const crawlId = breakdown?.crawl_id ?? ""
 
-  // --- Selection sync in render (replaces useEffect-based derived-state pattern) ---
-
+  // --- Sync selected pillars (default: initial pillar, else all) ---
   syncSelectedPillars({
     initialPillarId,
     pillarOptions,
     selectedPillarIds,
-    setSelectedPillarIds: (ids: string[]) =>
-      dispatchSelection({ type: "SET_PILLAR_IDS", payload: ids }),
+    setSelectedPillarIds: (ids) =>
+      dispatch({ type: "SET_PILLAR_IDS", payload: ids }),
   })
 
-  const selectedPillars = useMemo(() => {
-    return pillarOptions.filter((pillar) =>
-      selectedPillarIds.includes(pillar.id)
-    )
-  }, [pillarOptions, selectedPillarIds])
+  const selectedPillars = useMemo(
+    () => pillarOptions.filter((pillar) => selectedPillarIds.includes(pillar.id)),
+    [pillarOptions, selectedPillarIds]
+  )
 
   const availableBucketScopes = useMemo<BucketScope[]>(() => {
     return selectedPillars.flatMap((pillar) =>
@@ -226,287 +174,401 @@ export function IssueExplorer({
         pillarLabel: pillar.label,
         bucketId: bucket.id,
         bucketLabel: formatBucketLabel(bucket.id, bucket.label),
+        bucket,
       }))
     )
   }, [selectedPillars])
 
-  // Sync buckets after computing available scopes
-  syncSelectedBuckets({
-    availableBucketScopes,
-    initialPillarId,
-    selectedBucketKeys,
-    setSelectedBucketKeys: (keys: string[]) =>
-      dispatchSelection({ type: "SET_BUCKET_KEYS", payload: keys }),
-  })
-
-  const availableIssueScopes = useMemo<IssueScope[]>(() => {
-    const selectedBucketScopes = availableBucketScopes.filter((bucketScope) =>
-      selectedBucketKeys.includes(bucketScope.key)
-    )
-    return selectedBucketScopes.flatMap((bucketScope) => {
-      const pillar = selectedPillars.find(
-        (item) => item.id === bucketScope.pillarId
-      )
-      const bucket = pillar?.buckets.find(
-        (item) => item.id === bucketScope.bucketId
-      )
-
-      return (bucket?.issues ?? []).map((issueType) => ({
-        key: `${bucketScope.key}::${issueType.id}`,
-        pillarId: bucketScope.pillarId,
-        pillarLabel: bucketScope.pillarLabel,
-        bucketId: bucketScope.bucketId,
-        bucketLabel: bucketScope.bucketLabel,
-        issueTypeId: issueType.id,
-        issueTypeLabel: issueType.label,
-        issueType,
-      }))
-    })
-  }, [availableBucketScopes, selectedBucketKeys, selectedPillars])
-
-  const selectedIssueScopes = useMemo(() => {
-    return availableIssueScopes.filter((issueScope) =>
-      selectedIssueTypeKeys.includes(issueScope.key)
-    )
-  }, [availableIssueScopes, selectedIssueTypeKeys])
-
-  // Sync issue types after computing available scopes
-  syncSelectedIssueTypes({
-    availableIssueScopes,
-    selectedIssueTypeKeys,
-    onApply: (keys: string[]) =>
-      dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: keys }),
-  })
-
-  const issueUrlCacheKey = [
-    breakdown?.crawl_id ?? "",
-    ...selectedIssueScopes.map((issueScope) => issueScope.key).sort(),
-  ].join("|")
-  const cachedIssueUrls = selectedIssueTypeKeys.length
-    ? issueUrlsCache.get(issueUrlCacheKey)
-    : undefined
-  const displayedIssueUrls = cachedIssueUrls ?? mergedIssueUrls
-  const crawlId = breakdown?.crawl_id ?? ""
-
-  useEffect(() => {
-    issueUrlsCache.clear()
-    dispatchIssueUrl({ type: "CLEAR" })
-  }, [crawlId, dispatchIssueUrl, issueUrlsCache])
-
-  const onSelectedBucketKeysChange = useCallback((nextBucketKeys: string[]) => {
-    dispatchSelection({ type: "SET_BUCKET_KEYS", payload: nextBucketKeys })
-  }, [])
-
-  const onSelectedIssueTypeKeysChange = useCallback(
-    (nextIssueTypeKeys: string[]) => {
-      dispatchSelection({
-        type: "SET_ISSUE_TYPE_KEYS",
-        payload: nextIssueTypeKeys,
-      })
-    },
-    []
+  const bucketRows = useMemo(
+    () =>
+      [...availableBucketScopes].sort(
+        (left, right) => right.bucket.total_penalty - left.bucket.total_penalty
+      ),
+    [availableBucketScopes]
   )
 
-  const onBackToIssueTypes = useCallback(() => {
-    dispatchSelection({ type: "CLEAR_ISSUE_TYPES" })
-    dispatchIssueUrl({ type: "CLEAR" })
-  }, [])
+  const drilledBucket = useMemo(
+    () => availableBucketScopes.find((scope) => scope.key === drilledBucketKey) ?? null,
+    [availableBucketScopes, drilledBucketKey]
+  )
 
-  const onSelectIssueType = useCallback((issueTypeKey: string) => {
-    dispatchSelection({ type: "SET_ISSUE_TYPE_KEYS", payload: [issueTypeKey] })
-  }, [])
+  const hasMultiplePillars = selectedPillarIds.length > 1
 
+  // --- Reset everything when the crawl changes ---
   useEffect(() => {
-    if (!breakdown || !selectedIssueTypeKeys.length) {
-      return
-    }
+    dispatch({ type: "RESET" })
+    setUrlState({ key: "", urls: [], loading: false, error: "" })
+  }, [crawlId])
 
-    const cacheKey = issueUrlCacheKey
-    if (issueUrlsCache.has(cacheKey)) {
-      return
-    }
+  // --- Load URLs for the drilled bucket ---
+  const urlCacheKey = drilledBucket ? `${crawlId}::${drilledBucket.key}` : ""
+  useEffect(() => {
+    if (!drilledBucket || !crawlId) return
 
     const controller = new AbortController()
     const { signal } = controller
 
-    async function loadIssueUrls() {
-      dispatchIssueUrl({ type: "LOAD_START" })
+    setUrlState({ key: urlCacheKey, urls: [], loading: true, error: "" })
 
-      try {
-        const rowsByScope = await Promise.all(
-          selectedIssueScopes.map((issueScope) =>
-            fetchAllIssueUrls(crawlId, issueScope, signal)
-          )
-        )
-
+    fetchBucketUrls(crawlId, drilledBucket, signal)
+      .then((rows) => {
         if (signal.aborted) return
-
-        const nextRows = rowsByScope
-          .flat()
-          .sort((left, right) => left.url.localeCompare(right.url))
-        issueUrlsCache.set(cacheKey, nextRows)
-        dispatchIssueUrl({ type: "LOAD_SUCCESS", urls: nextRows })
-      } catch (error) {
+        const sorted = rows.sort((a, b) => a.url.localeCompare(b.url))
+        setUrlState({ key: urlCacheKey, urls: sorted, loading: false, error: "" })
+      })
+      .catch((error) => {
         if (signal.aborted) return
-        dispatchIssueUrl({
-          type: "LOAD_ERROR",
+        setUrlState({
+          key: urlCacheKey,
+          urls: [],
+          loading: false,
           error:
-            error instanceof Error
-              ? error.message
-              : "Unable to load issue URLs.",
+            error instanceof Error ? error.message : "Unable to load issue URLs.",
+        })
+      })
+
+    return () => controller.abort()
+  }, [crawlId, drilledBucket, urlCacheKey])
+
+  const displayedUrls = urlState.key === urlCacheKey ? urlState.urls : []
+  const isLoadingUrls = urlState.key === urlCacheKey && urlState.loading
+  const urlError = urlState.key === urlCacheKey ? urlState.error : ""
+
+  const paginatedBucketRows = useMemo(() => {
+    const start = bucketPageIndex * bucketPageSize
+    return bucketRows.slice(start, start + bucketPageSize)
+  }, [bucketRows, bucketPageIndex, bucketPageSize])
+
+  const paginatedUrls = useMemo(() => {
+    const start = urlPageIndex * urlPageSize
+    return displayedUrls.slice(start, start + urlPageSize)
+  }, [displayedUrls, urlPageIndex, urlPageSize])
+
+  // --- Selection toggles ---
+  const onToggleBucket = useCallback(
+    (key: string) => {
+      dispatch({
+        type: "SET_CHECKED_BUCKETS",
+        payload: checkedBucketKeys.includes(key)
+          ? checkedBucketKeys.filter((item) => item !== key)
+          : [...checkedBucketKeys, key],
+      })
+    },
+    [checkedBucketKeys]
+  )
+
+  const onToggleAllBuckets = useCallback(
+    (checked: boolean) => {
+      dispatch({
+        type: "SET_CHECKED_BUCKETS",
+        payload: checked ? bucketRows.map((row) => row.key) : [],
+      })
+    },
+    [bucketRows]
+  )
+
+  const onToggleUrl = useCallback(
+    (key: string) => {
+      dispatch({
+        type: "SET_CHECKED_URLS",
+        payload: checkedUrlKeys.includes(key)
+          ? checkedUrlKeys.filter((item) => item !== key)
+          : [...checkedUrlKeys, key],
+      })
+    },
+    [checkedUrlKeys]
+  )
+
+  const onToggleAllUrls = useCallback(
+    (checked: boolean) => {
+      dispatch({
+        type: "SET_CHECKED_URLS",
+        payload: checked ? displayedUrls.map((row) => urlRowKey(row)) : [],
+      })
+    },
+    [displayedUrls]
+  )
+
+  const bucketDrag = useDragSelection(
+    checkedBucketKeys,
+    useCallback(
+      (keys: string[]) => dispatch({ type: "SET_CHECKED_BUCKETS", payload: keys }),
+      []
+    )
+  )
+  const urlDrag = useDragSelection(
+    checkedUrlKeys,
+    useCallback(
+      (keys: string[]) => dispatch({ type: "SET_CHECKED_URLS", payload: keys }),
+      []
+    )
+  )
+
+  // --- Build fix selections from the current checked rows ---
+  const fixSelections = useMemo<FixSelection[]>(() => {
+    if (drilledBucket) {
+      const checkedSet = new Set(checkedUrlKeys)
+      const rows = displayedUrls.filter((row) => checkedSet.has(urlRowKey(row)))
+      if (!rows.length) return []
+      return [
+        {
+          pillarId: drilledBucket.pillarId,
+          pillarLabel: drilledBucket.pillarLabel,
+          bucketIds: [drilledBucket.bucketId],
+          bucketLabels: [drilledBucket.bucketLabel],
+          issueTypeIds: [...new Set(rows.map((row) => row.issueTypeId))],
+          urls: [...new Set(rows.map((row) => row.url))],
+        },
+      ]
+    }
+
+    // Whole-bucket selection: leave issueTypeIds empty so the backend expands
+    // to every issue type in the selected buckets.
+    const checkedSet = new Set(checkedBucketKeys)
+    const scopes = availableBucketScopes.filter((scope) => checkedSet.has(scope.key))
+    const byPillar = new Map<string, FixSelection>()
+    for (const scope of scopes) {
+      const existing = byPillar.get(scope.pillarId)
+      if (existing) {
+        existing.bucketIds.push(scope.bucketId)
+        existing.bucketLabels.push(scope.bucketLabel)
+      } else {
+        byPillar.set(scope.pillarId, {
+          pillarId: scope.pillarId,
+          pillarLabel: scope.pillarLabel,
+          bucketIds: [scope.bucketId],
+          bucketLabels: [scope.bucketLabel],
+          issueTypeIds: [],
+          urls: [],
         })
       }
     }
-
-    void loadIssueUrls()
-
-    return () => {
-      controller.abort()
-    }
+    return [...byPillar.values()]
   }, [
-    breakdown,
-    crawlId,
-    dispatchIssueUrl,
-    issueUrlCacheKey,
-    issueUrlsCache,
-    selectedIssueScopes,
-    selectedIssueTypeKeys.length,
+    availableBucketScopes,
+    checkedBucketKeys,
+    checkedUrlKeys,
+    displayedUrls,
+    drilledBucket,
   ])
 
-  const issueTypeRows = useMemo(() => {
-    return [...availableIssueScopes].sort(
-      (left, right) =>
-        right.issueType.final_penalty - left.issueType.final_penalty
+  const selectionCount = drilledBucket
+    ? checkedUrlKeys.length
+    : checkedBucketKeys.length
+
+  const onRecommendFixes = useCallback(() => {
+    if (!crawlId || !projectId) {
+      toast.error("Recommended fixes are unavailable for this view.")
+      return
+    }
+    if (!fixSelections.length) return
+
+    const maxScopedUrls = 20
+    const droppedUrls = fixSelections.reduce(
+      (sum, s) => sum + Math.max(0, s.urls.length - maxScopedUrls),
+      0
     )
-  }, [availableIssueScopes])
+    if (droppedUrls > 0) {
+      toast.warning(
+        `Only the first ${maxScopedUrls} URLs per pillar are sent for fixes; ${droppedUrls} will be skipped.`
+      )
+    }
 
-  const paginatedIssueTypeRows = useMemo(() => {
-    const start = issueTypePageIndex * issueTypePageSize
-    return issueTypeRows.slice(start, start + issueTypePageSize)
-  }, [issueTypePageIndex, issueTypePageSize, issueTypeRows])
+    setIsSubmittingFix(true)
+    const promise = generateBatchAIFix({
+      crawlId,
+      projectId,
+      selections: fixSelections,
+    })
 
-  const paginatedMergedIssueUrls = useMemo(() => {
-    const start = issueUrlPageIndex * issueUrlPageSize
-    return displayedIssueUrls.slice(start, start + issueUrlPageSize)
-  }, [issueUrlPageIndex, issueUrlPageSize, displayedIssueUrls])
+    const first = fixSelections[0]
+    toast.promise(promise, {
+      loading: "Generating recommended fixes…",
+      success: (conversation) => ({
+        message: `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
+        action: onOpenAIConversation
+          ? {
+              label: "Open chat",
+              onClick: () =>
+                onOpenAIConversation(conversation.id, {
+                  pillarId: first.pillarId,
+                  bucketIds: first.bucketIds,
+                  issueTypeIds: first.issueTypeIds,
+                }),
+            }
+          : undefined,
+      }),
+      error: (error) =>
+        error instanceof ApiError
+          ? error.message
+          : "Unable to generate recommended fixes.",
+    })
 
-  const hasSelectedIssueTypes = selectedIssueTypeKeys.length > 0
-  const hasMultipleSources =
-    selectedPillarIds.length > 1 ||
-    selectedBucketKeys.length > 1 ||
-    selectedIssueTypeKeys.length > 1
+    const done = () => setIsSubmittingFix(false)
+    void promise.then(done, done)
+  }, [crawlId, fixSelections, onOpenAIConversation, projectId])
 
-  const isFixActionPending = useCallback(
-    (targetKey: string) => pendingFixTargetKeys.includes(targetKey),
-    [pendingFixTargetKeys]
-  )
+  const onExport = useCallback(async () => {
+    if (!crawlId) return
 
-  const onFixAction = useCallback(
-    (target: AIFixTarget) => {
-      if (!breakdown?.crawl_id || !projectId) {
-        toast.error("Recommended fixes are unavailable for this view.")
-        return
+    const params = new URLSearchParams()
+    if (drilledBucket) {
+      params.set("pillar_ids", drilledBucket.pillarId)
+      params.set("bucket_keys", drilledBucket.key)
+      const checkedSet = new Set(checkedUrlKeys)
+      const urls = [
+        ...new Set(
+          displayedUrls
+            .filter((row) => checkedSet.has(urlRowKey(row)))
+            .map((row) => row.url)
+        ),
+      ]
+      params.set("issue_urls", urls.join(","))
+    } else {
+      if (selectedPillarIds.length)
+        params.set("pillar_ids", selectedPillarIds.join(","))
+      params.set("bucket_keys", checkedBucketKeys.join(","))
+    }
+
+    try {
+      const response = await fetch(
+        buildApiUrl(`/crawls/${crawlId}/score-breakdown/export.xlsx?${params}`),
+        { credentials: "include" }
+      )
+      if (!response.ok) {
+        const errorText = await response.text()
+        let errorMsg = "Unable to export crawl issues."
+        try {
+          const body = JSON.parse(errorText)
+          if (typeof (body as Record<string, unknown>).error === "string") {
+            errorMsg = (body as Record<string, unknown>).error as string
+          }
+        } catch {
+          // use default message
+        }
+        throw new Error(errorMsg)
       }
+      const blob = await response.blob()
+      const filename = getExportFilename(
+        response.headers.get("content-disposition"),
+        `crawl-${crawlId.slice(0, 8)}-issues.xlsx`
+      )
+      downloadBlob(blob, filename)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to export crawl issues."
+      )
+    }
+  }, [
+    checkedBucketKeys,
+    checkedUrlKeys,
+    crawlId,
+    displayedUrls,
+    drilledBucket,
+    selectedPillarIds,
+  ])
 
-      const request = buildPendingAIFixRequest(target)
-
-      if (pendingFixTargetKeysRef.current.has(target.key)) {
-        return
-      }
-
-      pendingFixTargetKeysRef.current.add(target.key)
-      setPendingFixTargetKeys([...pendingFixTargetKeysRef.current])
-
-      const queuedFixPromise = generateQueuedAIFix({
-        crawlId: breakdown.crawl_id,
-        projectId,
-        request,
-        target,
-      })
-
-      toast.promise(queuedFixPromise, {
-        loading: `Generating fixes for ${target.issueTypeLabel}…`,
-        success: (conversation) => ({
-          message: `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
-          action: onOpenAIConversation
-            ? {
-                label: "Open chat",
-                onClick: () =>
-                  onOpenAIConversation(conversation.id, {
-                    pillarId: target.pillarId,
-                    bucketIds: [target.bucketId],
-                    issueTypeIds: [target.issueTypeId],
-                  }),
-              }
-            : undefined,
-        }),
-        error: (error) =>
-          error instanceof ApiError
-            ? error.message
-            : "Unable to generate recommended fixes.",
-      })
-
-      const clearPendingTarget = () => {
-        pendingFixTargetKeysRef.current.delete(target.key)
-        setPendingFixTargetKeys([...pendingFixTargetKeysRef.current])
-      }
-      void queuedFixPromise.then(clearPendingTarget, clearPendingTarget)
-    },
-    [breakdown?.crawl_id, onOpenAIConversation, projectId]
-  )
-
-  if (!breakdown || !pillarOptions.length || !availableBucketScopes.length) {
+  if (!breakdown || !pillarOptions.length) {
     return <NoIssueBreakdown />
   }
 
+  const canAct = selectionCount > 0
+
   return (
-    <IssueExplorerContent
-      availableBucketScopes={availableBucketScopes}
-      availableIssueScopes={availableIssueScopes}
-      displayedIssueUrls={displayedIssueUrls}
-      crawlId={crawlId}
-      onBackToIssueTypes={onBackToIssueTypes}
-      onFixAction={onFixAction}
-      onSelectIssueType={onSelectIssueType}
-      onSelectedBucketKeysChange={onSelectedBucketKeysChange}
-      onSelectedIssueTypeKeysChange={onSelectedIssueTypeKeysChange}
-      viewState={{ hasMultipleSources, hasSelectedIssueTypes }}
-      isFixActionPending={isFixActionPending}
-      isLoadingIssueUrls={isLoadingIssueUrls}
-      issueTypePageIndex={issueTypePageIndex}
-      issueTypePageSize={issueTypePageSize}
-      issueTypeRows={issueTypeRows}
-      issueUrlPageIndex={issueUrlPageIndex}
-      issueUrlPageSize={issueUrlPageSize}
-      issueUrlsError={issueUrlsError}
-      paginatedIssueTypeRows={paginatedIssueTypeRows}
-      paginatedMergedIssueUrls={paginatedMergedIssueUrls}
-      totalIssueTypeRows={issueTypeRows.length}
-      pillarOptions={pillarOptions}
-      selectedBucketKeys={selectedBucketKeys}
-      selectedIssueTypeKeys={selectedIssueTypeKeys}
-      selectedPillarIds={selectedPillarIds}
-      selectedPillars={selectedPillars}
-      setIssueTypePageIndex={(v) =>
-        dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_INDEX", payload: v })
-      }
-      setIssueTypePageSize={(v) =>
-        dispatchSelection({ type: "SET_ISSUE_TYPE_PAGE_SIZE", payload: v })
-      }
-      setIssueUrlPageIndex={(v) =>
-        dispatchSelection({ type: "SET_ISSUE_URL_PAGE_INDEX", payload: v })
-      }
-      setIssueUrlPageSize={(v) =>
-        dispatchSelection({ type: "SET_ISSUE_URL_PAGE_SIZE", payload: v })
-      }
-      setSelectedPillarIds={(v) =>
-        dispatchSelection({ type: "SET_PILLAR_IDS", payload: v })
-      }
-    />
+    <div className="px-4 pb-24 lg:px-6 lg:pb-32">
+      <div className="mb-4 grid grid-cols-3 items-center gap-3">
+        <div className="flex min-w-0 items-center justify-start">
+          {drilledBucket ? (
+            <Button
+              onClick={() => dispatch({ type: "DRILL_OUT" })}
+              size="sm"
+              variant="outline"
+            >
+              <ChevronLeftIcon data-icon="inline-start" />
+              Back to buckets
+            </Button>
+          ) : null}
+        </div>
+        <span className="truncate text-center font-medium text-foreground">
+          {drilledBucket?.bucketLabel}
+        </span>
+        <div className="flex items-center justify-end">
+          <Button
+            disabled={!canAct || isSubmittingFix || !projectId}
+            onClick={onRecommendFixes}
+            size="sm"
+          >
+            {isSubmittingFix ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <SparklesIcon className="size-4" />
+            )}
+            Recommend Fixes{selectionCount > 0 ? ` (${selectionCount})` : ""}
+          </Button>
+        </div>
+      </div>
+
+      <div>
+        {drilledBucket ? (
+          <UrlIssueTable
+            checkedKeys={checkedUrlKeys}
+            error={urlError}
+            getRowProps={urlDrag.getRowProps}
+            isLoading={isLoadingUrls}
+            onToggleAll={onToggleAllUrls}
+            onToggleRow={onToggleUrl}
+            rows={paginatedUrls}
+            totalRows={displayedUrls.length}
+          />
+        ) : (
+          <BucketTable
+            checkedKeys={checkedBucketKeys}
+            getRowProps={bucketDrag.getRowProps}
+            hasMultiplePillars={hasMultiplePillars}
+            onDrill={(key) => dispatch({ type: "DRILL_IN", payload: key })}
+            onToggleAll={onToggleAllBuckets}
+            onToggleRow={onToggleBucket}
+            rows={paginatedBucketRows}
+            totalRows={bucketRows.length}
+          />
+        )}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <Button
+          disabled={!canAct}
+          onClick={onExport}
+          size="sm"
+          variant="outline"
+        >
+          <DownloadIcon className="size-4" />
+          Export XLSX
+        </Button>
+        <TablePagination
+          pageIndex={drilledBucket ? urlPageIndex : bucketPageIndex}
+          pageSize={drilledBucket ? urlPageSize : bucketPageSize}
+          setPageIndex={(v) =>
+            dispatch({
+              type: drilledBucket
+                ? "SET_URL_PAGE_INDEX"
+                : "SET_BUCKET_PAGE_INDEX",
+              payload: v,
+            })
+          }
+          setPageSize={(v) =>
+            dispatch({
+              type: drilledBucket ? "SET_URL_PAGE_SIZE" : "SET_BUCKET_PAGE_SIZE",
+              payload: v,
+            })
+          }
+          totalRows={drilledBucket ? displayedUrls.length : bucketRows.length}
+        />
+      </div>
+    </div>
   )
 }
 
-// --- Sync helpers (pure computation, called from render) ---
+// --- Sync helper (pure computation, called from render) ---
 
 type SyncSelectedPillarsArgs = {
   initialPillarId?: string
@@ -522,9 +584,7 @@ function syncSelectedPillars({
   setSelectedPillarIds,
 }: SyncSelectedPillarsArgs) {
   if (!pillarOptions.length) {
-    if (selectedPillarIds.length) {
-      setSelectedPillarIds([])
-    }
+    if (selectedPillarIds.length) setSelectedPillarIds([])
     return
   }
 
@@ -532,96 +592,23 @@ function syncSelectedPillars({
     initialPillarId &&
     pillarOptions.some((pillar) => pillar.id === initialPillarId)
   ) {
-    const nextSelectedPillarIds = [initialPillarId]
-    if (!areStringArraysEqual(selectedPillarIds, nextSelectedPillarIds)) {
-      setSelectedPillarIds(nextSelectedPillarIds)
-    }
+    const next = [initialPillarId]
+    if (!areStringArraysEqual(selectedPillarIds, next)) setSelectedPillarIds(next)
     return
   }
 
-  const nextSelectedPillarIds = selectedPillarIds.filter((pillarId) =>
-    pillarOptions.some((pillar) => pillar.id === pillarId)
+  const valid = selectedPillarIds.filter((id) =>
+    pillarOptions.some((pillar) => pillar.id === id)
   )
 
-  if (!nextSelectedPillarIds.length) {
-    const fallbackPillarIds = [pillarOptions[0].id]
-    if (!areStringArraysEqual(selectedPillarIds, fallbackPillarIds)) {
-      setSelectedPillarIds(fallbackPillarIds)
-    }
+  if (!valid.length) {
+    const all = pillarOptions.map((pillar) => pillar.id)
+    if (!areStringArraysEqual(selectedPillarIds, all)) setSelectedPillarIds(all)
     return
   }
 
-  if (!areStringArraysEqual(nextSelectedPillarIds, selectedPillarIds)) {
-    setSelectedPillarIds(nextSelectedPillarIds)
-  }
+  if (!areStringArraysEqual(valid, selectedPillarIds)) setSelectedPillarIds(valid)
 }
-
-type SyncSelectedBucketsArgs = {
-  availableBucketScopes: BucketScope[]
-  initialPillarId?: string
-  selectedBucketKeys: string[]
-  setSelectedBucketKeys: (values: string[]) => void
-}
-
-function syncSelectedBuckets({
-  availableBucketScopes,
-  initialPillarId,
-  selectedBucketKeys,
-  setSelectedBucketKeys,
-}: SyncSelectedBucketsArgs) {
-  if (!availableBucketScopes.length) {
-    if (selectedBucketKeys.length) {
-      setSelectedBucketKeys([])
-    }
-    return
-  }
-
-  const nextSelectedBucketKeys = selectedBucketKeys.filter((bucketKey) =>
-    availableBucketScopes.some((bucketScope) => bucketScope.key === bucketKey)
-  )
-
-  if (!nextSelectedBucketKeys.length) {
-    const fallbackBucketKeys = initialPillarId
-      ? availableBucketScopes.map((bucketScope) => bucketScope.key)
-      : [availableBucketScopes[0].key]
-    if (!areStringArraysEqual(selectedBucketKeys, fallbackBucketKeys)) {
-      setSelectedBucketKeys(fallbackBucketKeys)
-    }
-    return
-  }
-
-  if (!areStringArraysEqual(nextSelectedBucketKeys, selectedBucketKeys)) {
-    setSelectedBucketKeys(nextSelectedBucketKeys)
-  }
-}
-
-type SyncSelectedIssueTypesArgs = {
-  availableIssueScopes: IssueScope[]
-  selectedIssueTypeKeys: string[]
-  onApply: (keys: string[]) => void
-}
-
-function syncSelectedIssueTypes({
-  availableIssueScopes,
-  selectedIssueTypeKeys,
-  onApply,
-}: SyncSelectedIssueTypesArgs) {
-  const nextSelectedIssueTypeKeys = selectedIssueTypeKeys.filter(
-    (issueTypeKey) =>
-      availableIssueScopes.some((issueScope) => issueScope.key === issueTypeKey)
-  )
-
-  const resolvedKeys =
-    nextSelectedIssueTypeKeys.length === 0 && availableIssueScopes.length > 0
-      ? availableIssueScopes.map((s) => s.key)
-      : nextSelectedIssueTypeKeys
-
-  if (!areStringArraysEqual(resolvedKeys, selectedIssueTypeKeys)) {
-    onApply(resolvedKeys)
-  }
-}
-
-// --- Presentational sub-components ---
 
 function NoIssueBreakdown() {
   return (
@@ -634,260 +621,6 @@ function NoIssueBreakdown() {
           </CardDescription>
         </CardHeader>
       </Card>
-    </div>
-  )
-}
-
-type IssueExplorerContentProps = {
-  availableBucketScopes: BucketScope[]
-  availableIssueScopes: IssueScope[]
-  displayedIssueUrls: MergedIssueUrlRow[]
-  onBackToIssueTypes: () => void
-  onFixAction: (target: AIFixTarget) => void
-  onSelectIssueType: (key: string) => void
-  onSelectedBucketKeysChange: (keys: string[]) => void
-  onSelectedIssueTypeKeysChange: (keys: string[]) => void
-  isLoadingIssueUrls: boolean
-  issueTypePageIndex: number
-  issueTypePageSize: number
-  issueTypeRows: IssueScope[]
-  issueUrlPageIndex: number
-  issueUrlPageSize: number
-  issueUrlsError: string
-  crawlId: string
-  paginatedIssueTypeRows: IssueScope[]
-  paginatedMergedIssueUrls: MergedIssueUrlRow[]
-  totalIssueTypeRows: number
-  pillarOptions: Array<{ id: string; label: string }>
-  selectedBucketKeys: string[]
-  selectedIssueTypeKeys: string[]
-  selectedPillarIds: string[]
-  selectedPillars: Array<{ label: string }>
-  setIssueTypePageIndex: (v: number) => void
-  setIssueTypePageSize: (v: number) => void
-  setIssueUrlPageIndex: (v: number) => void
-  setIssueUrlPageSize: (v: number) => void
-  setSelectedPillarIds: (v: string[]) => void
-  /** Combined view state flags */
-  viewState: {
-    hasMultipleSources: boolean
-    hasSelectedIssueTypes: boolean
-  }
-  isFixActionPending: (key: string) => boolean
-}
-
-function IssueExplorerContent(props: IssueExplorerContentProps) {
-  const {
-    availableBucketScopes,
-    crawlId,
-    availableIssueScopes,
-    displayedIssueUrls,
-    onBackToIssueTypes,
-    onFixAction,
-    onSelectIssueType,
-    onSelectedBucketKeysChange,
-    onSelectedIssueTypeKeysChange,
-    isLoadingIssueUrls,
-    issueTypePageIndex,
-    issueTypePageSize,
-    issueTypeRows,
-    issueUrlPageIndex,
-    issueUrlPageSize,
-    issueUrlsError,
-    totalIssueTypeRows,
-    paginatedIssueTypeRows,
-    paginatedMergedIssueUrls,
-    pillarOptions,
-    selectedBucketKeys,
-    selectedIssueTypeKeys,
-    selectedPillarIds,
-    selectedPillars,
-    setIssueTypePageIndex,
-    setIssueTypePageSize,
-    setIssueUrlPageIndex,
-    setIssueUrlPageSize,
-    setSelectedPillarIds,
-    viewState,
-    isFixActionPending,
-  } = props
-  const { hasMultipleSources, hasSelectedIssueTypes } = viewState
-
-  const handleExportXlsx = useCallback(async () => {
-    if (!crawlId) return
-
-    const params = new URLSearchParams()
-    if (selectedPillarIds.length)
-      params.set("pillar_ids", selectedPillarIds.join(","))
-    if (selectedBucketKeys.length)
-      params.set("bucket_keys", selectedBucketKeys.join(","))
-    if (selectedIssueTypeKeys.length)
-      params.set("issue_type_keys", selectedIssueTypeKeys.join(","))
-
-    try {
-      const response = await fetch(
-        buildApiUrl(`/crawls/${crawlId}/score-breakdown/export.xlsx?${params}`),
-        { credentials: "include" }
-      )
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        let errorMsg = "Unable to export crawl issues."
-        try {
-          const body = JSON.parse(errorText)
-          if (typeof (body as Record<string, unknown>).error === "string") {
-            errorMsg = (body as Record<string, unknown>).error as string
-          }
-        } catch {
-          // use default message
-        }
-        throw new Error(errorMsg)
-      }
-
-      const blob = await response.blob()
-      const filename = getExportFilename(
-        response.headers.get("content-disposition"),
-        `crawl-${crawlId.slice(0, 8)}-issues.xlsx`
-      )
-      downloadBlob(blob, filename)
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to export crawl issues."
-      )
-    }
-  }, [crawlId, selectedPillarIds, selectedBucketKeys, selectedIssueTypeKeys])
-
-  return (
-    <div className="px-4 pb-24 lg:px-6 lg:pb-32">
-      <div className="mb-4 flex w-full items-start justify-between gap-4">
-        <ScopeBreadcrumbs
-          availableBucketScopes={availableBucketScopes}
-          availableIssueScopes={availableIssueScopes}
-          pillarOptions={pillarOptions}
-          selectedBucketKeys={selectedBucketKeys}
-          selectedIssueTypeKeys={selectedIssueTypeKeys}
-          selectedPillarIds={selectedPillarIds}
-          selectedPillarLabels={selectedPillars.map((pillar) => pillar.label)}
-          setSelectedBucketKeys={onSelectedBucketKeysChange}
-          setSelectedIssueTypeKeys={onSelectedIssueTypeKeysChange}
-          setSelectedPillarIds={setSelectedPillarIds}
-        />
-        <TablePagination
-          pageIndex={
-            hasSelectedIssueTypes ? issueUrlPageIndex : issueTypePageIndex
-          }
-          pageSize={
-            hasSelectedIssueTypes ? issueUrlPageSize : issueTypePageSize
-          }
-          rowLabel={hasSelectedIssueTypes ? "URLs" : "issue types"}
-          setPageIndex={
-            hasSelectedIssueTypes ? setIssueUrlPageIndex : setIssueTypePageIndex
-          }
-          setPageSize={
-            hasSelectedIssueTypes ? setIssueUrlPageSize : setIssueTypePageSize
-          }
-          totalRows={
-            hasSelectedIssueTypes
-              ? displayedIssueUrls.length
-              : issueTypeRows.length
-          }
-        />
-      </div>
-
-      <div className="mb-4 flex justify-end">
-        <Button
-          disabled={!crawlId || !selectedIssueTypeKeys.length}
-          onClick={handleExportXlsx}
-          size="sm"
-          variant="outline"
-        >
-          <DownloadIcon className="size-4" />
-          Export XLSX
-        </Button>
-      </div>
-
-      <IssueExplorerTableArea
-        displayedIssueUrls={displayedIssueUrls}
-        hasMultipleSources={hasMultipleSources}
-        hasSelectedIssueTypes={hasSelectedIssueTypes}
-        isFixActionPending={isFixActionPending}
-        isLoadingIssueUrls={isLoadingIssueUrls}
-        issueUrlsError={issueUrlsError}
-        onBackToIssueTypes={onBackToIssueTypes}
-        onFixAction={onFixAction}
-        onSelectIssueType={onSelectIssueType}
-        paginatedIssueTypeRows={paginatedIssueTypeRows}
-        paginatedMergedIssueUrls={paginatedMergedIssueUrls}
-        totalIssueTypeRows={totalIssueTypeRows}
-      />
-    </div>
-  )
-}
-
-type IssueExplorerTableAreaProps = {
-  displayedIssueUrls: MergedIssueUrlRow[]
-  hasMultipleSources: boolean
-  hasSelectedIssueTypes: boolean
-  isFixActionPending: (key: string) => boolean
-  isLoadingIssueUrls: boolean
-  issueUrlsError: string
-  onBackToIssueTypes: () => void
-  onFixAction: (target: AIFixTarget) => void
-  onSelectIssueType: (key: string) => void
-  paginatedIssueTypeRows: IssueScope[]
-  paginatedMergedIssueUrls: MergedIssueUrlRow[]
-  totalIssueTypeRows: number
-}
-
-function IssueExplorerTableArea({
-  displayedIssueUrls,
-  hasMultipleSources,
-  hasSelectedIssueTypes,
-  isFixActionPending,
-  isLoadingIssueUrls,
-  issueUrlsError,
-  onBackToIssueTypes,
-  onFixAction,
-  onSelectIssueType,
-  paginatedIssueTypeRows,
-  paginatedMergedIssueUrls,
-  totalIssueTypeRows,
-}: IssueExplorerTableAreaProps) {
-  return (
-    <div className="min-h-[32rem]">
-      {hasSelectedIssueTypes ? (
-        <>
-          <Button
-            className="mb-4"
-            onClick={onBackToIssueTypes}
-            size="sm"
-            variant="outline"
-          >
-            <ChevronLeftIcon data-icon="inline-start" />
-            Back to issue types
-          </Button>
-          <UrlIssueTable
-            error={issueUrlsError}
-            hasMultipleSources={hasMultipleSources}
-            isFixActionPending={isFixActionPending}
-            isLoading={isLoadingIssueUrls}
-            onFixAction={onFixAction}
-            rows={paginatedMergedIssueUrls}
-            title="Selected issue types"
-            totalRows={displayedIssueUrls.length}
-          />
-        </>
-      ) : (
-        <IssueTypeTable
-          hasMultipleSources={hasMultipleSources}
-          isFixActionPending={isFixActionPending}
-          onFixAction={onFixAction}
-          rows={paginatedIssueTypeRows}
-          totalRows={totalIssueTypeRows}
-          onSelectIssueType={onSelectIssueType}
-        />
-      )}
     </div>
   )
 }
