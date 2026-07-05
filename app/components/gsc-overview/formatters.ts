@@ -31,12 +31,14 @@ export function formatMetricDelta(
   currentValue: number,
   previousValue: number
 ) {
-  if (previousValue === 0) return ""
+  if (previousValue === 0 && currentValue === 0) return ""
 
   if (metricKey === "position") {
     const delta = previousValue - currentValue
     return `${delta >= 0 ? "+" : ""}${delta.toFixed(1)} vs previous window`
   }
+
+  if (previousValue === 0) return "New vs previous window"
 
   const delta = ((currentValue - previousValue) / previousValue) * 100
   return `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}% vs previous window`

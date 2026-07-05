@@ -26,6 +26,19 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 
+const ALLOWED_GSC_AUTH_HOSTS = new Set(["accounts.google.com"])
+
+function isAllowedGSCAuthURL(rawURL: string) {
+  try {
+    const parsed = new URL(rawURL)
+    return (
+      parsed.protocol === "https:" && ALLOWED_GSC_AUTH_HOSTS.has(parsed.hostname)
+    )
+  } catch {
+    return false
+  }
+}
+
 export function gscStatusQueryKey(projectId: string) {
   return ["gsc-status", projectId] as const
 }
@@ -124,6 +137,11 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         `/projects/${activeProject.id}/gsc/connect/start`,
         { return_path: window.location.pathname + window.location.search }
       )
+      if (!isAllowedGSCAuthURL(response.auth_url)) {
+        throw new Error(
+          "Unable to start Google Search Console connection: unexpected auth URL."
+        )
+      }
       window.location.href = response.auth_url
     } catch (error) {
       setGscConnectErrorMessage(

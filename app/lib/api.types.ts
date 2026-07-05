@@ -467,6 +467,24 @@ export type AIAuditListResponse = {
   }
 }
 
+export type BucketTrendResponse = { id: string; label: string; score: number }
+export type PillarTrendResponse = {
+  id: string
+  label: string
+  score: number
+  buckets?: BucketTrendResponse[]
+}
+export type CrawlTrendSnapshot = {
+  crawl_id: string
+  completed_at: string
+  overall_score: number
+  seo_score: number
+  aeo_score: number
+  pagespeed_score: number
+  pillars?: PillarTrendResponse[]
+}
+export type ProjectBucketTrendsResponse = { crawls: CrawlTrendSnapshot[] }
+
 export type AppBootstrapResponse = {
   me: MeResponse
   projects: ProjectResponse[]

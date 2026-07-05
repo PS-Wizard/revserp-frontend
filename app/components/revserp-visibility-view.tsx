@@ -215,7 +215,7 @@ function ResponseBody({ run }: { run: AIAuditRunResponse }) {
 
   if (items.length === 0) {
     return (
-      <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+      <p className="text-sm leading-relaxed break-words whitespace-pre-wrap text-muted-foreground">
         {raw || "No response."}
       </p>
     )
@@ -242,9 +242,9 @@ function ResponseBody({ run }: { run: AIAuditRunResponse }) {
               {idx + 1}
             </span>
             <span
-              className={
+              className={`break-words ${
                 isTarget ? "font-medium text-foreground" : "text-foreground/80"
-              }
+              }`}
             >
               {item.text}
               {isTarget && (
@@ -307,7 +307,7 @@ function ResponseTabs({
   }
 
   return (
-    <div className="flex flex-col gap-4 px-4 lg:px-6">
+    <div className="flex min-w-0 flex-col gap-4 px-4 lg:px-6">
       <Tabs defaultValue={models[0]} className="gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -352,7 +352,7 @@ function ResponseTabs({
                         className="flex flex-col gap-3 px-5 py-4"
                       >
                         <div className="flex items-start justify-between gap-3">
-                          <h4 className="text-sm leading-snug font-medium text-foreground">
+                          <h4 className="min-w-0 break-words text-sm leading-snug font-medium text-foreground">
                             <span className="mr-1.5 text-muted-foreground">
                               {order}.
                             </span>
@@ -426,7 +426,7 @@ function VisibilityGrid({
   const cols = models.length > 0 ? models : skeletonModels
 
   return (
-    <div className="flex flex-col gap-3 px-4 lg:px-6">
+    <div className="flex min-w-0 flex-col gap-3 px-4 lg:px-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold">Visibility Matrix</h3>
@@ -437,8 +437,8 @@ function VisibilityGrid({
         <MatrixLegend />
       </div>
 
-      <Card className="gap-0 overflow-hidden border-border/50 py-0">
-        <div className="overflow-x-auto">
+      <Card className="min-w-0 gap-0 overflow-hidden border-border/50 py-0">
+        <div className="min-w-0 overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-border/50 bg-muted/40 backdrop-blur">
@@ -667,7 +667,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
     Math.max(1, Array.from(new Set(runs.map((r) => r.model_name))).length)
 
   return (
-    <div className="@container/main flex flex-1 flex-col gap-8 py-8">
+    <div className="@container/main flex min-w-0 flex-1 flex-col gap-8 py-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 px-4 lg:px-6">
         <div>

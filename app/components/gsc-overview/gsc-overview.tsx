@@ -152,6 +152,7 @@ export function GSCOverview({
     status,
     createInitialState
   )
+  const latestRequestedSiteURLRef = useRef<string | null>(null)
 
   const countryDisplayNames = useMemo(
     () =>
@@ -286,6 +287,10 @@ export function GSCOverview({
       return
     }
 
+    // Latest-wins guard: if another site switch starts before this one
+    // finishes, bail out after each await so a slower, stale request can't
+    // clobber the dropdown/backend state set by a newer request.
+    latestRequestedSiteURLRef.current = nextSiteURL
     dispatch({ type: "SET_SELECTION_ERROR", value: "" })
     dispatch({ type: "SET_SAVING", value: true })
     try {
@@ -295,8 +300,11 @@ export function GSCOverview({
           site_url: nextSiteURL,
         }
       )
+      if (latestRequestedSiteURLRef.current !== nextSiteURL) return
       await onRefreshOverview()
+      if (latestRequestedSiteURLRef.current !== nextSiteURL) return
     } catch (error) {
+      if (latestRequestedSiteURLRef.current !== nextSiteURL) return
       dispatch({
         type: "SET_SELECTION_ERROR",
         value:
@@ -305,7 +313,9 @@ export function GSCOverview({
             : "Unable to switch the Search Console property.",
       })
     } finally {
-      dispatch({ type: "SET_SAVING", value: false })
+      if (latestRequestedSiteURLRef.current === nextSiteURL) {
+        dispatch({ type: "SET_SAVING", value: false })
+      }
     }
   }
 

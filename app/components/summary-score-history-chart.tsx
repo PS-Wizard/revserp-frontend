@@ -14,8 +14,11 @@ import {
 } from "~/components/ui/card"
 import { useApexChart } from "~/hooks/use-apex-chart"
 import { getCrawlTimestamp } from "~/lib/crawl"
-import { isNumber } from "~/components/trend-sparkline"
 import { getPillarChartColor } from "~/lib/pillar-colors"
+import {
+  formatTooltipDateTime,
+  getScoreRange,
+} from "~/components/score-history-chart-utils"
 
 const SCORE_SERIES = [
   { key: "overall", label: "Overall", color: "rgba(255,255,255,0.50)" },
@@ -27,6 +30,8 @@ const SCORE_SERIES = [
     color: getPillarChartColor("pagespeed", 0),
   },
 ] as const
+
+const SCORE_SERIES_KEYS = SCORE_SERIES.map((scoreSeries) => scoreSeries.key)
 
 export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
   activeProjectName,
@@ -64,7 +69,10 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
       })),
     [chartRows]
   )
-  const yRange = useMemo(() => getScoreRange(chartRows), [chartRows])
+  const yRange = useMemo(
+    () => getScoreRange(chartRows, SCORE_SERIES_KEYS),
+    [chartRows]
+  )
 
   const chartOptions = useMemo<ApexOptions>(
     () => ({
@@ -182,43 +190,3 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
   )
 })
 
-function getScoreRange(rows: Array<Record<string, number | null>>) {
-  const values: number[] = []
-  for (const row of rows) {
-    for (const scoreSeries of SCORE_SERIES) {
-      const value = row[scoreSeries.key]
-      if (isNumber(value)) {
-        values.push(value)
-      }
-    }
-  }
-
-  if (!values.length) {
-    return { min: 0, max: 100 }
-  }
-
-  const min = Math.max(0, Math.floor(Math.min(...values) - 8))
-  const max = Math.min(100, Math.ceil(Math.max(...values) + 8))
-
-  if (max - min < 18) {
-    const midpoint = (min + max) / 2
-    return {
-      min: Math.max(0, Math.floor(midpoint - 9)),
-      max: Math.min(100, Math.ceil(midpoint + 9)),
-    }
-  }
-
-  return { min, max }
-}
-
-const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-})
-
-function formatTooltipDateTime(value: number) {
-  return tooltipDateTimeFormatter.format(new Date(value))
-}

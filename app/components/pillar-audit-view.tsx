@@ -4,6 +4,7 @@ import { memo, useMemo, useState } from "react"
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
+import { NumberPopIn } from "~/components/number-pop-in"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import {
   Card,
@@ -21,21 +22,31 @@ import { getPillarChartColor } from "~/lib/pillar-colors"
 import {
   TrendBadge,
   TrendSparkline,
-  formatScore,
   getRoundedDelta,
   getTrendLabel,
   getTrendSummary,
 } from "~/components/trend-sparkline"
 
+export type CrawlBreakdownScores = {
+  overall_score: number
+  pillars: Array<{
+    id: string
+    label: string
+    score: number
+    buckets: Array<{ id: string; label: string; score: number }>
+  }>
+}
+
 export type CrawlBreakdown = {
   crawl: CrawlResponse
-  breakdown: ScoreBreakdownResponse
+  breakdown: CrawlBreakdownScores
 }
 
 type PillarAuditViewProps = {
   activeProjectName?: string
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
+  currentCrawlId?: string
   onOpenAIConversation?: (
     conversationId: string,
     scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
@@ -49,11 +60,15 @@ export const PillarAuditView = memo(function PillarAuditView({
   activeProjectName,
   crawlBreakdowns,
   currentBreakdown,
+  currentCrawlId,
   onOpenAIConversation,
   pillarId,
   projectId,
   title,
 }: PillarAuditViewProps) {
+  const currentEntry =
+    crawlBreakdowns.find(({ crawl }) => crawl.id === currentCrawlId) ??
+    crawlBreakdowns[0]
   const currentPillar = currentBreakdown?.pillars.find(
     (pillar) => pillar.id === pillarId
   )
@@ -77,11 +92,12 @@ export const PillarAuditView = memo(function PillarAuditView({
         />
         <BucketScoreCards
           crawlBreakdowns={crawlBreakdowns}
+          currentCrawlId={currentCrawlId}
           pillarId={pillarId}
           psiResult={
             pillarId === "pagespeed"
               ? ((
-                  crawlBreakdowns[0]?.crawl
+                  currentEntry?.crawl
                     ?.google_psi_results as GooglePSIStoredResult[]
                 )?.[0] ?? null)
               : null
@@ -111,24 +127,39 @@ export const PillarAuditView = memo(function PillarAuditView({
 
 const BucketScoreCards = memo(function BucketScoreCards({
   crawlBreakdowns,
+  currentCrawlId,
   pillarId,
   psiResult,
 }: {
   crawlBreakdowns: CrawlBreakdown[]
+  currentCrawlId?: string
   pillarId: string
   psiResult: GooglePSIStoredResult | null
 }) {
   const [psiDrawerOpen, setPsiDrawerOpen] = useState(false)
+  // crawlBreakdowns is the full history sorted newest-first. Locate the crawl
+  // the user has selected (falling back to the newest) so the cards, trend
+  // deltas, and pop-in replay key track the selection rather than always the
+  // newest crawl.
+  const currentIndex = useMemo(() => {
+    const idx = crawlBreakdowns.findIndex(
+      ({ crawl }) => crawl.id === currentCrawlId
+    )
+    return idx >= 0 ? idx : 0
+  }, [crawlBreakdowns, currentCrawlId])
   const buckets = useMemo(
-    () => getLatestPillarBuckets(crawlBreakdowns, pillarId),
-    [crawlBreakdowns, pillarId]
+    () =>
+      crawlBreakdowns[currentIndex]?.breakdown.pillars.find(
+        (pillar) => pillar.id === pillarId
+      )?.buckets ?? [],
+    [crawlBreakdowns, currentIndex, pillarId]
   )
   const previousPillar = useMemo(
     () =>
-      crawlBreakdowns[1]?.breakdown.pillars.find(
+      crawlBreakdowns[currentIndex + 1]?.breakdown.pillars.find(
         (pillar) => pillar.id === pillarId
       ),
-    [crawlBreakdowns, pillarId]
+    [crawlBreakdowns, currentIndex, pillarId]
   )
   const chronologicalBreakdowns = useMemo(
     () => [...crawlBreakdowns].reverse(),
@@ -183,7 +214,17 @@ const BucketScoreCards = memo(function BucketScoreCards({
               </CardHeader>
               <div className="flex flex-1 items-center justify-center px-6 py-4">
                 <CardTitle className="text-3xl font-semibold tabular-nums @[250px]/card:text-4xl">
-                  {formatScore(bucket.score)}
+                  {bucket.score === undefined ? (
+                    "—"
+                  ) : (
+                    <>
+                      <NumberPopIn
+                        value={Math.round(bucket.score)}
+                        replayKey={currentCrawlId}
+                      />
+                      %
+                    </>
+                  )}
                 </CardTitle>
               </div>
               <CardFooter className="flex items-end justify-between gap-4 text-sm">
@@ -209,14 +250,3 @@ const BucketScoreCards = memo(function BucketScoreCards({
     </div>
   )
 })
-
-function getLatestPillarBuckets(
-  crawlBreakdowns: CrawlBreakdown[],
-  pillarId: string
-) {
-  return (
-    crawlBreakdowns[0]?.breakdown.pillars.find(
-      (pillar) => pillar.id === pillarId
-    )?.buckets ?? []
-  )
-}

@@ -57,6 +57,7 @@ import type {
   ScoringConfig,
 } from "~/lib/api.types"
 import { ScoringEditor } from "./internal/scoring/editor"
+import { TablePagination } from "~/components/issue-explorer/scope-controls"
 import {
   Dialog,
   DialogClose,
@@ -667,6 +668,11 @@ function AccountsTab() {
   const [disableTarget, setDisableTarget] = useState<
     { user: UserRow } | "bulk" | null
   >(null)
+  // /admin/users returns every user with no limit/offset support, so we
+  // paginate the render client-side to keep the DOM (and input latency)
+  // bounded at scale while search/filter still runs over the full list.
+  const [pageIndex, setPageIndex] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -702,19 +708,26 @@ function AccountsTab() {
     )
   })
 
-  const someFilteredSelected = filtered.some((u) => selectedIds.has(u.id))
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const clampedPageIndex = Math.min(pageIndex, pageCount - 1)
+  const paginated = filtered.slice(
+    clampedPageIndex * pageSize,
+    clampedPageIndex * pageSize + pageSize
+  )
+
+  const someFilteredSelected = paginated.some((u) => selectedIds.has(u.id))
   const allFilteredSelected =
-    filtered.length > 0 && filtered.every((u) => selectedIds.has(u.id))
+    paginated.length > 0 && paginated.every((u) => selectedIds.has(u.id))
 
   const handleSelectAll = () => {
     if (allFilteredSelected) {
-      const filteredIds = new Set(filtered.map((u) => u.id))
+      const pageIds = new Set(paginated.map((u) => u.id))
       const next = new Set(selectedIds)
-      for (const id of filteredIds) next.delete(id)
+      for (const id of pageIds) next.delete(id)
       setSelectedIds(next)
     } else {
       const next = new Set(selectedIds)
-      for (const u of filtered) next.add(u.id)
+      for (const u of paginated) next.add(u.id)
       setSelectedIds(next)
     }
   }
@@ -836,7 +849,10 @@ function AccountsTab() {
             className="pl-8"
             placeholder="Search users..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPageIndex(0)
+            }}
           />
         </div>
         <Button
@@ -897,7 +913,7 @@ function AccountsTab() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filtered.map((user) => (
+          {paginated.map((user) => (
             <TableRow
               key={user.id}
               data-state={selectedIds.has(user.id) ? "selected" : undefined}
@@ -1027,6 +1043,18 @@ function AccountsTab() {
           )}
         </TableBody>
       </Table>
+
+      {filtered.length > 0 && (
+        <div className="flex justify-end">
+          <TablePagination
+            pageIndex={clampedPageIndex}
+            pageSize={pageSize}
+            setPageIndex={setPageIndex}
+            setPageSize={setPageSize}
+            totalRows={filtered.length}
+          />
+        </div>
+      )}
 
       <Dialog
         open={disableTarget !== null}

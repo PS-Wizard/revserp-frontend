@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, redirect, useLoaderData, useNavigate } from "react-router"
 import { Asterisk } from "lucide-react"
 
@@ -12,6 +12,10 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
+
+export function meta() {
+  return [{ name: "referrer", content: "no-referrer" }]
+}
 
 export type InviteLookupResponse = {
   id: string
@@ -91,6 +95,13 @@ export default function InvitePage() {
   const canAcceptInvite =
     invite !== null && invite.status === "active" && isAuthenticated
   const statusMessage = getInviteStatusMessage(invite, inviteErrorMessage)
+
+  useEffect(() => {
+    // Scrub the invite secret out of the address bar / history entry once
+    // the loader has already consumed it, so it doesn't linger in browser
+    // history any longer than the initial page load requires.
+    window.history.replaceState(null, "", "/invite")
+  }, [])
 
   async function acceptInvite() {
     if (!canAcceptInvite || isAcceptingInvite) {

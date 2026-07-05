@@ -17,6 +17,7 @@ import { IssueExplorer } from "~/components/issue-explorer"
 import {
   PillarAuditView,
   type CrawlBreakdown,
+  type CrawlBreakdownScores,
 } from "~/components/pillar-audit-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
@@ -44,6 +45,7 @@ import type {
   AppBootstrapResponse,
   CrawlResponse,
   MeResponse,
+  ProjectBucketTrendsResponse,
   ProjectResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
@@ -163,9 +165,6 @@ export default function AppPage() {
     null
   )
   const [isNewChat, setIsNewChat] = useState(false)
-  const [extraBreakdowns, setExtraBreakdowns] = useState<CrawlBreakdown[]>([])
-  // Cache fetched extra breakdowns by crawl id to avoid re-fetching on project revisit.
-  const extraBreakdownCacheRef = useRef<Map<string, CrawlBreakdown>>(new Map())
 
   const sortedCrawls = useMemo(
     () =>
@@ -271,68 +270,55 @@ export default function AppPage() {
     revalidate: revalidateIfIdle,
   })
 
-  // Fetch up to 2 extra score-breakdowns for chart history — gated to the
-  // summary tab only (sole consumer). Uses an AbortController to cancel on
-  // cleanup. Caches by crawl id across project revisits.
-  useEffect(() => {
-    if (view !== "revserp-audit" || auditTab !== "summary") return
+  // Fetch compact per-crawl bucket-score history for the full crawl history,
+  // ungated by tab so SEO/AEO/PageSpeed tabs get real trend data too (not
+  // just the current crawl). One request per project via the dedicated
+  // bucket-trends endpoint, joined with sortedCompletedCrawls (source of
+  // truth for the full CrawlResponse fields like google_psi_results).
+  const bucketTrendsQuery = useQuery({
+    queryKey: ["bucket-trends", activeProject?.id],
+    queryFn: () =>
+      clientApiFetch<ProjectBucketTrendsResponse>(
+        `/projects/${activeProject!.id}/bucket-trends?limit=50`
+      ),
+    enabled: view === "revserp-audit" && !!activeProject?.id,
+    staleTime: 60_000,
+  })
 
-    const alreadyFetched = new Set([
-      ...crawlBreakdowns.map(({ crawl }) => crawl.id),
-      ...extraBreakdownCacheRef.current.keys(),
-    ])
-    const toFetch = sortedCompletedCrawls
-      .filter((crawl) => !alreadyFetched.has(crawl.id))
-      .slice(0, 2)
-
-    if (toFetch.length === 0) {
-      // Populate from cache for this project.
-      const cached = sortedCompletedCrawls
-        .map((crawl) => extraBreakdownCacheRef.current.get(crawl.id))
-        .filter((bd): bd is CrawlBreakdown => bd !== undefined)
-      setExtraBreakdowns(cached)
-      return
+  const trendCrawlBreakdowns = useMemo(() => {
+    const snapshots = bucketTrendsQuery.data?.crawls ?? []
+    const crawlById = new Map(sortedCompletedCrawls.map((c) => [c.id, c]))
+    const result: CrawlBreakdown[] = []
+    for (const snap of snapshots) {
+      const crawl = crawlById.get(snap.crawl_id)
+      if (!crawl) continue
+      result.push({
+        crawl,
+        breakdown: {
+          overall_score: snap.overall_score,
+          pillars: (snap.pillars ?? []).map((p) => ({
+            id: p.id,
+            label: p.label,
+            score: p.score,
+            buckets: (p.buckets ?? []).map((b) => ({
+              id: b.id,
+              label: b.label,
+              score: b.score,
+            })),
+          })),
+        },
+      })
     }
-
-    const controller = new AbortController()
-    void Promise.allSettled(
-      toFetch.map((crawl) =>
-        clientApiFetch<ScoreBreakdownResponse>(
-          `/crawls/${crawl.id}/score-breakdown`,
-          { signal: controller.signal }
-        ).then((breakdown) => ({ crawl, breakdown }))
-      )
-    ).then((results) => {
-      if (controller.signal.aborted) return
-      for (const r of results) {
-        if (r.status === "fulfilled") {
-          extraBreakdownCacheRef.current.set(r.value.crawl.id, r.value)
-        }
-      }
-      const cached = sortedCompletedCrawls
-        .map((crawl) => extraBreakdownCacheRef.current.get(crawl.id))
-        .filter((bd): bd is CrawlBreakdown => bd !== undefined)
-      setExtraBreakdowns(cached)
-    })
-
-    return () => {
-      controller.abort()
-    }
-  }, [activeProject?.id, view, auditTab]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Reset extra breakdowns and cache on project change.
-  useEffect(() => {
-    setExtraBreakdowns([])
-    extraBreakdownCacheRef.current = new Map()
-  }, [activeProject?.id])
+    return result
+  }, [bucketTrendsQuery.data, sortedCompletedCrawls])
 
   const allCrawlBreakdowns = useMemo(() => {
     const seen = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
-    const extras = extraBreakdowns.filter(({ crawl }) => !seen.has(crawl.id))
+    const extras = trendCrawlBreakdowns.filter(({ crawl }) => !seen.has(crawl.id))
     return [...crawlBreakdowns, ...extras].sort(
       (a, b) => getCrawlTimestamp(b.crawl) - getCrawlTimestamp(a.crawl)
     )
-  }, [crawlBreakdowns, extraBreakdowns])
+  }, [crawlBreakdowns, trendCrawlBreakdowns])
 
   const previousCrawl = useMemo(() => {
     const idx = sortedCompletedCrawls.findIndex(
@@ -429,6 +415,7 @@ export default function AppPage() {
       (crawl) => crawl.id === previousCrawl?.id
     ) ?? previousCrawl
 
+
   const { data: visibilityAuditsList } = useQuery({
     queryKey: activeProject?.id
       ? ["ai-audits-list", activeProject.id]
@@ -465,65 +452,11 @@ export default function AppPage() {
       )
     : undefined
 
-  const previousVisibilityAuditId = visibilityAuditsList?.ai_audits.find(
-    (a) => a.crawl_id === stablePreviousCrawl?.id
-  )?.id
-
-  const { data: previousVisibilityAudit } = useQuery({
-    queryKey: previousVisibilityAuditId
-      ? ["ai-audit", previousVisibilityAuditId]
-      : ["ai-audit-disabled"],
-    queryFn: () =>
-      clientApiFetch<AIAuditResponse>(
-        `/ai-audits/${previousVisibilityAuditId!}`
-      ),
-    enabled: Boolean(previousVisibilityAuditId),
-  })
-
-  const previousVisibilitySuccessRuns = (
-    previousVisibilityAudit?.runs ?? []
-  ).filter((r) => r.status === "success")
-  const hasPreviousVisibility = previousVisibilitySuccessRuns.length > 0
-  const previousVisibilityRate = hasPreviousVisibility
-    ? Math.round(
-        (previousVisibilitySuccessRuns.filter((r) => r.mentioned_target)
-          .length /
-          previousVisibilitySuccessRuns.length) *
-          100
-      )
-    : undefined
-
-  const currentOverall = useMemo(
-    () =>
-      computeBlendedOverall({
-        seo: stableCurrentCrawl?.seo_score,
-        aeo: stableCurrentCrawl?.aeo_score,
-        pagespeed: stableCurrentCrawl?.pagespeed_score,
-        visibility: currentVisibilityRate,
-      }),
-    [
-      stableCurrentCrawl?.seo_score,
-      stableCurrentCrawl?.aeo_score,
-      stableCurrentCrawl?.pagespeed_score,
-      currentVisibilityRate,
-    ]
-  )
-
-  const previousOverall = useMemo(
-    () =>
-      computeBlendedOverall({
-        seo: stablePreviousCrawl?.seo_score,
-        aeo: stablePreviousCrawl?.aeo_score,
-        pagespeed: stablePreviousCrawl?.pagespeed_score,
-        visibility: previousVisibilityRate,
-      }),
-    [
-      stablePreviousCrawl?.seo_score,
-      stablePreviousCrawl?.aeo_score,
-      stablePreviousCrawl?.pagespeed_score,
-      previousVisibilityRate,
-    ]
-  )
+  // Render the backend-computed overall score (honors org-configurable
+  // overall_weights and the backend min-score clamp) rather than a
+  // client-side blend, so the dashboard matches crawl history/exports.
+  const currentOverall = stableCurrentCrawl?.overall_score ?? null
+  const previousOverall = stablePreviousCrawl?.overall_score ?? null
 
   const currentBlendWeights = useMemo(
     () =>
@@ -625,8 +558,16 @@ export default function AppPage() {
     [trackCrawl]
   )
 
+  // exportPdf is redefined on every render by usePdfExport; route through a
+  // ref so onExportAudit keeps a stable identity for AppNavbar's React.memo.
+  const exportPdfRef = useRef(exportPdf)
+  exportPdfRef.current = exportPdf
+  const handleExportAudit = useCallback(() => {
+    void exportPdfRef.current()
+  }, [])
+
   return (
-    <main className="min-h-svh bg-background text-foreground">
+    <main className="min-h-svh overflow-x-clip bg-background text-foreground">
       {cancelDialog}
       <AppNavbar
         activeProjectId={activeProject?.id}
@@ -639,7 +580,7 @@ export default function AppPage() {
         onViewChange={setView}
         onSelectConversation={handleOpenAIConversation}
         onNewChat={handleNewAIChat}
-        onExportAudit={() => void exportPdf()}
+        onExportAudit={handleExportAudit}
         isExportingAudit={isExporting}
         organizationId={me.active_org_id}
         projects={projects}
@@ -704,6 +645,7 @@ export default function AppPage() {
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
+                  currentCrawlId={stableCurrentCrawl?.id}
                   currentBreakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="seo"
@@ -716,6 +658,7 @@ export default function AppPage() {
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
+                  currentCrawlId={stableCurrentCrawl?.id}
                   currentBreakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="aeo"
@@ -728,6 +671,7 @@ export default function AppPage() {
                 <PillarAuditView
                   activeProjectName={activeProject?.name}
                   crawlBreakdowns={stableCrawlBreakdowns}
+                  currentCrawlId={stableCurrentCrawl?.id}
                   currentBreakdown={stableCurrentBreakdown}
                   onOpenAIConversation={handleOpenAIConversation}
                   pillarId="pagespeed"
@@ -875,22 +819,6 @@ function getNormalizedBlendWeights(scores: BlendScores) {
   return weights
 }
 
-function computeBlendedOverall(scores: BlendScores): number | null {
-  const weights = getNormalizedBlendWeights(scores)
-  let total = 0
-  let hasTerm = false
-  for (const key of Object.keys(OVERALL_BLEND_WEIGHTS) as Array<
-    keyof BlendScores
-  >) {
-    const score = scores[key]
-    if (typeof score === "number" && Number.isFinite(score)) {
-      total += weights[key] * score
-      hasTerm = true
-    }
-  }
-  return hasTerm ? Math.round(total) : null
-}
-
 function computeContribution(
   normalizedWeight: number,
   score?: number | null
@@ -921,17 +849,13 @@ function getBreakdownChartKey(crawlBreakdown: CrawlBreakdown) {
   return `${getCrawlChartKey(crawlBreakdown.crawl)}:${getScoreBreakdownChartKey(crawlBreakdown.breakdown)}`
 }
 
-function getScoreBreakdownChartKey(breakdown: ScoreBreakdownResponse) {
+function getScoreBreakdownChartKey(breakdown: CrawlBreakdownScores) {
   return [
-    breakdown.crawl_id,
+    breakdown.overall_score ?? "",
     ...breakdown.pillars.flatMap((pillar) => [
       pillar.id,
       pillar.score ?? "",
-      ...pillar.buckets.flatMap((bucket) => [
-        bucket.id,
-        bucket.score ?? "",
-        bucket.affected_url_count,
-      ]),
+      ...pillar.buckets.flatMap((bucket) => [bucket.id, bucket.score ?? ""]),
     ]),
   ].join(":")
 }

@@ -3,6 +3,7 @@
 import { memo, useMemo } from "react"
 
 import type { CrawlResponse } from "~/lib/api.types"
+import { NumberPopIn } from "~/components/number-pop-in"
 import {
   Card,
   CardDescription,
@@ -13,7 +14,6 @@ import {
 import {
   TrendBadge,
   TrendSparkline,
-  formatScore,
   getRoundedDelta,
   getTrendLabel,
   getTrendSummary,
@@ -89,7 +89,17 @@ export const SectionCards = memo(function SectionCards({
             <CardHeader>
               <CardDescription>{card.label}</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                {formatScore(card.value)}
+                {card.value === undefined ? (
+                  "—"
+                ) : (
+                  <>
+                    <NumberPopIn
+                      value={Math.round(card.value)}
+                      replayKey={currentCrawl?.id}
+                    />
+                    %
+                  </>
+                )}
               </CardTitle>
               {delta !== null && <TrendBadge delta={delta} />}
             </CardHeader>

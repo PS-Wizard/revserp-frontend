@@ -1,6 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react"
 import {
   ChevronLeftIcon,
   DownloadIcon,
@@ -18,7 +25,7 @@ import type {
 } from "~/components/issue-explorer/types"
 import {
   areStringArraysEqual,
-  fetchBucketUrls,
+  BucketUrlPager,
   generateBatchAIFix,
   urlRowKey,
 } from "~/components/issue-explorer/utils"
@@ -33,7 +40,11 @@ import {
 } from "~/components/ui/card"
 import { ApiError, buildApiUrl } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
-import { downloadBlob, getExportFilename } from "~/components/app-navbar/utils"
+import {
+  downloadBlob,
+  getExportFilename,
+  readExportError,
+} from "~/components/app-navbar/utils"
 
 // --- Selection reducer ---
 
@@ -142,12 +153,15 @@ export function IssueExplorer({
   } = state
 
   const [isSubmittingFix, setIsSubmittingFix] = useState(false)
+  const pagerRef = useRef<BucketUrlPager | null>(null)
   const [urlState, setUrlState] = useState<{
     key: string
-    urls: MergedIssueUrlRow[]
+    pageRows: MergedIssueUrlRow[]
+    loadedRows: MergedIssueUrlRow[]
+    total: number
     loading: boolean
     error: string
-  }>({ key: "", urls: [], loading: false, error: "" })
+  }>({ key: "", pageRows: [], loadedRows: [], total: 0, loading: false, error: "" })
 
   const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
   const crawlId = breakdown?.crawl_id ?? ""
@@ -197,52 +211,69 @@ export function IssueExplorer({
   // --- Reset everything when the crawl changes ---
   useEffect(() => {
     dispatch({ type: "RESET" })
-    setUrlState({ key: "", urls: [], loading: false, error: "" })
+    pagerRef.current = null
+    setUrlState({ key: "", pageRows: [], loadedRows: [], total: 0, loading: false, error: "" })
   }, [crawlId])
 
-  // --- Load URLs for the drilled bucket ---
+  // --- Create a fresh lazy pager whenever the drilled bucket changes ---
   const urlCacheKey = drilledBucket ? `${crawlId}::${drilledBucket.key}` : ""
   useEffect(() => {
-    if (!drilledBucket || !crawlId) return
+    if (!drilledBucket || !crawlId) {
+      pagerRef.current = null
+      return
+    }
 
     const controller = new AbortController()
-    const { signal } = controller
-
-    setUrlState({ key: urlCacheKey, urls: [], loading: true, error: "" })
-
-    fetchBucketUrls(crawlId, drilledBucket, signal)
-      .then((rows) => {
-        if (signal.aborted) return
-        const sorted = rows.sort((a, b) => a.url.localeCompare(b.url))
-        setUrlState({ key: urlCacheKey, urls: sorted, loading: false, error: "" })
-      })
-      .catch((error) => {
-        if (signal.aborted) return
-        setUrlState({
-          key: urlCacheKey,
-          urls: [],
-          loading: false,
-          error:
-            error instanceof Error ? error.message : "Unable to load issue URLs.",
-        })
-      })
+    pagerRef.current = new BucketUrlPager(crawlId, drilledBucket, controller.signal)
+    setUrlState({ key: urlCacheKey, pageRows: [], loadedRows: [], total: 0, loading: false, error: "" })
 
     return () => controller.abort()
   }, [crawlId, drilledBucket, urlCacheKey])
 
-  const displayedUrls = urlState.key === urlCacheKey ? urlState.urls : []
-  const isLoadingUrls = urlState.key === urlCacheKey && urlState.loading
-  const urlError = urlState.key === urlCacheKey ? urlState.error : ""
+  // --- Fetch only the page currently being displayed from the pager ---
+  useEffect(() => {
+    const pager = pagerRef.current
+    if (!pager || !drilledBucket || !crawlId) return
+
+    setUrlState((prev) =>
+      prev.key === urlCacheKey ? { ...prev, loading: true, error: "" } : prev
+    )
+
+    pager
+      .getPage(urlPageIndex, urlPageSize)
+      .then(({ rows, total }) => {
+        if (pagerRef.current !== pager) return
+        setUrlState({
+          key: urlCacheKey,
+          pageRows: rows,
+          loadedRows: pager.loadedRows,
+          total,
+          loading: false,
+          error: "",
+        })
+      })
+      .catch((error) => {
+        if (pagerRef.current !== pager) return
+        setUrlState((prev) => ({
+          ...prev,
+          loading: false,
+          error:
+            error instanceof Error ? error.message : "Unable to load issue URLs.",
+        }))
+      })
+  }, [crawlId, drilledBucket, urlCacheKey, urlPageIndex, urlPageSize])
+
+  const isCurrentUrlState = urlState.key === urlCacheKey
+  const displayedUrls = isCurrentUrlState ? urlState.pageRows : []
+  const loadedUrls = isCurrentUrlState ? urlState.loadedRows : []
+  const totalUrlRows = isCurrentUrlState ? urlState.total : 0
+  const isLoadingUrls = isCurrentUrlState && urlState.loading
+  const urlError = isCurrentUrlState ? urlState.error : ""
 
   const paginatedBucketRows = useMemo(() => {
     const start = bucketPageIndex * bucketPageSize
     return bucketRows.slice(start, start + bucketPageSize)
   }, [bucketRows, bucketPageIndex, bucketPageSize])
-
-  const paginatedUrls = useMemo(() => {
-    const start = urlPageIndex * urlPageSize
-    return displayedUrls.slice(start, start + urlPageSize)
-  }, [displayedUrls, urlPageIndex, urlPageSize])
 
   // --- Selection toggles ---
   const onToggleBucket = useCallback(
@@ -281,12 +312,28 @@ export function IssueExplorer({
 
   const onToggleAllUrls = useCallback(
     (checked: boolean) => {
-      dispatch({
-        type: "SET_CHECKED_URLS",
-        payload: checked ? displayedUrls.map((row) => urlRowKey(row)) : [],
+      if (!checked) {
+        dispatch({ type: "SET_CHECKED_URLS", payload: [] })
+        return
+      }
+
+      const pager = pagerRef.current
+      if (!pager) return
+
+      // "Select all" spans every URL in the bucket, not just the visible
+      // page, so this is the one place we fetch the remaining pages.
+      void pager.loadAll().then(({ rows }) => {
+        if (pagerRef.current !== pager) return
+        setUrlState((prev) =>
+          prev.key === urlCacheKey ? { ...prev, loadedRows: rows } : prev
+        )
+        dispatch({
+          type: "SET_CHECKED_URLS",
+          payload: rows.map((row) => urlRowKey(row)),
+        })
       })
     },
-    [displayedUrls]
+    [urlCacheKey]
   )
 
   const bucketDrag = useDragSelection(
@@ -308,7 +355,7 @@ export function IssueExplorer({
   const fixSelections = useMemo<FixSelection[]>(() => {
     if (drilledBucket) {
       const checkedSet = new Set(checkedUrlKeys)
-      const rows = displayedUrls.filter((row) => checkedSet.has(urlRowKey(row)))
+      const rows = loadedUrls.filter((row) => checkedSet.has(urlRowKey(row)))
       if (!rows.length) return []
       return [
         {
@@ -348,7 +395,7 @@ export function IssueExplorer({
     availableBucketScopes,
     checkedBucketKeys,
     checkedUrlKeys,
-    displayedUrls,
+    loadedUrls,
     drilledBucket,
   ])
 
@@ -418,7 +465,7 @@ export function IssueExplorer({
       const checkedSet = new Set(checkedUrlKeys)
       const urls = [
         ...new Set(
-          displayedUrls
+          loadedUrls
             .filter((row) => checkedSet.has(urlRowKey(row)))
             .map((row) => row.url)
         ),
@@ -436,17 +483,7 @@ export function IssueExplorer({
         { credentials: "include" }
       )
       if (!response.ok) {
-        const errorText = await response.text()
-        let errorMsg = "Unable to export crawl issues."
-        try {
-          const body = JSON.parse(errorText)
-          if (typeof (body as Record<string, unknown>).error === "string") {
-            errorMsg = (body as Record<string, unknown>).error as string
-          }
-        } catch {
-          // use default message
-        }
-        throw new Error(errorMsg)
+        throw new Error(await readExportError(response))
       }
       const blob = await response.blob()
       const filename = getExportFilename(
@@ -463,7 +500,7 @@ export function IssueExplorer({
     checkedBucketKeys,
     checkedUrlKeys,
     crawlId,
-    displayedUrls,
+    loadedUrls,
     drilledBucket,
     selectedPillarIds,
   ])
@@ -517,8 +554,8 @@ export function IssueExplorer({
             isLoading={isLoadingUrls}
             onToggleAll={onToggleAllUrls}
             onToggleRow={onToggleUrl}
-            rows={paginatedUrls}
-            totalRows={displayedUrls.length}
+            rows={displayedUrls}
+            totalRows={totalUrlRows}
           />
         ) : (
           <BucketTable
@@ -561,7 +598,7 @@ export function IssueExplorer({
               payload: v,
             })
           }
-          totalRows={drilledBucket ? displayedUrls.length : bucketRows.length}
+          totalRows={drilledBucket ? totalUrlRows : bucketRows.length}
         />
       </div>
     </div>

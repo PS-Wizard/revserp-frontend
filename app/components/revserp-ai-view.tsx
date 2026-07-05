@@ -235,15 +235,19 @@ function useAIConversation({
     return activeSendRequestIdRef.current === requestId
   }
 
+  const loadRequestIdRef = useRef(0)
+
   const loadConversation = useCallback(
     async (conversationId: string) => {
       cancelSending()
+      const requestSeq = ++loadRequestIdRef.current
       setIsLoadingMessages(true)
       setErrorMessage("")
       try {
         const response = await clientApiFetch<AIConversationDetailResponse>(
           `/ai/conversations/${conversationId}`
         )
+        if (loadRequestIdRef.current !== requestSeq) return
         setActiveConversationId(response.conversation.id)
         const loadedMessages = response.messages.map(newMessageFromResponse)
         setMessages(loadedMessages)
@@ -266,13 +270,16 @@ function useAIConversation({
           setEmptyPollCount(0)
         }
       } catch (error) {
+        if (loadRequestIdRef.current !== requestSeq) return
         setErrorMessage(
           error instanceof ApiError
             ? error.message
             : "Unable to load AI conversation."
         )
       } finally {
-        setIsLoadingMessages(false)
+        if (loadRequestIdRef.current === requestSeq) {
+          setIsLoadingMessages(false)
+        }
       }
     },
     [cancelSending, crawlId, projectId, queryClient]
@@ -456,6 +463,8 @@ function useAIConversation({
     setMessages([...baseMessages, optimisticUserMessage])
     resetTextareaHeight()
 
+    let createdConversationId: string | null = null
+
     try {
       let conversationId = activeConversationId
       if (!conversationId) {
@@ -468,6 +477,7 @@ function useAIConversation({
         )
         if (!isActiveSendRequest(sendRequestId)) return
         conversationId = created.conversation.id
+        createdConversationId = created.conversation.id
         setActiveConversationId(conversationId)
         // Update conversations list cache
         queryClient.setQueryData<AIConversationResponse[]>(
@@ -533,6 +543,18 @@ function useAIConversation({
           ? error.message
           : "Unable to generate an AI fix."
       )
+      if (createdConversationId) {
+        // Roll back the optimistically-created conversation: it never
+        // received a first message, so it shouldn't linger in the sidebar.
+        queryClient.setQueryData<AIConversationResponse[]>(
+          aiConversationsListQueryKey(projectId, crawlId),
+          (current) =>
+            current?.filter(
+              (conversation) => conversation.id !== createdConversationId
+            ) ?? current
+        )
+        setActiveConversationId(null)
+      }
     } finally {
       finishSending(sendRequestId)
     }

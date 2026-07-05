@@ -1,6 +1,4 @@
 import { useState } from "react"
-import { toPng } from "html-to-image"
-import jsPDF from "jspdf"
 import { clientApiFetch } from "~/lib/api"
 
 export type CommentarySection = {
@@ -70,6 +68,11 @@ export function usePdfExport({
     setIsExporting(true)
 
     try {
+      const [{ toPng }, { default: jsPDF }] = await Promise.all([
+        import("html-to-image"),
+        import("jspdf"),
+      ])
+
       const commentary = await clientApiFetch<CommentaryResponse>(
         `/crawls/${crawlId}/commentary`
       )

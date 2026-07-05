@@ -38,6 +38,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
   title,
 }: ScoreRadialChartProps) {
   const [rechartsComponents, setRechartsComponents] = useState<{
+    PolarAngleAxis: React.ComponentType<any>
     PolarGrid: React.ComponentType<any>
     RadialBar: React.ComponentType<any>
     RadialBarChart: React.ComponentType<any>
@@ -46,6 +47,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
   useEffect(() => {
     import("recharts").then((m) => {
       setRechartsComponents({
+        PolarAngleAxis: m.PolarAngleAxis,
         PolarGrid: m.PolarGrid,
         RadialBar: m.RadialBar,
         RadialBarChart: m.RadialBarChart,
@@ -113,6 +115,12 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
                         }}
                       />
                     }
+                  />
+                  <rechartsComponents.PolarAngleAxis
+                    type="number"
+                    domain={[0, 100]}
+                    tick={false}
+                    axisLine={false}
                   />
                   <rechartsComponents.PolarGrid
                     gridType="circle"

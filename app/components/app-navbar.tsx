@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useReducer, useRef, useState } from "react"
+import { memo, useMemo, useReducer, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
@@ -183,7 +183,7 @@ const initialRunCrawlState: RunCrawlState = {
 
 // --- Component ---
 
-export function AppNavbar({
+export const AppNavbar = memo(function AppNavbar({
   activeProjectId,
   currentCrawl,
   projectCrawls,
@@ -761,7 +761,7 @@ export function AppNavbar({
       />
     </>
   )
-}
+})
 
 // --- Dialogs ---
 

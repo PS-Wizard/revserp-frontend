@@ -4,10 +4,7 @@ import { memo, useMemo, useRef } from "react"
 
 import type { ApexOptions } from "apexcharts"
 
-import type {
-  CrawlResponse,
-  ScoreBreakdownBucketResponse,
-} from "~/lib/api.types"
+import type { CrawlResponse } from "~/lib/api.types"
 import {
   Card,
   CardContent,
@@ -16,14 +13,20 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { useApexChart } from "~/hooks/use-apex-chart"
-import { isNumber } from "~/components/trend-sparkline"
 import { formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
+import {
+  formatTooltipDateTime,
+  getScoreRange,
+} from "~/components/score-history-chart-utils"
 
 type CrawlBreakdown = {
   crawl: CrawlResponse
   breakdown: {
-    pillars: Array<{ id: string; buckets: ScoreBreakdownBucketResponse[] }>
+    pillars: Array<{
+      id: string
+      buckets: Array<{ id: string; label: string; score: number }>
+    }>
   }
 }
 
@@ -78,28 +81,12 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     [buckets, chartRows, pillarId]
   )
 
-  const yRange = useMemo(() => {
-    const values: number[] = []
-    for (const row of chartRows) {
-      for (const bucket of buckets) {
-        const value = row[bucket.id]
-        if (isNumber(value)) {
-          values.push(value)
-        }
-      }
-    }
-    if (!values.length) return { min: 0, max: 100 }
-    const min = Math.max(0, Math.floor(Math.min(...values) - 8))
-    const max = Math.min(100, Math.ceil(Math.max(...values) + 8))
-    if (max - min < 18) {
-      const mid = (min + max) / 2
-      return {
-        min: Math.max(0, Math.floor(mid - 9)),
-        max: Math.min(100, Math.ceil(mid + 9)),
-      }
-    }
-    return { min, max }
-  }, [chartRows, buckets])
+  const bucketIds = useMemo(() => buckets.map((bucket) => bucket.id), [buckets])
+
+  const yRange = useMemo(
+    () => getScoreRange(chartRows, bucketIds),
+    [chartRows, bucketIds]
+  )
 
   const chartOptions = useMemo<ApexOptions>(
     () => ({
@@ -224,14 +211,3 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
   )
 })
 
-const tooltipDateTimeFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-})
-
-function formatTooltipDateTime(value: number) {
-  return tooltipDateTimeFormatter.format(new Date(value))
-}
