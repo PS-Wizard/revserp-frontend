@@ -16,7 +16,10 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { TablePagination } from "~/components/issue-explorer/scope-controls"
+import {
+  IssueTypeFilter,
+  TablePagination,
+} from "~/components/issue-explorer/scope-controls"
 import { BucketTable, UrlIssueTable } from "~/components/issue-explorer/tables"
 import type {
   BucketScope,
@@ -51,6 +54,7 @@ import {
 type State = {
   selectedPillarIds: string[]
   drilledBucketKey: string | null
+  issueTypeFilter: string[]
   checkedBucketKeys: string[]
   checkedUrlKeys: string[]
   bucketPageIndex: number
@@ -63,6 +67,7 @@ type Action =
   | { type: "SET_PILLAR_IDS"; payload: string[] }
   | { type: "DRILL_IN"; payload: string }
   | { type: "DRILL_OUT" }
+  | { type: "SET_ISSUE_TYPE_FILTER"; payload: string[] }
   | { type: "SET_CHECKED_BUCKETS"; payload: string[] }
   | { type: "SET_CHECKED_URLS"; payload: string[] }
   | { type: "SET_BUCKET_PAGE_INDEX"; payload: number }
@@ -74,6 +79,7 @@ type Action =
 const initialState: State = {
   selectedPillarIds: [],
   drilledBucketKey: null,
+  issueTypeFilter: [],
   checkedBucketKeys: [],
   checkedUrlKeys: [],
   bucketPageIndex: 0,
@@ -91,12 +97,14 @@ function reducer(state: State, action: Action): State {
         checkedBucketKeys: [],
         checkedUrlKeys: [],
         drilledBucketKey: null,
+        issueTypeFilter: [],
         bucketPageIndex: 0,
       }
     case "DRILL_IN":
       return {
         ...state,
         drilledBucketKey: action.payload,
+        issueTypeFilter: [],
         checkedUrlKeys: [],
         urlPageIndex: 0,
       }
@@ -104,6 +112,14 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         drilledBucketKey: null,
+        issueTypeFilter: [],
+        checkedUrlKeys: [],
+        urlPageIndex: 0,
+      }
+    case "SET_ISSUE_TYPE_FILTER":
+      return {
+        ...state,
+        issueTypeFilter: action.payload,
         checkedUrlKeys: [],
         urlPageIndex: 0,
       }
@@ -144,6 +160,7 @@ export function IssueExplorer({
   const {
     selectedPillarIds,
     drilledBucketKey,
+    issueTypeFilter,
     checkedBucketKeys,
     checkedUrlKeys,
     bucketPageIndex,
@@ -161,7 +178,14 @@ export function IssueExplorer({
     total: number
     loading: boolean
     error: string
-  }>({ key: "", pageRows: [], loadedRows: [], total: 0, loading: false, error: "" })
+  }>({
+    key: "",
+    pageRows: [],
+    loadedRows: [],
+    total: 0,
+    loading: false,
+    error: "",
+  })
 
   const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
   const crawlId = breakdown?.crawl_id ?? ""
@@ -176,7 +200,8 @@ export function IssueExplorer({
   })
 
   const selectedPillars = useMemo(
-    () => pillarOptions.filter((pillar) => selectedPillarIds.includes(pillar.id)),
+    () =>
+      pillarOptions.filter((pillar) => selectedPillarIds.includes(pillar.id)),
     [pillarOptions, selectedPillarIds]
   )
 
@@ -202,9 +227,27 @@ export function IssueExplorer({
   )
 
   const drilledBucket = useMemo(
-    () => availableBucketScopes.find((scope) => scope.key === drilledBucketKey) ?? null,
+    () =>
+      availableBucketScopes.find((scope) => scope.key === drilledBucketKey) ??
+      null,
     [availableBucketScopes, drilledBucketKey]
   )
+
+  // The URL pager iterates bucket.issues, so scoping it to the selected issue
+  // types filters server-side (no over-fetch). Empty filter = every type.
+  const effectiveDrilledBucket = useMemo<BucketScope | null>(() => {
+    if (!drilledBucket || !issueTypeFilter.length) return drilledBucket
+    const selected = new Set(issueTypeFilter)
+    return {
+      ...drilledBucket,
+      bucket: {
+        ...drilledBucket.bucket,
+        issues: drilledBucket.bucket.issues.filter((issue) =>
+          selected.has(issue.id)
+        ),
+      },
+    }
+  }, [drilledBucket, issueTypeFilter])
 
   const hasMultiplePillars = selectedPillarIds.length > 1
 
@@ -212,28 +255,49 @@ export function IssueExplorer({
   useEffect(() => {
     dispatch({ type: "RESET" })
     pagerRef.current = null
-    setUrlState({ key: "", pageRows: [], loadedRows: [], total: 0, loading: false, error: "" })
+    setUrlState({
+      key: "",
+      pageRows: [],
+      loadedRows: [],
+      total: 0,
+      loading: false,
+      error: "",
+    })
   }, [crawlId])
 
-  // --- Create a fresh lazy pager whenever the drilled bucket changes ---
-  const urlCacheKey = drilledBucket ? `${crawlId}::${drilledBucket.key}` : ""
+  // --- Create a fresh lazy pager whenever the drilled bucket or its issue-type
+  // filter changes (the filter is part of the key so it recreates the pager) ---
+  const urlCacheKey = drilledBucket
+    ? `${crawlId}::${drilledBucket.key}::${[...issueTypeFilter].sort().join(",")}`
+    : ""
   useEffect(() => {
-    if (!drilledBucket || !crawlId) {
+    if (!effectiveDrilledBucket || !crawlId) {
       pagerRef.current = null
       return
     }
 
     const controller = new AbortController()
-    pagerRef.current = new BucketUrlPager(crawlId, drilledBucket, controller.signal)
-    setUrlState({ key: urlCacheKey, pageRows: [], loadedRows: [], total: 0, loading: false, error: "" })
+    pagerRef.current = new BucketUrlPager(
+      crawlId,
+      effectiveDrilledBucket,
+      controller.signal
+    )
+    setUrlState({
+      key: urlCacheKey,
+      pageRows: [],
+      loadedRows: [],
+      total: 0,
+      loading: false,
+      error: "",
+    })
 
     return () => controller.abort()
-  }, [crawlId, drilledBucket, urlCacheKey])
+  }, [crawlId, effectiveDrilledBucket, urlCacheKey])
 
   // --- Fetch only the page currently being displayed from the pager ---
   useEffect(() => {
     const pager = pagerRef.current
-    if (!pager || !drilledBucket || !crawlId) return
+    if (!pager || !effectiveDrilledBucket || !crawlId) return
 
     setUrlState((prev) =>
       prev.key === urlCacheKey ? { ...prev, loading: true, error: "" } : prev
@@ -258,10 +322,12 @@ export function IssueExplorer({
           ...prev,
           loading: false,
           error:
-            error instanceof Error ? error.message : "Unable to load issue URLs.",
+            error instanceof Error
+              ? error.message
+              : "Unable to load issue URLs.",
         }))
       })
-  }, [crawlId, drilledBucket, urlCacheKey, urlPageIndex, urlPageSize])
+  }, [crawlId, effectiveDrilledBucket, urlCacheKey, urlPageIndex, urlPageSize])
 
   const isCurrentUrlState = urlState.key === urlCacheKey
   const displayedUrls = isCurrentUrlState ? urlState.pageRows : []
@@ -339,7 +405,8 @@ export function IssueExplorer({
   const bucketDrag = useDragSelection(
     checkedBucketKeys,
     useCallback(
-      (keys: string[]) => dispatch({ type: "SET_CHECKED_BUCKETS", payload: keys }),
+      (keys: string[]) =>
+        dispatch({ type: "SET_CHECKED_BUCKETS", payload: keys }),
       []
     )
   )
@@ -372,7 +439,9 @@ export function IssueExplorer({
     // Whole-bucket selection: leave issueTypeIds empty so the backend expands
     // to every issue type in the selected buckets.
     const checkedSet = new Set(checkedBucketKeys)
-    const scopes = availableBucketScopes.filter((scope) => checkedSet.has(scope.key))
+    const scopes = availableBucketScopes.filter((scope) =>
+      checkedSet.has(scope.key)
+    )
     const byPillar = new Map<string, FixSelection>()
     for (const scope of scopes) {
       const existing = byPillar.get(scope.pillarId)
@@ -493,7 +562,9 @@ export function IssueExplorer({
       downloadBlob(blob, filename)
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Unable to export crawl issues."
+        error instanceof Error
+          ? error.message
+          : "Unable to export crawl issues."
       )
     }
   }, [
@@ -529,7 +600,16 @@ export function IssueExplorer({
         <span className="truncate text-center font-medium text-foreground">
           {drilledBucket?.bucketLabel}
         </span>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-3">
+          {drilledBucket ? (
+            <IssueTypeFilter
+              issueTypes={drilledBucket.bucket.issues}
+              selected={issueTypeFilter}
+              onChange={(ids) =>
+                dispatch({ type: "SET_ISSUE_TYPE_FILTER", payload: ids })
+              }
+            />
+          ) : null}
           <Button
             disabled={!canAct || isSubmittingFix || !projectId}
             onClick={onRecommendFixes}
@@ -594,7 +674,9 @@ export function IssueExplorer({
           }
           setPageSize={(v) =>
             dispatch({
-              type: drilledBucket ? "SET_URL_PAGE_SIZE" : "SET_BUCKET_PAGE_SIZE",
+              type: drilledBucket
+                ? "SET_URL_PAGE_SIZE"
+                : "SET_BUCKET_PAGE_SIZE",
               payload: v,
             })
           }
@@ -630,7 +712,8 @@ function syncSelectedPillars({
     pillarOptions.some((pillar) => pillar.id === initialPillarId)
   ) {
     const next = [initialPillarId]
-    if (!areStringArraysEqual(selectedPillarIds, next)) setSelectedPillarIds(next)
+    if (!areStringArraysEqual(selectedPillarIds, next))
+      setSelectedPillarIds(next)
     return
   }
 
@@ -644,7 +727,8 @@ function syncSelectedPillars({
     return
   }
 
-  if (!areStringArraysEqual(valid, selectedPillarIds)) setSelectedPillarIds(valid)
+  if (!areStringArraysEqual(valid, selectedPillarIds))
+    setSelectedPillarIds(valid)
 }
 
 function NoIssueBreakdown() {

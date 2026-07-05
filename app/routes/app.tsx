@@ -314,7 +314,9 @@ export default function AppPage() {
 
   const allCrawlBreakdowns = useMemo(() => {
     const seen = new Set(crawlBreakdowns.map(({ crawl }) => crawl.id))
-    const extras = trendCrawlBreakdowns.filter(({ crawl }) => !seen.has(crawl.id))
+    const extras = trendCrawlBreakdowns.filter(
+      ({ crawl }) => !seen.has(crawl.id)
+    )
     return [...crawlBreakdowns, ...extras].sort(
       (a, b) => getCrawlTimestamp(b.crawl) - getCrawlTimestamp(a.crawl)
     )
@@ -414,7 +416,6 @@ export default function AppPage() {
     stableSortedCompletedCrawls.find(
       (crawl) => crawl.id === previousCrawl?.id
     ) ?? previousCrawl
-
 
   const { data: visibilityAuditsList } = useQuery({
     queryKey: activeProject?.id
