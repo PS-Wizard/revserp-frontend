@@ -27,6 +27,7 @@ function getSupabaseBrowserClient() {
         detectSessionInUrl: false,
         flowType: "pkce",
         persistSession: false,
+        storage: window.localStorage,
       },
     })
   }
