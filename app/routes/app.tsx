@@ -86,7 +86,7 @@ export async function loader({ request }: { request: Request }) {
     breakdown,
   } = bootstrap
 
-  const recentCrawls: CrawlResponse[] = crawls
+  const recentCrawls: CrawlResponse[] = crawls ?? []
   const projectCrawls: Record<string, CrawlResponse[]> = activeProject
     ? { [activeProject.id]: recentCrawls }
     : {}
@@ -95,13 +95,14 @@ export async function loader({ request }: { request: Request }) {
   let crawlBreakdowns: CrawlBreakdown[] = []
 
   if (currentBreakdown && selected_crawl_id) {
-    const selectedCrawl = crawls.find((c) => c.id === selected_crawl_id) ?? null
+    const selectedCrawl =
+      recentCrawls.find((c) => c.id === selected_crawl_id) ?? null
     if (selectedCrawl) {
       crawlBreakdowns = [{ crawl: selectedCrawl, breakdown: currentBreakdown }]
     }
   } else if (currentBreakdown) {
     // breakdown present but no selected_crawl_id — find the most recent completed crawl
-    const sortedCompleted = [...crawls]
+    const sortedCompleted = [...recentCrawls]
       .filter((c) => c.status === "completed")
       .sort((a, b) => getCrawlTimestamp(b) - getCrawlTimestamp(a))
     if (sortedCompleted[0]) {
