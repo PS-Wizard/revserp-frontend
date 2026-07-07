@@ -26,8 +26,12 @@ function getSupabaseBrowserClient() {
         autoRefreshToken: false,
         detectSessionInUrl: false,
         flowType: "pkce",
-        persistSession: false,
-        storage: window.localStorage,
+        // PKCE needs the code verifier to survive the OAuth redirect round-trip.
+        // auth-js only uses real (localStorage) storage when persistSession is
+        // true; with it false the verifier lives in memory and is wiped by the
+        // full-page redirect. We persist, then clear the local session right
+        // after the code exchange so the browser stays effectively stateless.
+        persistSession: true,
       },
     })
   }
@@ -72,7 +76,9 @@ export async function resolveOAuthSessionFromCallback(): Promise<Session> {
       throw new Error("Supabase OAuth did not return a session.")
     }
 
-    return data.session
+    const oauthSession = data.session
+    await supabaseClient.auth.signOut({ scope: "local" })
+    return oauthSession
   }
 
   const { data, error } = await supabaseClient.auth.getSession()
