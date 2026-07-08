@@ -534,6 +534,7 @@ export default function AppPage() {
     ]
   )
 
+  const coverRef = useRef<HTMLDivElement>(null)
   const overallRef = useRef<HTMLDivElement>(null)
   const seoRef = useRef<HTMLDivElement>(null)
   const aeoRef = useRef<HTMLDivElement>(null)
@@ -544,6 +545,7 @@ export default function AppPage() {
     crawlId: currentCrawl?.id ?? null,
     projectName: activeProject?.name ?? "audit",
     currentCrawl: stableCurrentCrawl,
+    coverRef,
     overallRef,
     seoRef,
     aeoRef,
@@ -763,6 +765,7 @@ export default function AppPage() {
       )}
       {showPrintSections && (
         <PdfPrintSections
+          coverRef={coverRef}
           overallRef={overallRef}
           seoRef={seoRef}
           aeoRef={aeoRef}

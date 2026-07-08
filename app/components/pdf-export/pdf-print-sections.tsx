@@ -22,6 +22,7 @@ import type { CrawlBreakdown } from "~/components/pillar-audit-view"
 import type { CrawlResponse, ScoreBreakdownResponse } from "~/lib/api.types"
 
 type PdfPrintSectionsProps = {
+  coverRef: React.RefObject<HTMLDivElement | null>
   overallRef: React.RefObject<HTMLDivElement | null>
   seoRef: React.RefObject<HTMLDivElement | null>
   aeoRef: React.RefObject<HTMLDivElement | null>
@@ -35,6 +36,7 @@ type PdfPrintSectionsProps = {
 }
 
 export function PdfPrintSections({
+  coverRef,
   overallRef,
   seoRef,
   aeoRef,
@@ -91,6 +93,14 @@ export function PdfPrintSections({
         zIndex: -1,
       }}
     >
+      {/* Cover page */}
+      <div ref={coverRef}>
+        <PrintCover
+          projectName={activeProjectName ?? "audit"}
+          currentCrawl={currentCrawl}
+        />
+      </div>
+
       {/* Overall section */}
       <div ref={overallRef} style={{ background: "#09090b", padding: "16px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "0.3fr 0.7fr", gap: "16px", marginBottom: "16px" }}>
@@ -145,6 +155,182 @@ export function PdfPrintSections({
   )
 }
 
+const COVER = {
+  bg: "#09090b",
+  card: "#1c1c1e",
+  fg: "#fafafa",
+  muted: "#a1a1a1",
+  border: "rgba(255,255,255,0.1)",
+  radius: 10,
+  font: "'Geist Variable', system-ui, sans-serif",
+}
+
+function coverScore(value?: number | null): string {
+  return value == null ? "N/A" : String(Math.round(value))
+}
+
+function PrintCover({
+  projectName,
+  currentCrawl,
+}: {
+  projectName: string
+  currentCrawl: CrawlResponse | null
+}) {
+  const now = new Date()
+  const dateStr = `${String(now.getDate()).padStart(2, "0")} ${now.toLocaleString("en-US", { month: "short" })} ${now.getFullYear()}`
+  const quarterStr = `Q${Math.floor(now.getMonth() / 3) + 1} · ${now.getFullYear()}`
+  const pagesCrawled =
+    currentCrawl?.urls_crawled != null
+      ? currentCrawl.urls_crawled.toLocaleString()
+      : "N/A"
+
+  const cellBase: React.CSSProperties = {
+    padding: "22px 24px",
+    display: "flex",
+    flexDirection: "column",
+    background: COVER.card,
+    border: `1px solid ${COVER.border}`,
+    borderRadius: COVER.radius,
+    boxSizing: "border-box",
+  }
+  const capStyle: React.CSSProperties = {
+    fontSize: 15,
+    letterSpacing: "0.04em",
+    color: COVER.muted,
+  }
+  const valStyle: React.CSSProperties = {
+    marginTop: "auto",
+    fontWeight: 600,
+    letterSpacing: "-0.03em",
+    lineHeight: 0.85,
+    color: COVER.fg,
+    fontVariantNumeric: "tabular-nums",
+  }
+
+  return (
+    <div
+      style={{
+        width: 1440,
+        height: 1018,
+        background: COVER.bg,
+        color: COVER.fg,
+        fontFamily: COVER.font,
+        padding: 64,
+        display: "flex",
+        flexDirection: "column",
+        boxSizing: "border-box",
+      }}
+    >
+      {/* header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 25, fontWeight: 600, letterSpacing: "-0.01em" }}>Revserp.ai</div>
+          <div style={{ fontSize: 15, color: COVER.muted, marginTop: 2 }}>a Revketer LLC product</div>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", fontVariantNumeric: "tabular-nums" }}>
+          {quarterStr}
+        </div>
+      </div>
+
+      {/* title */}
+      <div style={{ marginTop: 56 }}>
+        <h1 style={{ margin: 0, fontSize: 92, lineHeight: 0.92, fontWeight: 600, letterSpacing: "-0.035em", maxWidth: "64%" }}>
+          Site Audit Report
+        </h1>
+        <p style={{ marginTop: 20, fontSize: 22, color: COVER.muted, maxWidth: "52%", lineHeight: 1.4 }}>
+          A complete assessment of search, answer-engine, and performance health for the crawled property.
+        </p>
+      </div>
+
+      <div style={{ flex: 1 }} />
+
+      {/* bento score grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.55fr 1fr 1fr 0.6fr",
+          gridTemplateRows: "1fr 1fr",
+          gap: 12,
+          height: 430,
+        }}
+      >
+        <div style={{ ...cellBase, gridColumn: 1, gridRow: "1 / 3", background: "linear-gradient(155deg, #242426 0%, #1c1c1e 60%)" }}>
+          <div style={{ ...capStyle, textTransform: "uppercase", letterSpacing: "0.16em", fontWeight: 600 }}>Overall</div>
+          <div style={{ ...valStyle, fontSize: 158 }}>
+            {coverScore(currentCrawl?.overall_score)}
+            {currentCrawl?.overall_score != null && (
+              <span style={{ fontSize: 46, fontWeight: 500, marginLeft: 4, color: COVER.muted }}>%</span>
+            )}
+          </div>
+          <div style={{ fontSize: 17, color: COVER.muted, marginTop: 10 }}>Weighted across all three pillars</div>
+        </div>
+
+        <div style={{ ...cellBase, gridColumn: 2, gridRow: 1 }}>
+          <div style={capStyle}>SEO</div>
+          <div style={{ ...valStyle, fontSize: 63 }}>{coverScore(currentCrawl?.seo_score)}</div>
+        </div>
+
+        <div style={{ ...cellBase, gridColumn: 3, gridRow: 1 }}>
+          <div style={capStyle}>AEO</div>
+          <div style={{ ...valStyle, fontSize: 63 }}>{coverScore(currentCrawl?.aeo_score)}</div>
+        </div>
+
+        <div
+          style={{
+            ...cellBase,
+            gridColumn: "2 / 4",
+            gridRow: 2,
+            flexDirection: "row",
+            alignItems: "flex-end",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 8 }}>
+            <span style={capStyle}>PageSpeed</span>
+            <span style={{ fontSize: 15, color: COVER.muted }}>Google PSI · mobile</span>
+          </div>
+          <div style={{ ...valStyle, marginTop: 0, fontSize: 63 }}>{coverScore(currentCrawl?.pagespeed_score)}</div>
+        </div>
+
+        <div
+          style={{
+            gridColumn: 4,
+            gridRow: "1 / 3",
+            borderRadius: COVER.radius,
+            border: `1px solid ${COVER.border}`,
+            overflow: "hidden",
+            position: "relative",
+            background: "linear-gradient(180deg, #fafafa 0%, #8f8f8f 40%, #4d4d4d 72%, #1c1c1e 100%)",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 15px)",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* footer meta */}
+      <div style={{ marginTop: 28, display: "flex", justifyContent: "space-between", gap: 28 }}>
+        {[
+          { k: "Prepared for", v: projectName, right: false },
+          { k: "Generated", v: dateStr, right: false },
+          { k: "Pages crawled", v: pagesCrawled, right: false },
+          { k: "Presented by", v: "Revketer LLC", right: true },
+        ].map((col) => (
+          <div key={col.k} style={{ textAlign: col.right ? "right" : "left" }}>
+            <div style={{ color: COVER.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontSize: 13 }}>{col.k}</div>
+            <div style={{ marginTop: 4, color: COVER.fg, fontWeight: 500, fontSize: 16 }}>{col.v}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 type DonutSegment = { key: string; label: string; value?: number | null; color?: string }
 
 function PrintDonutChart({
@@ -161,13 +347,17 @@ function PrintDonutChart({
   const SIZE = 260
   const CX = SIZE / 2
   const CY = SIZE / 2
-  const RING_WIDTH = 14
   const GAP = 4
-  const MAX_RINGS = segments.length
-  // outermost ring first, shrinking inward
+  const HOLE = 46 // reserved center hole so the score label never overlaps rings
   const outerRadius = CX - 10
+  const ringCount = Math.max(1, segments.length)
+  // distribute rings between the outer edge and the reserved hole so they
+  // always fit regardless of how many buckets a pillar has
+  const step = (outerRadius - HOLE) / ringCount
+  const RING_WIDTH = Math.max(6, step - GAP)
+  // outermost ring first, shrinking inward
   const rings = segments.map((seg, i) => {
-    const r = outerRadius - i * (RING_WIDTH + GAP)
+    const r = outerRadius - RING_WIDTH / 2 - i * step
     const c = 2 * Math.PI * r
     const pct = Math.max(0, Math.min(100, seg.value ?? 0)) / 100
     const dash = pct * c
@@ -214,12 +404,9 @@ function PrintDonutChart({
           ))}
           {/* center label */}
           {centerValue != null && (
-            <>
-              <circle cx={CX} cy={CY} r={outerRadius - MAX_RINGS * (RING_WIDTH + GAP) - 4} fill="#09090b" />
-              <text x={CX} y={CY + 6} textAnchor="middle" fill="#fff" fontSize="22" fontWeight="700" fontFamily="system-ui, sans-serif">
-                {Math.round(centerValue)}%
-              </text>
-            </>
+            <text x={CX} y={CY + 7} textAnchor="middle" fill="#fff" fontSize="30" fontWeight="700" fontFamily="'Geist Variable', system-ui, sans-serif">
+              {Math.round(centerValue)}%
+            </text>
           )}
         </svg>
       </div>
@@ -231,7 +418,7 @@ function PrintDonutChart({
               <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: seg.color ?? "#fff", flexShrink: 0 }} />
               <span style={{ color: "#aaa" }}>{seg.label}</span>
             </div>
-            <span style={{ color: "#fff", fontWeight: 500 }}>{seg.value != null ? `${Math.round(seg.value)}%` : "—"}</span>
+            <span style={{ color: "#fff", fontWeight: 500 }}>{seg.value != null ? `${Math.round(seg.value)}%` : "N/A"}</span>
           </div>
         ))}
       </div>

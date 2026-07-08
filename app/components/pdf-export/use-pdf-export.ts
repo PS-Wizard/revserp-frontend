@@ -20,6 +20,7 @@ export type UsePdfExportOptions = {
   crawlId: string | null
   projectName: string
   currentCrawl: import("~/lib/api.types").CrawlResponse | null
+  coverRef: React.RefObject<HTMLDivElement | null>
   overallRef: React.RefObject<HTMLDivElement | null>
   seoRef: React.RefObject<HTMLDivElement | null>
   aeoRef: React.RefObject<HTMLDivElement | null>
@@ -50,10 +51,23 @@ const MARGIN = 15
 const CONTENT_W = PAGE_W - MARGIN * 2
 const CONTENT_H = PAGE_H - MARGIN * 2
 
+// Dark theme (matches the app's shadcn .dark tokens / #09090b captures)
+const DARK_BG: [number, number, number] = [9, 9, 11]
+const DARK_HEADING: [number, number, number] = [240, 240, 242]
+const DARK_BODY: [number, number, number] = [212, 212, 216]
+const DARK_MUTED: [number, number, number] = [140, 140, 145]
+const DARK_LINE: [number, number, number] = [45, 45, 50]
+
+function paintDarkPage(pdf: import("jspdf").jsPDF) {
+  pdf.setFillColor(...DARK_BG)
+  pdf.rect(0, 0, PAGE_W, PAGE_H, "F")
+}
+
 export function usePdfExport({
   crawlId,
   projectName,
   currentCrawl,
+  coverRef,
   overallRef,
   seoRef,
   aeoRef,
@@ -81,7 +95,8 @@ export function usePdfExport({
       await new Promise((r) => setTimeout(r, 2000))
 
       const captureOpts = { pixelRatio: 2, backgroundColor: "#09090b" }
-      const [overallPng, seoPng, aeoPng, pagespeedPng] = await Promise.all([
+      const [coverPng, overallPng, seoPng, aeoPng, pagespeedPng] = await Promise.all([
+        toPng(coverRef.current!, captureOpts),
         toPng(overallRef.current!, captureOpts),
         toPng(seoRef.current!, captureOpts),
         toPng(aeoRef.current!, captureOpts),
@@ -95,61 +110,8 @@ export function usePdfExport({
       })
       const dateStr = new Date().toISOString().slice(0, 10)
 
-      // Cover page
-      pdf.setFont("helvetica", "bold")
-      pdf.setFontSize(28)
-      pdf.setTextColor(20, 20, 20)
-      pdf.text("SEO AUDIT REPORT", MARGIN, 60)
-
-      pdf.setFont("helvetica", "normal")
-      pdf.setFontSize(14)
-      pdf.setTextColor(100, 100, 100)
-      pdf.text(projectName, MARGIN, 72)
-
-      pdf.setDrawColor(220, 220, 220)
-      pdf.setLineWidth(0.3)
-      pdf.line(MARGIN, 92, PAGE_W - MARGIN, 92)
-
-      pdf.setFont("helvetica", "bold")
-      pdf.setFontSize(11)
-      pdf.setTextColor(60, 60, 60)
-      pdf.text("Score Overview", MARGIN, 104)
-
-      const scoreBoxes = [
-        { label: "Overall", score: currentCrawl?.overall_score },
-        { label: "SEO", score: currentCrawl?.seo_score },
-        { label: "AEO", score: currentCrawl?.aeo_score },
-        { label: "PageSpeed", score: currentCrawl?.pagespeed_score },
-      ]
-      const scoreXPositions = [MARGIN, MARGIN + 65, MARGIN + 130, MARGIN + 195]
-
-      for (let i = 0; i < scoreBoxes.length; i++) {
-        const box = scoreBoxes[i]
-        const x = scoreXPositions[i]
-        pdf.setFont("helvetica", "normal")
-        pdf.setFontSize(9)
-        pdf.setTextColor(100, 100, 100)
-        pdf.text(box.label, x, 115)
-
-        pdf.setFont("helvetica", "bold")
-        pdf.setFontSize(22)
-        pdf.setTextColor(20, 20, 20)
-        const scoreText = box.score != null ? `${Math.round(box.score)}%` : "—"
-        pdf.text(scoreText, x, 132)
-      }
-
-      pdf.setDrawColor(220, 220, 220)
-      pdf.setLineWidth(0.3)
-      pdf.line(MARGIN, 145, PAGE_W - MARGIN, 145)
-
-      pdf.setFont("helvetica", "normal")
-      pdf.setFontSize(9)
-      pdf.setTextColor(150, 150, 150)
-      pdf.text(`Generated ${dateStr}`, MARGIN, 158)
-
-      pdf.setFontSize(8)
-      pdf.setTextColor(180, 180, 180)
-      pdf.text("Powered by Revketer", MARGIN, 164)
+      // Cover page: full-bleed rasterized bento cover
+      pdf.addImage(coverPng, "PNG", 0, 0, PAGE_W, PAGE_H)
 
       const sections: Array<{
         label: string
@@ -188,16 +150,54 @@ export function usePdfExport({
         },
       ]
 
+      const ensureSpace = (cursorY: number): number => {
+        if (cursorY > PAGE_H - MARGIN) {
+          pdf.addPage()
+          paintDarkPage(pdf)
+          return MARGIN + 8
+        }
+        return cursorY
+      }
+
+      const renderBlock = (
+        heading: string,
+        items: string[],
+        cursorY: number,
+        prefix: (i: number) => string
+      ): number => {
+        if (items.length === 0) return cursorY
+        cursorY = ensureSpace(cursorY)
+        pdf.setFont("helvetica", "bold")
+        pdf.setFontSize(9)
+        pdf.setTextColor(...DARK_HEADING)
+        pdf.text(heading, MARGIN, cursorY)
+        cursorY += 7
+
+        items.forEach((item, i) => {
+          pdf.setFont("helvetica", "normal")
+          pdf.setFontSize(9.5)
+          pdf.setTextColor(...DARK_BODY)
+          const itemLines = pdf.splitTextToSize(`${prefix(i)}${item}`, CONTENT_W - 8)
+          for (const line of itemLines) {
+            cursorY = ensureSpace(cursorY)
+            pdf.text(line, MARGIN + 8, cursorY)
+            cursorY += 5
+          }
+        })
+        return cursorY + 5
+      }
+
       for (const section of sections) {
         // Image page
         pdf.addPage()
+        paintDarkPage(pdf)
 
         pdf.setFont("helvetica", "bold")
         pdf.setFontSize(9)
-        pdf.setTextColor(150, 150, 150)
+        pdf.setTextColor(...DARK_MUTED)
         pdf.text(section.imageLabel, MARGIN, MARGIN + 4)
 
-        pdf.setDrawColor(220, 220, 220)
+        pdf.setDrawColor(...DARK_LINE)
         pdf.setLineWidth(0.3)
         pdf.line(MARGIN, MARGIN + 7, PAGE_W - MARGIN, MARGIN + 7)
 
@@ -215,10 +215,11 @@ export function usePdfExport({
 
         // Commentary page
         pdf.addPage()
+        paintDarkPage(pdf)
 
         pdf.setFont("helvetica", "bold")
         pdf.setFontSize(18)
-        pdf.setTextColor(20, 20, 20)
+        pdf.setTextColor(...DARK_HEADING)
         pdf.text(section.label, MARGIN, MARGIN + 8)
 
         if (section.score != null) {
@@ -230,7 +231,7 @@ export function usePdfExport({
           )
         }
 
-        pdf.setDrawColor(220, 220, 220)
+        pdf.setDrawColor(...DARK_LINE)
         pdf.setLineWidth(0.3)
         pdf.line(MARGIN, MARGIN + 14, PAGE_W - MARGIN, MARGIN + 14)
 
@@ -239,111 +240,26 @@ export function usePdfExport({
         // Summary
         pdf.setFont("helvetica", "normal")
         pdf.setFontSize(10)
-        pdf.setTextColor(50, 50, 50)
+        pdf.setTextColor(...DARK_BODY)
         const summaryLines = pdf.splitTextToSize(
           section.commentary.summary,
           CONTENT_W
         )
         for (const line of summaryLines) {
-          if (cursorY > PAGE_H - MARGIN) {
-            pdf.addPage()
-            cursorY = MARGIN + 8
-          }
+          cursorY = ensureSpace(cursorY)
           pdf.text(line, MARGIN, cursorY)
           cursorY += 5
         }
         cursorY += 6
 
-        // Strengths
-        if (section.commentary.strengths.length > 0) {
-          if (cursorY > PAGE_H - MARGIN) {
-            pdf.addPage()
-            cursorY = MARGIN + 8
-          }
-          pdf.setFont("helvetica", "bold")
-          pdf.setFontSize(9)
-          pdf.setTextColor(30, 30, 30)
-          pdf.text("STRENGTHS", MARGIN, cursorY)
-          cursorY += 7
-
-          for (const item of section.commentary.strengths) {
-            pdf.setFont("helvetica", "normal")
-            pdf.setFontSize(9.5)
-            pdf.setTextColor(50, 50, 50)
-            const itemLines = pdf.splitTextToSize(`•  ${item}`, CONTENT_W - 8)
-            for (const line of itemLines) {
-              if (cursorY > PAGE_H - MARGIN) {
-                pdf.addPage()
-                cursorY = MARGIN + 8
-              }
-              pdf.text(line, MARGIN + 8, cursorY)
-              cursorY += 5
-            }
-          }
-          cursorY += 5
-        }
-
-        // Concerns
-        if (section.commentary.concerns.length > 0) {
-          if (cursorY > PAGE_H - MARGIN) {
-            pdf.addPage()
-            cursorY = MARGIN + 8
-          }
-          pdf.setFont("helvetica", "bold")
-          pdf.setFontSize(9)
-          pdf.setTextColor(30, 30, 30)
-          pdf.text("AREAS OF CONCERN", MARGIN, cursorY)
-          cursorY += 7
-
-          for (const item of section.commentary.concerns) {
-            pdf.setFont("helvetica", "normal")
-            pdf.setFontSize(9.5)
-            pdf.setTextColor(50, 50, 50)
-            const itemLines = pdf.splitTextToSize(`•  ${item}`, CONTENT_W - 8)
-            for (const line of itemLines) {
-              if (cursorY > PAGE_H - MARGIN) {
-                pdf.addPage()
-                cursorY = MARGIN + 8
-              }
-              pdf.text(line, MARGIN + 8, cursorY)
-              cursorY += 5
-            }
-          }
-          cursorY += 5
-        }
-
-        // Recommendations
-        if (section.commentary.recommendations.length > 0) {
-          if (cursorY > PAGE_H - MARGIN) {
-            pdf.addPage()
-            cursorY = MARGIN + 8
-          }
-          pdf.setFont("helvetica", "bold")
-          pdf.setFontSize(9)
-          pdf.setTextColor(30, 30, 30)
-          pdf.text("RECOMMENDED ACTIONS", MARGIN, cursorY)
-          cursorY += 7
-
-          for (let i = 0; i < section.commentary.recommendations.length; i++) {
-            const item = section.commentary.recommendations[i]
-            pdf.setFont("helvetica", "normal")
-            pdf.setFontSize(9.5)
-            pdf.setTextColor(50, 50, 50)
-            const itemLines = pdf.splitTextToSize(
-              `${i + 1}.  ${item}`,
-              CONTENT_W - 8
-            )
-            for (const line of itemLines) {
-              if (cursorY > PAGE_H - MARGIN) {
-                pdf.addPage()
-                cursorY = MARGIN + 8
-              }
-              pdf.text(line, MARGIN + 8, cursorY)
-              cursorY += 5
-            }
-          }
-          cursorY += 5
-        }
+        cursorY = renderBlock("STRENGTHS", section.commentary.strengths, cursorY, () => "•  ")
+        cursorY = renderBlock("AREAS OF CONCERN", section.commentary.concerns, cursorY, () => "•  ")
+        cursorY = renderBlock(
+          "RECOMMENDED ACTIONS",
+          section.commentary.recommendations,
+          cursorY,
+          (i) => `${i + 1}.  `
+        )
       }
 
       pdf.save(
