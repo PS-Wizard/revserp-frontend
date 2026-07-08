@@ -29,6 +29,24 @@ export type UsePdfExportOptions = {
   onDone: () => void
 }
 
+// jsPDF standard fonts only support WinAnsi. Any non-Latin-1 char the LLM emits
+// (smart quotes, en/em dashes, unicode spaces, arrows, ellipsis) corrupts the
+// whole string into a 2-byte render — visible as wildly letter-spaced text that
+// runs off the page. Normalize such characters to ASCII before drawing.
+function sanitizeForPdf(text: string): string {
+  return text
+    .replace(/[‘’‚‛′]/g, "'")
+    .replace(/[“”„‟″]/g, '"')
+    .replace(/[‐‑‒–—―−]/g, "-")
+    .replace(/…/g, "...")
+    .replace(/[•·‧]/g, "-")
+    .replace(/[  -   　]/g, " ")
+    .replace(/[​-‍﻿]/g, "")
+    .replace(/→/g, "->")
+    .replace(/←/g, "<-")
+    .replace(/[^\x00-\xFF]/g, "")
+}
+
 function loadImageAspectRatio(dataUrl: string): Promise<number> {
   return new Promise((resolve) => {
     const timeout = setTimeout(() => resolve(1), 5000)
@@ -177,7 +195,7 @@ export function usePdfExport({
           pdf.setFont("helvetica", "normal")
           pdf.setFontSize(9.5)
           pdf.setTextColor(...DARK_BODY)
-          const itemLines = pdf.splitTextToSize(`${prefix(i)}${item}`, CONTENT_W - 8)
+          const itemLines = pdf.splitTextToSize(sanitizeForPdf(`${prefix(i)}${item}`), CONTENT_W - 8)
           for (const line of itemLines) {
             cursorY = ensureSpace(cursorY)
             pdf.text(line, MARGIN + 8, cursorY)
@@ -242,7 +260,7 @@ export function usePdfExport({
         pdf.setFontSize(10)
         pdf.setTextColor(...DARK_BODY)
         const summaryLines = pdf.splitTextToSize(
-          section.commentary.summary,
+          sanitizeForPdf(section.commentary.summary),
           CONTENT_W
         )
         for (const line of summaryLines) {
