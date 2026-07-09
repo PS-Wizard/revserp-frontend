@@ -16,6 +16,11 @@ import {
 
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
+import { redirectAuthenticatedUser } from "~/lib/auth.server"
+
+export async function loader({ request }: { request: Request }) {
+  return redirectAuthenticatedUser(request)
+}
 
 const integrations = [
   "Google Search Console",
