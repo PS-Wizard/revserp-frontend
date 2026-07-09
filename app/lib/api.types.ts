@@ -66,11 +66,7 @@ export type ProjectsResponse = {
 }
 
 export type CrawlStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "failed"
-  | "cancelled"
+  "queued" | "running" | "completed" | "failed" | "cancelled"
 
 export type CrawlPhase = "crawling" | "analyzing"
 
@@ -447,7 +443,8 @@ export type AIAuditResponse = {
   id: string
   project_id: string
   crawl_id?: string
-  status: "queued" | "running" | "completed" | "completed_with_failures" | "failed"
+  status:
+    "queued" | "running" | "completed" | "completed_with_failures" | "failed"
   score?: number
   error_message?: string
   started_at?: string
@@ -484,6 +481,20 @@ export type CrawlTrendSnapshot = {
   pillars?: PillarTrendResponse[]
 }
 export type ProjectBucketTrendsResponse = { crawls: CrawlTrendSnapshot[] }
+
+export type SiteGraphNode = {
+  url: string
+  title: string
+  status: number
+  in: number
+  out: number
+}
+
+export type SiteGraphResponse = {
+  nodes: SiteGraphNode[]
+  edges: Array<[number, number]>
+  stats: { pages: number; links: number; broken: number }
+}
 
 export type AppBootstrapResponse = {
   me: MeResponse

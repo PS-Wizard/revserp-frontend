@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   useLoaderData,
   useLocation,
@@ -49,6 +57,14 @@ import type {
   ProjectResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
+
+// Lazy so d3-force and the canvas renderer stay out of the main bundle
+// until the Site-Graph tab is opened.
+const SiteGraphView = lazy(() =>
+  import("~/components/site-graph/site-graph-view").then((module) => ({
+    default: module.SiteGraphView,
+  }))
+)
 
 export async function loader({ request }: { request: Request }) {
   const requestUrl = new URL(request.url)
@@ -156,7 +172,7 @@ export default function AppPage() {
   const queryClient = useQueryClient()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<
-    "summary" | "seo" | "aeo" | "pagespeed"
+    "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
   >("summary")
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   const [openAIConversationId, setOpenAIConversationId] = useState<
@@ -607,7 +623,10 @@ export default function AppPage() {
             <Tabs
               value={auditTab}
               onValueChange={(value) =>
-                setAuditTab(value as "summary" | "seo" | "aeo" | "pagespeed")
+                setAuditTab(
+                  value as
+                    "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
+                )
               }
               className="gap-6"
             >
@@ -684,6 +703,14 @@ export default function AppPage() {
                 />
               </TabsContent>
 
+              <TabsContent value="site-graph">
+                {auditTab === "site-graph" ? (
+                  <Suspense fallback={null}>
+                    <SiteGraphView currentCrawlId={stableCurrentCrawl?.id} />
+                  </Suspense>
+                ) : null}
+              </TabsContent>
+
               <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 justify-center px-4">
                 <TabsList className="h-11 w-fit border border-foreground/20 bg-muted/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-md">
                   <TabsTrigger className="px-4 text-sm" value="summary">
@@ -697,6 +724,9 @@ export default function AppPage() {
                   </TabsTrigger>
                   <TabsTrigger className="px-4 text-sm" value="pagespeed">
                     PageSpeed
+                  </TabsTrigger>
+                  <TabsTrigger className="px-4 text-sm" value="site-graph">
+                    Site-Graph
                   </TabsTrigger>
                 </TabsList>
               </div>
