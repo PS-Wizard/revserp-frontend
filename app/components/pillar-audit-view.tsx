@@ -1,11 +1,16 @@
 "use client"
 
-import { memo, useMemo, useState } from "react"
+import { memo, useCallback, useMemo, useState } from "react"
+import { Loader2Icon, SparklesIcon } from "lucide-react"
+import { toast } from "sonner"
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
+import { generateBatchAIFix } from "~/components/issue-explorer/utils"
+import type { FixSelection } from "~/components/issue-explorer/types"
 import { NumberPopIn } from "~/components/number-pop-in"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
+import { Button } from "~/components/ui/button"
 import {
   Card,
   CardDescription,
@@ -15,6 +20,7 @@ import {
 } from "~/components/ui/card"
 import { Separator } from "~/components/ui/separator"
 import { GooglePSIDrawer } from "~/components/gsc-overview/google-psi-drawer"
+import { ApiError } from "~/lib/api"
 import type { GooglePSIStoredResult } from "~/lib/api.types"
 import type { CrawlResponse, ScoreBreakdownResponse } from "~/lib/api.types"
 import { formatBucketLabel } from "~/lib/utils"
@@ -92,8 +98,11 @@ export const PillarAuditView = memo(function PillarAuditView({
         />
         <BucketScoreCards
           crawlBreakdowns={crawlBreakdowns}
+          currentBreakdown={currentBreakdown}
           currentCrawlId={currentCrawlId}
+          onOpenAIConversation={onOpenAIConversation}
           pillarId={pillarId}
+          projectId={projectId}
           psiResult={
             pillarId === "pagespeed"
               ? ((
@@ -127,16 +136,89 @@ export const PillarAuditView = memo(function PillarAuditView({
 
 const BucketScoreCards = memo(function BucketScoreCards({
   crawlBreakdowns,
+  currentBreakdown,
   currentCrawlId,
+  onOpenAIConversation,
   pillarId,
+  projectId,
   psiResult,
 }: {
   crawlBreakdowns: CrawlBreakdown[]
+  currentBreakdown: ScoreBreakdownResponse | null
   currentCrawlId?: string
+  onOpenAIConversation?: (
+    conversationId: string,
+    scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
+  ) => void
   pillarId: string
+  projectId?: string
   psiResult: GooglePSIStoredResult | null
 }) {
   const [psiDrawerOpen, setPsiDrawerOpen] = useState(false)
+  const [submittingBucketId, setSubmittingBucketId] = useState<string | null>(
+    null
+  )
+  const crawlId = currentBreakdown?.crawl_id ?? ""
+  const pillarLabel = useMemo(
+    () =>
+      currentBreakdown?.pillars.find((pillar) => pillar.id === pillarId)
+        ?.label ?? pillarId,
+    [currentBreakdown, pillarId]
+  )
+
+  // Mirror the issue table's whole-bucket "Recommend Fixes": one selection
+  // scoped to this bucket with empty issueTypeIds/urls so the backend expands
+  // to every issue type in it.
+  const onRecommendBucketFix = useCallback(
+    (bucket: { id: string; label: string }) => {
+      if (!crawlId || !projectId) {
+        toast.error("Recommended fixes are unavailable for this view.")
+        return
+      }
+
+      const selection: FixSelection = {
+        pillarId,
+        pillarLabel,
+        bucketIds: [bucket.id],
+        bucketLabels: [formatBucketLabel(bucket.id, bucket.label)],
+        issueTypeIds: [],
+        urls: [],
+      }
+
+      setSubmittingBucketId(bucket.id)
+      const promise = generateBatchAIFix({
+        crawlId,
+        projectId,
+        selections: [selection],
+      })
+
+      toast.promise(promise, {
+        loading: "Generating recommended fixes…",
+        success: (conversation) => ({
+          message: `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
+          action: onOpenAIConversation
+            ? {
+                label: "Open chat",
+                onClick: () =>
+                  onOpenAIConversation(conversation.id, {
+                    pillarId,
+                    bucketIds: [bucket.id],
+                    issueTypeIds: [],
+                  }),
+              }
+            : undefined,
+        }),
+        error: (error) =>
+          error instanceof ApiError
+            ? error.message
+            : "Unable to generate recommended fixes.",
+      })
+
+      const done = () => setSubmittingBucketId(null)
+      void promise.then(done, done)
+    },
+    [crawlId, projectId, pillarId, pillarLabel, onOpenAIConversation]
+  )
   // crawlBreakdowns is the full history sorted newest-first. Locate the crawl
   // the user has selected (falling back to the newest) so the cards, trend
   // deltas, and pop-in replay key track the selection rather than always the
@@ -196,7 +278,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
         return (
           <>
             <Card
-              className={`@container/card flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
+              className={`@container/card relative flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
                 bucket.id === "psi_cwv" && psiResult
                   ? "cursor-pointer transition hover:border-primary/30"
                   : ""
@@ -236,6 +318,26 @@ const BucketScoreCards = memo(function BucketScoreCards({
                 </div>
                 <TrendSparkline values={series} trend={delta} />
               </CardFooter>
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/40 opacity-0 backdrop-blur-[3px] transition-opacity duration-200 group-hover/card:opacity-100">
+                <Button
+                  className="pointer-events-auto shadow-sm"
+                  disabled={
+                    submittingBucketId !== null || !projectId || !crawlId
+                  }
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onRecommendBucketFix(bucket)
+                  }}
+                  size="sm"
+                >
+                  {submittingBucketId === bucket.id ? (
+                    <Loader2Icon className="size-4 animate-spin" />
+                  ) : (
+                    <SparklesIcon className="size-4" />
+                  )}
+                  Recommend Fixes
+                </Button>
+              </div>
             </Card>
             {bucket.id === "psi_cwv" && psiResult && (
               <GooglePSIDrawer
