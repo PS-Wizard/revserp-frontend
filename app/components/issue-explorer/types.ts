@@ -1,7 +1,14 @@
 import type {
   ScoreBreakdownBucketResponse,
   ScoreBreakdownIssueURLsResponse,
+  ScoreBreakdownPillarResponse,
 } from "~/lib/api.types"
+
+export type PillarScope = {
+  key: string
+  pillarLabel: string
+  pillar: ScoreBreakdownPillarResponse
+}
 
 export type BucketScope = {
   key: string
