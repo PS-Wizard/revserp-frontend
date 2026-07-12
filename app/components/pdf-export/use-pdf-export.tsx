@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { toast } from "sonner"
 import { clientApiFetch } from "~/lib/api"
 
 export type CommentarySection = {
@@ -98,6 +99,18 @@ export function usePdfExport({
   async function exportPdf() {
     if (!crawlId || isExporting) return
     setIsExporting(true)
+
+    const toastId = `audit-export-${crawlId}`
+    toast.loading(
+      <span className="shimmer text-muted-foreground">Generating audit…</span>,
+      {
+        id: toastId,
+        duration: Infinity,
+        description: projectName
+          ? `Building the ${projectName} audit report.`
+          : undefined,
+      }
+    )
 
     try {
       const [{ toPng }, { default: jsPDF }] = await Promise.all([
@@ -283,6 +296,17 @@ export function usePdfExport({
       pdf.save(
         `audit-${projectName.toLowerCase().replace(/\s+/g, "-")}-${dateStr}.pdf`
       )
+
+      toast.success("Audit ready", {
+        id: toastId,
+        description: "Your audit PDF has been downloaded.",
+      })
+    } catch (error) {
+      toast.error("Couldn't generate audit", {
+        id: toastId,
+        description:
+          error instanceof Error ? error.message : "The audit export failed.",
+      })
     } finally {
       onDone()
       setIsExporting(false)

@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "~/components/ui/table"
 
-import type { BucketScope, MergedIssueUrlRow } from "./types"
+import type { BucketScope, MergedIssueUrlRow, PillarScope } from "./types"
 import { formatScore } from "~/components/trend-sparkline"
 
 import type { RowSelectionProps } from "./use-drag-selection"
@@ -44,10 +44,94 @@ function SelectAllHead({
   )
 }
 
+type PillarTableProps = {
+  rows: PillarScope[]
+  totalRows: number
+  checkedKeys: string[]
+  onToggleRow: (key: string) => void
+  onToggleAll: (checked: boolean) => void
+  onDrill: (key: string) => void
+  getRowProps: (key: string) => RowSelectionProps
+}
+
+export function PillarTable({
+  rows,
+  totalRows,
+  checkedKeys,
+  onToggleRow,
+  onToggleAll,
+  onDrill,
+  getRowProps,
+}: PillarTableProps) {
+  if (!totalRows) {
+    return <EmptyMessage message="No pillars found for the selected scope." />
+  }
+
+  const checkedSet = new Set(checkedKeys)
+
+  return (
+    <div className="overflow-hidden rounded-lg border select-none">
+      <Table>
+        <TableHeader className="sticky top-0 z-10 bg-muted">
+          <TableRow>
+            <SelectAllHead
+              checkedCount={rows.filter((r) => checkedSet.has(r.key)).length}
+              totalCount={rows.length}
+              onToggleAll={onToggleAll}
+            />
+            <TableHead>Pillar</TableHead>
+            <TableHead className="text-right">Score</TableHead>
+            <TableHead className="text-right">Buckets</TableHead>
+            <TableHead className="text-right">Issue Types</TableHead>
+            <TableHead className="text-right">Issues</TableHead>
+            <TableHead className="text-right">Affected URLs</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow
+              className="cursor-pointer"
+              key={row.key}
+              onDoubleClick={() => onDrill(row.key)}
+              title="Double-click to view buckets · drag to select"
+              {...getRowProps(row.key)}
+            >
+              <TableCell>
+                <Checkbox
+                  aria-label={`Select ${row.pillarLabel}`}
+                  checked={checkedSet.has(row.key)}
+                  onCheckedChange={() => onToggleRow(row.key)}
+                />
+              </TableCell>
+              <TableCell className="whitespace-normal font-medium text-foreground">
+                {row.pillarLabel}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatScore(row.pillar.score)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {row.pillar.bucket_count}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {row.pillar.issue_type_count}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {row.pillar.issue_row_count}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {row.pillar.affected_url_count}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
 type BucketTableProps = {
   rows: BucketScope[]
   totalRows: number
-  hasMultiplePillars: boolean
   checkedKeys: string[]
   onToggleRow: (key: string) => void
   onToggleAll: (checked: boolean) => void
@@ -58,7 +142,6 @@ type BucketTableProps = {
 export function BucketTable({
   rows,
   totalRows,
-  hasMultiplePillars,
   checkedKeys,
   onToggleRow,
   onToggleAll,
@@ -81,7 +164,6 @@ export function BucketTable({
               totalCount={rows.length}
               onToggleAll={onToggleAll}
             />
-            {hasMultiplePillars ? <TableHead>Pillar</TableHead> : null}
             <TableHead>Bucket</TableHead>
             <TableHead className="text-right">Score</TableHead>
             <TableHead className="text-right">Issue Types</TableHead>
@@ -105,11 +187,6 @@ export function BucketTable({
                   onCheckedChange={() => onToggleRow(row.key)}
                 />
               </TableCell>
-              {hasMultiplePillars ? (
-                <TableCell className="whitespace-normal text-muted-foreground">
-                  {row.pillarLabel}
-                </TableCell>
-              ) : null}
               <TableCell className="whitespace-normal font-medium text-foreground">
                 {row.bucketLabel}
               </TableCell>
@@ -216,9 +293,17 @@ export function UrlIssueTable({
                   />
                 </TableCell>
                 <TableCell className="max-w-[18rem] font-medium text-foreground">
-                  <div className="truncate" title={row.url}>
+                  <a
+                    href={row.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={row.url}
+                    onClick={(event) => event.stopPropagation()}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    className="block truncate text-primary hover:underline"
+                  >
                     {row.url}
-                  </div>
+                  </a>
                 </TableCell>
                 <TableCell className="whitespace-normal text-muted-foreground">
                   {row.issueTypeLabel}
@@ -230,7 +315,7 @@ export function UrlIssueTable({
                   {row.message}
                 </TableCell>
                 <TableCell className="max-w-[24rem] whitespace-normal text-muted-foreground">
-                  {row.details}
+                  <Linkify text={row.details} />
                 </TableCell>
               </TableRow>
             )
@@ -251,4 +336,34 @@ function EmptyMessage({ message }: { message: string }) {
 
 function SeverityBadge({ severity }: { severity: string }) {
   return <Badge variant="outline">{severity || "Unknown"}</Badge>
+}
+
+// Splits text on http(s) URLs and renders the URLs as new-tab links. The
+// capturing split yields the matched URLs as their own array entries, so each
+// part is either a plain string or exactly one URL.
+const URL_SPLIT_PATTERN = /(https?:\/\/[^\s]+)/g
+
+function Linkify({ text }: { text: string }) {
+  if (!text) return null
+  return (
+    <>
+      {text.split(URL_SPLIT_PATTERN).map((part, index) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            className="break-all text-primary hover:underline"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </>
+  )
 }

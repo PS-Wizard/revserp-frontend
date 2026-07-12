@@ -22,6 +22,7 @@ import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { CompileLoader } from "~/components/compile-loader"
 import { IssueExplorer } from "~/components/issue-explorer"
+import { IssueTreemap } from "~/components/issue-treemap"
 import {
   PillarAuditView,
   type CrawlBreakdown,
@@ -586,6 +587,30 @@ export default function AppPage() {
     void exportPdfRef.current()
   }, [])
 
+  const issuesRef = useRef<HTMLDivElement>(null)
+  const issueFocusTokenRef = useRef(0)
+  const [issueFocus, setIssueFocus] = useState<{
+    pillarId?: string
+    bucketId: string
+    issueTypeId?: string
+    autoSelect?: number
+    token: number
+  } | null>(null)
+  const handleSelectBucket = useCallback(
+    (pillarId: string, bucketId: string, issueTypeId?: string) => {
+      issueFocusTokenRef.current += 1
+      setIssueFocus({
+        pillarId,
+        bucketId,
+        issueTypeId,
+        autoSelect: 20,
+        token: issueFocusTokenRef.current,
+      })
+      issuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    },
+    []
+  )
+
   return (
     <main className="min-h-svh overflow-x-clip bg-background text-foreground">
       {cancelDialog}
@@ -655,13 +680,22 @@ export default function AppPage() {
                   overallPreviousValue={previousOverall}
                 />
                 <div className="px-4 lg:px-6">
+                  <IssueTreemap
+                    breakdown={stableCurrentBreakdown}
+                    onSelectBucket={handleSelectBucket}
+                  />
+                </div>
+                <div className="px-4 lg:px-6">
                   <Separator />
                 </div>
-                <IssueExplorer
-                  breakdown={stableCurrentBreakdown}
-                  onOpenAIConversation={handleOpenAIConversation}
-                  projectId={activeProject?.id}
-                />
+                <div className="scroll-mt-4" ref={issuesRef}>
+                  <IssueExplorer
+                    breakdown={stableCurrentBreakdown}
+                    focusRequest={issueFocus}
+                    onOpenAIConversation={handleOpenAIConversation}
+                    projectId={activeProject?.id}
+                  />
+                </div>
               </TabsContent>
 
               <TabsContent value="seo">
