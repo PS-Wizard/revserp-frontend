@@ -412,6 +412,10 @@ export type AutoCrawlResponse = {
   enabled: boolean
   config_snapshot?: AutoCrawlConfigSnapshot | null
   last_enqueued_at?: string
+  frequency_days: number
+  run_at: string
+  timezone: string
+  next_run_at?: string
   created_at?: string
   updated_at?: string
 }
@@ -419,6 +423,9 @@ export type AutoCrawlResponse = {
 export type AutoCrawlPutBody = {
   enabled: boolean
   config_snapshot?: AutoCrawlConfigSnapshot | null
+  frequency_days?: number
+  run_at?: string
+  timezone?: string
 }
 
 export type AIAuditRunResponse = {

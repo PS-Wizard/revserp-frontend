@@ -711,6 +711,7 @@ export const AppNavbar = memo(function AppNavbar({
         error={autoCrawl.error}
         isOpen={autoCrawl.isDialogOpen}
         isSaving={autoCrawl.isSaving}
+        nextRunAt={autoCrawl.nextRunAt}
         onConfigChange={autoCrawl.setConfig}
         onOpenChange={(open) =>
           open ? void autoCrawl.openDialog() : autoCrawl.closeDialog()

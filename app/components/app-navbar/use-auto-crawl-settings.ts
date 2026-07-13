@@ -9,6 +9,8 @@ export type AutoCrawlConfig = {
   delayMs: string
   jitterMs: string
   fetchTimeoutSeconds: string
+  frequencyDays: string
+  runAt: string
 }
 
 export const DEFAULT_AUTO_CRAWL_CONFIG: AutoCrawlConfig = {
@@ -17,6 +19,8 @@ export const DEFAULT_AUTO_CRAWL_CONFIG: AutoCrawlConfig = {
   delayMs: "",
   jitterMs: "",
   fetchTimeoutSeconds: "10",
+  frequencyDays: "1",
+  runAt: "03:00",
 }
 
 export function useAutoCrawlSettings(activeProjectId?: string | null) {
@@ -28,6 +32,7 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState("")
+  const [nextRunAt, setNextRunAt] = useState("")
 
   // Track activeProjectId to reload when it changes.
   const lastProjectIdRef = useRef<string | null | undefined>(undefined)
@@ -39,8 +44,15 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
         `/projects/${activeProjectId}/auto-crawl`
       )
       setEnabled(data.enabled)
+      setNextRunAt(data.next_run_at ?? "")
+      const frequencyDays = data.frequency_days
+        ? String(data.frequency_days)
+        : DEFAULT_AUTO_CRAWL_CONFIG.frequencyDays
+      const runAt = data.run_at || DEFAULT_AUTO_CRAWL_CONFIG.runAt
       if (data.config_snapshot) {
         setConfig({
+          frequencyDays,
+          runAt,
           maxDepth: String(data.config_snapshot.max_depth),
           maxPages:
             data.config_snapshot.max_pages !== undefined
@@ -59,7 +71,7 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
           ),
         })
       } else {
-        setConfig(DEFAULT_AUTO_CRAWL_CONFIG)
+        setConfig({ ...DEFAULT_AUTO_CRAWL_CONFIG, frequencyDays, runAt })
       }
     } catch {
       // Defaults stay (disabled, empty config).
@@ -138,6 +150,19 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
       }
     }
 
+    const parsedFrequencyDays = Number(cfg.frequencyDays)
+    if (
+      !Number.isInteger(parsedFrequencyDays) ||
+      parsedFrequencyDays < 1 ||
+      parsedFrequencyDays > 30
+    ) {
+      return "Crawl frequency must be between 1 and 30 days."
+    }
+
+    if (!/^\d{2}:\d{2}$/.test(cfg.runAt)) {
+      return "Crawl time must be a valid time of day."
+    }
+
     return null
   }, [])
 
@@ -174,23 +199,30 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
     setIsSaving(true)
     setError("")
     try {
-      await clientApiPut(`/projects/${activeProjectId}/auto-crawl`, {
-        enabled: true,
-        config_snapshot: {
-          max_depth: parsedMaxDepth,
-          fetch_timeout_seconds: parsedFetchTimeoutSeconds,
-          ...(parsedMaxPages !== undefined
-            ? { max_pages: parsedMaxPages }
-            : {}),
-          ...(parsedDelayMs !== undefined
-            ? { request_delay_ms: parsedDelayMs }
-            : {}),
-          ...(parsedJitterMs !== undefined
-            ? { request_jitter_ms: parsedJitterMs }
-            : {}),
-        },
-      })
+      const saved = await clientApiPut<AutoCrawlResponse>(
+        `/projects/${activeProjectId}/auto-crawl`,
+        {
+          enabled: true,
+          frequency_days: Number(config.frequencyDays),
+          run_at: config.runAt,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          config_snapshot: {
+            max_depth: parsedMaxDepth,
+            fetch_timeout_seconds: parsedFetchTimeoutSeconds,
+            ...(parsedMaxPages !== undefined
+              ? { max_pages: parsedMaxPages }
+              : {}),
+            ...(parsedDelayMs !== undefined
+              ? { request_delay_ms: parsedDelayMs }
+              : {}),
+            ...(parsedJitterMs !== undefined
+              ? { request_jitter_ms: parsedJitterMs }
+              : {}),
+          },
+        }
+      )
       setEnabled(true)
+      setNextRunAt(saved.next_run_at ?? "")
       setIsDialogOpen(false)
       setError("")
     } catch (e) {
@@ -209,6 +241,7 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
     isDialogOpen,
     isSaving,
     error,
+    nextRunAt,
     setConfig,
     loadSettings,
     openDialog,

@@ -16,13 +16,31 @@ import {
   FieldLabel,
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select"
 import type { AutoCrawlConfig } from "./use-auto-crawl-settings"
+
+const frequencyOptions = [
+  { value: "1", label: "Every day" },
+  { value: "2", label: "Every 2 days" },
+  { value: "3", label: "Every 3 days" },
+  { value: "4", label: "Every 4 days" },
+  { value: "5", label: "Every 5 days" },
+  { value: "7", label: "Every week" },
+  { value: "14", label: "Every 2 weeks" },
+]
 
 type AutoCrawlDialogProps = {
   isOpen: boolean
   isSaving: boolean
   error: string
   config: AutoCrawlConfig
+  nextRunAt: string
   onConfigChange: (config: AutoCrawlConfig) => void
   onOpenChange: (open: boolean) => void
   onSubmit: () => void
@@ -33,6 +51,7 @@ export function AutoCrawlDialog({
   isSaving,
   error,
   config,
+  nextRunAt,
   onConfigChange,
   onOpenChange,
   onSubmit,
@@ -56,6 +75,47 @@ export function AutoCrawlDialog({
           </DialogHeader>
 
           <FieldGroup>
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="auto-frequency-days">Schedule</FieldLabel>
+                <Select
+                  onValueChange={(value) =>
+                    onConfigChange({
+                      ...config,
+                      frequencyDays: value ?? config.frequencyDays,
+                    })
+                  }
+                  value={config.frequencyDays}
+                >
+                  <SelectTrigger className="w-full" id="auto-frequency-days">
+                    <SelectValue placeholder="Every day" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {frequencyOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="auto-run-at">At</FieldLabel>
+                <Input
+                  id="auto-run-at"
+                  onChange={(event) =>
+                    onConfigChange({ ...config, runAt: event.target.value })
+                  }
+                  type="time"
+                  value={config.runAt}
+                />
+              </Field>
+            </div>
+            <FieldDescription>
+              {nextRunAt
+                ? `Crawls run in your local timezone. Next run: ${formatNextRun(nextRunAt)}.`
+                : "Crawls run in your local timezone."}
+            </FieldDescription>
             <Field>
               <FieldLabel htmlFor="auto-max-depth">Max depth</FieldLabel>
               <Input
@@ -166,4 +226,18 @@ export function AutoCrawlDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+const nextRunFormatter = new Intl.DateTimeFormat("en-US", {
+  weekday: "short",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+})
+
+function formatNextRun(value: string) {
+  const timestamp = new Date(value)
+  if (Number.isNaN(timestamp.getTime())) return value
+  return nextRunFormatter.format(timestamp)
 }
