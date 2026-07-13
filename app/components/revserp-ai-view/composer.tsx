@@ -1,4 +1,4 @@
-import { Loader2Icon, SendIcon } from "lucide-react"
+import { SendIcon, SquareIcon } from "lucide-react"
 import { Button } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
 import type {
@@ -15,6 +15,7 @@ export function Composer({
   errorMessage,
   onPromptChange,
   onSubmit,
+  onStop,
   onKeyDown,
   onTextareaInput,
   pillars,
@@ -34,6 +35,7 @@ export function Composer({
   errorMessage: string
   onPromptChange: (value: string) => void
   onSubmit: () => void
+  onStop: () => void
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
   onTextareaInput: () => void
   pillars: ScoreBreakdownPillarResponse[]
@@ -80,19 +82,27 @@ export function Composer({
             selectedPillarId={selectedPillarId}
           />
 
-          <Button
-            aria-label="Send prompt"
-            className="mb-0.5 ml-auto size-9 rounded-full"
-            disabled={!canSend}
-            onClick={() => void onSubmit()}
-            size="icon"
-          >
-            {isSending ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
+          {isSending ? (
+            <Button
+              aria-label="Stop generating"
+              className="mb-0.5 ml-auto size-9 rounded-full"
+              onClick={onStop}
+              size="icon"
+              variant="secondary"
+            >
+              <SquareIcon className="size-3.5 fill-current" />
+            </Button>
+          ) : (
+            <Button
+              aria-label="Send prompt"
+              className="mb-0.5 ml-auto size-9 rounded-full"
+              disabled={!canSend}
+              onClick={() => void onSubmit()}
+              size="icon"
+            >
               <SendIcon className="size-4" />
-            )}
-          </Button>
+            </Button>
+          )}
         </div>
       </div>
     </div>

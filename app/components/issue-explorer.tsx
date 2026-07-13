@@ -672,34 +672,54 @@ export function IssueExplorer({
     }
 
     setIsSubmittingFix(true)
+    const controller = new AbortController()
     const promise = generateBatchAIFix({
       crawlId,
       projectId,
       selections: fixSelections,
+      signal: controller.signal,
     })
 
     const first = fixSelections[0]
-    toast.promise(promise, {
-      loading: "Generating recommended fixes…",
-      success: (conversation) => ({
-        message: `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
-        action: onOpenAIConversation
-          ? {
-              label: "Open chat",
-              onClick: () =>
-                onOpenAIConversation(conversation.id, {
-                  pillarId: first.pillarId,
-                  bucketIds: first.bucketIds,
-                  issueTypeIds: first.issueTypeIds,
-                }),
-            }
-          : undefined,
-      }),
-      error: (error) =>
-        error instanceof ApiError
-          ? error.message
-          : "Unable to generate recommended fixes.",
+    const toastId = toast.loading("Generating recommended fixes…", {
+      action: {
+        label: "Cancel",
+        onClick: () => controller.abort(),
+      },
     })
+    promise.then(
+      (conversation) => {
+        toast.success(
+          `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
+          {
+            id: toastId,
+            action: onOpenAIConversation
+              ? {
+                  label: "Open chat",
+                  onClick: () =>
+                    onOpenAIConversation(conversation.id, {
+                      pillarId: first.pillarId,
+                      bucketIds: first.bucketIds,
+                      issueTypeIds: first.issueTypeIds,
+                    }),
+                }
+              : undefined,
+          }
+        )
+      },
+      (error) => {
+        if (controller.signal.aborted) {
+          toast.dismiss(toastId)
+          return
+        }
+        toast.error(
+          error instanceof ApiError
+            ? error.message
+            : "Unable to generate recommended fixes.",
+          { id: toastId }
+        )
+      }
+    )
 
     const done = () => setIsSubmittingFix(false)
     void promise.then(done, done)

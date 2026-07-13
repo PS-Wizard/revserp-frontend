@@ -32,8 +32,13 @@ export async function clientApiFetch<T>(path: string, init: RequestInit = {}) {
   return parseApiResponse<T>(response)
 }
 
-export function clientApiPost<T>(path: string, body: unknown) {
+export function clientApiPost<T>(
+  path: string,
+  body: unknown,
+  init: RequestInit = {}
+) {
   return clientApiFetch<T>(path, {
+    ...init,
     method: "POST",
     headers: new Headers({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),

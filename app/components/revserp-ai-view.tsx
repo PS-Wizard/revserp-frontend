@@ -215,6 +215,9 @@ function useAIConversation({
     !isSending
   )
 
+  const sendAbortControllerRef = useRef<AbortController | null>(null)
+  const sendRestoreRef = useRef<(() => void) | null>(null)
+
   function startSending(requestId: string) {
     activeSendRequestIdRef.current = requestId
     setActiveSendRequestId(requestId)
@@ -224,12 +227,25 @@ function useAIConversation({
     if (activeSendRequestIdRef.current !== requestId) return
     activeSendRequestIdRef.current = null
     setActiveSendRequestId(null)
+    sendAbortControllerRef.current = null
+    sendRestoreRef.current = null
   }
 
   const cancelSending = useCallback(() => {
+    sendAbortControllerRef.current?.abort()
+    sendAbortControllerRef.current = null
+    sendRestoreRef.current = null
     activeSendRequestIdRef.current = null
     setActiveSendRequestId(null)
   }, [])
+
+  // Stop button: abort the in-flight request and put the prompt back in the
+  // composer so it can be edited and resent.
+  const stopSending = useCallback(() => {
+    const restore = sendRestoreRef.current
+    cancelSending()
+    restore?.()
+  }, [cancelSending])
 
   function isActiveSendRequest(requestId: string) {
     return activeSendRequestIdRef.current === requestId
@@ -457,6 +473,12 @@ function useAIConversation({
 
     // Batch related state updates
     const sendRequestId = requestId
+    const abortController = new AbortController()
+    sendAbortControllerRef.current = abortController
+    sendRestoreRef.current = () => {
+      setMessages(baseMessages)
+      setPrompt(trimmedPrompt)
+    }
     startSending(sendRequestId)
     setPrompt("")
     setErrorMessage("")
@@ -473,7 +495,8 @@ function useAIConversation({
           {
             crawl_id: breakdown.crawl_id,
             title: trimmedPrompt,
-          }
+          },
+          { signal: abortController.signal }
         )
         if (!isActiveSendRequest(sendRequestId)) return
         conversationId = created.conversation.id
@@ -498,7 +521,8 @@ function useAIConversation({
           bucket_ids: selectedBucketIdsForRequest,
           issue_type_ids: selectedIssueTypeIds,
           content: trimmedPrompt,
-        }
+        },
+        { signal: abortController.signal }
       )
       if (!isActiveSendRequest(sendRequestId)) return
       const nextMessages = [
@@ -652,6 +676,7 @@ function useAIConversation({
     onPromptChange: setPrompt,
     scrollContainerRef,
     textareaRef,
+    stopSending,
   }
 }
 
@@ -714,6 +739,7 @@ export function RevserpAIView({
     onPromptChange,
     scrollContainerRef,
     textareaRef,
+    stopSending,
   } = useAIConversation({
     breakdown,
     openConversationId,
@@ -752,6 +778,7 @@ export function RevserpAIView({
           onSubmit={() => {
             void handleSubmit()
           }}
+          onStop={stopSending}
           onKeyDown={handlePromptKeyDown}
           onTextareaInput={growTextarea}
           pillars={breakdown.pillars}

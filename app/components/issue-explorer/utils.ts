@@ -179,17 +179,20 @@ export async function generateBatchAIFix({
   crawlId,
   projectId,
   selections,
+  signal,
 }: {
   crawlId: string
   projectId: string
   selections: FixSelection[]
+  signal?: AbortSignal
 }): Promise<AIConversationResponse> {
   const created = await clientApiPost<CreateAIConversationResponse>(
     `/projects/${projectId}/ai/conversations`,
     {
       crawl_id: crawlId,
       title: buildBatchTitle(selections),
-    }
+    },
+    { signal }
   )
 
   let conversation = created.conversation
@@ -203,7 +206,8 @@ export async function generateBatchAIFix({
         issue_type_ids: selection.issueTypeIds,
         issue_urls: selection.urls,
         content: buildBatchPrompt(selection),
-      }
+      },
+      { signal }
     )
     conversation = response.conversation
   }
