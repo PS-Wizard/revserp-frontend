@@ -20,6 +20,7 @@ export type TableRow = {
 export type MetricSummary = {
   current: number
   previous: number
+  hasPreviousWindow: boolean
 }
 
 export type MetricConfig = {
@@ -30,7 +31,7 @@ export type MetricConfig = {
 
 export type ChartSeries = {
   name: string
-  data: Array<{ x: number; y: number }>
+  data: Array<{ x: number; y: number | null }>
 }
 
 export function toTableRows<RowType extends GSCSearchAnalyticsRowResponse>(
@@ -78,6 +79,7 @@ export function buildMetricSummary(
   return {
     current: metricValueForRows(metricKey, currentRows),
     previous: metricValueForRows(metricKey, previousRows),
+    hasPreviousWindow: previousRows.length > 0,
   }
 }
 

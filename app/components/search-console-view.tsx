@@ -21,6 +21,7 @@ import {
 } from "~/components/ui/select"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
+  CrawlResponse,
   ProjectGSCOverviewResponse,
   ProjectGSCStatusResponse,
   ProjectResponse,
@@ -50,11 +51,13 @@ export function gscOverviewQueryKey(projectId: string) {
 type SearchConsoleViewProps = {
   activeProject: ProjectResponse | null
   isOrganizationOwner: boolean
+  completedCrawls: CrawlResponse[]
 }
 
 export const SearchConsoleView = memo(function SearchConsoleView({
   activeProject,
   isOrganizationOwner,
+  completedCrawls,
 }: SearchConsoleViewProps) {
   const queryClient = useQueryClient()
   const projectId = activeProject?.id
@@ -215,6 +218,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     return (
       <GSCOverview
         activeProjectID={activeProject.id}
+        completedCrawls={completedCrawls}
         isOrganizationOwner={isOrganizationOwner}
         onRefreshOverview={handleRefreshOverview}
         overviewErrorMessage={gscLoadErrorMessage}
@@ -327,7 +331,8 @@ function areSearchConsoleViewPropsEqual(
 ) {
   return (
     previous.activeProject?.id === next.activeProject?.id &&
-    previous.isOrganizationOwner === next.isOrganizationOwner
+    previous.isOrganizationOwner === next.isOrganizationOwner &&
+    previous.completedCrawls === next.completedCrawls
   )
 }
 

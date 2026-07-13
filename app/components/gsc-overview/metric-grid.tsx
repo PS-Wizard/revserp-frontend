@@ -20,11 +20,9 @@ export function GSCMetricGrid({
     <div className="grid gap-px border-y border-border/50 bg-border/50 md:grid-cols-2 xl:grid-cols-4">
       {(Object.keys(metricConfig) as GSCMetricKey[]).map((metricKey) => {
         const summary = derivedMetricSummary[metricKey]
-        const delta = formatMetricDelta(
-          metricKey,
-          summary.current,
-          summary.previous
-        )
+        const delta = summary.hasPreviousWindow
+          ? formatMetricDelta(metricKey, summary.current, summary.previous)
+          : ""
 
         return (
           <button

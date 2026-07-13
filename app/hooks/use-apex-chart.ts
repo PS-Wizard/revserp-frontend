@@ -66,4 +66,6 @@ export function useApexChart(
       )
     }
   }, [chartOptions, enabled, series])
+
+  return chartInstanceRef
 }

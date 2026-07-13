@@ -1,12 +1,14 @@
 "use client"
 
-import { useMemo, useReducer, useRef } from "react"
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react"
 
 import { ApiError, clientApiPost } from "~/lib/api"
 import type {
+  CrawlResponse,
   ProjectGSCOverviewResponse,
   ProjectGSCStatusResponse,
 } from "~/lib/api.types"
+import { getCrawlTimestamp } from "~/lib/crawl"
 
 import { GSCHeaderCard } from "./header-card"
 import { GSCMetricGrid } from "./metric-grid"
@@ -46,6 +48,8 @@ const metricConfig: Record<GSCMetricKey, MetricConfig> = {
 }
 const dayInMilliseconds = 24 * 60 * 60 * 1000
 
+type VisibleChartRange = { min: number; max: number }
+
 type OverviewState = {
   selectedGSCSiteURL: string
   isSavingGSCProjectSelection: boolean
@@ -55,6 +59,7 @@ type OverviewState = {
   tableSearch: string
   tableSort: TableSortState
   visibleMetrics: Record<GSCMetricKey, boolean>
+  visibleChartRange: VisibleChartRange | null
 }
 
 type Action =
@@ -66,6 +71,7 @@ type Action =
   | { type: "SET_TABLE_SEARCH"; value: string }
   | { type: "SET_TABLE_SORT"; value: TableSortState["column"] }
   | { type: "TOGGLE_METRIC"; value: GSCMetricKey }
+  | { type: "SET_VISIBLE_CHART_RANGE"; value: VisibleChartRange | null }
   | { type: "RESET_TABLE" }
 
 function overviewReducer(state: OverviewState, action: Action): OverviewState {
@@ -103,12 +109,15 @@ function overviewReducer(state: OverviewState, action: Action): OverviewState {
         },
       }
     }
+    case "SET_VISIBLE_CHART_RANGE":
+      return { ...state, visibleChartRange: action.value }
     case "RESET_TABLE":
       return {
         ...state,
         tableSearch: "",
         activeDimensionTab: "queries" as GSCDimensionTab,
         tableSort: { column: "clicks", direction: "desc" },
+        visibleChartRange: null,
       }
     default:
       return state
@@ -130,6 +139,7 @@ function createInitialState(status: ProjectGSCStatusResponse): OverviewState {
       ctr: true,
       position: true,
     },
+    visibleChartRange: null,
   }
 }
 export function GSCOverview({
@@ -139,6 +149,7 @@ export function GSCOverview({
   overviewErrorMessage,
   isOrganizationOwner,
   onRefreshOverview,
+  completedCrawls,
 }: {
   activeProjectID: string
   status: ProjectGSCStatusResponse
@@ -146,6 +157,7 @@ export function GSCOverview({
   overviewErrorMessage: string
   isOrganizationOwner: boolean
   onRefreshOverview: () => Promise<void>
+  completedCrawls: CrawlResponse[]
 }) {
   const [state, dispatch] = useReducer(
     overviewReducer,
@@ -179,10 +191,39 @@ export function GSCOverview({
     prevOverviewRef.current = selectedWindowOverview
     dispatch({ type: "RESET_TABLE" })
   }
+  // Debounced zoom/pan range reported by the chart. While zoomed or panning,
+  // the metric cards reflect the visible slice and the "previous window" is
+  // the equally-sized slice immediately before it.
+  const rangeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleVisibleRangeChange = useCallback(
+    (range: VisibleChartRange | null) => {
+      if (rangeDebounceRef.current) clearTimeout(rangeDebounceRef.current)
+      if (range === null) {
+        dispatch({ type: "SET_VISIBLE_CHART_RANGE", value: null })
+        return
+      }
+      rangeDebounceRef.current = setTimeout(() => {
+        dispatch({ type: "SET_VISIBLE_CHART_RANGE", value: range })
+      }, 250)
+    },
+    []
+  )
+  useEffect(
+    () => () => {
+      if (rangeDebounceRef.current) clearTimeout(rangeDebounceRef.current)
+    },
+    []
+  )
+
   const currentVisibleTrendRows = useMemo(() => {
     if (!trendRows.length) return []
-    return trendRows.slice(-7)
-  }, [trendRows])
+    const range = state.visibleChartRange
+    if (!range) return trendRows
+    return trendRows.filter((row) => {
+      const timestamp = dateTimestamp(row.date)
+      return timestamp >= range.min && timestamp <= range.max
+    })
+  }, [trendRows, state.visibleChartRange])
 
   const previousVisibleTrendRows = useMemo(() => {
     if (!trendRows.length || !currentVisibleTrendRows.length) return []
@@ -266,6 +307,36 @@ export function GSCOverview({
       ),
     [selectedWindowOverview]
   )
+
+  // Overall crawl score as a forward-filled step series over the trend dates:
+  // each day carries the score of the latest crawl completed by end of that
+  // day, so the line stays flat between crawls and steps when a crawl lands.
+  const scoreChartSeries = useMemo(() => {
+    if (!trendRows.length) return null
+    const scoredCrawls = completedCrawls
+      .filter((crawl) => crawl.overall_score != null)
+      .map((crawl) => ({
+        timestamp: getCrawlTimestamp(crawl),
+        score: crawl.overall_score as number,
+      }))
+      .sort((left, right) => left.timestamp - right.timestamp)
+    if (!scoredCrawls.length) return null
+
+    let crawlIndex = 0
+    let lastScore: number | null = null
+    const data = trendRows.map((row) => {
+      const endOfDay = dateTimestamp(row.date) + dayInMilliseconds - 1
+      while (
+        crawlIndex < scoredCrawls.length &&
+        scoredCrawls[crawlIndex].timestamp <= endOfDay
+      ) {
+        lastScore = scoredCrawls[crawlIndex].score
+        crawlIndex += 1
+      }
+      return { x: dateTimestamp(row.date), y: lastScore }
+    })
+    return { name: "Overall Score", data }
+  }, [completedCrawls, trendRows])
 
   const handleRefreshOverview = async () => {
     dispatch({ type: "SET_REFRESHING", value: true })
@@ -356,6 +427,8 @@ export function GSCOverview({
             chartMetricOrder={chartMetricOrder}
             chartSeries={chartSeries}
             metricConfig={metricConfig}
+            onVisibleRangeChange={handleVisibleRangeChange}
+            scoreSeries={scoreChartSeries}
             visibleMetrics={state.visibleMetrics}
             windowOverview={selectedWindowOverview}
           />

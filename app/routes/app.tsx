@@ -802,6 +802,7 @@ export default function AppPage() {
       ) : view === "search-console" ? (
         <SearchConsoleView
           activeProject={activeProject}
+          completedCrawls={stableSortedCompletedCrawls}
           isOrganizationOwner={isOrganizationOwner}
         />
       ) : view === "revserp-ai" ? (
