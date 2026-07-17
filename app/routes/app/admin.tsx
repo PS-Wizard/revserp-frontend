@@ -83,11 +83,9 @@ type AiConfig = {
 
 // --- Scoring Tab ---
 function ScoringTab() {
-  const [mode, setMode] = useState<"global" | "org">("global")
   const [config, setConfig] = useState<ScoringConfig | null>(null)
   const [defaultConfig, setDefaultConfig] = useState<ScoringConfig | null>(null)
   const [orgs, setOrgs] = useState<AdminOrganizationResponse[]>([])
-  const [isOverride, setIsOverride] = useState(false)
   const [loading, setLoading] = useState(false)
   const [baselineBreakdown, setBaselineBreakdown] =
     useState<ScoreBreakdownResponse | null>(null)
@@ -114,26 +112,6 @@ function ScoringTab() {
       setEditorVersion((version) => version + 1)
     } catch {
       toast.error("Failed to load scoring config")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const loadOrgOverride = useCallback(async (orgId: string) => {
-    if (!orgId) return
-    setLoading(true)
-    try {
-      const data = await clientApiFetch<{
-        config: ScoringConfig
-        default: ScoringConfig
-        is_override: boolean
-      }>(`/admin/organizations/${orgId}/scoring-config`)
-      setConfig(data.config)
-      setDefaultConfig(data.default)
-      setIsOverride(data.is_override)
-      setEditorVersion((version) => version + 1)
-    } catch {
-      toast.error("Failed to load organization scoring config")
     } finally {
       setLoading(false)
     }
@@ -208,19 +186,12 @@ function ScoringTab() {
     loadBaselineBreakdown()
   }, [loadBaselineBreakdown])
 
-  // Load the GLOBAL config on mount and when switching back to global mode.
+  // Load the GLOBAL config on mount.
   // Deliberately NOT dependent on selectedPreviewOrgId: choosing a preview crawl
   // must not reload or remount the global config editor (it would discard draft edits).
   useEffect(() => {
-    if (mode === "global") loadGlobal()
-  }, [mode, loadGlobal])
-
-  // Load the ORG override config only when an org is selected in org mode.
-  useEffect(() => {
-    if (mode === "org" && selectedPreviewOrgId) {
-      loadOrgOverride(selectedPreviewOrgId)
-    }
-  }, [mode, selectedPreviewOrgId, loadOrgOverride])
+    loadGlobal()
+  }, [loadGlobal])
 
   useEffect(() => {
     loadProjects(selectedPreviewOrgId)
@@ -234,35 +205,10 @@ function ScoringTab() {
     draftConfig: ScoringConfig
   ): Promise<void> => {
     try {
-      if (mode === "global") {
-        await clientApiPut("/internal/scoring-config", { config: draftConfig })
-      } else if (selectedPreviewOrgId) {
-        await clientApiPut(
-          `/admin/organizations/${selectedPreviewOrgId}/scoring-config`,
-          { config: draftConfig }
-        )
-        setIsOverride(true)
-      }
+      await clientApiPut("/internal/scoring-config", { config: draftConfig })
       toast.success("Saved changes")
     } catch {
       toast.error("Failed to save changes")
-    }
-  }
-
-  const handleResetToGlobal = async () => {
-    if (mode !== "org" || !selectedPreviewOrgId) return
-    setLoading(true)
-    try {
-      await clientApiDelete(
-        `/admin/organizations/${selectedPreviewOrgId}/scoring-config`
-      )
-      setIsOverride(false)
-      await loadOrgOverride(selectedPreviewOrgId)
-      toast.success("Reset to global defaults")
-    } catch {
-      toast.error("Failed to reset")
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -312,9 +258,7 @@ function ScoringTab() {
     : null
 
   const triggerLabel = (() => {
-    if (mode === "org" && !selectedPreviewOrgId) return "Choose organization"
-    if (mode === "global" && !selectedPreviewOrgId)
-      return "Choose preview crawl"
+    if (!selectedPreviewOrgId) return "Choose preview crawl"
     return [selectedOrg?.name, selectedProject?.name, selectedCrawlLabel]
       .filter(Boolean)
       .join(" / ")
@@ -331,22 +275,13 @@ function ScoringTab() {
   return (
     <div className="space-y-6">
       <ScoringEditor
-        key={`${mode}-${mode === "org" ? selectedPreviewOrgId || "none" : "global"}-${editorVersion}`}
+        key={`global-${editorVersion}`}
         config={config}
         defaultConfig={defaultConfig ?? config}
         crawlId={selectedCrawlId}
         baselineBreakdown={baselineBreakdown}
         toolbar={
           <div className="flex flex-wrap items-center gap-3">
-            <Tabs
-              value={mode}
-              onValueChange={(v) => setMode(v as "global" | "org")}
-            >
-              <TabsList>
-                <TabsTrigger value="global">Global Scoring</TabsTrigger>
-                <TabsTrigger value="org">Organization Overrides</TabsTrigger>
-              </TabsList>
-            </Tabs>
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -460,21 +395,8 @@ function ScoringTab() {
                 </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
-            {mode === "org" && selectedPreviewOrgId && (
-              <Badge variant={isOverride ? "default" : "secondary"}>
-                {isOverride ? "Custom override" : "Using global defaults"}
-              </Badge>
-            )}
           </div>
         }
-        headerExtraActions={
-          mode === "org" && isOverride ? (
-            <Button variant="outline" size="sm" onClick={handleResetToGlobal}>
-              <RotateCcwIcon /> Reset to global
-            </Button>
-          ) : undefined
-        }
-        disableSave={mode === "org" && !selectedPreviewOrgId}
         loading={loading}
         previewEndpoint="/admin/scoring-config/preview"
         onSave={handleEditorSave}

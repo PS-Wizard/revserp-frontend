@@ -379,13 +379,6 @@ export type AdminOrganizationResponse = {
   name: string
 }
 
-export type AdminOrganizationOverrideConfigResponse = {
-  config: ScoringConfig
-  default: ScoringConfig
-  is_override: boolean
-  updated_at?: string
-}
-
 export type AdminAIAppConfig = {
   context_prompt: string
   guidelines: string
