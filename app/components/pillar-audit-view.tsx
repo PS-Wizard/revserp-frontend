@@ -50,10 +50,7 @@ type PillarAuditViewProps = {
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
   currentCrawlId?: string
-  onOpenAIConversation?: (
-    conversationId: string,
-    scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
-  ) => void
+  onSeedAIChat?: (prompt: string) => void
   pillarId: string
   projectId?: string
   title: string
@@ -64,7 +61,7 @@ export const PillarAuditView = memo(function PillarAuditView({
   crawlBreakdowns,
   currentBreakdown,
   currentCrawlId,
-  onOpenAIConversation,
+  onSeedAIChat,
   pillarId,
   projectId,
   title,
@@ -158,7 +155,7 @@ export const PillarAuditView = memo(function PillarAuditView({
           breakdown={currentBreakdown}
           focusRequest={bucketFocus}
           initialPillarId={pillarId}
-          onOpenAIConversation={onOpenAIConversation}
+          onSeedAIChat={onSeedAIChat}
           projectId={projectId}
         />
       </div>

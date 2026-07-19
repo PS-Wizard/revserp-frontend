@@ -1,10 +1,5 @@
-import { clientApiFetch, clientApiPost } from "~/lib/api"
-import type {
-  AIConversationResponse,
-  CreateAIConversationMessageResponse,
-  CreateAIConversationResponse,
-  ScoreBreakdownIssueURLsResponse,
-} from "~/lib/api.types"
+import { clientApiFetch } from "~/lib/api"
+import type { ScoreBreakdownIssueURLsResponse } from "~/lib/api.types"
 
 import type { BucketScope, FixSelection, MergedIssueUrlRow } from "./types"
 
@@ -171,61 +166,23 @@ export class BucketUrlPager {
 }
 
 /**
- * Creates one conversation and posts one message per pillar selection.
- * The AI message API scopes a message to a single pillar, so cross-pillar
- * selections are split into one message each within the same conversation.
+ * Builds a single natural-language prompt describing the selected issues/URLs
+ * to seed a fresh AI-dock conversation. The model then fetches the relevant
+ * issue detail via its own tools — no scope IDs are sent from the client.
+ * URLs are capped per selection to keep the seed prompt bounded.
  */
-export async function generateBatchAIFix({
-  crawlId,
-  projectId,
-  selections,
-  signal,
-}: {
-  crawlId: string
-  projectId: string
-  selections: FixSelection[]
-  signal?: AbortSignal
-}): Promise<AIConversationResponse> {
-  const created = await clientApiPost<CreateAIConversationResponse>(
-    `/projects/${projectId}/ai/conversations`,
-    {
-      crawl_id: crawlId,
-      title: buildBatchTitle(selections),
-    },
-    { signal }
-  )
-
-  let conversation = created.conversation
-  for (const selection of selections) {
-    const response = await clientApiPost<CreateAIConversationMessageResponse>(
-      `/ai/conversations/${created.conversation.id}/messages`,
-      {
-        crawl_id: crawlId,
-        pillar_id: selection.pillarId,
-        bucket_ids: selection.bucketIds,
-        issue_type_ids: selection.issueTypeIds,
-        issue_urls: selection.urls,
-        content: buildBatchPrompt(selection),
-      },
-      { signal }
+export function buildBatchFixPrompt(
+  selections: FixSelection[],
+  maxUrlsPerSelection = 20
+): string {
+  return selections
+    .map((selection) =>
+      buildBatchPrompt({
+        ...selection,
+        urls: selection.urls.slice(0, maxUrlsPerSelection),
+      })
     )
-    conversation = response.conversation
-  }
-
-  return conversation
-}
-
-function buildBatchTitle(selections: FixSelection[]) {
-  const urlCount = selections.reduce((sum, s) => sum + s.urls.length, 0)
-  if (urlCount > 0) {
-    return `Fix ${urlCount} affected URL${urlCount === 1 ? "" : "s"}`
-  }
-
-  const bucketCount = selections.reduce((sum, s) => sum + s.bucketIds.length, 0)
-  if (selections.length === 1 && bucketCount === 1) {
-    return `Fix ${selections[0].bucketLabels[0]} issues`
-  }
-  return `Fix ${bucketCount} selected bucket${bucketCount === 1 ? "" : "s"}`
+    .join("\n\n")
 }
 
 function buildBatchPrompt(selection: FixSelection) {

@@ -24,7 +24,6 @@ import {
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { ProjectPickerDialog } from "~/components/app-navbar/project-picker-dialog"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
-import { AiConversationsPopover } from "~/components/app-navbar/ai-conversations-popover"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
@@ -188,7 +187,6 @@ export const AppNavbar = memo(function AppNavbar({
   currentCrawl,
   projectCrawls,
   isCrawlRunning,
-  isViewingRunningCrawl,
   crawlStatusLabel,
   onCrawlStart,
   organizationId,
@@ -198,9 +196,6 @@ export const AppNavbar = memo(function AppNavbar({
   userName,
   view,
   onViewChange,
-  onSelectConversation,
-  onDeleteConversation,
-  onNewChat,
   isPlatformAdmin,
   onExportAudit,
   isExportingAudit,
@@ -490,15 +485,6 @@ export const AppNavbar = memo(function AppNavbar({
                   Revserp Visibility
                 </TabsTrigger>
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
-                <AiConversationsPopover
-                  activeProjectId={activeProjectId}
-                  crawlId={currentCrawl?.id}
-                  isCrawlRunning={isViewingRunningCrawl}
-                  onViewChange={onViewChange}
-                  onSelectConversation={onSelectConversation}
-                  onDeleteConversation={onDeleteConversation}
-                  onNewChat={onNewChat}
-                />
               </TabsList>
             </Tabs>
           </div>

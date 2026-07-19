@@ -14,7 +14,8 @@ import {
   useRevalidator,
 } from "react-router"
 import { redirect } from "react-router"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
@@ -30,7 +31,18 @@ import {
 } from "~/components/pillar-audit-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
-import { RevserpAIView } from "~/components/revserp-ai-view"
+import { AIDock } from "~/components/ai-dock/ai-dock"
+import type {
+  AIExportAction,
+  AINavigationDestination,
+} from "~/components/ai-dock/use-ai-chat"
+import {
+  downloadBlob,
+  formatCrawlDate,
+  getExportFilename,
+  getProjectFilenameSegment,
+  readExportError,
+} from "~/components/app-navbar/utils"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { SearchConsoleView } from "~/components/search-console-view"
 import {
@@ -44,10 +56,9 @@ import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
-import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
+import { ApiError, buildApiUrl, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
 import { getPillarChartColor } from "~/lib/pillar-colors"
-import { type AIScopeState } from "~/lib/ai-conversation"
 import type {
   AIAuditListResponse,
   AIAuditResponse,
@@ -154,7 +165,6 @@ const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
   "search-console": "Search Console",
-  "revserp-ai": "Revserp AI",
 }
 
 export default function AppPage() {
@@ -170,19 +180,16 @@ export default function AppPage() {
   const revalidator = useRevalidator()
   const location = useLocation()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<
     "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
   >("summary")
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
-  const [openAIConversationId, setOpenAIConversationId] = useState<
-    string | null
-  >(null)
-  const [pendingAIScope, setPendingAIScope] = useState<AIScopeState | null>(
-    null
-  )
-  const [isNewChat, setIsNewChat] = useState(false)
+  const [aiOpenRequest, setAiOpenRequest] = useState<{
+    prompt: string
+    token: number
+  } | null>(null)
+  const aiOpenTokenRef = useRef(0)
 
   const sortedCrawls = useMemo(
     () =>
@@ -236,26 +243,9 @@ export default function AppPage() {
     }
   }, [])
 
-  const handleOpenAIConversation = useCallback(
-    (conversationId: string, scope?: AIScopeState) => {
-      if (activeProject?.id) {
-        queryClient.invalidateQueries({
-          queryKey: ["ai-conversations", activeProject.id],
-        })
-      }
-      setOpenAIConversationId(conversationId)
-      setIsNewChat(false)
-      setPendingAIScope(scope ?? null)
-      setView("revserp-ai")
-    },
-    [queryClient, activeProject?.id]
-  )
-
-  const handleNewAIChat = useCallback(() => {
-    setOpenAIConversationId(null)
-    setIsNewChat(true)
-    setPendingAIScope(null)
-    setView("revserp-ai")
+  const handleSeedAIChat = useCallback((prompt: string) => {
+    aiOpenTokenRef.current += 1
+    setAiOpenRequest({ prompt, token: aiOpenTokenRef.current })
   }, [])
 
   const goToCrawl = useCallback(
@@ -372,12 +362,6 @@ export default function AppPage() {
       setIsStartingCrawl(false)
     }
   }, [activeRunningCrawl])
-
-  useEffect(() => {
-    if (isViewingRunningCrawl && view === "revserp-ai") {
-      setView("revserp-audit")
-    }
-  }, [isViewingRunningCrawl, view])
 
   // Lock page scrolling only while viewing the running crawl (overlay is up).
   useEffect(() => {
@@ -587,6 +571,77 @@ export default function AppPage() {
     void exportPdfRef.current()
   }, [])
 
+  // --- Global AI dock wiring ---
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects])
+
+  const handleAINavigate = useCallback(
+    (destination: AINavigationDestination) => {
+      switch (destination) {
+        case "audit_summary":
+          setView("revserp-audit")
+          setAuditTab("summary")
+          break
+        case "audit_seo":
+          setView("revserp-audit")
+          setAuditTab("seo")
+          break
+        case "audit_aeo":
+          setView("revserp-audit")
+          setAuditTab("aeo")
+          break
+        case "audit_pagespeed":
+          setView("revserp-audit")
+          setAuditTab("pagespeed")
+          break
+        case "site_graph":
+          setView("revserp-audit")
+          setAuditTab("site-graph")
+          break
+        case "search_console":
+          setView("search-console")
+          break
+        case "visibility":
+          setView("revserp-visibility")
+          break
+      }
+    },
+    []
+  )
+
+  const handleAIProjectSwitched = useCallback(
+    (switchedProjectId: string) => {
+      if (!projects.some((project) => project.id === switchedProjectId)) return
+      goToCrawl(switchedProjectId)
+    },
+    [projects, goToCrawl]
+  )
+
+  const handleAITrackCrawl = useCallback(
+    (id: string) => {
+      setIsStartingCrawl(true)
+      trackCrawl(id)
+    },
+    [trackCrawl]
+  )
+
+  const handleAIExport = useCallback(
+    (action: AIExportAction) => {
+      if (action.kind === "audit" && action.format === "pdf") {
+        void exportPdfRef.current()
+        return
+      }
+      if (
+        action.kind === "crawl" &&
+        action.crawl_id &&
+        (action.format === "csv" || action.format === "xlsx")
+      ) {
+        const crawl = recentCrawls.find((c) => c.id === action.crawl_id)
+        if (crawl) void exportCrawlIssues(crawl, action.format, projects)
+      }
+    },
+    [recentCrawls, projects]
+  )
+
   const issuesRef = useRef<HTMLDivElement>(null)
   const issueFocusTokenRef = useRef(0)
   const [issueFocus, setIssueFocus] = useState<{
@@ -619,12 +674,9 @@ export default function AppPage() {
         currentCrawl={currentCrawl}
         projectCrawls={projectCrawls}
         isCrawlRunning={isCrawlRunning}
-        isViewingRunningCrawl={isViewingRunningCrawl}
         crawlStatusLabel={crawlStatusLabel}
         onCrawlStart={handleCrawlStart}
         onViewChange={setView}
-        onSelectConversation={handleOpenAIConversation}
-        onNewChat={handleNewAIChat}
         onExportAudit={handleExportAudit}
         isExportingAudit={isExporting}
         organizationId={me.active_org_id}
@@ -692,7 +744,7 @@ export default function AppPage() {
                   <IssueExplorer
                     breakdown={stableCurrentBreakdown}
                     focusRequest={issueFocus}
-                    onOpenAIConversation={handleOpenAIConversation}
+                    onSeedAIChat={handleSeedAIChat}
                     projectId={activeProject?.id}
                   />
                 </div>
@@ -704,7 +756,7 @@ export default function AppPage() {
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentCrawlId={stableCurrentCrawl?.id}
                   currentBreakdown={stableCurrentBreakdown}
-                  onOpenAIConversation={handleOpenAIConversation}
+                  onSeedAIChat={handleSeedAIChat}
                   pillarId="seo"
                   projectId={activeProject?.id}
                   title="SEO"
@@ -717,7 +769,7 @@ export default function AppPage() {
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentCrawlId={stableCurrentCrawl?.id}
                   currentBreakdown={stableCurrentBreakdown}
-                  onOpenAIConversation={handleOpenAIConversation}
+                  onSeedAIChat={handleSeedAIChat}
                   pillarId="aeo"
                   projectId={activeProject?.id}
                   title="AEO"
@@ -730,7 +782,7 @@ export default function AppPage() {
                   crawlBreakdowns={stableCrawlBreakdowns}
                   currentCrawlId={stableCurrentCrawl?.id}
                   currentBreakdown={stableCurrentBreakdown}
-                  onOpenAIConversation={handleOpenAIConversation}
+                  onSeedAIChat={handleSeedAIChat}
                   pillarId="pagespeed"
                   projectId={activeProject?.id}
                   title="PageSpeed"
@@ -745,7 +797,7 @@ export default function AppPage() {
                 ) : null}
               </TabsContent>
 
-              <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 justify-center px-4">
+              <div className="fixed bottom-6 left-6 z-50 flex justify-start">
                 <TabsList className="h-11 w-fit border border-foreground/20 bg-muted/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-md">
                   <TabsTrigger className="px-4 text-sm" value="summary">
                     Summary
@@ -805,14 +857,6 @@ export default function AppPage() {
           completedCrawls={stableSortedCompletedCrawls}
           isOrganizationOwner={isOrganizationOwner}
         />
-      ) : view === "revserp-ai" ? (
-        <RevserpAIView
-          breakdown={stableCurrentBreakdown}
-          initialScope={pendingAIScope}
-          openConversationId={openAIConversationId}
-          projectId={activeProject?.id}
-          forceNewConversation={isNewChat}
-        />
       ) : (
         <div className="p-6">
           <Card>
@@ -843,8 +887,54 @@ export default function AppPage() {
           activeProjectName={activeProject?.name}
         />
       )}
+
+      <AIDock
+        orgId={me.active_org_id}
+        projectId={activeProject?.id}
+        crawlId={currentCrawl?.id}
+        projectIds={projectIds}
+        trackCrawl={handleAITrackCrawl}
+        onNavigate={handleAINavigate}
+        onProjectSwitched={handleAIProjectSwitched}
+        onExport={handleAIExport}
+        externalOpen={aiOpenRequest}
+      />
     </main>
   )
+}
+
+// Crawl-issues export used by the AI dock's `export{kind:'crawl'}` action.
+// Mirrors the existing navbar crawl export (use-project-actions handleExportCrawl)
+// minus the reducer bookkeeping, reusing the same endpoint and filename utils.
+async function exportCrawlIssues(
+  crawl: CrawlResponse,
+  format: "csv" | "xlsx",
+  projects: ProjectResponse[]
+) {
+  if (crawl.status !== "completed") {
+    toast.error("Only completed crawls can be exported.")
+    return
+  }
+  try {
+    const response = await fetch(
+      buildApiUrl(`/crawls/${crawl.id}/score-breakdown/export.${format}`),
+      { credentials: "include" }
+    )
+    if (!response.ok) {
+      throw new Error(await readExportError(response))
+    }
+    const blob = await response.blob()
+    const project = projects.find((item) => item.id === crawl.project_id)
+    const filename = getExportFilename(
+      response.headers.get("content-disposition"),
+      `${getProjectFilenameSegment(project)}-${formatCrawlDate(crawl)}-issues.${format}`
+    )
+    downloadBlob(blob, filename)
+  } catch (error) {
+    toast.error(
+      error instanceof Error ? error.message : "Unable to export crawl issues."
+    )
+  }
 }
 
 const OVERALL_BLEND_WEIGHTS = {

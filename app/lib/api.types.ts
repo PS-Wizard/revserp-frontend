@@ -312,10 +312,11 @@ export type GooglePSIStoredResult = {
 
 export type GooglePSIResults = GooglePSIStoredResult[]
 
-export type AIConversationResponse = {
+// --- Org-scoped AI (rehaul v2, used by the global AI dock) ---
+
+export type AIConversationSummary = {
   id: string
-  project_id: string
-  crawl_id?: string
+  org_id: string
   created_by_user_id: string
   title?: string
   message_count: number
@@ -323,40 +324,38 @@ export type AIConversationResponse = {
   updated_at: string
 }
 
-export type AIMessageResponse = {
+export type AIDockToolCall = {
+  id: string
+  name: string
+  // Persisted as an inline JSON object by the backend; normalized to a string
+  // at the mapping boundary (see messagesFromResponses / the tool_call frame).
+  args?: unknown
+}
+
+export type AIDockMessage = {
   id: string
   conversation_id: string
-  role: "user" | "assistant"
+  role: "user" | "assistant" | "tool"
   content: string
-  crawl_id?: string
-  scope?: unknown
+  reasoning_content?: string
+  tool_calls?: AIDockToolCall[]
+  tool_call_id?: string
+  tool_name?: string
   model?: string
   created_at: string
 }
 
-export type AIConversationsResponse = {
-  conversations: AIConversationResponse[]
+export type AIConversationListResponse = {
+  conversations: AIConversationSummary[]
 }
 
-export type AIConversationDetailResponse = {
-  conversation: AIConversationResponse
-  messages: AIMessageResponse[]
+export type AIConversationDetail = {
+  conversation: AIConversationSummary
+  messages: AIDockMessage[]
 }
 
-export type CreateAIConversationResponse = {
-  conversation: AIConversationResponse
-}
-
-export type CreateAIConversationMessageResponse = {
-  conversation: AIConversationResponse
-  user_message: AIMessageResponse
-  assistant_message: AIMessageResponse
-  scope: {
-    pillar_label: string
-    bucket_label: string
-    issue_count: number
-    url_count: number
-  }
+export type CreateAIConversation = {
+  conversation: AIConversationSummary
 }
 
 // --- Admin types ---

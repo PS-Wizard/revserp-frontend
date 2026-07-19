@@ -1,13 +1,11 @@
 import type {
-  AIConversationResponse,
-  AIMessageResponse,
-  ScoreBreakdownResponse,
+  AIConversationSummary,
+  AIDockMessage,
 } from "~/lib/api.types"
-import { areStringArraysEqual } from "~/components/issue-explorer/utils"
 
 export type AiConversationGroup = {
   label: string
-  conversations: AIConversationResponse[]
+  conversations: AIConversationSummary[]
 }
 
 function formatConversationDate(value: string) {
@@ -33,10 +31,10 @@ export function formatConversationTime(value: string) {
 }
 
 export function groupConversationsByDate(
-  conversations: AIConversationResponse[]
+  conversations: AIConversationSummary[]
 ): AiConversationGroup[] {
   const groups: AiConversationGroup[] = []
-  const groupByLabel = new Map<string, AIConversationResponse[]>()
+  const groupByLabel = new Map<string, AIConversationSummary[]>()
 
   for (const conversation of conversations) {
     const label = formatConversationDate(conversation.updated_at)
@@ -54,93 +52,71 @@ export function groupConversationsByDate(
   return groups
 }
 
+export type ToolCallInfo = {
+  id: string
+  name: string
+  args?: string
+  summary?: string
+  status: "running" | "done" | "error"
+}
+
 export type RevserpAIMessage = {
   id?: string
   role: "user" | "assistant"
   content: string
+  reasoning?: string
+  toolCalls?: ToolCallInfo[]
+  streaming?: boolean
 }
 
-export type AIScopeState = {
-  pillarId: string
-  bucketIds: string[]
-  issueTypeIds: string[]
-}
+// Folds backend `role: "tool"` rows into the preceding assistant message's
+// toolCalls (matched by tool_call_id), so the UI model stays a clean
+// user/assistant alternation.
+export function messagesFromResponses(
+  messages: AIDockMessage[]
+): RevserpAIMessage[] {
+  const result: RevserpAIMessage[] = []
 
-export function getNextScopeState(
-  breakdown: ScoreBreakdownResponse | null,
-  selectedPillarId: string,
-  selectedBucketIds: string[],
-  selectedIssueTypeIds: string[]
-): AIScopeState | null {
-  if (!breakdown?.pillars.length) {
-    if (
-      !selectedPillarId &&
-      !selectedBucketIds.length &&
-      !selectedIssueTypeIds.length
-    ) {
-      return null
-    }
-
-    return { pillarId: "", bucketIds: [], issueTypeIds: [] }
-  }
-
-  const selectedPillar =
-    breakdown.pillars.find((pillar) => pillar.id === selectedPillarId) ??
-    breakdown.pillars[0]
-  const validBucketIds = new Set(
-    selectedPillar.buckets.map((bucket) => bucket.id)
-  )
-  let nextBucketIds = selectedBucketIds.filter((bucketId) =>
-    validBucketIds.has(bucketId)
-  )
-
-  if (!nextBucketIds.length && selectedPillar.buckets[0]) {
-    nextBucketIds = [selectedPillar.buckets[0].id]
-  }
-
-  const nextBucketIdSet = new Set(nextBucketIds)
-  const validIssueTypeIds = new Set<string>()
-  for (const bucket of selectedPillar.buckets) {
-    if (!nextBucketIdSet.has(bucket.id)) {
+  for (const message of messages) {
+    if (message.role === "tool") {
+      const assistantMessage = result[result.length - 1]
+      const toolCall = assistantMessage?.toolCalls?.find(
+        (call) => call.id === message.tool_call_id
+      )
+      if (toolCall) {
+        toolCall.summary = message.content
+        toolCall.status = "done"
+      }
       continue
     }
 
-    for (const issueType of bucket.issues) {
-      validIssueTypeIds.add(issueType.id)
-    }
+    result.push({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+      reasoning: message.reasoning_content,
+      toolCalls: message.tool_calls?.map((toolCall) => ({
+        id: toolCall.id,
+        name: toolCall.name,
+        // The server persists tool_calls[].args as an inline JSON object, so
+        // normalize to a string here exactly as the live tool_call frame does.
+        args:
+          typeof toolCall.args === "string"
+            ? toolCall.args
+            : toolCall.args != null
+              ? JSON.stringify(toolCall.args)
+              : undefined,
+        status: "done" as const,
+      })),
+    })
   }
-  const nextIssueTypeIds = selectedIssueTypeIds.filter((issueTypeId) =>
-    validIssueTypeIds.has(issueTypeId)
-  )
 
-  if (
-    selectedPillar.id === selectedPillarId &&
-    areStringArraysEqual(nextBucketIds, selectedBucketIds) &&
-    areStringArraysEqual(nextIssueTypeIds, selectedIssueTypeIds)
-  ) {
-    return null
-  }
-
-  return {
-    pillarId: selectedPillar.id,
-    bucketIds: nextBucketIds,
-    issueTypeIds: nextIssueTypeIds,
-  }
-}
-
-export function newMessageFromResponse(
-  message: AIMessageResponse
-): RevserpAIMessage {
-  return {
-    id: message.id,
-    role: message.role,
-    content: message.content,
-  }
+  return result
 }
 
 export function upsertConversation(
-  conversations: AIConversationResponse[],
-  conversation: AIConversationResponse
+  conversations: AIConversationSummary[],
+  conversation: AIConversationSummary
 ) {
   return [
     conversation,

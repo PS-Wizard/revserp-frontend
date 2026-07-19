@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { DownloadIcon, Loader2Icon, SparklesIcon } from "lucide-react"
+import { DownloadIcon, SparklesIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -30,7 +30,7 @@ import type {
 import {
   areStringArraysEqual,
   BucketUrlPager,
-  generateBatchAIFix,
+  buildBatchFixPrompt,
   urlRowKey,
 } from "~/components/issue-explorer/utils"
 import { useDragSelection } from "~/components/issue-explorer/use-drag-selection"
@@ -50,7 +50,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import { ApiError, buildApiUrl } from "~/lib/api"
+import { buildApiUrl } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
 import {
   downloadBlob,
@@ -195,7 +195,7 @@ export function IssueExplorer({
   breakdown,
   focusRequest,
   initialPillarId,
-  onOpenAIConversation,
+  onSeedAIChat,
   projectId,
 }: {
   breakdown: ScoreBreakdownResponse | null
@@ -207,10 +207,7 @@ export function IssueExplorer({
     token: number
   } | null
   initialPillarId?: string
-  onOpenAIConversation?: (
-    conversationId: string,
-    scope?: { pillarId: string; bucketIds: string[]; issueTypeIds: string[] }
-  ) => void
+  onSeedAIChat?: (prompt: string) => void
   projectId?: string
 }) {
   const [state, dispatch] = useReducer(reducer, initialState)
@@ -230,7 +227,6 @@ export function IssueExplorer({
     urlPageSize,
   } = state
 
-  const [isSubmittingFix, setIsSubmittingFix] = useState(false)
   const pagerRef = useRef<BucketUrlPager | null>(null)
   const [urlState, setUrlState] = useState<{
     key: string
@@ -658,7 +654,7 @@ export function IssueExplorer({
       toast.error("Recommended fixes are unavailable for this view.")
       return
     }
-    if (!fixSelections.length) return
+    if (!fixSelections.length || !onSeedAIChat) return
 
     const maxScopedUrls = 20
     const droppedUrls = fixSelections.reduce(
@@ -667,63 +663,15 @@ export function IssueExplorer({
     )
     if (droppedUrls > 0) {
       toast.warning(
-        `Only the first ${maxScopedUrls} URLs per pillar are sent for fixes; ${droppedUrls} will be skipped.`
+        `Only the first ${maxScopedUrls} URLs per pillar are included; ${droppedUrls} will be skipped.`
       )
     }
 
-    setIsSubmittingFix(true)
-    const controller = new AbortController()
-    const promise = generateBatchAIFix({
-      crawlId,
-      projectId,
-      selections: fixSelections,
-      signal: controller.signal,
-    })
-
-    const first = fixSelections[0]
-    const toastId = toast.loading("Generating recommended fixes…", {
-      action: {
-        label: "Cancel",
-        onClick: () => controller.abort(),
-      },
-    })
-    promise.then(
-      (conversation) => {
-        toast.success(
-          `Fixes are ready in "${conversation.title || "Untitled chat"}".`,
-          {
-            id: toastId,
-            action: onOpenAIConversation
-              ? {
-                  label: "Open chat",
-                  onClick: () =>
-                    onOpenAIConversation(conversation.id, {
-                      pillarId: first.pillarId,
-                      bucketIds: first.bucketIds,
-                      issueTypeIds: first.issueTypeIds,
-                    }),
-                }
-              : undefined,
-          }
-        )
-      },
-      (error) => {
-        if (controller.signal.aborted) {
-          toast.dismiss(toastId)
-          return
-        }
-        toast.error(
-          error instanceof ApiError
-            ? error.message
-            : "Unable to generate recommended fixes.",
-          { id: toastId }
-        )
-      }
-    )
-
-    const done = () => setIsSubmittingFix(false)
-    void promise.then(done, done)
-  }, [crawlId, fixSelections, onOpenAIConversation, projectId])
+    // Seed the global AI dock with a natural-language prompt describing the
+    // selection. The dock opens maximized and the model fetches the relevant
+    // issue detail via its own tools.
+    onSeedAIChat(buildBatchFixPrompt(fixSelections, maxScopedUrls))
+  }, [crawlId, fixSelections, onSeedAIChat, projectId])
 
   const onExport = useCallback(async () => {
     if (!crawlId) return
@@ -861,15 +809,11 @@ export function IssueExplorer({
             />
           ) : null}
           <Button
-            disabled={!canAct || isSubmittingFix || !projectId}
+            disabled={!canAct || !projectId}
             onClick={onRecommendFixes}
             size="sm"
           >
-            {isSubmittingFix ? (
-              <Loader2Icon className="size-4 animate-spin" />
-            ) : (
-              <SparklesIcon className="size-4" />
-            )}
+            <SparklesIcon className="size-4" />
             Recommend Fixes{selectionCount > 0 ? ` (${selectionCount})` : ""}
           </Button>
         </div>
