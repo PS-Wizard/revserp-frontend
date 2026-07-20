@@ -40,7 +40,7 @@ export function AIComposer({
 
       <div className="flex items-end gap-2 rounded-2xl border border-border/60 bg-muted/40 p-1.5">
         <Textarea
-          className="max-h-40 min-h-9 flex-1 resize-none border-0 bg-transparent px-2.5 py-1.5 text-sm leading-6 shadow-none outline-none focus-visible:ring-0 dark:bg-transparent"
+          className="max-h-40 min-h-9 w-full min-w-0 flex-1 resize-none border-0 bg-transparent px-2.5 py-1.5 text-sm leading-6 break-words shadow-none outline-none focus-visible:ring-0 dark:bg-transparent"
           onChange={(event) => onPromptChange(event.currentTarget.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask Revserp AI…"

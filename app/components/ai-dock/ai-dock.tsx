@@ -236,7 +236,7 @@ export function AIDock({
                 </Button>
               </header>
 
-              <div className="flex min-h-0 flex-1">
+              <div className="flex min-h-0 min-w-0 flex-1">
                 {panelState === "maximized" && historyOpen ? (
                   <aside className="hidden w-64 shrink-0 border-r border-border/60 sm:block">
                     <ConversationHistory
@@ -255,7 +255,7 @@ export function AIDock({
                   </aside>
                 ) : null}
 
-                <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   {panelState === "mini" ? (
                     <div className="flex shrink-0 items-center justify-between border-b border-border/40 px-3 py-1.5">
                       <span className="truncate text-xs text-muted-foreground">
@@ -276,7 +276,7 @@ export function AIDock({
 
                   <div
                     ref={messageScrollRef}
-                    className="min-h-0 flex-1 overflow-y-auto"
+                    className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
                   >
                     <AIMessageList
                       messages={messages}

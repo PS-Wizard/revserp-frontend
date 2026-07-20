@@ -190,6 +190,10 @@
 
 .markdown-message {
   line-height: 1.7;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .markdown-message h1,
 .markdown-message h2,

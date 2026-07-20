@@ -45,7 +45,7 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCallInfo }) {
       )}
       <span className="shrink-0">{humanizeToolName(toolCall.name)}</span>
       {toolCall.summary ? (
-        <span className="truncate text-muted-foreground/70">
+        <span className="min-w-0 truncate text-muted-foreground/70">
           — {toolCall.summary}
         </span>
       ) : null}
@@ -150,7 +150,7 @@ export function AIMessageList({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-3 py-4">
+    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-5 px-3 py-4">
       {messages.map((message, messageIndex) => (
         <div
           key={message.id ?? `${message.role}-${messageIndex}`}
@@ -160,11 +160,11 @@ export function AIMessageList({
           )}
         >
           {message.role === "user" ? (
-            <div className="max-w-[85%] rounded-2xl bg-primary px-3.5 py-2 text-sm leading-6 text-primary-foreground shadow-md">
+            <div className="max-w-[85%] overflow-hidden rounded-2xl bg-primary px-3.5 py-2 text-sm leading-6 break-words text-primary-foreground shadow-md">
               <MarkdownMessage content={message.content} />
             </div>
           ) : (
-            <article className="w-full text-sm leading-6 text-foreground">
+            <article className="w-full min-w-0 text-sm leading-6 text-foreground">
               <div className="flex items-start gap-2.5">
                 <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-card">
                   <BotIcon className="size-3.5" />
