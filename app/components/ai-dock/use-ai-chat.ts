@@ -115,6 +115,7 @@ export type UseAIChatParams = {
   onNavigate: (destination: AINavigationDestination) => void
   onProjectSwitched: (projectId: string) => void
   onExport: (action: AIExportAction) => void
+  onAutoCrawlConfigured: () => void
   setPanelState: (state: PanelState) => void
 }
 
@@ -127,6 +128,7 @@ export function useAIChat({
   onNavigate,
   onProjectSwitched,
   onExport,
+  onAutoCrawlConfigured,
   setPanelState,
 }: UseAIChatParams) {
   const queryClient = useQueryClient()
@@ -412,6 +414,9 @@ export function useAIChat({
           content: trimmedPrompt,
           project_id: projectIdRef.current || undefined,
           crawl_id: crawlIdRef.current || undefined,
+          // Browser timezone, used as the default when the agent configures an
+          // auto-crawl without specifying one (mirrors the auto-crawl dialog).
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
         },
         {
           signal: abortController.signal,
@@ -468,6 +473,11 @@ export function useAIChat({
                   id: string
                   name: string
                   summary?: string
+                }
+                // Refresh the navbar's auto-crawl state once the agent has
+                // finished (re)configuring it, so it isn't stale until refresh.
+                if (toolResult.name === "configure_auto_crawl") {
+                  onAutoCrawlConfigured()
                 }
                 applyAssistantUpdate((message) => ({
                   ...message,

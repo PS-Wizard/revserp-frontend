@@ -199,6 +199,7 @@ export const AppNavbar = memo(function AppNavbar({
   isPlatformAdmin,
   onExportAudit,
   isExportingAudit,
+  autoCrawlRefreshToken,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -294,7 +295,7 @@ export const AppNavbar = memo(function AppNavbar({
     runCrawlReducer,
     initialRunCrawlState
   )
-  const autoCrawl = useAutoCrawlSettings(activeProjectId)
+  const autoCrawl = useAutoCrawlSettings(activeProjectId, autoCrawlRefreshToken)
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"

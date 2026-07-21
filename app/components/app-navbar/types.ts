@@ -24,4 +24,7 @@ export type AppNavbarProps = {
   isPlatformAdmin: boolean
   onExportAudit: () => void
   isExportingAudit: boolean
+  // Bumped when the AI agent changes auto-crawl settings, so the navbar's
+  // auto-crawl state re-fetches instead of showing a stale enabled/disabled.
+  autoCrawlRefreshToken?: number
 }

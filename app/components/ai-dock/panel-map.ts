@@ -20,6 +20,7 @@ const TOOL_PANEL_MAP: Record<string, PanelState> = {
   export_audit: "mini",
   // collapse
   start_crawl: "collapsed",
+  configure_auto_crawl: "collapsed",
   navigate: "collapsed",
   switch_project: "collapsed",
 }

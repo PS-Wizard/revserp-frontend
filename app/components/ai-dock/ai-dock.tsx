@@ -41,6 +41,7 @@ export type AIDockProps = {
   onNavigate: (destination: AINavigationDestination) => void
   onProjectSwitched: (projectId: string) => void
   onExport: (action: AIExportAction) => void
+  onAutoCrawlConfigured: () => void
   externalOpen: { prompt: string; token: number } | null
 }
 
@@ -53,6 +54,7 @@ export function AIDock({
   onNavigate,
   onProjectSwitched,
   onExport,
+  onAutoCrawlConfigured,
   externalOpen,
 }: AIDockProps) {
   const [panelState, setPanelState] = useState<PanelState>("collapsed")
@@ -68,6 +70,7 @@ export function AIDock({
     onNavigate,
     onProjectSwitched,
     onExport,
+    onAutoCrawlConfigured,
     setPanelState,
   })
 

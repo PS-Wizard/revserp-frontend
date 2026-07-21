@@ -190,6 +190,11 @@ export default function AppPage() {
     token: number
   } | null>(null)
   const aiOpenTokenRef = useRef(0)
+  // Bumped when the AI agent configures auto-crawl, so the navbar re-fetches.
+  const [autoCrawlRefresh, setAutoCrawlRefresh] = useState(0)
+  const handleAIAutoCrawlConfigured = useCallback(() => {
+    setAutoCrawlRefresh((token) => token + 1)
+  }, [])
 
   const sortedCrawls = useMemo(
     () =>
@@ -686,6 +691,7 @@ export default function AppPage() {
         userName={me.user.name}
         view={view}
         isPlatformAdmin={me.is_platform_admin}
+        autoCrawlRefreshToken={autoCrawlRefresh}
       />
 
       {view === "revserp-audit" ? (
@@ -897,6 +903,7 @@ export default function AppPage() {
         onNavigate={handleAINavigate}
         onProjectSwitched={handleAIProjectSwitched}
         onExport={handleAIExport}
+        onAutoCrawlConfigured={handleAIAutoCrawlConfigured}
         externalOpen={aiOpenRequest}
       />
     </main>

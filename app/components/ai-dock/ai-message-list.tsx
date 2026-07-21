@@ -22,6 +22,8 @@ const TOOL_LABELS: Record<string, string> = {
   get_recommended_fix: "Looking up recommended fix",
   get_score_summary: "Reading score summary",
   start_crawl: "Starting a crawl",
+  configure_auto_crawl: "Configuring auto-crawl",
+  update_business_profile: "Updating business profile",
   export_crawl: "Exporting crawl",
   export_audit: "Exporting audit",
   navigate: "Navigating",
