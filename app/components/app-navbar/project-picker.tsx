@@ -1,6 +1,17 @@
-import { Building2Icon, CheckIcon, PlusIcon, TrashIcon } from "lucide-react"
+"use client"
+
+import { useEffect, useRef } from "react"
+import { AnimatePresence, motion } from "motion/react"
+import {
+  Building2Icon,
+  CheckIcon,
+  ChevronsUpDownIcon,
+  PlusIcon,
+  TrashIcon,
+} from "lucide-react"
 
 import { CompileLoader } from "~/components/compile-loader"
+import { buttonVariants } from "~/components/ui/button"
 import {
   Command,
   CommandEmpty,
@@ -17,20 +28,22 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "~/components/ui/context-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog"
+import { cn } from "~/lib/utils"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
 import { CrawlContextRow } from "./crawl-context-row"
 import type { ExportFormat } from "./types"
 
-type ProjectPickerDialogProps = {
+const CARD_TRANSITION = {
+  type: "spring" as const,
+  stiffness: 380,
+  damping: 34,
+  mass: 0.9,
+}
+
+type ProjectPickerProps = {
   activeProjectId?: string | null
+  activeProjectName?: string
   crawlPanelCrawls: CrawlResponse[]
   currentCrawl: CrawlResponse | null
   cancellingCrawlId: string | null
@@ -53,8 +66,9 @@ type ProjectPickerDialogProps = {
   onSelectProject: (projectId: string, crawlId?: string) => void
 }
 
-export function ProjectPickerDialog({
+export function ProjectPicker({
   activeProjectId,
+  activeProjectName,
   crawlPanelCrawls,
   currentCrawl,
   cancellingCrawlId,
@@ -75,52 +89,124 @@ export function ProjectPickerDialog({
   onOpenChange,
   onProjectHover,
   onSelectProject,
-}: ProjectPickerDialogProps) {
-  return (
-    <Dialog onOpenChange={onOpenChange} open={isOpen}>
-      <DialogContent
-        className="gap-0 overflow-hidden rounded-xl border-border/50 p-0 shadow-lg sm:max-w-4xl"
-        showCloseButton={false}
-      >
-        <DialogHeader className="sr-only">
-          <DialogTitle>Projects</DialogTitle>
-          <DialogDescription>
-            Select a project or create a new one.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid h-[460px] grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)] bg-popover">
-          <ProjectCommandList
-            activeProjectId={activeProjectId}
-            deletingProjectId={deletingProjectId}
-            projects={projects}
-            onCreateProjectOpen={onCreateProjectOpen}
-            onDeleteProject={onDeleteProject}
-            onOpenBusinessProfile={onOpenBusinessProfile}
-            onProjectHover={onProjectHover}
-            onSelectProject={onSelectProject}
-          />
+}: ProjectPickerProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const wasOpenRef = useRef(false)
 
-          <CrawlPanel
-            crawlPanelCrawls={crawlPanelCrawls}
-            currentCrawl={currentCrawl}
-            cancellingCrawlId={cancellingCrawlId}
-            deletingCrawlId={deletingCrawlId}
-            exportFormat={exportFormat}
-            exportingCrawlId={exportingCrawlId}
-            onCancelCrawl={onCancelCrawl}
-            onDeleteCrawl={onDeleteCrawl}
-            onExportCrawl={onExportCrawl}
-            onExportFormatChange={onExportFormatChange}
-            onSelectProject={onSelectProject}
+  // Escape closes, and lock body scroll while open.
+  useEffect(() => {
+    if (!isOpen) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onOpenChange(false)
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen, onOpenChange])
+
+  // On open focus the search input; on close return focus to the trigger pill.
+  useEffect(() => {
+    if (isOpen) {
+      panelRef.current
+        ?.querySelector<HTMLInputElement>("[data-slot=command-input]")
+        ?.focus()
+    } else if (wasOpenRef.current) {
+      triggerRef.current?.focus()
+    }
+    wasOpenRef.current = isOpen
+  }, [isOpen])
+
+  return (
+    <>
+      {isOpen ? (
+        <span aria-hidden className="inline-block h-9 w-72" />
+      ) : (
+        <motion.button
+          ref={triggerRef}
+          layout
+          layoutId="project-picker-card"
+          // Close (panel -> pill) is the entering pill's transition: snap it
+          // instantly so the shrink doesn't spring and distort the text.
+          transition={{ duration: 0 }}
+          type="button"
+          data-slot="button"
+          onClick={() => onOpenChange(true)}
+          className={cn(buttonVariants({ variant: "outline" }), "w-72 justify-between")}
+        >
+          <span className="min-w-0 truncate">
+            {activeProjectName || "Search projects"}
+          </span>
+          <ChevronsUpDownIcon data-icon="inline-end" />
+        </motion.button>
+      )}
+
+      <AnimatePresence>
+        {isOpen ? (
+          <motion.div
+            key="project-picker-backdrop"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => onOpenChange(false)}
           />
-        </div>
-        {projectActionError ? (
-          <p className="border-t border-border/50 px-4 py-3 text-sm text-destructive">
-            {projectActionError}
-          </p>
         ) : null}
-      </DialogContent>
-    </Dialog>
+      </AnimatePresence>
+
+      {isOpen ? (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center pt-[72px]">
+          <motion.div
+            ref={panelRef}
+            layout
+            layoutId="project-picker-card"
+            transition={CARD_TRANSITION}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Projects"
+            className="pointer-events-auto flex h-[460px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl shadow-black/40"
+          >
+            <p className="sr-only">Select a project or create a new one.</p>
+            <div className="grid h-[460px] grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)] bg-popover">
+              <ProjectCommandList
+                activeProjectId={activeProjectId}
+                deletingProjectId={deletingProjectId}
+                projects={projects}
+                onCreateProjectOpen={onCreateProjectOpen}
+                onDeleteProject={onDeleteProject}
+                onOpenBusinessProfile={onOpenBusinessProfile}
+                onProjectHover={onProjectHover}
+                onSelectProject={onSelectProject}
+              />
+
+              <CrawlPanel
+                crawlPanelCrawls={crawlPanelCrawls}
+                currentCrawl={currentCrawl}
+                cancellingCrawlId={cancellingCrawlId}
+                deletingCrawlId={deletingCrawlId}
+                exportFormat={exportFormat}
+                exportingCrawlId={exportingCrawlId}
+                onCancelCrawl={onCancelCrawl}
+                onDeleteCrawl={onDeleteCrawl}
+                onExportCrawl={onExportCrawl}
+                onExportFormatChange={onExportFormatChange}
+                onSelectProject={onSelectProject}
+              />
+            </div>
+            {projectActionError ? (
+              <p className="border-t border-border/50 px-4 py-3 text-sm text-destructive">
+                {projectActionError}
+              </p>
+            ) : null}
+          </motion.div>
+        </div>
+      ) : null}
+    </>
   )
 }
 

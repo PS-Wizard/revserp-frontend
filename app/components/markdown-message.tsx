@@ -90,7 +90,13 @@ function renderMarkdown(markdown: string) {
 }
 
 function renderInline(value: string) {
-  let escapedValue = escapeHTML(value)
+  // Resolve backslash escapes the LLM emits (e.g. \" \| \* and a trailing
+  // hard-break \) before HTML-escaping, so they don't leak through as literal
+  // backslashes. CommonMark only escapes punctuation, so leave \<letter> alone.
+  const unescaped = value
+    .replace(/\\([^0-9A-Za-z\s])/g, "$1")
+    .replace(/\\\s*$/, "")
+  let escapedValue = escapeHTML(unescaped)
   escapedValue = escapedValue.replace(/`([^`]+)`/g, "<code>$1</code>")
   escapedValue = escapedValue.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
   escapedValue = escapedValue.replace(/\*([^*]+)\*/g, "<em>$1</em>")
@@ -131,10 +137,20 @@ function parseTableRow(line: string) {
   let currentCell = ""
   let isInsideCode = false
 
-  for (const character of trimmedLine) {
+  for (let i = 0; i < trimmedLine.length; i += 1) {
+    const character = trimmedLine[i]
+
     if (character === "`") {
       isInsideCode = !isInsideCode
       currentCell += character
+      continue
+    }
+
+    // An escaped pipe is literal cell text, not a column separator. Consume
+    // both chars here so renderInline receives a clean "|".
+    if (character === "\\" && !isInsideCode && trimmedLine[i + 1] === "|") {
+      currentCell += "|"
+      i += 1
       continue
     }
 

@@ -6,8 +6,8 @@
 
 export type PanelState = "collapsed" | "mini" | "maximized"
 
-// Tools not listed here ("list_projects", "get_business_profile") intentionally
-// leave the panel state unchanged.
+// Tools not listed here ("list_projects") intentionally leave the panel state
+// unchanged.
 const TOOL_PANEL_MAP: Record<string, PanelState> = {
   // maximize
   list_issues: "maximized",
@@ -15,6 +15,8 @@ const TOOL_PANEL_MAP: Record<string, PanelState> = {
   get_page_content: "maximized",
   get_score_summary: "maximized",
   list_pages: "maximized",
+  get_business_profile: "maximized",
+  update_business_profile: "maximized",
   // minimize
   export_crawl: "mini",
   export_audit: "mini",

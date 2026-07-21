@@ -118,6 +118,21 @@ export function AIDock({
     })
   }, [messages, isLoadingConversation, panelState])
 
+  // Clicking outside the card steps the dock down one level. Maximized is
+  // handled by its backdrop (-> mini); mini has no backdrop, so watch the
+  // document and collapse when the click lands outside the card.
+  const cardRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (panelState !== "mini") return
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!cardRef.current?.contains(event.target as Node)) {
+        setPanelState("collapsed")
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown)
+    return () => document.removeEventListener("pointerdown", handlePointerDown)
+  }, [panelState])
+
   const cardSizeClass =
     panelState === "collapsed"
       ? "h-11 rounded-full"
@@ -150,6 +165,7 @@ export function AIDock({
         )}
       >
         <motion.div
+          ref={cardRef}
           layout
           layoutId="ai-dock-card"
           transition={CARD_TRANSITION}

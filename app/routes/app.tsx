@@ -609,6 +609,7 @@ export default function AppPage() {
           setView("revserp-visibility")
           break
       }
+      window.scrollTo({ top: 0, behavior: "smooth" })
     },
     []
   )
@@ -617,6 +618,7 @@ export default function AppPage() {
     (switchedProjectId: string) => {
       if (!projects.some((project) => project.id === switchedProjectId)) return
       goToCrawl(switchedProjectId)
+      window.scrollTo({ top: 0, behavior: "smooth" })
     },
     [projects, goToCrawl]
   )

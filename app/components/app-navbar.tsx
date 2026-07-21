@@ -5,11 +5,9 @@ import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
   Building2Icon,
-  ChevronsUpDownIcon,
   CogIcon,
   DownloadIcon,
   PlayIcon,
-  SearchIcon,
 } from "lucide-react"
 import { CompileLoader } from "~/components/compile-loader"
 
@@ -22,7 +20,7 @@ import {
   LeaveWorkspaceDialog,
 } from "~/components/app-navbar/dialogs"
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
-import { ProjectPickerDialog } from "~/components/app-navbar/project-picker-dialog"
+import { ProjectPicker } from "~/components/app-navbar/project-picker"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
@@ -491,30 +489,51 @@ export const AppNavbar = memo(function AppNavbar({
           </div>
 
           <div className="flex items-center justify-center gap-3">
-            <Button
-              className="w-72 justify-between"
-              onClick={() => setIsProjectMenuOpen(true)}
-              variant="outline"
-            >
-              <span className="flex min-w-0 items-center gap-2 truncate">
-                <SearchIcon data-icon="inline-start" />
-                <span className="truncate">
-                  {activeProject?.name || "Search projects"}
-                </span>
-              </span>
-              <ChevronsUpDownIcon data-icon="inline-end" />
-            </Button>
+            <ProjectPicker
+              activeProjectId={activeProjectId}
+              activeProjectName={activeProject?.name}
+              crawlPanelCrawls={crawlPanelCrawls}
+              currentCrawl={currentCrawl}
+              cancellingCrawlId={projectActions.cancellingCrawlId}
+              deletingCrawlId={projectActions.deletingCrawlId}
+              deletingProjectId={projectActions.deletingProjectId}
+              exportFormat={projectActions.exportFormat}
+              exportingCrawlId={projectActions.exportingCrawlId}
+              isOpen={isProjectMenuOpen}
+              projectActionError={projectActions.projectActionError}
+              projects={projects}
+              onCancelCrawl={(crawl) =>
+                void projectActions.handleCancelCrawl(crawl)
+              }
+              onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
+              onDeleteCrawl={projectActions.openDeleteCrawlDialog}
+              onDeleteProject={projectActions.openDeleteProjectDialog}
+              onExportCrawl={(crawl, format) =>
+                void projectActions.handleExportCrawl(crawl, format)
+              }
+              onExportFormatChange={projectActions.onExportFormatChange}
+              onOpenBusinessProfile={(project) =>
+                void handleOpenBusinessProfileDrawer(project)
+              }
+              onOpenChange={setIsProjectMenuOpen}
+              onProjectHover={handleProjectHover}
+              onSelectProject={(projectId, crawlId) =>
+                void handleSelectProject(projectId, crawlId)
+              }
+            />
 
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button variant="outline" />}>
                 {isCrawlRunning ? (
                   <CompileLoader className="text-foreground" size={18} />
-                ) : null}
+                ) : (
+                  <CogIcon />
+                )}
                 {isCrawlRunning
                   ? crawlStatusLabel === "queued"
                     ? "Queued"
                     : "Crawling"
-                  : "Run Crawl"}
+                  : "Actions"}
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="w-56">
                 <DropdownMenuGroup>
@@ -528,7 +547,7 @@ export const AppNavbar = memo(function AppNavbar({
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger disabled={!activeProjectId}>
                       <CogIcon />
-                      Configure Crawl
+                      Auto Crawl
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="w-52">
                       <DropdownMenuRadioGroup
@@ -707,7 +726,6 @@ export const AppNavbar = memo(function AppNavbar({
       />
 
       <AppNavbarDialogs
-        activeProjectId={activeProjectId}
         businessProfile={{
           businessProfileProject,
           brandName,
@@ -733,17 +751,10 @@ export const AppNavbar = memo(function AppNavbar({
           setPrimaryLocation,
           setBusinessDescription,
         }}
-        crawlPanelCrawls={crawlPanelCrawls}
         createProject={createProject}
         createProjectDispatch={createProjectDispatch}
-        currentCrawl={currentCrawl}
         handleCreateProject={handleCreateProject}
-        handleOpenBusinessProfileDrawer={handleOpenBusinessProfileDrawer}
-        handleSelectProject={handleSelectProject}
-        isProjectMenuOpen={isProjectMenuOpen}
-        onProjectHover={handleProjectHover}
         projectActions={projectActions}
-        projects={projects}
         setIsProjectMenuOpen={setIsProjectMenuOpen}
         workspaceActions={workspaceActions}
       />
@@ -754,7 +765,6 @@ export const AppNavbar = memo(function AppNavbar({
 // --- Dialogs ---
 
 type AppNavbarDialogsProps = {
-  activeProjectId: AppNavbarProps["activeProjectId"]
   businessProfile: {
     businessProfileProject: ReturnType<
       typeof useBusinessProfile
@@ -784,35 +794,20 @@ type AppNavbarDialogsProps = {
     setPrimaryLocation: (v: string) => void
     setBusinessDescription: (v: string) => void
   }
-  crawlPanelCrawls: CrawlResponse[]
   createProject: CreateProjectState
   createProjectDispatch: React.Dispatch<CreateProjectEvent>
-  currentCrawl: AppNavbarProps["currentCrawl"]
   handleCreateProject: (event: FormEvent<HTMLFormElement>) => Promise<void>
-  handleOpenBusinessProfileDrawer: (project: ProjectResponse) => void
-  handleSelectProject: (projectId: string, crawlId?: string) => void
-  isProjectMenuOpen: boolean
-  onProjectHover: (id: string | null) => void
   projectActions: ReturnType<typeof useProjectActions>
-  projects: AppNavbarProps["projects"]
   setIsProjectMenuOpen: (v: boolean) => void
   workspaceActions: ReturnType<typeof useWorkspaceActions>
 }
 
 function AppNavbarDialogs({
-  activeProjectId,
   businessProfile,
-  crawlPanelCrawls,
   createProject,
   createProjectDispatch,
-  currentCrawl,
   handleCreateProject,
-  handleOpenBusinessProfileDrawer,
-  handleSelectProject,
-  isProjectMenuOpen,
-  onProjectHover,
   projectActions,
-  projects,
   setIsProjectMenuOpen,
   workspaceActions,
 }: AppNavbarDialogsProps) {
@@ -844,36 +839,6 @@ function AppNavbarDialogs({
 
   return (
     <>
-      <ProjectPickerDialog
-        activeProjectId={activeProjectId}
-        crawlPanelCrawls={crawlPanelCrawls}
-        currentCrawl={currentCrawl}
-        cancellingCrawlId={projectActions.cancellingCrawlId}
-        deletingCrawlId={projectActions.deletingCrawlId}
-        deletingProjectId={projectActions.deletingProjectId}
-        exportFormat={projectActions.exportFormat}
-        exportingCrawlId={projectActions.exportingCrawlId}
-        isOpen={isProjectMenuOpen}
-        projectActionError={projectActions.projectActionError}
-        projects={projects}
-        onCancelCrawl={(crawl) => void projectActions.handleCancelCrawl(crawl)}
-        onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
-        onDeleteCrawl={projectActions.openDeleteCrawlDialog}
-        onDeleteProject={projectActions.openDeleteProjectDialog}
-        onExportCrawl={(crawl, format) =>
-          void projectActions.handleExportCrawl(crawl, format)
-        }
-        onExportFormatChange={projectActions.onExportFormatChange}
-        onOpenBusinessProfile={(project) =>
-          void handleOpenBusinessProfileDrawer(project)
-        }
-        onOpenChange={setIsProjectMenuOpen}
-        onProjectHover={onProjectHover}
-        onSelectProject={(projectId, crawlId) =>
-          void handleSelectProject(projectId, crawlId)
-        }
-      />
-
       <BusinessProfileDrawer
         aiQuestions={aiQuestions}
         brandName={brandName}
