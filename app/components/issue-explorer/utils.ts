@@ -173,7 +173,7 @@ export class BucketUrlPager {
  */
 export function buildBatchFixPrompt(
   selections: FixSelection[],
-  maxUrlsPerSelection = 20
+  maxUrlsPerSelection = 10
 ): string {
   return selections
     .map((selection) =>

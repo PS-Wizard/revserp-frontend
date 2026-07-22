@@ -656,7 +656,7 @@ export function IssueExplorer({
     }
     if (!fixSelections.length || !onSeedAIChat) return
 
-    const maxScopedUrls = 20
+    const maxScopedUrls = 10
     const droppedUrls = fixSelections.reduce(
       (sum, s) => sum + Math.max(0, s.urls.length - maxScopedUrls),
       0

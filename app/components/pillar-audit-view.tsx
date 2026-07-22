@@ -135,7 +135,7 @@ export const PillarAuditView = memo(function PillarAuditView({
           breakdown={currentBreakdown}
           pillarId={pillarId}
           onSelectBucket={(_pillarId, bucketId, issueTypeId) =>
-            handleRecommendBucket(bucketId, issueTypeId, 20)
+            handleRecommendBucket(bucketId, issueTypeId, 10)
           }
         />
       </div>

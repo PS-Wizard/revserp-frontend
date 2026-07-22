@@ -1,11 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react"
-import {
-  BotIcon,
-  ChevronDownIcon,
-  Loader2Icon,
-  SparklesIcon,
-  WrenchIcon,
-} from "lucide-react"
+import { BotIcon, Loader2Icon, SparklesIcon, WrenchIcon } from "lucide-react"
 
 import { ThinkingOrb } from "thinking-orbs"
 import { MarkdownMessage } from "~/components/markdown-message"
@@ -33,6 +26,14 @@ function humanizeToolName(name: string) {
   return TOOL_LABELS[name] ?? name
 }
 
+// Summary of the backend's page-read guardrail stub. These rows are internal
+// noise, so they're hidden from the tool-call list shown to clients.
+const HIDDEN_TOOL_SUMMARY = "page-read limit reached"
+
+function isVisibleToolCall(toolCall: ToolCallInfo) {
+  return toolCall.summary !== HIDDEN_TOOL_SUMMARY
+}
+
 function ToolCallRow({ toolCall }: { toolCall: ToolCallInfo }) {
   const isRunning = toolCall.status === "running"
   return (
@@ -51,69 +52,6 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCallInfo }) {
           — {toolCall.summary}
         </span>
       ) : null}
-    </div>
-  )
-}
-
-function ThinkingBlock({
-  reasoning,
-  streaming,
-  hasAnswer,
-}: {
-  reasoning: string
-  streaming: boolean
-  hasAnswer: boolean
-}) {
-  const [isOpen, setIsOpen] = useState(streaming)
-  const detailsId = useId()
-  const reasoningRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!streaming || hasAnswer) setIsOpen(false)
-  }, [streaming, hasAnswer])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const el = reasoningRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [reasoning, isOpen])
-
-  const isThinkingLive = streaming && !hasAnswer
-
-  return (
-    <div className="rounded-xl border border-border/50 bg-muted/20">
-      <button
-        aria-controls={detailsId}
-        aria-expanded={isOpen}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-xs text-muted-foreground"
-        onClick={() => setIsOpen((current) => !current)}
-        type="button"
-      >
-        <ChevronDownIcon
-          className={cn(
-            "size-3 shrink-0 transition-transform",
-            !isOpen && "-rotate-90"
-          )}
-        />
-        <span>{isThinkingLive ? "Thinking..." : "Thinking"}</span>
-        {isThinkingLive ? (
-          <ThinkingOrb
-            aria-hidden="true"
-            className="shrink-0"
-            size={20}
-            state="composing"
-          />
-        ) : null}
-      </button>
-      <div
-        id={detailsId}
-        hidden={!isOpen}
-        ref={reasoningRef}
-        className="max-h-[180px] overflow-y-auto border-t border-border/50 px-3 py-2 text-xs leading-6 whitespace-pre-wrap text-muted-foreground"
-      >
-        {reasoning}
-      </div>
     </div>
   )
 }
@@ -182,19 +120,13 @@ export function AIMessageList({
                   <BotIcon className="size-3.5" />
                 </div>
                 <div className="min-w-0 flex-1 space-y-2.5">
-                  {message.reasoning ? (
-                    <ThinkingBlock
-                      reasoning={message.reasoning}
-                      streaming={Boolean(message.streaming)}
-                      hasAnswer={Boolean(message.content)}
-                    />
-                  ) : null}
-
-                  {message.toolCalls?.length ? (
+                  {message.toolCalls?.some(isVisibleToolCall) ? (
                     <div className="space-y-1.5">
-                      {message.toolCalls.map((toolCall) => (
-                        <ToolCallRow key={toolCall.id} toolCall={toolCall} />
-                      ))}
+                      {message.toolCalls
+                        .filter(isVisibleToolCall)
+                        .map((toolCall) => (
+                          <ToolCallRow key={toolCall.id} toolCall={toolCall} />
+                        ))}
                     </div>
                   ) : null}
 
