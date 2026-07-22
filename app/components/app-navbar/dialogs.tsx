@@ -1,6 +1,6 @@
 import { CopyIcon } from "lucide-react"
 
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
   Dialog,
@@ -91,7 +91,13 @@ export function CreateProjectDialog({
             </Button>
             <Button disabled={isCreatingProject} type="submit">
               {isCreatingProject ? (
-                <CompileLoader className="text-primary-foreground" size={18} />
+                <ThinkingOrb
+                  aria-hidden="true"
+                  className="shrink-0"
+                  size={20}
+                  state="working"
+                  style={{ width: 18, height: 18 }}
+                />
               ) : null}
               {isCreatingProject ? "Creating..." : "Create project"}
             </Button>
@@ -147,9 +153,12 @@ export function DeleteProjectDialog({
             variant="destructive"
           >
             {deletingProjectId ? (
-              <CompileLoader
-                className="text-destructive-foreground"
-                size={18}
+              <ThinkingOrb
+                aria-hidden="true"
+                className="shrink-0"
+                size={20}
+                state="working"
+                style={{ width: 18, height: 18 }}
               />
             ) : null}
             {deletingProjectId ? "Deleting..." : "Delete"}
@@ -205,9 +214,12 @@ export function DeleteCrawlDialog({
             variant="destructive"
           >
             {deletingCrawlId ? (
-              <CompileLoader
-                className="text-destructive-foreground"
-                size={18}
+              <ThinkingOrb
+                aria-hidden="true"
+                className="shrink-0"
+                size={20}
+                state="working"
+                style={{ width: 18, height: 18 }}
               />
             ) : null}
             {deletingCrawlId ? "Deleting..." : "Delete"}
@@ -311,9 +323,12 @@ export function InviteMembersDialog({
             ) : (
               <Button disabled={isCreatingInvite} type="submit">
                 {isCreatingInvite ? (
-                  <CompileLoader
-                    className="text-primary-foreground"
-                    size={18}
+                  <ThinkingOrb
+                    aria-hidden="true"
+                    className="shrink-0"
+                    size={20}
+                    state="working"
+                    style={{ width: 18, height: 18 }}
                   />
                 ) : null}
                 {isCreatingInvite ? "Creating..." : "Create invite link"}
@@ -372,9 +387,12 @@ export function LeaveWorkspaceDialog({
             variant="destructive"
           >
             {isLeavingWorkspace ? (
-              <CompileLoader
-                className="text-destructive-foreground"
-                size={18}
+              <ThinkingOrb
+                aria-hidden="true"
+                className="shrink-0"
+                size={20}
+                state="working"
+                style={{ width: 18, height: 18 }}
               />
             ) : null}
             {isLeavingWorkspace ? "Leaving..." : "Leave workspace"}

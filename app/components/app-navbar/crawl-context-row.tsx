@@ -1,6 +1,6 @@
 import { BanIcon, CheckIcon, DownloadIcon, TrashIcon } from "lucide-react"
 
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -80,7 +80,13 @@ export function CrawlContextRow({
           <ContextMenuSub>
             <ContextMenuSubTrigger disabled={!canExport || disabled}>
               {isExporting ? (
-                <CompileLoader className="text-foreground" size={16} />
+                <ThinkingOrb
+                  aria-label="Exporting crawl"
+                  className="shrink-0"
+                  size={20}
+                  state="working"
+                  style={{ width: 16, height: 16 }}
+                />
               ) : (
                 <DownloadIcon />
               )}
@@ -103,7 +109,13 @@ export function CrawlContextRow({
                   onClick={() => onExport(exportFormat)}
                 >
                   {isExporting ? (
-                    <CompileLoader className="text-foreground" size={16} />
+                    <ThinkingOrb
+                      aria-label="Exporting crawl"
+                      className="shrink-0"
+                      size={20}
+                      state="working"
+                      style={{ width: 16, height: 16 }}
+                    />
                   ) : (
                     <DownloadIcon />
                   )}
@@ -117,7 +129,13 @@ export function CrawlContextRow({
               <ContextMenuSeparator />
               <ContextMenuItem disabled={isCancelling} onClick={onCancel}>
                 {isCancelling ? (
-                  <CompileLoader className="text-foreground" size={16} />
+                  <ThinkingOrb
+                    aria-label="Cancelling crawl"
+                    className="shrink-0"
+                    size={20}
+                    state="working"
+                    style={{ width: 16, height: 16 }}
+                  />
                 ) : (
                   <BanIcon />
                 )}
@@ -132,7 +150,13 @@ export function CrawlContextRow({
             variant="destructive"
           >
             {isDeleting ? (
-              <CompileLoader className="text-destructive" size={16} />
+              <ThinkingOrb
+                aria-label="Deleting crawl"
+                className="shrink-0"
+                size={20}
+                state="working"
+                style={{ width: 16, height: 16 }}
+              />
             ) : (
               <TrashIcon />
             )}

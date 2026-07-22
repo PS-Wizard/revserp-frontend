@@ -9,6 +9,7 @@ import {
   PanelLeftIcon,
   SparklesIcon,
 } from "lucide-react"
+import { ThinkingOrb } from "thinking-orbs"
 
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
@@ -180,22 +181,19 @@ export function AIDock({
               onClick={() => setPanelState("mini")}
               className="flex h-full items-center gap-2 px-4 text-sm font-medium text-foreground"
             >
-              <span className="relative flex size-2.5 items-center justify-center">
-                <span
-                  className={cn(
-                    "absolute inline-flex size-full rounded-full",
-                    isSending
-                      ? "animate-ping bg-primary/70"
-                      : "bg-emerald-500/60"
-                  )}
+              {isSending ? (
+                <ThinkingOrb
+                  aria-hidden="true"
+                  className="shrink-0"
+                  size={20}
+                  state="solving"
                 />
-                <span
-                  className={cn(
-                    "relative inline-flex size-2 rounded-full",
-                    isSending ? "bg-primary" : "bg-emerald-500"
-                  )}
-                />
-              </span>
+              ) : (
+                <span className="relative flex size-2.5 items-center justify-center">
+                  <span className="absolute inline-flex size-full rounded-full bg-emerald-500/60" />
+                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                </span>
+              )}
               <SparklesIcon className="size-4" />
               <span>{isSending ? "Working…" : "Revserp AI"}</span>
             </button>

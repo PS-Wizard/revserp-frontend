@@ -8,7 +8,7 @@ import {
   UsersIcon,
 } from "lucide-react"
 
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
 import {
   DropdownMenu,
@@ -125,7 +125,13 @@ export function ProfileMenu({
               variant="destructive"
             >
               {isLeavingWorkspace ? (
-                <CompileLoader className="text-destructive" size={16} />
+                <ThinkingOrb
+                  aria-label="Leaving workspace"
+                  className="shrink-0"
+                  size={20}
+                  state="working"
+                  style={{ width: 16, height: 16 }}
+                />
               ) : (
                 <DoorOpenIcon />
               )}
@@ -152,7 +158,13 @@ export function ProfileMenu({
           variant="default"
         >
           {isLoggingOut ? (
-            <CompileLoader className="text-foreground" size={16} />
+            <ThinkingOrb
+              aria-hidden="true"
+              className="shrink-0"
+              size={20}
+              state="working"
+              style={{ width: 16, height: 16 }}
+            />
           ) : (
             <LogOutIcon />
           )}

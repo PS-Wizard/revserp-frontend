@@ -21,7 +21,7 @@ import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { IssueExplorer } from "~/components/issue-explorer"
 import { IssueTreemap } from "~/components/issue-treemap"
 import {
@@ -836,7 +836,12 @@ export default function AppPage() {
                   scrolling regardless of page height. */}
               <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
                 <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                  <CompileLoader className="text-foreground" size={56} />
+                  <ThinkingOrb
+                    aria-hidden="true"
+                    className="shrink-0"
+                    size={64}
+                    state="working"
+                  />
                   <div className="flex flex-col gap-1">
                     <h2 className="text-lg font-medium">
                       {crawlStatusLabel === "queued"

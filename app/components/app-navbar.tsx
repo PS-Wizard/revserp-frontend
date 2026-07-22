@@ -9,7 +9,7 @@ import {
   DownloadIcon,
   PlayIcon,
 } from "lucide-react"
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import {
@@ -525,7 +525,13 @@ export const AppNavbar = memo(function AppNavbar({
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button variant="outline" />}>
                 {isCrawlRunning ? (
-                  <CompileLoader className="text-foreground" size={18} />
+                  <ThinkingOrb
+                    aria-hidden="true"
+                    className="shrink-0"
+                    size={20}
+                    state="solving"
+                    style={{ width: 18, height: 18 }}
+                  />
                 ) : (
                   <CogIcon />
                 )}

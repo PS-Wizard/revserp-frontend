@@ -1,4 +1,4 @@
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
   Field,
@@ -54,7 +54,13 @@ export function RunCrawlPopover({
         disabled={!activeProjectId || isCrawlRunning}
       >
         {isCrawlRunning ? (
-          <CompileLoader className="text-foreground" size={18} />
+          <ThinkingOrb
+            aria-label="Crawl in progress"
+            className="shrink-0"
+            size={20}
+            state="solving"
+            style={{ width: 18, height: 18 }}
+          />
         ) : null}
         Run Crawl
       </PopoverTrigger>
@@ -115,7 +121,13 @@ export function RunCrawlPopover({
               type="submit"
             >
               {isStartingCrawl ? (
-                <CompileLoader className="text-primary-foreground" size={18} />
+                <ThinkingOrb
+                  aria-hidden="true"
+                  className="shrink-0"
+                  size={20}
+                  state="solving"
+                  style={{ width: 18, height: 18 }}
+                />
               ) : null}
               {isStartingCrawl ? "Starting..." : "Start crawl"}
             </Button>

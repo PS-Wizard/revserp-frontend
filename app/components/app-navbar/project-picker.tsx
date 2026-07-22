@@ -10,7 +10,7 @@ import {
   TrashIcon,
 } from "lucide-react"
 
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { buttonVariants } from "~/components/ui/button"
 import {
   Command,
@@ -314,7 +314,13 @@ function ProjectCommandItem({
             variant="destructive"
           >
             {deletingProjectId === project.id ? (
-              <CompileLoader className="text-destructive" size={16} />
+              <ThinkingOrb
+                aria-label="Deleting project"
+                className="shrink-0"
+                size={20}
+                state="working"
+                style={{ width: 16, height: 16 }}
+              />
             ) : (
               <TrashIcon />
             )}

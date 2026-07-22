@@ -1,4 +1,4 @@
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
   Drawer,
@@ -95,7 +95,13 @@ export function BusinessProfileDrawer({
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
             {isLoadingBusinessProfile ? (
               <div className="flex min-h-72 items-center justify-center">
-                <CompileLoader className="text-foreground" size={24} />
+                <ThinkingOrb
+                  aria-label="Loading business profile"
+                  className="shrink-0"
+                  size={20}
+                  state="searching"
+                  style={{ width: 24, height: 24 }}
+                />
               </div>
             ) : (
               <>
@@ -145,7 +151,13 @@ export function BusinessProfileDrawer({
               type="submit"
             >
               {isSavingBusinessProfile ? (
-                <CompileLoader className="text-primary-foreground" size={18} />
+                <ThinkingOrb
+                  aria-hidden="true"
+                  className="shrink-0"
+                  size={20}
+                  state="working"
+                  style={{ width: 18, height: 18 }}
+                />
               ) : null}
               {isSavingBusinessProfile ? "Saving..." : "Save profile"}
             </Button>
@@ -186,7 +198,12 @@ function AIGeneratedQuestions({
 
       {isLoading ? (
         <div className="flex h-24 items-center justify-center">
-          <CompileLoader className="text-foreground" size={20} />
+          <ThinkingOrb
+            aria-label="Loading generated questions"
+            className="shrink-0"
+            size={20}
+            state="searching"
+          />
         </div>
       ) : isRegenerating && !aiQuestions ? (
         <div className="flex h-24 items-center justify-center rounded-lg border border-dashed border-border">

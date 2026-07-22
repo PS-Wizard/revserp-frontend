@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react"
 
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
@@ -256,7 +256,13 @@ function ScoringHeader({
           disabled={!hasDraftChanges || isSaving}
         >
           {isSaving ? (
-            <CompileLoader size={16} className="text-primary-foreground" />
+            <ThinkingOrb
+              aria-label="Saving score configuration"
+              className="shrink-0"
+              size={20}
+              state="working"
+              style={{ width: 16, height: 16 }}
+            />
           ) : null}
           Save
         </Button>
@@ -756,7 +762,13 @@ export function ScoringEditor({
         )}
         {ui.isPreviewing ? (
           <Badge variant="outline" className="gap-1.5">
-            <CompileLoader size={14} className="text-foreground" />
+            <ThinkingOrb
+              aria-hidden="true"
+              className="shrink-0"
+              size={20}
+              state="solving"
+              style={{ width: 14, height: 14 }}
+            />
             Previewing
           </Badge>
         ) : null}

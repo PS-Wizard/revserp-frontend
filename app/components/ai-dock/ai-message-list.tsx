@@ -7,7 +7,7 @@ import {
   WrenchIcon,
 } from "lucide-react"
 
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { MarkdownMessage } from "~/components/markdown-message"
 import type { RevserpAIMessage, ToolCallInfo } from "~/lib/ai-conversation"
 import { cn } from "~/lib/utils"
@@ -98,7 +98,12 @@ function ThinkingBlock({
         />
         <span>{isThinkingLive ? "Thinking..." : "Thinking"}</span>
         {isThinkingLive ? (
-          <Loader2Icon className="size-3 shrink-0 animate-spin text-muted-foreground/70" />
+          <ThinkingOrb
+            aria-hidden="true"
+            className="shrink-0"
+            size={20}
+            state="composing"
+          />
         ) : null}
       </button>
       <div
@@ -126,7 +131,12 @@ export function AIMessageList({
     return (
       <div className="flex h-full items-center justify-center text-center">
         <div className="flex items-center gap-3 rounded-full border border-border bg-card px-4 py-2 text-sm shadow-xl">
-          <CompileLoader size={20} />
+          <ThinkingOrb
+            aria-hidden="true"
+            className="shrink-0"
+            size={20}
+            state="searching"
+          />
           <span className="text-muted-foreground">Loading conversation...</span>
         </div>
       </div>
@@ -195,7 +205,12 @@ export function AIMessageList({
                       className="flex min-h-7 items-center gap-2 text-sm text-muted-foreground"
                       role="status"
                     >
-                      <CompileLoader size={16} />
+                      <ThinkingOrb
+                        aria-hidden="true"
+                        className="shrink-0"
+                        size={20}
+                        state="composing"
+                      />
                       <span>Generating response…</span>
                     </div>
                   ) : (

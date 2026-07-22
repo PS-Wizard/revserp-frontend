@@ -1,4 +1,4 @@
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Badge } from "~/components/ui/badge"
 import { Checkbox } from "~/components/ui/checkbox"
 import {
@@ -234,7 +234,13 @@ export function UrlIssueTable({
   if (isLoading) {
     return (
       <div className="flex min-h-64 flex-col items-center justify-center gap-4 text-center">
-        <CompileLoader className="text-foreground" size={40} />
+        <ThinkingOrb
+          aria-hidden="true"
+          className="shrink-0"
+          size={64}
+          state="searching"
+          style={{ width: 40, height: 40 }}
+        />
         <div className="flex flex-col gap-1">
           <p className="font-medium">Loading affected URLs</p>
           <p className="text-sm text-muted-foreground">

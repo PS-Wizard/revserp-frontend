@@ -1,4 +1,4 @@
-import { CompileLoader } from "~/components/compile-loader"
+import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
   Dialog,
@@ -217,7 +217,13 @@ export function AutoCrawlDialog({
             </Button>
             <Button disabled={isSaving} type="submit">
               {isSaving ? (
-                <CompileLoader className="text-primary-foreground" size={18} />
+                <ThinkingOrb
+                  aria-hidden="true"
+                  className="shrink-0"
+                  size={20}
+                  state="working"
+                  style={{ width: 18, height: 18 }}
+                />
               ) : null}
               {isSaving ? "Saving..." : "Save Crawl Config"}
             </Button>
