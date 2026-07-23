@@ -22,12 +22,27 @@ type SimNode = {
   depth: number
   broken: boolean
   appearDelay: number
+  // Per-node show/hide animation, reusing the intro ease. `vis` is the live
+  // 0..1 scale eased from `visFrom` toward `visTarget`, gated by
+  // `now - visStart - visDelay` over INTRO_NODE_MS.
+  vis: number
+  visTarget: number
+  visFrom: number
+  visStart: number
+  visDelay: number
   x: number
   y: number
   vx?: number
   vy?: number
   fx?: number | null
   fy?: number | null
+}
+
+export type SiteGraphFilter = {
+  query: string
+  maxHops: number | null
+  showOrphans: boolean
+  brokenOnly: boolean
 }
 
 type SimLink = {
@@ -41,6 +56,7 @@ type ForceGraphProps = {
   nodes: SiteGraphNode[]
   edges: Array<[number, number]>
   className?: string
+  filter?: SiteGraphFilter
 }
 
 const MIN_ZOOM = 0.15
@@ -100,44 +116,48 @@ function resolveThemeColors(element: HTMLElement) {
 }
 
 /**
- * Shortest-click-path spanning tree from the site root via BFS over the
- * directed link graph, mutating each node's `depth` (clicks from home; -1 for
- * pages unreachable from it). Every returned edge is a real link; pages the
- * root can't reach are adopted through any real inbound link from a reached
- * page, and true orphans stay disconnected.
+ * Shortest-click-path depths from the site root via BFS over the directed link
+ * graph. Returns per-node `depth` (clicks from home; -1 for pages unreachable
+ * from it) and `parent` (the node index each page was first reached through;
+ * -1 for the root and true orphans). Pages the root can't reach are adopted
+ * through any real inbound link from a reached page; true orphans stay
+ * disconnected. The parent edges form the spanning tree used for layout.
  */
-function buildTree(
-  simNodes: SimNode[],
+function computeDepths(
+  nodes: SiteGraphNode[],
   edges: Array<[number, number]>
-): Array<[number, number]> {
-  if (simNodes.length === 0) return []
+): { depth: number[]; parent: number[] } {
+  const n = nodes.length
+  const depth = new Array<number>(n).fill(-1)
+  const parent = new Array<number>(n).fill(-1)
+  if (n === 0) return { depth, parent }
 
-  const outAdjacency: number[][] = simNodes.map(() => [])
+  const outAdjacency: number[][] = nodes.map(() => [])
   for (const [sourceIndex, targetIndex] of edges) {
     outAdjacency[sourceIndex].push(targetIndex)
   }
 
   let root = 0
   let rootScore = -1
-  for (const node of simNodes) {
+  for (let i = 0; i < n; i++) {
     // Prefer the homepage (pathnameLabel returns the hostname for "/"),
     // otherwise the most linked-to page.
-    const score = node.label.includes("/") ? node.inCount : Infinity
+    const label = pathnameLabel(nodes[i].url)
+    const score = label.includes("/") ? nodes[i].in : Infinity
     if (score > rootScore) {
       rootScore = score
-      root = node.index
+      root = i
     }
   }
 
-  const treeEdges: Array<[number, number]> = []
-  simNodes[root].depth = 0
+  depth[root] = 0
   const queue = [root]
   for (let head = 0; head < queue.length; head++) {
     const current = queue[head]
     for (const targetIndex of outAdjacency[current]) {
-      if (simNodes[targetIndex].depth >= 0) continue
-      simNodes[targetIndex].depth = simNodes[current].depth + 1
-      treeEdges.push([current, targetIndex])
+      if (depth[targetIndex] >= 0) continue
+      depth[targetIndex] = depth[current] + 1
+      parent[targetIndex] = current
       queue.push(targetIndex)
     }
   }
@@ -149,15 +169,60 @@ function buildTree(
   while (adopted) {
     adopted = false
     for (const [sourceIndex, targetIndex] of edges) {
-      if (simNodes[sourceIndex].depth >= 0 && simNodes[targetIndex].depth < 0) {
-        simNodes[targetIndex].depth = simNodes[sourceIndex].depth + 1
-        treeEdges.push([sourceIndex, targetIndex])
+      if (depth[sourceIndex] >= 0 && depth[targetIndex] < 0) {
+        depth[targetIndex] = depth[sourceIndex] + 1
+        parent[targetIndex] = sourceIndex
         adopted = true
       }
     }
   }
 
-  return treeEdges
+  return { depth, parent }
+}
+
+/**
+ * Pure filter predicate shared by the renderer and the panel's live count so
+ * the two can never drift. Returns a per-node boolean of whether the node
+ * survives all ACTIVE constraints in `filter`; with no filter (or the default
+ * all-visible filter) every node passes. A node matches the URL query if its
+ * own url contains the query OR it is a direct (either-direction) neighbor of
+ * a node whose url does — expanded over an undirected adjacency built here.
+ */
+export function computeVisible(
+  nodes: SiteGraphNode[],
+  edges: Array<[number, number]>,
+  filter?: SiteGraphFilter
+): boolean[] {
+  const n = nodes.length
+  const result = new Array<boolean>(n).fill(true)
+  if (!filter) return result
+
+  const query = filter.query.trim().toLowerCase()
+  const needDepth = filter.maxHops != null || !filter.showOrphans
+  const depth = needDepth ? computeDepths(nodes, edges).depth : null
+
+  for (let i = 0; i < n; i++) {
+    if (filter.brokenOnly && nodes[i].status < 400) {
+      result[i] = false
+      continue
+    }
+    if (depth) {
+      const d = depth[i]
+      if (!filter.showOrphans && d < 0) {
+        result[i] = false
+        continue
+      }
+      if (filter.maxHops != null && (d < 0 || d > filter.maxHops)) {
+        result[i] = false
+        continue
+      }
+    }
+    if (query && !nodes[i].url.toLowerCase().includes(query)) {
+      result[i] = false
+      continue
+    }
+  }
+  return result
 }
 
 /**
@@ -173,10 +238,16 @@ export const ForceGraph = memo(function ForceGraph({
   nodes,
   edges,
   className,
+  filter,
 }: ForceGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
+  // Bridge the latest filter into the running simulation without adding it to
+  // the main effect's deps (which would rebuild the sim and replay the intro).
+  const filterRef = useRef(filter)
+  filterRef.current = filter
+  const applyFilterRef = useRef<((f?: SiteGraphFilter) => void) | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -214,6 +285,11 @@ export const ForceGraph = memo(function ForceGraph({
         depth: -1,
         broken: node.status >= 400,
         appearDelay: 0,
+        vis: 0,
+        visTarget: 1,
+        visFrom: 0,
+        visStart: 0,
+        visDelay: 0,
         x: seedRadius * Math.cos(seedAngle),
         y: seedRadius * Math.sin(seedAngle),
       }
@@ -225,9 +301,15 @@ export const ForceGraph = memo(function ForceGraph({
       node.appearDelay = (order / priorityOrder.length) * INTRO_TOTAL_MS
     })
 
-    // Layout/base-render edges: the spanning tree (also assigns depths).
-    // Hover reveals the full neighborhood from the complete edge list.
-    const layoutEdges = buildTree(simNodes, edges)
+    // Layout/base-render edges: the spanning tree (parent links) from the
+    // shortest-click-path depths. Hover reveals the full neighborhood from the
+    // complete edge list.
+    const { depth: nodeDepths, parent: nodeParents } = computeDepths(nodes, edges)
+    for (let i = 0; i < simNodes.length; i++) simNodes[i].depth = nodeDepths[i]
+    const layoutEdges: Array<[number, number]> = []
+    for (let i = 0; i < nodeParents.length; i++) {
+      if (nodeParents[i] >= 0) layoutEdges.push([nodeParents[i], i])
+    }
     const simLinks: SimLink[] = layoutEdges.map(
       ([sourceIndex, targetIndex]) => ({
         source: simNodes[sourceIndex],
@@ -279,6 +361,13 @@ export const ForceGraph = memo(function ForceGraph({
     let introStart = reduceMotion ? -Infinity : performance.now()
     let disposed = false
 
+    // Seed each node's visibility transition to reproduce the intro exactly:
+    // easing 0 -> 1 from introStart, staggered by the hub-first appearDelay.
+    for (const node of simNodes) {
+      node.visStart = introStart
+      node.visDelay = node.appearDelay
+    }
+
     if (reduceMotion) {
       simulation.stop()
       simulation.tick(160)
@@ -288,12 +377,24 @@ export const ForceGraph = memo(function ForceGraph({
       introStart === -Infinity ||
       performance.now() - introStart > INTRO_TOTAL_MS + INTRO_NODE_MS
 
+    // Effective node scale: eases visFrom -> visTarget over INTRO_NODE_MS,
+    // gated by now - visStart - visDelay. With the intro seed (visFrom 0,
+    // visTarget 1, visStart introStart, visDelay appearDelay) this is exactly
+    // the original intro ramp. The live value is written back to node.vis so a
+    // later transition can start from the true current scale.
     const nodeScale = (node: SimNode, now: number) => {
-      if (introStart === -Infinity) return 1
-      const elapsed = now - introStart - node.appearDelay
-      if (elapsed <= 0) return 0
-      if (elapsed >= INTRO_NODE_MS) return 1
-      return easeOutCubic(elapsed / INTRO_NODE_MS)
+      let t: number
+      if (node.visStart === -Infinity) {
+        t = 1
+      } else {
+        const elapsed = now - node.visStart - node.visDelay
+        if (elapsed <= 0) t = 0
+        else if (elapsed >= INTRO_NODE_MS) t = 1
+        else t = easeOutCubic(elapsed / INTRO_NODE_MS)
+      }
+      const value = node.visFrom + (node.visTarget - node.visFrom) * t
+      node.vis = value
+      return value
     }
 
     // --- Label collision grid ---------------------------------------------------
@@ -319,6 +420,9 @@ export const ForceGraph = memo(function ForceGraph({
 
     // --- Scene rendering (base layer only, no hover effects) --------------------
     const scales = new Float32Array(simNodes.length)
+    // Edges whose endpoints are mid fade-in/out, drawn per-edge so their alpha
+    // tracks the dimmer endpoint (reused each frame to avoid allocation).
+    const fadingLinks: SimLink[] = []
 
     const renderScene = () => {
       const now = performance.now()
@@ -345,14 +449,19 @@ export const ForceGraph = memo(function ForceGraph({
 
       for (const node of simNodes) scales[node.index] = nodeScale(node, now)
 
-      // Edges: one batched path, culled to the viewport.
+      // Edges: fully-visible ones in one batched path (fast); edges with an
+      // endpoint mid fade get drawn per-edge so their alpha tracks that
+      // endpoint — so lines fade in/out in lockstep with their nodes.
+      fadingLinks.length = 0
       sceneContext.lineWidth = 1 / transform.k
       sceneContext.strokeStyle = colors.edge
       sceneContext.beginPath()
       for (const link of simLinks) {
-        if (scales[link.source.index] <= 0 || scales[link.target.index] <= 0) {
-          continue
-        }
+        const edgeScale = Math.min(
+          scales[link.source.index],
+          scales[link.target.index]
+        )
+        if (edgeScale <= 0) continue
         const sx = link.source.x
         const sy = link.source.y
         const tx = link.target.x
@@ -365,11 +474,26 @@ export const ForceGraph = memo(function ForceGraph({
         ) {
           continue
         }
-        sceneContext.moveTo(sx, sy)
-        sceneContext.lineTo(tx, ty)
+        if (edgeScale >= 0.999) {
+          sceneContext.moveTo(sx, sy)
+          sceneContext.lineTo(tx, ty)
+        } else {
+          fadingLinks.push(link)
+        }
       }
       sceneContext.globalAlpha = 0.3
       sceneContext.stroke()
+      for (const link of fadingLinks) {
+        const edgeScale = Math.min(
+          scales[link.source.index],
+          scales[link.target.index]
+        )
+        sceneContext.globalAlpha = 0.3 * edgeScale
+        sceneContext.beginPath()
+        sceneContext.moveTo(link.source.x, link.source.y)
+        sceneContext.lineTo(link.target.x, link.target.y)
+        sceneContext.stroke()
+      }
 
       // Nodes.
       for (const node of simNodes) {
@@ -458,6 +582,7 @@ export const ForceGraph = memo(function ForceGraph({
       context.beginPath()
       for (const neighborIndex of hoveredNeighbors) {
         const neighbor = simNodes[neighborIndex]
+        if (neighbor.vis <= 0.01) continue
         context.moveTo(hovered.x, hovered.y)
         context.lineTo(neighbor.x, neighbor.y)
       }
@@ -491,6 +616,7 @@ export const ForceGraph = memo(function ForceGraph({
       context.fillStyle = colors.nodeHighlight
       for (const neighborIndex of hoveredNeighbors) {
         const neighbor = simNodes[neighborIndex]
+        if (neighbor.vis <= 0.01) continue
         context.beginPath()
         context.arc(neighbor.x, neighbor.y, NODE_RADIUS + 2.5, 0, Math.PI * 2)
         context.fill()
@@ -498,6 +624,7 @@ export const ForceGraph = memo(function ForceGraph({
       context.globalAlpha = 1
       for (const neighborIndex of hoveredNeighbors) {
         const neighbor = simNodes[neighborIndex]
+        if (neighbor.vis <= 0.01) continue
         context.beginPath()
         context.arc(neighbor.x, neighbor.y, NODE_RADIUS, 0, Math.PI * 2)
         context.fillStyle = nodeFill(neighbor)
@@ -528,6 +655,7 @@ export const ForceGraph = memo(function ForceGraph({
       }
       drawOverlayLabel(hovered, 1)
       for (const neighborIndex of hoveredNeighbors) {
+        if (simNodes[neighborIndex].vis <= 0.01) continue
         drawOverlayLabel(simNodes[neighborIndex], 0.8)
       }
       context.globalAlpha = 1
@@ -559,16 +687,30 @@ export const ForceGraph = memo(function ForceGraph({
     }
 
     // --- Auto-fit during settle ------------------------------------------------
-    const fitToView = (lerp: number) => {
+    // When visibleOnly, frame just the nodes that are (or are becoming)
+    // visible, so a filter zooms to its results; falls back to all nodes when
+    // nothing is visible.
+    const fitToView = (lerp: number, visibleOnly = false) => {
       let minX = Infinity
       let maxX = -Infinity
       let minY = Infinity
       let maxY = -Infinity
+      let count = 0
       for (const node of simNodes) {
+        if (visibleOnly && node.vis <= 0.01 && node.visTarget !== 1) continue
         if (node.x < minX) minX = node.x
         if (node.x > maxX) maxX = node.x
         if (node.y < minY) minY = node.y
         if (node.y > maxY) maxY = node.y
+        count++
+      }
+      if (visibleOnly && count === 0) {
+        for (const node of simNodes) {
+          if (node.x < minX) minX = node.x
+          if (node.x > maxX) maxX = node.x
+          if (node.y < minY) minY = node.y
+          if (node.y > maxY) maxY = node.y
+        }
       }
       if (!Number.isFinite(minX) || width === 0) return
       const spanX = Math.max(maxX - minX, 1)
@@ -598,6 +740,68 @@ export const ForceGraph = memo(function ForceGraph({
       introRaf = requestAnimationFrame(introLoop)
     }
     if (!reduceMotion) introRaf = requestAnimationFrame(introLoop)
+
+    // --- Filter show/hide transitions -----------------------------------------
+    // Pure render-visibility over the existing layout: only the per-node vis
+    // targets change, the simulation is never rebuilt or restarted.
+    let filterRaf = 0
+    let filterActive = false
+    const filterSettled = () => {
+      for (const node of simNodes) {
+        if (Math.abs(node.vis - node.visTarget) >= 0.01) return false
+      }
+      return true
+    }
+    const filterLoop = () => {
+      if (disposed) return
+      // Zoom to the results even if the user has panned/zoomed — only for the
+      // duration of the transition.
+      fitToView(0.12, true)
+      invalidateScene()
+      if (filterSettled()) {
+        // Snap to exact targets and render one final clean frame so hidden
+        // nodes/edges fully vanish without needing a later pan/zoom.
+        for (const node of simNodes) node.vis = node.visTarget
+        invalidateScene()
+        filterActive = false
+        filterRaf = 0
+        return
+      }
+      filterRaf = requestAnimationFrame(filterLoop)
+    }
+    const applyFilter = (f?: SiteGraphFilter) => {
+      if (disposed) return
+      const visible = computeVisible(nodes, edges, f)
+      const now = performance.now()
+      let changed = false
+      for (const node of simNodes) {
+        const want = visible[node.index] ? 1 : 0
+        if (want === node.visTarget) continue
+        changed = true
+        if (reduceMotion) {
+          node.visFrom = want
+          node.visTarget = want
+          node.vis = want
+          node.visStart = -Infinity
+        } else {
+          node.visFrom = node.vis
+          node.visTarget = want
+          node.visStart = now
+          // Snappier hub-first stagger, same ordering as the intro.
+          node.visDelay = (node.appearDelay / INTRO_TOTAL_MS) * 250
+        }
+      }
+      if (!changed) return
+      if (reduceMotion) {
+        invalidateScene()
+        return
+      }
+      if (!filterActive) {
+        filterActive = true
+        filterRaf = requestAnimationFrame(filterLoop)
+      }
+    }
+    applyFilterRef.current = applyFilter
 
     // --- Sizing ------------------------------------------------------------------
     const resize = () => {
@@ -639,6 +843,7 @@ export const ForceGraph = memo(function ForceGraph({
       let best: SimNode | null = null
       let bestDistance = searchRadius
       for (const node of simNodes) {
+        if (node.vis <= 0.01) continue
         const dx = node.x - x
         const dy = node.y - y
         const distance = Math.sqrt(dx * dx + dy * dy) - NODE_RADIUS
@@ -817,10 +1022,14 @@ export const ForceGraph = memo(function ForceGraph({
     canvas.addEventListener("wheel", onWheel, { passive: false })
     canvas.addEventListener("dblclick", onDoubleClick)
 
+    // Honor a filter that was already set before this sim mounted.
+    applyFilter(filterRef.current)
+
     return () => {
       disposed = true
       cancelAnimationFrame(introRaf)
       cancelAnimationFrame(hoverRaf)
+      cancelAnimationFrame(filterRaf)
       window.clearTimeout(sceneSettleTimer)
       simulation.stop()
       resizeObserver.disconnect()
@@ -833,6 +1042,16 @@ export const ForceGraph = memo(function ForceGraph({
       canvas.removeEventListener("dblclick", onDoubleClick)
     }
   }, [nodes, edges])
+
+  // Push filter changes into the running sim without rebuilding it.
+  useEffect(() => {
+    applyFilterRef.current?.(filterRef.current)
+  }, [
+    filter?.query,
+    filter?.maxHops,
+    filter?.showOrphans,
+    filter?.brokenOnly,
+  ])
 
   return (
     <div ref={containerRef} className={className}>

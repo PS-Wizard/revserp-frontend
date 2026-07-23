@@ -191,7 +191,7 @@ function buildBatchPrompt(selection: FixSelection) {
     const issueType = selection.issueTypeIds[0] ?? ""
     const issueTypeLabel = selection.issueTypeLabels[0] ?? issueType
     const list = selection.urls.map((url) => `- ${url}`).join("\n")
-    return `Help me fix the "${issueTypeLabel}" issue (${selection.pillarLabel}) on these pages:\n${list}\nUse list_issues with issue_type and these urls in ONE call to get each page's current values, and get_recommended_fix once for ${issueType}. You already have these URLs — do NOT call list_pages or read full page content to look them up. Give concrete, ready-to-apply per-page fixes based only on the crawl context. Do not read other issue types.`
+    return `Help me fix the "${issueTypeLabel}" issue (${selection.pillarLabel}) on these pages:\n${list}\nGive concrete, ready-to-apply fixes for each page based on the crawl.`
   }
 
   // Issue-type tier: selection is one or more whole issue types.
