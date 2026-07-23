@@ -12,12 +12,10 @@ import {
 import { DownloadIcon, SparklesIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import {
-  IssueTypeFilter,
-  TablePagination,
-} from "~/components/issue-explorer/scope-controls"
+import { TablePagination } from "~/components/issue-explorer/scope-controls"
 import {
   BucketTable,
+  IssueTypeTable,
   PillarTable,
   UrlIssueTable,
 } from "~/components/issue-explorer/tables"
@@ -64,14 +62,17 @@ type State = {
   selectedPillarIds: string[]
   drilledPillarId: string | null
   drilledBucketKey: string | null
-  issueTypeFilter: string[]
+  drilledIssueTypeId: string | null
   checkedPillarIds: string[]
   checkedBucketKeys: string[]
+  checkedIssueTypeKeys: string[]
   checkedUrlKeys: string[]
   pillarPageIndex: number
   pillarPageSize: number
   bucketPageIndex: number
   bucketPageSize: number
+  issueTypePageIndex: number
+  issueTypePageSize: number
   urlPageIndex: number
   urlPageSize: number
 }
@@ -80,16 +81,20 @@ type Action =
   | { type: "SET_PILLAR_IDS"; payload: string[] }
   | { type: "DRILL_PILLAR"; payload: string }
   | { type: "DRILL_BUCKET"; payload: string }
+  | { type: "DRILL_ISSUE_TYPE"; payload: string }
   | { type: "GO_TO_PILLARS" }
   | { type: "GO_TO_BUCKETS" }
-  | { type: "SET_ISSUE_TYPE_FILTER"; payload: string[] }
+  | { type: "GO_TO_ISSUE_TYPES" }
   | { type: "SET_CHECKED_PILLARS"; payload: string[] }
   | { type: "SET_CHECKED_BUCKETS"; payload: string[] }
+  | { type: "SET_CHECKED_ISSUE_TYPES"; payload: string[] }
   | { type: "SET_CHECKED_URLS"; payload: string[] }
   | { type: "SET_PILLAR_PAGE_INDEX"; payload: number }
   | { type: "SET_PILLAR_PAGE_SIZE"; payload: number }
   | { type: "SET_BUCKET_PAGE_INDEX"; payload: number }
   | { type: "SET_BUCKET_PAGE_SIZE"; payload: number }
+  | { type: "SET_ISSUE_TYPE_PAGE_INDEX"; payload: number }
+  | { type: "SET_ISSUE_TYPE_PAGE_SIZE"; payload: number }
   | { type: "SET_URL_PAGE_INDEX"; payload: number }
   | { type: "SET_URL_PAGE_SIZE"; payload: number }
   | { type: "RESET" }
@@ -98,14 +103,17 @@ const initialState: State = {
   selectedPillarIds: [],
   drilledPillarId: null,
   drilledBucketKey: null,
-  issueTypeFilter: [],
+  drilledIssueTypeId: null,
   checkedPillarIds: [],
   checkedBucketKeys: [],
+  checkedIssueTypeKeys: [],
   checkedUrlKeys: [],
   pillarPageIndex: 0,
   pillarPageSize: 10,
   bucketPageIndex: 0,
   bucketPageSize: 10,
+  issueTypePageIndex: 0,
+  issueTypePageSize: 10,
   urlPageIndex: 0,
   urlPageSize: 10,
 }
@@ -118,10 +126,11 @@ function reducer(state: State, action: Action): State {
         selectedPillarIds: action.payload,
         checkedPillarIds: [],
         checkedBucketKeys: [],
+        checkedIssueTypeKeys: [],
         checkedUrlKeys: [],
         drilledPillarId: null,
         drilledBucketKey: null,
-        issueTypeFilter: [],
+        drilledIssueTypeId: null,
         bucketPageIndex: 0,
       }
     case "DRILL_PILLAR":
@@ -129,6 +138,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         drilledPillarId: action.payload,
         drilledBucketKey: null,
+        drilledIssueTypeId: null,
         checkedBucketKeys: [],
         bucketPageIndex: 0,
       }
@@ -136,7 +146,16 @@ function reducer(state: State, action: Action): State {
       return {
         ...state,
         drilledBucketKey: action.payload,
-        issueTypeFilter: [],
+        drilledIssueTypeId: null,
+        checkedIssueTypeKeys: [],
+        checkedUrlKeys: [],
+        issueTypePageIndex: 0,
+        urlPageIndex: 0,
+      }
+    case "DRILL_ISSUE_TYPE":
+      return {
+        ...state,
+        drilledIssueTypeId: action.payload,
         checkedUrlKeys: [],
         urlPageIndex: 0,
       }
@@ -145,24 +164,28 @@ function reducer(state: State, action: Action): State {
         ...state,
         drilledPillarId: null,
         drilledBucketKey: null,
+        drilledIssueTypeId: null,
         checkedBucketKeys: [],
+        checkedIssueTypeKeys: [],
         checkedUrlKeys: [],
-        issueTypeFilter: [],
         bucketPageIndex: 0,
+        issueTypePageIndex: 0,
         urlPageIndex: 0,
       }
     case "GO_TO_BUCKETS":
       return {
         ...state,
         drilledBucketKey: null,
+        drilledIssueTypeId: null,
+        checkedIssueTypeKeys: [],
         checkedUrlKeys: [],
-        issueTypeFilter: [],
+        issueTypePageIndex: 0,
         urlPageIndex: 0,
       }
-    case "SET_ISSUE_TYPE_FILTER":
+    case "GO_TO_ISSUE_TYPES":
       return {
         ...state,
-        issueTypeFilter: action.payload,
+        drilledIssueTypeId: null,
         checkedUrlKeys: [],
         urlPageIndex: 0,
       }
@@ -170,6 +193,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, checkedPillarIds: action.payload }
     case "SET_CHECKED_BUCKETS":
       return { ...state, checkedBucketKeys: action.payload }
+    case "SET_CHECKED_ISSUE_TYPES":
+      return { ...state, checkedIssueTypeKeys: action.payload }
     case "SET_CHECKED_URLS":
       return { ...state, checkedUrlKeys: action.payload }
     case "SET_PILLAR_PAGE_INDEX":
@@ -180,6 +205,10 @@ function reducer(state: State, action: Action): State {
       return { ...state, bucketPageIndex: action.payload }
     case "SET_BUCKET_PAGE_SIZE":
       return { ...state, bucketPageSize: action.payload }
+    case "SET_ISSUE_TYPE_PAGE_INDEX":
+      return { ...state, issueTypePageIndex: action.payload }
+    case "SET_ISSUE_TYPE_PAGE_SIZE":
+      return { ...state, issueTypePageSize: action.payload }
     case "SET_URL_PAGE_INDEX":
       return { ...state, urlPageIndex: action.payload }
     case "SET_URL_PAGE_SIZE":
@@ -215,14 +244,17 @@ export function IssueExplorer({
     selectedPillarIds,
     drilledPillarId,
     drilledBucketKey,
-    issueTypeFilter,
+    drilledIssueTypeId,
     checkedPillarIds,
     checkedBucketKeys,
+    checkedIssueTypeKeys,
     checkedUrlKeys,
     pillarPageIndex,
     pillarPageSize,
     bucketPageIndex,
     bucketPageSize,
+    issueTypePageIndex,
+    issueTypePageSize,
     urlPageIndex,
     urlPageSize,
   } = state
@@ -307,21 +339,39 @@ export function IssueExplorer({
     [bucketScopes, drilledBucketKey]
   )
 
-  // The URL pager iterates bucket.issues, so scoping it to the selected issue
-  // types filters server-side (no over-fetch). Empty filter = every type.
+  const drilledIssueType = useMemo(
+    () =>
+      drilledBucket && drilledIssueTypeId
+        ? (drilledBucket.bucket.issues.find(
+            (issue) => issue.id === drilledIssueTypeId
+          ) ?? null)
+        : null,
+    [drilledBucket, drilledIssueTypeId]
+  )
+
+  const issueTypeRows = useMemo(
+    () =>
+      drilledBucket
+        ? [...drilledBucket.bucket.issues].sort(
+            (left, right) => right.affected_url_count - left.affected_url_count
+          )
+        : [],
+    [drilledBucket]
+  )
+
+  // The URL pager iterates bucket.issues, so scoping it to the single drilled
+  // issue type filters server-side (no over-fetch). Non-null only at the URL
+  // tier, so the pager/urlState only run once an issue type is drilled.
   const effectiveDrilledBucket = useMemo<BucketScope | null>(() => {
-    if (!drilledBucket || !issueTypeFilter.length) return drilledBucket
-    const selected = new Set(issueTypeFilter)
+    if (!drilledBucket || !drilledIssueType) return null
     return {
       ...drilledBucket,
       bucket: {
         ...drilledBucket.bucket,
-        issues: drilledBucket.bucket.issues.filter((issue) =>
-          selected.has(issue.id)
-        ),
+        issues: [drilledIssueType],
       },
     }
-  }, [drilledBucket, issueTypeFilter])
+  }, [drilledBucket, drilledIssueType])
 
   // --- Reset everything when the crawl changes ---
   useEffect(() => {
@@ -359,17 +409,18 @@ export function IssueExplorer({
       bucket.issues.some((issue) => issue.id === focusRequest.issueTypeId)
     ) {
       dispatch({
-        type: "SET_ISSUE_TYPE_FILTER",
-        payload: [focusRequest.issueTypeId],
+        type: "DRILL_ISSUE_TYPE",
+        payload: focusRequest.issueTypeId,
       })
     }
   }, [focusRequest, effectivePillarId, selectedPillars])
 
-  // --- Create a fresh lazy pager whenever the drilled bucket or its issue-type
-  // filter changes (the filter is part of the key so it recreates the pager) ---
-  const urlCacheKey = drilledBucket
-    ? `${crawlId}::${drilledBucket.key}::${[...issueTypeFilter].sort().join(",")}`
-    : ""
+  // --- Create a fresh lazy pager whenever the drilled issue type changes (the
+  // issue type is part of the key so it recreates the pager) ---
+  const urlCacheKey =
+    drilledBucket && drilledIssueTypeId
+      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}`
+      : ""
   useEffect(() => {
     if (!effectiveDrilledBucket || !crawlId) {
       pagerRef.current = null
@@ -468,6 +519,11 @@ export function IssueExplorer({
     return bucketRows.slice(start, start + bucketPageSize)
   }, [bucketRows, bucketPageIndex, bucketPageSize])
 
+  const paginatedIssueTypeRows = useMemo(() => {
+    const start = issueTypePageIndex * issueTypePageSize
+    return issueTypeRows.slice(start, start + issueTypePageSize)
+  }, [issueTypeRows, issueTypePageIndex, issueTypePageSize])
+
   // --- Selection toggles ---
   const onTogglePillar = useCallback(
     (key: string) => {
@@ -513,6 +569,28 @@ export function IssueExplorer({
     [bucketRows]
   )
 
+  const onToggleIssueType = useCallback(
+    (key: string) => {
+      dispatch({
+        type: "SET_CHECKED_ISSUE_TYPES",
+        payload: checkedIssueTypeKeys.includes(key)
+          ? checkedIssueTypeKeys.filter((item) => item !== key)
+          : [...checkedIssueTypeKeys, key],
+      })
+    },
+    [checkedIssueTypeKeys]
+  )
+
+  const onToggleAllIssueTypes = useCallback(
+    (checked: boolean) => {
+      dispatch({
+        type: "SET_CHECKED_ISSUE_TYPES",
+        payload: checked ? issueTypeRows.map((row) => row.id) : [],
+      })
+    },
+    [issueTypeRows]
+  )
+
   const onToggleUrl = useCallback(
     (key: string) => {
       dispatch({
@@ -527,28 +605,14 @@ export function IssueExplorer({
 
   const onToggleAllUrls = useCallback(
     (checked: boolean) => {
-      if (!checked) {
-        dispatch({ type: "SET_CHECKED_URLS", payload: [] })
-        return
-      }
-
-      const pager = pagerRef.current
-      if (!pager) return
-
-      // "Select all" spans every URL in the bucket, not just the visible
-      // page, so this is the one place we fetch the remaining pages.
-      void pager.loadAll().then(({ rows }) => {
-        if (pagerRef.current !== pager) return
-        setUrlState((prev) =>
-          prev.key === urlCacheKey ? { ...prev, loadedRows: rows } : prev
-        )
-        dispatch({
-          type: "SET_CHECKED_URLS",
-          payload: rows.map((row) => urlRowKey(row)),
-        })
+      // Select all only toggles the currently visible page of URLs, not every
+      // URL across all pages.
+      dispatch({
+        type: "SET_CHECKED_URLS",
+        payload: checked ? displayedUrls.map((row) => urlRowKey(row)) : [],
       })
     },
-    [urlCacheKey]
+    [displayedUrls]
   )
 
   const pillarDrag = useDragSelection(
@@ -567,6 +631,14 @@ export function IssueExplorer({
       []
     )
   )
+  const issueTypeDrag = useDragSelection(
+    checkedIssueTypeKeys,
+    useCallback(
+      (keys: string[]) =>
+        dispatch({ type: "SET_CHECKED_ISSUE_TYPES", payload: keys }),
+      []
+    )
+  )
   const urlDrag = useDragSelection(
     checkedUrlKeys,
     useCallback(
@@ -577,7 +649,8 @@ export function IssueExplorer({
 
   // --- Build fix selections from the current checked rows ---
   const fixSelections = useMemo<FixSelection[]>(() => {
-    if (drilledBucket) {
+    // URL tier: selection always sits inside ONE drilled issue type.
+    if (drilledBucket && drilledIssueType) {
       const checkedSet = new Set(checkedUrlKeys)
       const rows = loadedUrls.filter((row) => checkedSet.has(urlRowKey(row)))
       if (!rows.length) return []
@@ -587,8 +660,29 @@ export function IssueExplorer({
           pillarLabel: drilledBucket.pillarLabel,
           bucketIds: [drilledBucket.bucketId],
           bucketLabels: [drilledBucket.bucketLabel],
-          issueTypeIds: [...new Set(rows.map((row) => row.issueTypeId))],
+          issueTypeIds: [drilledIssueType.id],
+          issueTypeLabels: [drilledIssueType.label],
           urls: [...new Set(rows.map((row) => row.url))],
+        },
+      ]
+    }
+
+    // Issue-type tier: checked issue types within the drilled bucket.
+    if (drilledBucket) {
+      const checkedSet = new Set(checkedIssueTypeKeys)
+      const issues = drilledBucket.bucket.issues.filter((issue) =>
+        checkedSet.has(issue.id)
+      )
+      if (!issues.length) return []
+      return [
+        {
+          pillarId: drilledBucket.pillarId,
+          pillarLabel: drilledBucket.pillarLabel,
+          bucketIds: [drilledBucket.bucketId],
+          bucketLabels: [drilledBucket.bucketLabel],
+          issueTypeIds: issues.map((issue) => issue.id),
+          issueTypeLabels: issues.map((issue) => issue.label),
+          urls: [],
         },
       ]
     }
@@ -611,6 +705,7 @@ export function IssueExplorer({
             bucketIds: [scope.bucketId],
             bucketLabels: [scope.bucketLabel],
             issueTypeIds: [],
+            issueTypeLabels: [],
             urls: [],
           })
         }
@@ -630,24 +725,29 @@ export function IssueExplorer({
           formatBucketLabel(bucket.id, bucket.label)
         ),
         issueTypeIds: [],
+        issueTypeLabels: [],
         urls: [],
       }))
   }, [
     bucketScopes,
     checkedBucketKeys,
+    checkedIssueTypeKeys,
     checkedPillarIds,
     checkedUrlKeys,
     effectivePillar,
     loadedUrls,
     drilledBucket,
+    drilledIssueType,
     selectedPillars,
   ])
 
-  const selectionCount = drilledBucket
+  const selectionCount = drilledIssueType
     ? checkedUrlKeys.length
-    : effectivePillar
-      ? checkedBucketKeys.length
-      : checkedPillarIds.length
+    : drilledBucket
+      ? checkedIssueTypeKeys.length
+      : effectivePillar
+        ? checkedBucketKeys.length
+        : checkedPillarIds.length
 
   const onRecommendFixes = useCallback(() => {
     if (!crawlId || !projectId) {
@@ -766,7 +866,15 @@ export function IssueExplorer({
     })
   }
   if (drilledBucket) {
-    crumbs.push({ label: drilledBucket.bucketLabel })
+    crumbs.push({
+      label: drilledBucket.bucketLabel,
+      onClick: drilledIssueType
+        ? () => dispatch({ type: "GO_TO_ISSUE_TYPES" })
+        : undefined,
+    })
+  }
+  if (drilledIssueType) {
+    crumbs.push({ label: drilledIssueType.label })
   }
 
   return (
@@ -799,15 +907,6 @@ export function IssueExplorer({
           </BreadcrumbList>
         </Breadcrumb>
         <div className="flex items-center justify-end gap-3">
-          {drilledBucket ? (
-            <IssueTypeFilter
-              issueTypes={drilledBucket.bucket.issues}
-              selected={issueTypeFilter}
-              onChange={(ids) =>
-                dispatch({ type: "SET_ISSUE_TYPE_FILTER", payload: ids })
-              }
-            />
-          ) : null}
           <Button
             disabled={!canAct || !projectId}
             onClick={onRecommendFixes}
@@ -820,7 +919,7 @@ export function IssueExplorer({
       </div>
 
       <div>
-        {drilledBucket ? (
+        {drilledBucket && drilledIssueType ? (
           <UrlIssueTable
             checkedKeys={checkedUrlKeys}
             error={urlError}
@@ -830,6 +929,18 @@ export function IssueExplorer({
             onToggleRow={onToggleUrl}
             rows={displayedUrls}
             totalRows={totalUrlRows}
+          />
+        ) : drilledBucket ? (
+          <IssueTypeTable
+            checkedKeys={checkedIssueTypeKeys}
+            getRowProps={issueTypeDrag.getRowProps}
+            onDrill={(key) =>
+              dispatch({ type: "DRILL_ISSUE_TYPE", payload: key })
+            }
+            onToggleAll={onToggleAllIssueTypes}
+            onToggleRow={onToggleIssueType}
+            rows={paginatedIssueTypeRows}
+            totalRows={issueTypeRows.length}
           />
         ) : effectivePillar ? (
           <BucketTable
@@ -866,45 +977,55 @@ export function IssueExplorer({
         </Button>
         <TablePagination
           pageIndex={
-            drilledBucket
+            drilledIssueType
               ? urlPageIndex
-              : effectivePillar
-                ? bucketPageIndex
-                : pillarPageIndex
+              : drilledBucket
+                ? issueTypePageIndex
+                : effectivePillar
+                  ? bucketPageIndex
+                  : pillarPageIndex
           }
           pageSize={
-            drilledBucket
+            drilledIssueType
               ? urlPageSize
-              : effectivePillar
-                ? bucketPageSize
-                : pillarPageSize
+              : drilledBucket
+                ? issueTypePageSize
+                : effectivePillar
+                  ? bucketPageSize
+                  : pillarPageSize
           }
           setPageIndex={(v) =>
             dispatch({
-              type: drilledBucket
+              type: drilledIssueType
                 ? "SET_URL_PAGE_INDEX"
-                : effectivePillar
-                  ? "SET_BUCKET_PAGE_INDEX"
-                  : "SET_PILLAR_PAGE_INDEX",
+                : drilledBucket
+                  ? "SET_ISSUE_TYPE_PAGE_INDEX"
+                  : effectivePillar
+                    ? "SET_BUCKET_PAGE_INDEX"
+                    : "SET_PILLAR_PAGE_INDEX",
               payload: v,
             })
           }
           setPageSize={(v) =>
             dispatch({
-              type: drilledBucket
+              type: drilledIssueType
                 ? "SET_URL_PAGE_SIZE"
-                : effectivePillar
-                  ? "SET_BUCKET_PAGE_SIZE"
-                  : "SET_PILLAR_PAGE_SIZE",
+                : drilledBucket
+                  ? "SET_ISSUE_TYPE_PAGE_SIZE"
+                  : effectivePillar
+                    ? "SET_BUCKET_PAGE_SIZE"
+                    : "SET_PILLAR_PAGE_SIZE",
               payload: v,
             })
           }
           totalRows={
-            drilledBucket
+            drilledIssueType
               ? totalUrlRows
-              : effectivePillar
-                ? bucketRows.length
-                : pillarRows.length
+              : drilledBucket
+                ? issueTypeRows.length
+                : effectivePillar
+                  ? bucketRows.length
+                  : pillarRows.length
           }
         />
       </div>

@@ -186,9 +186,20 @@ export function buildBatchFixPrompt(
 }
 
 function buildBatchPrompt(selection: FixSelection) {
+  // URL tier: selection is always scoped to a single issue type.
   if (selection.urls.length) {
+    const issueType = selection.issueTypeIds[0] ?? ""
+    const issueTypeLabel = selection.issueTypeLabels[0] ?? issueType
     const list = selection.urls.map((url) => `- ${url}`).join("\n")
-    return `Help me fix the issues on these URLs for ${selection.pillarLabel}:\n${list}\nGive concrete, ready-to-apply recommendations based only on the crawl context.`
+    return `Help me fix the "${issueTypeLabel}" issue (${selection.pillarLabel}) on these pages:\n${list}\nUse list_issues with issue_type and these urls in ONE call to get each page's current values, and get_recommended_fix once for ${issueType}. You already have these URLs — do NOT call list_pages or read full page content to look them up. Give concrete, ready-to-apply per-page fixes based only on the crawl context. Do not read other issue types.`
+  }
+
+  // Issue-type tier: selection is one or more whole issue types.
+  if (selection.issueTypeLabels.length) {
+    const issueTypes = selection.issueTypeLabels.join(", ")
+    return `Help me fix the ${issueTypes} issue${
+      selection.issueTypeLabels.length === 1 ? "" : "s"
+    } (${selection.pillarLabel}). Prioritize the most impactful affected URLs, and give concrete, ready-to-apply recommendations based only on the crawl context.`
   }
 
   const buckets = selection.bucketLabels.join(", ")

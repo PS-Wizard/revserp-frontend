@@ -10,6 +10,8 @@ import {
   TableRow,
 } from "~/components/ui/table"
 
+import type { ScoreBreakdownIssueTypeResponse } from "~/lib/api.types"
+
 import type { BucketScope, MergedIssueUrlRow, PillarScope } from "./types"
 import { formatScore } from "~/components/trend-sparkline"
 
@@ -201,6 +203,85 @@ export function BucketTable({
               </TableCell>
               <TableCell className="text-right tabular-nums">
                 {row.bucket.affected_url_count}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+type IssueTypeTableProps = {
+  rows: ScoreBreakdownIssueTypeResponse[]
+  totalRows: number
+  checkedKeys: string[]
+  onToggleRow: (key: string) => void
+  onToggleAll: (checked: boolean) => void
+  onDrill: (key: string) => void
+  getRowProps: (key: string) => RowSelectionProps
+}
+
+export function IssueTypeTable({
+  rows,
+  totalRows,
+  checkedKeys,
+  onToggleRow,
+  onToggleAll,
+  onDrill,
+  getRowProps,
+}: IssueTypeTableProps) {
+  if (!totalRows) {
+    return (
+      <EmptyMessage message="No issue types found for the selected bucket." />
+    )
+  }
+
+  const checkedSet = new Set(checkedKeys)
+
+  return (
+    <div className="overflow-hidden rounded-lg border select-none">
+      <Table>
+        <TableHeader className="sticky top-0 z-10 bg-muted">
+          <TableRow>
+            <SelectAllHead
+              checkedCount={rows.filter((r) => checkedSet.has(r.id)).length}
+              totalCount={rows.length}
+              onToggleAll={onToggleAll}
+            />
+            <TableHead>Issue Type</TableHead>
+            <TableHead>Severity</TableHead>
+            <TableHead className="text-right">Affected URLs</TableHead>
+            <TableHead className="text-right">Issues</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow
+              className="cursor-pointer"
+              key={row.id}
+              onDoubleClick={() => onDrill(row.id)}
+              title="Double-click to view affected URLs · drag to select"
+              {...getRowProps(row.id)}
+            >
+              <TableCell>
+                <Checkbox
+                  aria-label={`Select ${row.label}`}
+                  checked={checkedSet.has(row.id)}
+                  onCheckedChange={() => onToggleRow(row.id)}
+                />
+              </TableCell>
+              <TableCell className="whitespace-normal font-medium text-foreground">
+                {row.label}
+              </TableCell>
+              <TableCell>
+                <SeverityBadge severity={row.severity} />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {row.affected_url_count}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {row.issue_row_count}
               </TableCell>
             </TableRow>
           ))}

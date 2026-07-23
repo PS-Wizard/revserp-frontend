@@ -39,6 +39,10 @@ export function useCrawlTracking({
   revalidate: () => void
 }): { trackCrawl: (id: string) => void; cancelDialog: React.ReactNode } {
   const trackedIdsRef = useRef<Set<string>>(new Set())
+  // Last status seen per tracked crawl, so a status change (e.g. queued ->
+  // running -> terminal) refetches the loader and keeps the navbar in sync
+  // with the live poll instead of showing stale loader data.
+  const lastStatusRef = useRef<Map<string, string>>(new Map())
   const [cancelTarget, setCancelTarget] = useState<CancelCrawlTarget | null>(
     null
   )
@@ -77,6 +81,12 @@ export function useCrawlTracking({
     let cancelled = false
 
     function applyCrawlStatus(id: string, crawl: CrawlResponse) {
+      // Refetch loader-backed data (which the navbar reads) whenever the
+      // authoritative status changes, so it never lags the live poll/toast.
+      if (lastStatusRef.current.get(id) !== crawl.status) {
+        lastStatusRef.current.set(id, crawl.status)
+        revalidateRef.current()
+      }
       const projectName = projectNameByIdRef.current.get(crawl.project_id)
       // In-flight crawls get View + Cancel side by side. Rendered as a raw
       // element (not sonner's {label,onClick}) so the Cancel click opens the
@@ -147,6 +157,7 @@ export function useCrawlTracking({
           break
         case "completed":
           trackedIdsRef.current.delete(id)
+          lastStatusRef.current.delete(id)
           toast.success("Crawl complete", {
             id,
             description: projectName
@@ -157,10 +168,10 @@ export function useCrawlTracking({
               onClick: () => goToCrawlRef.current(crawl.project_id, id),
             },
           })
-          revalidateRef.current()
           break
         case "failed":
           trackedIdsRef.current.delete(id)
+          lastStatusRef.current.delete(id)
           toast.error("Crawl failed", {
             id,
             description: projectName
@@ -170,6 +181,7 @@ export function useCrawlTracking({
           break
         case "cancelled":
           trackedIdsRef.current.delete(id)
+          lastStatusRef.current.delete(id)
           toast.dismiss(id)
           break
       }

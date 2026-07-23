@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
+import { BorderBeam } from "border-beam"
 import {
   Maximize2Icon,
   Minimize2Icon,
@@ -17,10 +18,7 @@ import { AIComposer } from "./ai-composer"
 import { AIMessageList } from "./ai-message-list"
 import { ConversationHistory } from "./conversation-history"
 import { useAIChat } from "./use-ai-chat"
-import type {
-  AIExportAction,
-  AINavigationDestination,
-} from "./use-ai-chat"
+import type { AIExportAction, AINavigationDestination } from "./use-ai-chat"
 import type { PanelState } from "./panel-map"
 
 const EMPTY_HINT =
@@ -165,157 +163,168 @@ export function AIDock({
             : "items-end pb-6"
         )}
       >
-        <motion.div
-          ref={cardRef}
-          layout
-          layoutId="ai-dock-card"
-          transition={CARD_TRANSITION}
+        <BorderBeam
+          active={isSending}
+          size={panelState === "collapsed" ? "md" : "pulse-outside"}
+          colorVariant="sunset"
+          theme="auto"
           className={cn(
-            "pointer-events-auto flex flex-col overflow-hidden border border-border bg-card shadow-2xl shadow-black/40",
-            cardSizeClass
+            "pointer-events-none flex",
+            panelState === "maximized" && "h-full w-full max-w-[100rem]"
           )}
         >
-          {panelState === "collapsed" ? (
-            <button
-              type="button"
-              onClick={() => setPanelState("mini")}
-              className="flex h-full items-center gap-2 px-4 text-sm font-medium text-foreground"
-            >
-              {isSending ? (
-                <ThinkingOrb
-                  aria-hidden="true"
-                  className="shrink-0"
-                  size={20}
-                  state="solving"
-                />
-              ) : (
-                <span className="relative flex size-2.5 items-center justify-center">
-                  <span className="absolute inline-flex size-full rounded-full bg-emerald-500/60" />
-                  <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
-                </span>
-              )}
-              <SparklesIcon className="size-4" />
-              <span>{isSending ? "Working…" : "Revserp AI"}</span>
-            </button>
-          ) : (
-            <>
-              <header className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
-                {panelState === "maximized" ? (
-                  <Button
-                    aria-label={historyOpen ? "Hide history" : "Show history"}
-                    className="size-7"
-                    onClick={() => setHistoryOpen((open) => !open)}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <PanelLeftIcon className="size-4" />
-                  </Button>
-                ) : null}
-                <SparklesIcon className="size-4 shrink-0 text-primary" />
-                <span className="flex-1 truncate text-sm font-medium">
-                  Revserp AI
-                </span>
+          <motion.div
+            ref={cardRef}
+            layout
+            layoutId="ai-dock-card"
+            transition={CARD_TRANSITION}
+            className={cn(
+              "pointer-events-auto flex flex-col overflow-hidden border border-border bg-card shadow-2xl shadow-black/40",
+              cardSizeClass
+            )}
+          >
+            {panelState === "collapsed" ? (
+              <button
+                type="button"
+                onClick={() => setPanelState("mini")}
+                className="flex h-full items-center gap-2 px-4 text-sm font-medium text-foreground"
+              >
                 {isSending ? (
-                  <span className="mr-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="inline-flex size-2 animate-pulse rounded-full bg-primary" />
-                    Working…
-                  </span>
-                ) : null}
-                {panelState === "mini" ? (
-                  <Button
-                    aria-label="Maximize"
-                    className="size-7"
-                    onClick={() => setPanelState("maximized")}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Maximize2Icon className="size-4" />
-                  </Button>
+                  <ThinkingOrb
+                    aria-hidden="true"
+                    className="shrink-0"
+                    size={20}
+                    state="solving"
+                  />
                 ) : (
+                  <span className="relative flex size-2.5 items-center justify-center">
+                    <span className="absolute inline-flex size-full rounded-full bg-emerald-500/60" />
+                    <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+                  </span>
+                )}
+                <SparklesIcon className="size-4" />
+                <span>{isSending ? "Working…" : "Revserp AI"}</span>
+              </button>
+            ) : (
+              <>
+                <header className="flex shrink-0 items-center gap-2 border-b border-border/60 px-3 py-2">
+                  {panelState === "maximized" ? (
+                    <Button
+                      aria-label={historyOpen ? "Hide history" : "Show history"}
+                      className="size-7"
+                      onClick={() => setHistoryOpen((open) => !open)}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <PanelLeftIcon className="size-4" />
+                    </Button>
+                  ) : null}
+                  <SparklesIcon className="size-4 shrink-0 text-primary" />
+                  <span className="flex-1 truncate text-sm font-medium">
+                    Revserp AI
+                  </span>
+                  {isSending ? (
+                    <span className="mr-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="inline-flex size-2 animate-pulse rounded-full bg-primary" />
+                      Working…
+                    </span>
+                  ) : null}
+                  {panelState === "mini" ? (
+                    <Button
+                      aria-label="Maximize"
+                      className="size-7"
+                      onClick={() => setPanelState("maximized")}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <Maximize2Icon className="size-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      aria-label="Restore"
+                      className="size-7"
+                      onClick={() => setPanelState("mini")}
+                      size="icon"
+                      variant="ghost"
+                    >
+                      <Minimize2Icon className="size-4" />
+                    </Button>
+                  )}
                   <Button
-                    aria-label="Restore"
+                    aria-label="Collapse"
                     className="size-7"
-                    onClick={() => setPanelState("mini")}
+                    onClick={() => setPanelState("collapsed")}
                     size="icon"
                     variant="ghost"
                   >
-                    <Minimize2Icon className="size-4" />
+                    <MinusIcon className="size-4" />
                   </Button>
-                )}
-                <Button
-                  aria-label="Collapse"
-                  className="size-7"
-                  onClick={() => setPanelState("collapsed")}
-                  size="icon"
-                  variant="ghost"
-                >
-                  <MinusIcon className="size-4" />
-                </Button>
-              </header>
+                </header>
 
-              <div className="flex min-h-0 min-w-0 flex-1">
-                {panelState === "maximized" && historyOpen ? (
-                  <aside className="hidden w-64 shrink-0 border-r border-border/60 sm:block">
-                    <ConversationHistory
-                      conversations={conversations}
-                      activeConversationId={activeConversationId}
-                      onSelect={(id) => {
-                        void loadConversation(id)
-                        setHistoryOpen(false)
-                      }}
-                      onNewChat={() => {
-                        startNewChat()
-                        setHistoryOpen(false)
-                      }}
-                      onDelete={(id) => void deleteConversation(id)}
-                    />
-                  </aside>
-                ) : null}
-
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  {panelState === "mini" ? (
-                    <div className="flex shrink-0 items-center justify-between border-b border-border/40 px-3 py-1.5">
-                      <span className="truncate text-xs text-muted-foreground">
-                        {conversations.find(
-                          (c) => c.id === activeConversationId
-                        )?.title ?? "New chat"}
-                      </span>
-                      <Button
-                        className="h-6 px-2 text-xs"
-                        onClick={startNewChat}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        New
-                      </Button>
-                    </div>
+                <div className="flex min-h-0 min-w-0 flex-1">
+                  {panelState === "maximized" && historyOpen ? (
+                    <aside className="hidden w-64 shrink-0 border-r border-border/60 sm:block">
+                      <ConversationHistory
+                        conversations={conversations}
+                        activeConversationId={activeConversationId}
+                        onSelect={(id) => {
+                          void loadConversation(id)
+                          setHistoryOpen(false)
+                        }}
+                        onNewChat={() => {
+                          startNewChat()
+                          setHistoryOpen(false)
+                        }}
+                        onDelete={(id) => void deleteConversation(id)}
+                      />
+                    </aside>
                   ) : null}
 
-                  <div
-                    ref={messageScrollRef}
-                    className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
-                  >
-                    <AIMessageList
-                      messages={messages}
-                      isLoadingConversation={isLoadingConversation}
-                      emptyHint={EMPTY_HINT}
+                  <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                    {panelState === "mini" ? (
+                      <div className="flex shrink-0 items-center justify-between border-b border-border/40 px-3 py-1.5">
+                        <span className="truncate text-xs text-muted-foreground">
+                          {conversations.find(
+                            (c) => c.id === activeConversationId
+                          )?.title ?? "New chat"}
+                        </span>
+                        <Button
+                          className="h-6 px-2 text-xs"
+                          onClick={startNewChat}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          New
+                        </Button>
+                      </div>
+                    ) : null}
+
+                    <div
+                      ref={messageScrollRef}
+                      className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+                    >
+                      <AIMessageList
+                        messages={messages}
+                        isLoadingConversation={isLoadingConversation}
+                        emptyHint={EMPTY_HINT}
+                      />
+                    </div>
+
+                    <AIComposer
+                      prompt={prompt}
+                      canSend={canSend}
+                      isSending={isSending}
+                      errorMessage={errorMessage}
+                      onPromptChange={setPrompt}
+                      onSubmit={() => void handleSubmit()}
+                      onStop={stopSending}
                     />
                   </div>
-
-                  <AIComposer
-                    prompt={prompt}
-                    canSend={canSend}
-                    isSending={isSending}
-                    errorMessage={errorMessage}
-                    onPromptChange={setPrompt}
-                    onSubmit={() => void handleSubmit()}
-                    onStop={stopSending}
-                  />
                 </div>
-              </div>
-            </>
-          )}
-        </motion.div>
+              </>
+            )}
+          </motion.div>
+        </BorderBeam>
       </div>
     </>
   )

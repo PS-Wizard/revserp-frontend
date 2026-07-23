@@ -26,6 +26,7 @@ export type FixSelection = {
   bucketIds: string[]
   bucketLabels: string[]
   issueTypeIds: string[]
+  issueTypeLabels: string[]
   urls: string[]
 }
 

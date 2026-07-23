@@ -1,25 +1,11 @@
-import { Fragment } from "react"
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
-  ChevronDownIcon,
-  ListFilterIcon,
 } from "lucide-react"
 
-import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
 import {
   Select,
   SelectContent,
@@ -28,128 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select"
-
-type IssueTypeOption = {
-  id: string
-  label: string
-  severity: string
-  affected_url_count: number
-}
-
-// Severity is the natural grouping for issue types; order groups worst-first
-// and push unknown/blank severities to the end under an "Other" heading.
-const SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
-
-function severityRank(severity: string) {
-  const index = SEVERITY_ORDER.indexOf(severity.toLowerCase())
-  return index === -1 ? SEVERITY_ORDER.length : index
-}
-
-function severityLabel(severity: string) {
-  if (!severity) return "Other"
-  return severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase()
-}
-
-function groupBySeverity(issueTypes: IssueTypeOption[]) {
-  const groups = new Map<string, IssueTypeOption[]>()
-  for (const issueType of issueTypes) {
-    const key = issueType.severity?.toLowerCase() || ""
-    const existing = groups.get(key)
-    if (existing) existing.push(issueType)
-    else groups.set(key, [issueType])
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => severityRank(a) - severityRank(b))
-    .map(([severity, items]) => ({
-      severity,
-      label: severityLabel(severity),
-      items: [...items].sort(
-        (left, right) => right.affected_url_count - left.affected_url_count
-      ),
-    }))
-}
-
-/**
- * Grouped multi-select filter for the issue types within a drilled bucket.
- * Options are grouped by severity; toggling checkboxes scopes the URL table to
- * the selected types (empty selection = all). Rendered only when the bucket has
- * more than one issue type.
- */
-export function IssueTypeFilter({
-  issueTypes,
-  selected,
-  onChange,
-}: {
-  issueTypes: IssueTypeOption[]
-  selected: string[]
-  onChange: (ids: string[]) => void
-}) {
-  if (issueTypes.length <= 1) return null
-
-  const selectedSet = new Set(selected)
-  const activeCount = selected.length
-  const groups = groupBySeverity(issueTypes)
-  const toggle = (id: string) =>
-    onChange(
-      selectedSet.has(id)
-        ? selected.filter((item) => item !== id)
-        : [...selected, id]
-    )
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button size="sm" variant="outline" />}
-        className="gap-1.5"
-      >
-        <ListFilterIcon className="size-4" />
-        Issue type
-        {activeCount > 0 ? (
-          <Badge
-            variant="secondary"
-            className="ml-0.5 h-5 min-w-5 justify-center rounded-full px-1 tabular-nums"
-          >
-            {activeCount}
-          </Badge>
-        ) : null}
-        <ChevronDownIcon className="size-4 opacity-60" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-80 w-72">
-        <DropdownMenuItem
-          disabled={activeCount === 0}
-          onClick={() => onChange([])}
-        >
-          Clear filter
-          <span className="ml-auto text-xs text-muted-foreground">
-            {issueTypes.length} types
-          </span>
-        </DropdownMenuItem>
-        {groups.map((group) => (
-          <Fragment key={group.severity || "other"}>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-              {group.items.map((issueType) => (
-                <DropdownMenuCheckboxItem
-                  key={issueType.id}
-                  checked={selectedSet.has(issueType.id)}
-                  onCheckedChange={() => toggle(issueType.id)}
-                >
-                  <span className="truncate" title={issueType.label}>
-                    {issueType.label}
-                  </span>
-                  <span className="ml-auto pl-2 text-xs text-muted-foreground tabular-nums">
-                    {issueType.affected_url_count}
-                  </span>
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuGroup>
-          </Fragment>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 type TablePaginationProps = {
   pageIndex: number

@@ -1,4 +1,4 @@
-import { BotIcon, Loader2Icon, SparklesIcon, WrenchIcon } from "lucide-react"
+import { BotIcon, SparklesIcon, WrenchIcon } from "lucide-react"
 
 import { ThinkingOrb } from "thinking-orbs"
 import { MarkdownMessage } from "~/components/markdown-message"
@@ -36,16 +36,21 @@ function isVisibleToolCall(toolCall: ToolCallInfo) {
 
 function ToolCallRow({ toolCall }: { toolCall: ToolCallInfo }) {
   const isRunning = toolCall.status === "running"
+  if (isRunning) {
+    return (
+      <div className="flex items-center text-xs" title={toolCall.args}>
+        <span className="shrink-0 shimmer">
+          {humanizeToolName(toolCall.name)}…
+        </span>
+      </div>
+    )
+  }
   return (
     <div
       className="flex items-center gap-2 text-xs text-muted-foreground"
       title={toolCall.args}
     >
-      {isRunning ? (
-        <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-      ) : (
-        <WrenchIcon className="size-3.5 shrink-0" />
-      )}
+      <WrenchIcon className="size-3.5 shrink-0" />
       <span className="shrink-0">{humanizeToolName(toolCall.name)}</span>
       {toolCall.summary ? (
         <span className="min-w-0 truncate text-muted-foreground/70">
@@ -100,7 +105,7 @@ export function AIMessageList({
   }
 
   return (
-    <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-5 px-3 py-4">
+    <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-5 px-3 py-4">
       {messages.map((message, messageIndex) => (
         <div
           key={message.id ?? `${message.role}-${messageIndex}`}
@@ -116,8 +121,16 @@ export function AIMessageList({
           ) : (
             <article className="w-full min-w-0 text-sm leading-6 text-foreground">
               <div className="flex items-start gap-2.5">
-                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border border-border bg-card">
-                  <BotIcon className="size-3.5" />
+                <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-card">
+                  {message.streaming ? (
+                    <ThinkingOrb
+                      aria-hidden="true"
+                      size={20}
+                      state={message.content ? "composing" : "searching"}
+                    />
+                  ) : (
+                    <BotIcon className="size-3.5" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1 space-y-2.5">
                   {message.toolCalls?.some(isVisibleToolCall) ? (
@@ -130,24 +143,22 @@ export function AIMessageList({
                     </div>
                   ) : null}
 
-                  {message.streaming && !message.content ? (
+                  {message.streaming &&
+                  !message.content &&
+                  !message.toolCalls?.some(isVisibleToolCall) ? (
                     <div
                       aria-atomic="true"
                       aria-live="polite"
-                      className="flex min-h-7 items-center gap-2 text-sm text-muted-foreground"
+                      className="flex min-h-7 items-center text-sm"
                       role="status"
                     >
-                      <ThinkingOrb
-                        aria-hidden="true"
-                        className="shrink-0"
-                        size={20}
-                        state="composing"
-                      />
-                      <span>Generating response…</span>
+                      <span className="shimmer">Thinking…</span>
                     </div>
-                  ) : (
+                  ) : null}
+
+                  {message.content ? (
                     <MarkdownMessage content={message.content} />
-                  )}
+                  ) : null}
                 </div>
               </div>
             </article>
