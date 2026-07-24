@@ -17,6 +17,7 @@ import type {
 } from "~/lib/api.types"
 import {
   messagesFromResponses,
+  normalizeChartSpec,
   upsertConversation,
 } from "~/lib/ai-conversation"
 import type { RevserpAIMessage } from "~/lib/ai-conversation"
@@ -60,7 +61,9 @@ function isNavigatePayload(
   payload: unknown
 ): payload is { destination: AINavigationDestination } {
   const destination = (payload as { destination?: unknown })?.destination
-  return NAVIGATION_DESTINATIONS.includes(destination as AINavigationDestination)
+  return NAVIGATION_DESTINATIONS.includes(
+    destination as AINavigationDestination
+  )
 }
 
 function isProjectSwitchedPayload(
@@ -68,9 +71,9 @@ function isProjectSwitchedPayload(
 ): payload is { project_id: string } {
   return Boolean(
     payload &&
-      typeof payload === "object" &&
-      typeof (payload as { project_id?: unknown }).project_id === "string" &&
-      (payload as { project_id: string }).project_id.trim()
+    typeof payload === "object" &&
+    typeof (payload as { project_id?: unknown }).project_id === "string" &&
+    (payload as { project_id: string }).project_id.trim()
   )
 }
 
@@ -263,7 +266,10 @@ export function useAIChat({
               : [response.conversation]
         )
       } catch (error) {
-        if (controller.signal.aborted || loadRequestIdRef.current !== requestSeq)
+        if (
+          controller.signal.aborted ||
+          loadRequestIdRef.current !== requestSeq
+        )
           return
         setErrorMessage(
           error instanceof ApiError
@@ -309,8 +315,9 @@ export function useAIChat({
       queryClient.setQueryData<AIConversationSummary[]>(
         aiConversationsListQueryKey(orgId),
         (current) =>
-          current?.filter((conversation) => conversation.id !== conversationId) ??
-          []
+          current?.filter(
+            (conversation) => conversation.id !== conversationId
+          ) ?? []
       )
       queryClient.removeQueries({
         queryKey: aiConversationDetailQueryKey(conversationId),
@@ -416,7 +423,8 @@ export function useAIChat({
           crawl_id: crawlIdRef.current || undefined,
           // Browser timezone, used as the default when the agent configures an
           // auto-crawl without specifying one (mirrors the auto-crawl dialog).
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
+          timezone:
+            Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
         },
         {
           signal: abortController.signal,
@@ -490,6 +498,16 @@ export function useAIChat({
                         }
                       : toolCall
                   ),
+                }))
+                break
+              }
+              case "chart": {
+                const frame = payload as { id?: string; chart?: unknown }
+                const chart = normalizeChartSpec(frame.chart, frame.id ?? "")
+                if (!chart) break
+                applyAssistantUpdate((message) => ({
+                  ...message,
+                  charts: [...(message.charts ?? []), chart],
                 }))
                 break
               }
@@ -567,8 +585,8 @@ export function useAIChat({
           : "Unable to generate an AI response."
       const hasPartialContent = Boolean(
         currentAssistantMessage.content ||
-          currentAssistantMessage.reasoning ||
-          currentAssistantMessage.toolCalls?.length
+        currentAssistantMessage.reasoning ||
+        currentAssistantMessage.toolCalls?.length
       )
 
       if (is409 || !hasPartialContent) {

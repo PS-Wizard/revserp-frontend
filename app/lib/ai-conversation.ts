@@ -1,7 +1,4 @@
-import type {
-  AIConversationSummary,
-  AIDockMessage,
-} from "~/lib/api.types"
+import type { AIConversationSummary, AIDockMessage } from "~/lib/api.types"
 
 export type AiConversationGroup = {
   label: string
@@ -60,12 +57,59 @@ export type ToolCallInfo = {
   status: "running" | "done" | "error"
 }
 
+export type ChartType = "line" | "bar" | "area" | "pie"
+
+export type ChartSeries = { key: string; label: string }
+
+export type ChartSpec = {
+  id: string
+  type: ChartType
+  title: string
+  x_key: string
+  series: ChartSeries[]
+  data: Record<string, unknown>[]
+}
+
+const CHART_TYPES: ChartType[] = ["line", "bar", "area", "pie"]
+
+// normalizeChartSpec validates an untrusted chart object (from a live `chart`
+// SSE frame or a persisted render_chart tool row) and stamps it with `id`.
+// Returns null on any structural problem so a malformed chart is skipped
+// rather than crashing the message list.
+export function normalizeChartSpec(raw: unknown, id: string): ChartSpec | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || !id) return null
+  const value = raw as Record<string, unknown>
+  const type = value.type
+  if (!CHART_TYPES.includes(type as ChartType)) return null
+  if (typeof value.title !== "string" || !value.title.trim()) return null
+  if (typeof value.x_key !== "string" || !value.x_key.trim()) return null
+  if (!Array.isArray(value.series) || value.series.length === 0) return null
+  const series: ChartSeries[] = []
+  for (const entry of value.series) {
+    if (!entry || typeof entry !== "object") return null
+    const { key, label } = entry as Record<string, unknown>
+    if (typeof key !== "string" || !key || typeof label !== "string" || !label)
+      return null
+    series.push({ key, label })
+  }
+  if (!Array.isArray(value.data) || value.data.length === 0) return null
+  return {
+    id,
+    type: type as ChartType,
+    title: value.title,
+    x_key: value.x_key,
+    series,
+    data: value.data as Record<string, unknown>[],
+  }
+}
+
 export type RevserpAIMessage = {
   id?: string
   role: "user" | "assistant"
   content: string
   reasoning?: string
   toolCalls?: ToolCallInfo[]
+  charts?: ChartSpec[]
   streaming?: boolean
 }
 
@@ -83,6 +127,27 @@ export function messagesFromResponses(
       const toolCall = assistantMessage?.toolCalls?.find(
         (call) => call.id === message.tool_call_id
       )
+      // render_chart rows persist the chart spec JSON as their content; rebuild
+      // the chart from it rather than showing the raw JSON as a tool summary.
+      if (message.tool_name === "render_chart") {
+        let chart: ChartSpec | null = null
+        try {
+          chart = normalizeChartSpec(
+            JSON.parse(message.content),
+            message.tool_call_id ?? message.id
+          )
+        } catch {
+          chart = null
+        }
+        if (chart && assistantMessage) {
+          assistantMessage.charts = [...(assistantMessage.charts ?? []), chart]
+        }
+        if (toolCall) {
+          toolCall.summary = chart ? `Chart: ${chart.title}` : "Chart"
+          toolCall.status = "done"
+        }
+        continue
+      }
       if (toolCall) {
         toolCall.summary = message.content
         toolCall.status = "done"

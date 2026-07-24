@@ -4,6 +4,7 @@ import { ThinkingOrb } from "thinking-orbs"
 import { MarkdownMessage } from "~/components/markdown-message"
 import type { RevserpAIMessage, ToolCallInfo } from "~/lib/ai-conversation"
 import { cn } from "~/lib/utils"
+import { ChartMessage } from "./chart-message"
 
 const TOOL_LABELS: Record<string, string> = {
   list_projects: "Listing projects",
@@ -20,6 +21,7 @@ const TOOL_LABELS: Record<string, string> = {
   export_crawl: "Exporting crawl",
   export_audit: "Exporting audit",
   navigate: "Navigating",
+  render_chart: "Rendering chart",
 }
 
 function humanizeToolName(name: string) {
@@ -159,6 +161,10 @@ export function AIMessageList({
                   {message.content ? (
                     <MarkdownMessage content={message.content} />
                   ) : null}
+
+                  {message.charts?.map((chart) => (
+                    <ChartMessage key={chart.id} spec={chart} />
+                  ))}
                 </div>
               </div>
             </article>
