@@ -83,6 +83,7 @@ export function AICapsule({
               className="shrink-0"
               size={20}
               state="solving"
+              theme="light"
               style={{ width: 16, height: 16 }}
             />
           ) : (
