@@ -25,12 +25,15 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import type { MeResponse } from "~/lib/api.types"
+import { cn } from "~/lib/utils"
 
 import { getWorkspaceInitials } from "./utils"
 
 type ProfileMenuProps = {
   activeOrganizationName?: string
   activeProjectId?: string | null
+  /** Bare avatar trigger, sized for the command dock's capsule. */
+  compact?: boolean
   currentCrawlId?: string | null
   initials: string
   isActiveOrganizationOwner: boolean
@@ -47,6 +50,7 @@ type ProfileMenuProps = {
 }
 
 export function ProfileMenu({
+  compact = false,
   initials,
   isActiveOrganizationOwner,
   workspaceState,
@@ -71,21 +75,33 @@ export function ProfileMenu({
         render={
           <button
             aria-label="Open profile and workspace menu"
-            className="flex items-center gap-3 rounded-full bg-card px-2 py-1.5 text-left shadow-xs transition hover:bg-muted/50 data-[popup-open]:bg-muted/50"
+            className={cn(
+              "flex items-center transition data-[popup-open]:bg-muted/50",
+              compact
+                ? "size-9 shrink-0 justify-center rounded-full hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                : "gap-3 rounded-full bg-card px-2 py-1.5 text-left shadow-xs hover:bg-muted/50"
+            )}
             type="button"
           />
         }
       >
-        <Avatar>
+        <Avatar className={compact ? "size-8" : undefined}>
           <AvatarFallback>{initials || "R"}</AvatarFallback>
         </Avatar>
-        <span className="hidden min-w-0 sm:block">
-          <span className="block truncate text-sm font-medium text-foreground">
-            {userName || "Revserp User"}
+        {compact ? null : (
+          <span className="hidden min-w-0 sm:block">
+            <span className="block truncate text-sm font-medium text-foreground">
+              {userName || "Revserp User"}
+            </span>
           </span>
-        </span>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64" sideOffset={10}>
+      <DropdownMenuContent
+        align="end"
+        className="w-64"
+        side={compact ? "top" : "bottom"}
+        sideOffset={10}
+      >
         <DropdownMenuGroup>
           <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
           <DropdownMenuSub>

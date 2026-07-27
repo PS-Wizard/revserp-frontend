@@ -1,14 +1,16 @@
 import type {
+  AIExportAction,
+  AINavigationDestination,
+} from "~/components/ai-dock/use-ai-chat"
+import type {
   CrawlResponse,
   MeResponse,
   ProjectResponse,
 } from "~/lib/api.types"
 
 export type DashboardView =
-  | "revserp-audit"
-  | "revserp-visibility"
-  | "search-console"
-  | "compare"
+  "revserp-audit" | "revserp-visibility" | "search-console" | "compare"
+export type AuditTab = "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
 
 export type AppNavbarProps = {
@@ -29,10 +31,20 @@ export type AppNavbarProps = {
   userName?: string
   view: DashboardView
   onViewChange: (value: DashboardView) => void
+  auditTab: AuditTab
+  onAuditTabChange: (value: AuditTab) => void
   isPlatformAdmin: boolean
   onExportAudit: () => void
   isExportingAudit: boolean
   // Bumped when the AI agent changes auto-crawl settings, so the navbar's
   // auto-crawl state re-fetches instead of showing a stale enabled/disabled.
   autoCrawlRefreshToken?: number
+  // --- Revserp AI (hosted by the command dock) ---
+  projectIds: string[]
+  trackCrawl: (id: string) => void
+  onNavigate: (destination: AINavigationDestination) => void
+  onProjectSwitched: (projectId: string) => void
+  onExport: (action: AIExportAction) => void
+  onAutoCrawlConfigured: () => void
+  externalOpen: { prompt: string; token: number } | null
 }

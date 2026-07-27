@@ -2,6 +2,7 @@
 
 import {
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -220,7 +221,7 @@ function reducer(state: State, action: Action): State {
 
 const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
 
-export function IssueExplorer({
+export const IssueExplorer = memo(function IssueExplorer({
   breakdown,
   focusRequest,
   initialPillarId,
@@ -298,7 +299,8 @@ export function IssueExplorer({
     selectedPillars.length === 1 ? selectedPillars[0].id : null
   const effectivePillarId = drilledPillarId ?? soloPillarId
   const effectivePillar = useMemo(
-    () => selectedPillars.find((pillar) => pillar.id === effectivePillarId) ?? null,
+    () =>
+      selectedPillars.find((pillar) => pillar.id === effectivePillarId) ?? null,
     [selectedPillars, effectivePillarId]
   )
 
@@ -1031,7 +1033,7 @@ export function IssueExplorer({
       </div>
     </div>
   )
-}
+})
 
 // --- Sync helper (pure computation, called from render) ---
 

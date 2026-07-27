@@ -2,6 +2,7 @@ import {
   Suspense,
   lazy,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -18,6 +19,7 @@ import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
+import type { AuditTab } from "~/components/app-navbar/types"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
@@ -32,7 +34,6 @@ import {
 import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
-import { AIDock } from "~/components/ai-dock/ai-dock"
 import type {
   AIExportAction,
   AINavigationDestination,
@@ -54,10 +55,15 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { Separator } from "~/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import { Tabs, TabsContent } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
-import { ApiError, buildApiUrl, clientApiFetch, serverApiFetch } from "~/lib/api"
+import {
+  ApiError,
+  buildApiUrl,
+  clientApiFetch,
+  serverApiFetch,
+} from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import type {
@@ -162,6 +168,17 @@ type AppLoaderData = {
   crawlBreakdowns: CrawlBreakdown[]
 }
 
+const PILLAR_TABS: ReadonlyArray<{
+  tab: AuditTab
+  pillarId: string
+  title: string
+}> = [
+  { tab: "seo", pillarId: "seo", title: "SEO" },
+  { tab: "aeo", pillarId: "aeo", title: "AEO" },
+  { tab: "pagespeed", pillarId: "pagespeed", title: "PageSpeed" },
+]
+
+
 const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
@@ -183,9 +200,9 @@ export default function AppPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const [view, setView] = useState<DashboardView>("revserp-audit")
-  const [auditTab, setAuditTab] = useState<
-    "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
-  >("summary")
+  const [auditTab, setAuditTab] = useState<AuditTab>("summary")
+  const deferredView = useDeferredValue(view)
+  const deferredAuditTab = useDeferredValue(auditTab)
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   // The other side of an open comparison. The near side is always the current
   // project/crawl selection, so a project switch closes the comparison rather
@@ -727,7 +744,7 @@ export default function AppPage() {
   }, [compareTarget, compareSides])
 
   return (
-    <main className="min-h-svh overflow-x-clip bg-background text-foreground">
+    <main className="min-h-svh overflow-x-clip bg-background pb-36 text-foreground">
       {cancelDialog}
       <AppNavbar
         activeProjectId={activeProject?.id}
@@ -737,9 +754,7 @@ export default function AppPage() {
         crawlStatusLabel={crawlStatusLabel}
         onCrawlStart={handleCrawlStart}
         onCompareCrawl={handleCompareCrawl}
-        compareLabel={
-          compareSides ? `vs ${compareSides.b.projectName}` : null
-        }
+        compareLabel={compareSides ? `vs ${compareSides.b.projectName}` : null}
         onViewChange={setView}
         onExportAudit={handleExportAudit}
         isExportingAudit={isExporting}
@@ -749,11 +764,20 @@ export default function AppPage() {
         userEmail={me.user.email}
         userName={me.user.name}
         view={view}
+        auditTab={auditTab}
+        onAuditTabChange={setAuditTab}
         isPlatformAdmin={me.is_platform_admin}
         autoCrawlRefreshToken={autoCrawlRefresh}
+        projectIds={projectIds}
+        trackCrawl={handleAITrackCrawl}
+        onNavigate={handleAINavigate}
+        onProjectSwitched={handleAIProjectSwitched}
+        onExport={handleAIExport}
+        onAutoCrawlConfigured={handleAIAutoCrawlConfigured}
+        externalOpen={aiOpenRequest}
       />
 
-      {view === "revserp-audit" ? (
+      {deferredView === "revserp-audit" ? (
         <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
           <div
             className={
@@ -762,16 +786,7 @@ export default function AppPage() {
                 : "transition duration-200"
             }
           >
-            <Tabs
-              value={auditTab}
-              onValueChange={(value) =>
-                setAuditTab(
-                  value as
-                    "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
-                )
-              }
-              className="gap-6"
-            >
+            <Tabs value={deferredAuditTab} className="gap-6">
               <TabsContent
                 value="summary"
                 className="flex flex-col gap-4 md:gap-6"
@@ -815,72 +830,28 @@ export default function AppPage() {
                 </div>
               </TabsContent>
 
-              <TabsContent value="seo">
-                <PillarAuditView
-                  activeProjectName={activeProject?.name}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  currentCrawlId={stableCurrentCrawl?.id}
-                  currentBreakdown={stableCurrentBreakdown}
-                  onSeedAIChat={handleSeedAIChat}
-                  pillarId="seo"
-                  projectId={activeProject?.id}
-                  title="SEO"
-                />
-              </TabsContent>
-
-              <TabsContent value="aeo">
-                <PillarAuditView
-                  activeProjectName={activeProject?.name}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  currentCrawlId={stableCurrentCrawl?.id}
-                  currentBreakdown={stableCurrentBreakdown}
-                  onSeedAIChat={handleSeedAIChat}
-                  pillarId="aeo"
-                  projectId={activeProject?.id}
-                  title="AEO"
-                />
-              </TabsContent>
-
-              <TabsContent value="pagespeed">
-                <PillarAuditView
-                  activeProjectName={activeProject?.name}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  currentCrawlId={stableCurrentCrawl?.id}
-                  currentBreakdown={stableCurrentBreakdown}
-                  onSeedAIChat={handleSeedAIChat}
-                  pillarId="pagespeed"
-                  projectId={activeProject?.id}
-                  title="PageSpeed"
-                />
-              </TabsContent>
+              {PILLAR_TABS.map(({ tab, pillarId, title }) => (
+                <TabsContent key={tab} value={tab}>
+                  <PillarAuditView
+                    activeProjectName={activeProject?.name}
+                    crawlBreakdowns={stableCrawlBreakdowns}
+                    currentCrawlId={stableCurrentCrawl?.id}
+                    currentBreakdown={stableCurrentBreakdown}
+                    onSeedAIChat={handleSeedAIChat}
+                    pillarId={pillarId}
+                    projectId={activeProject?.id}
+                    title={title}
+                  />
+                </TabsContent>
+              ))}
 
               <TabsContent value="site-graph">
-                {auditTab === "site-graph" ? (
+                {deferredAuditTab === "site-graph" ? (
                   <Suspense fallback={null}>
                     <SiteGraphView currentCrawlId={stableCurrentCrawl?.id} />
                   </Suspense>
                 ) : null}
               </TabsContent>
-
-              <div className="fixed bottom-6 left-6 z-50 flex justify-start">
-                <TabsList className="h-11 w-fit border border-foreground/20 bg-muted/95 p-1 shadow-2xl shadow-black/40 backdrop-blur-md">
-                  <TabsTrigger className="px-4 text-sm" value="summary">
-                    Summary
-                  </TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="seo">
-                    SEO
-                  </TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="aeo">
-                    AEO
-                  </TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="pagespeed">
-                    PageSpeed
-                  </TabsTrigger>
-                  <TabsTrigger className="px-4 text-sm" value="site-graph">
-                    Site-Graph
-                  </TabsTrigger>
-                </TabsList>
-              </div>
             </Tabs>
           </div>
 
@@ -916,18 +887,18 @@ export default function AppPage() {
             </>
           ) : null}
         </div>
-      ) : view === "compare" && compareSides ? (
+      ) : deferredView === "compare" && compareSides ? (
         <CompareView
           a={compareSides.a}
           b={compareSides.b}
           onExit={handleExitCompare}
         />
-      ) : view === "revserp-visibility" ? (
+      ) : deferredView === "revserp-visibility" ? (
         <RevserpVisibilityView
           activeProject={activeProject}
           currentCrawl={stableCurrentCrawl}
         />
-      ) : view === "search-console" ? (
+      ) : deferredView === "search-console" ? (
         <SearchConsoleView
           activeProject={activeProject}
           completedCrawls={stableSortedCompletedCrawls}
@@ -937,13 +908,13 @@ export default function AppPage() {
         <div className="p-6">
           <Card>
             <CardHeader>
-              <CardTitle>{viewLabels[view]}</CardTitle>
+              <CardTitle>{viewLabels[deferredView]}</CardTitle>
               <CardDescription>
                 Placeholder app view for the protected dashboard shell.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-              <p>Current section: {viewLabels[view]}</p>
+              <p>Current section: {viewLabels[deferredView]}</p>
             </CardContent>
           </Card>
         </div>
@@ -963,19 +934,6 @@ export default function AppPage() {
           activeProjectName={activeProject?.name}
         />
       )}
-
-      <AIDock
-        orgId={me.active_org_id}
-        projectId={activeProject?.id}
-        crawlId={currentCrawl?.id}
-        projectIds={projectIds}
-        trackCrawl={handleAITrackCrawl}
-        onNavigate={handleAINavigate}
-        onProjectSwitched={handleAIProjectSwitched}
-        onExport={handleAIExport}
-        onAutoCrawlConfigured={handleAIAutoCrawlConfigured}
-        externalOpen={aiOpenRequest}
-      />
     </main>
   )
 }

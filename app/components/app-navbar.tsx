@@ -3,13 +3,6 @@
 import { memo, useMemo, useReducer, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
-import {
-  Building2Icon,
-  CogIcon,
-  DownloadIcon,
-  PlayIcon,
-} from "lucide-react"
-import { ThinkingOrb } from "thinking-orbs"
 
 import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import {
@@ -19,8 +12,6 @@ import {
   InviteMembersDialog,
   LeaveWorkspaceDialog,
 } from "~/components/app-navbar/dialogs"
-import { ProfileMenu } from "~/components/app-navbar/profile-menu"
-import { ProjectPicker } from "~/components/app-navbar/project-picker"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
@@ -32,26 +23,11 @@ import type {
   DashboardView,
 } from "~/components/app-navbar/types"
 import {
-  formatCrawlDateTime,
   getCrawlValidationError,
   getInitials,
 } from "~/components/app-navbar/utils"
+import { CommandDock } from "~/components/command-dock/command-dock"
 import { getCrawlTimestamp } from "~/lib/crawl"
-import { Button } from "~/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
 import { clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   CrawlResponse,
@@ -196,16 +172,28 @@ export const AppNavbar = memo(function AppNavbar({
   userName,
   view,
   onViewChange,
+  auditTab,
+  onAuditTabChange,
   isPlatformAdmin,
   onExportAudit,
   isExportingAudit,
   autoCrawlRefreshToken,
+  projectIds,
+  trackCrawl,
+  onNavigate,
+  onProjectSwitched,
+  onExport,
+  onAutoCrawlConfigured,
+  externalOpen,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const revalidator = useRevalidator()
 
-  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false)
+  // Bumped when a dialog action should also dismiss whatever panel the dock
+  // has expanded (the dock owns its own view state).
+  const [dockDismissToken, setDockDismissToken] = useState(0)
+  const dismissDock = () => setDockDismissToken((token) => token + 1)
 
   const projectActions = useProjectActions({
     projects,
@@ -323,8 +311,6 @@ export const AppNavbar = memo(function AppNavbar({
     : []
 
   function handleSelectProject(projectId: string, crawlId?: string) {
-    setIsProjectMenuOpen(false)
-
     const searchParams = new URLSearchParams(location.search)
     searchParams.set("project", projectId)
     if (crawlId) {
@@ -338,7 +324,6 @@ export const AppNavbar = memo(function AppNavbar({
 
   function handleOpenBusinessProfileDrawer(project: ProjectResponse) {
     openBusinessProfileDrawer(project)
-    setIsProjectMenuOpen(false)
   }
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
@@ -365,7 +350,6 @@ export const AppNavbar = memo(function AppNavbar({
       )
 
       createProjectDispatch({ type: "CREATED" })
-      setIsProjectMenuOpen(false)
 
       const searchParams = new URLSearchParams(location.search)
       searchParams.set("project", createdProject.id)
@@ -473,228 +457,71 @@ export const AppNavbar = memo(function AppNavbar({
 
   return (
     <>
-      <header className="w-full">
-        <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-6 px-6 py-4">
-          <div className="flex min-w-0 items-center">
-            <Tabs
-              onValueChange={(value) => onViewChange(value as DashboardView)}
-              value={view}
-            >
-              <TabsList>
-                <TabsTrigger value="revserp-audit">Revserp Audit</TabsTrigger>
-                <TabsTrigger value="revserp-visibility">
-                  Revserp Visibility
-                </TabsTrigger>
-                <TabsTrigger value="search-console">Search Console</TabsTrigger>
-                {compareLabel ? (
-                  <TabsTrigger value="compare">{compareLabel}</TabsTrigger>
-                ) : null}
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <div className="flex items-center justify-center gap-3">
-            <ProjectPicker
-              activeProjectId={activeProjectId}
-              activeProjectName={activeProject?.name}
-              crawlPanelCrawls={crawlPanelCrawls}
-              currentCrawl={currentCrawl}
-              cancellingCrawlId={projectActions.cancellingCrawlId}
-              deletingCrawlId={projectActions.deletingCrawlId}
-              deletingProjectId={projectActions.deletingProjectId}
-              exportFormat={projectActions.exportFormat}
-              exportingCrawlId={projectActions.exportingCrawlId}
-              isOpen={isProjectMenuOpen}
-              projectActionError={projectActions.projectActionError}
-              projects={projects}
-              onCancelCrawl={(crawl) =>
-                void projectActions.handleCancelCrawl(crawl)
-              }
-              onCompareCrawl={(crawl) => {
-                setIsProjectMenuOpen(false)
-                onCompareCrawl(crawl)
-              }}
-              onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
-              onDeleteCrawl={projectActions.openDeleteCrawlDialog}
-              onDeleteProject={projectActions.openDeleteProjectDialog}
-              onExportCrawl={(crawl, format) =>
-                void projectActions.handleExportCrawl(crawl, format)
-              }
-              onExportFormatChange={projectActions.onExportFormatChange}
-              onOpenBusinessProfile={(project) =>
-                void handleOpenBusinessProfileDrawer(project)
-              }
-              onOpenChange={setIsProjectMenuOpen}
-              onProjectHover={handleProjectHover}
-              onSelectProject={(projectId, crawlId) =>
-                void handleSelectProject(projectId, crawlId)
-              }
-            />
-
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" />}>
-                {isCrawlRunning ? (
-                  <ThinkingOrb
-                    aria-hidden="true"
-                    className="shrink-0"
-                    size={20}
-                    state="solving"
-                    style={{ width: 18, height: 18 }}
-                  />
-                ) : (
-                  <CogIcon />
-                )}
-                {isCrawlRunning
-                  ? crawlStatusLabel === "queued"
-                    ? "Queued"
-                    : "Crawling"
-                  : "Actions"}
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    disabled={!activeProjectId || isCrawlRunning}
-                    onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                  >
-                    <PlayIcon />
-                    Run Crawl
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger disabled={!activeProjectId}>
-                      <CogIcon />
-                      Auto Crawl
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-52">
-                      <DropdownMenuRadioGroup
-                        value={autoCrawl.enabled ? "enable" : "disable"}
-                        onValueChange={(v) => {
-                          if (v === "enable") void autoCrawl.openDialog()
-                          else void autoCrawl.handleDisable()
-                        }}
-                      >
-                        <DropdownMenuRadioItem value="enable">
-                          Enable Auto Crawl
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="disable">
-                          Disable Auto Crawl
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuItem
-                    disabled={!activeProject}
-                    onClick={() =>
-                      activeProject &&
-                      handleOpenBusinessProfileDrawer(activeProject)
-                    }
-                  >
-                    <Building2Icon />
-                    Business Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger disabled={!activeProject}>
-                      <DownloadIcon />
-                      Export
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent className="w-52">
-                      <DropdownMenuItem
-                        disabled={!activeProject || isExportingAudit}
-                        onClick={() => onExportAudit()}
-                      >
-                        {isExportingAudit
-                          ? "Generating audit…"
-                          : "Export Audit"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger
-                          disabled={activeCrawls.length === 0}
-                        >
-                          Export Specific Crawl
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-52">
-                          {activeCrawls.length === 0 ? (
-                            <DropdownMenuItem disabled>
-                              No crawls available
-                            </DropdownMenuItem>
-                          ) : (
-                            activeCrawls.map((crawl) => (
-                              <DropdownMenuSub key={crawl.id}>
-                                <DropdownMenuSubTrigger
-                                  disabled={
-                                    crawl.status !== "completed" ||
-                                    projectActions.exportingCrawlId !== null
-                                  }
-                                >
-                                  <span className="truncate">
-                                    {formatCrawlDateTime(crawl)}
-                                  </span>
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent className="w-24">
-                                  <DropdownMenuItem
-                                    disabled={
-                                      crawl.status !== "completed" ||
-                                      projectActions.exportingCrawlId !== null
-                                    }
-                                    onClick={() => {
-                                      void projectActions.handleExportCrawl(
-                                        crawl,
-                                        "xlsx"
-                                      )
-                                    }}
-                                  >
-                                    XLSX
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={
-                                      crawl.status !== "completed" ||
-                                      projectActions.exportingCrawlId !== null
-                                    }
-                                    onClick={() => {
-                                      void projectActions.handleExportCrawl(
-                                        crawl,
-                                        "csv"
-                                      )
-                                    }}
-                                  >
-                                    CSV
-                                  </DropdownMenuItem>
-                                </DropdownMenuSubContent>
-                              </DropdownMenuSub>
-                            ))
-                          )}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          <div className="flex justify-end">
-            <ProfileMenu
-              initials={initials}
-              isActiveOrganizationOwner={
-                workspaceActions.isActiveOrganizationOwner
-              }
-              workspaceState={workspaceActions.workspaceState}
-              organizationId={organizationId}
-              organizations={organizations}
-              profileActionError={workspaceActions.profileActionError}
-              userName={userName}
-              isPlatformAdmin={isPlatformAdmin}
-              onInviteOpen={workspaceActions.openInviteDialog}
-              onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
-              onLogout={() => void workspaceActions.handleLogout()}
-              onSelectOrganization={(value) =>
-                void workspaceActions.handleSelectOrganization(value)
-              }
-            />
-          </div>
-        </div>
-      </header>
+      <CommandDock
+        activeCrawls={activeCrawls}
+        activeProject={activeProject}
+        activeProjectId={activeProjectId}
+        auditTab={auditTab}
+        cancellingCrawlId={projectActions.cancellingCrawlId}
+        compareLabel={compareLabel}
+        crawlPanelCrawls={crawlPanelCrawls}
+        crawlStatusLabel={crawlStatusLabel}
+        currentCrawl={currentCrawl}
+        deletingCrawlId={projectActions.deletingCrawlId}
+        deletingProjectId={projectActions.deletingProjectId}
+        dismissToken={dockDismissToken}
+        exportFormat={projectActions.exportFormat}
+        exportingCrawlId={projectActions.exportingCrawlId}
+        externalOpen={externalOpen}
+        initials={initials}
+        isActiveOrganizationOwner={workspaceActions.isActiveOrganizationOwner}
+        isAutoCrawlEnabled={autoCrawl.enabled}
+        isCrawlRunning={isCrawlRunning}
+        isExportingAudit={isExportingAudit}
+        isPlatformAdmin={isPlatformAdmin}
+        onAuditTabChange={onAuditTabChange}
+        onAutoCrawlConfigured={onAutoCrawlConfigured}
+        onAutoCrawlDisable={() => void autoCrawl.handleDisable()}
+        onAutoCrawlEnable={() => void autoCrawl.openDialog()}
+        onCancelCrawl={(crawl) => void projectActions.handleCancelCrawl(crawl)}
+        onCompareCrawl={onCompareCrawl}
+        onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
+        onDeleteCrawl={projectActions.openDeleteCrawlDialog}
+        onDeleteProject={projectActions.openDeleteProjectDialog}
+        onExport={onExport}
+        onExportAudit={onExportAudit}
+        onExportCrawl={(crawl, format) =>
+          void projectActions.handleExportCrawl(crawl, format)
+        }
+        onExportFormatChange={projectActions.onExportFormatChange}
+        onInviteOpen={workspaceActions.openInviteDialog}
+        onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
+        onLogout={() => void workspaceActions.handleLogout()}
+        onNavigate={onNavigate}
+        onOpenBusinessProfile={(project) =>
+          handleOpenBusinessProfileDrawer(project)
+        }
+        onProjectHover={handleProjectHover}
+        onProjectSwitched={onProjectSwitched}
+        onRunCrawlOpen={() => runCrawlDispatch({ type: "OPEN" })}
+        onSelectOrganization={(value) =>
+          void workspaceActions.handleSelectOrganization(value)
+        }
+        onSelectProject={(projectId, crawlId) =>
+          handleSelectProject(projectId, crawlId)
+        }
+        onViewChange={onViewChange}
+        organizationId={organizationId}
+        organizations={organizations}
+        profileActionError={workspaceActions.profileActionError}
+        projectActionError={projectActions.projectActionError}
+        projectIds={projectIds}
+        projects={projects}
+        trackCrawl={trackCrawl}
+        userName={userName}
+        view={view}
+        workspaceState={workspaceActions.workspaceState}
+      />
       <RunCrawlDialog
         activeProject={activeProject}
         activeProjectId={activeProjectId}
@@ -769,8 +596,8 @@ export const AppNavbar = memo(function AppNavbar({
         createProject={createProject}
         createProjectDispatch={createProjectDispatch}
         handleCreateProject={handleCreateProject}
+        onDismissDock={dismissDock}
         projectActions={projectActions}
-        setIsProjectMenuOpen={setIsProjectMenuOpen}
         workspaceActions={workspaceActions}
       />
     </>
@@ -812,8 +639,8 @@ type AppNavbarDialogsProps = {
   createProject: CreateProjectState
   createProjectDispatch: React.Dispatch<CreateProjectEvent>
   handleCreateProject: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  onDismissDock: () => void
   projectActions: ReturnType<typeof useProjectActions>
-  setIsProjectMenuOpen: (v: boolean) => void
   workspaceActions: ReturnType<typeof useWorkspaceActions>
 }
 
@@ -822,8 +649,8 @@ function AppNavbarDialogs({
   createProject,
   createProjectDispatch,
   handleCreateProject,
+  onDismissDock,
   projectActions,
-  setIsProjectMenuOpen,
   workspaceActions,
 }: AppNavbarDialogsProps) {
   const {
@@ -904,7 +731,7 @@ function AppNavbarDialogs({
         projectActionError={projectActions.projectActionError}
         projectPendingDelete={projectActions.projectPendingDelete}
         onDelete={() => {
-          setIsProjectMenuOpen(false)
+          onDismissDock()
           void projectActions.handleDeleteProject()
         }}
         onOpenChange={(open) => {

@@ -1,17 +1,12 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { AnimatePresence, motion } from "motion/react"
-import {
-  Building2Icon,
-  CheckIcon,
-  ChevronsUpDownIcon,
-  PlusIcon,
-  TrashIcon,
-} from "lucide-react"
-
+import { motion } from "motion/react"
+import { Building2Icon, CheckIcon, PlusIcon, TrashIcon } from "lucide-react"
 import { ThinkingOrb } from "thinking-orbs"
-import { buttonVariants } from "~/components/ui/button"
+
+import { CrawlContextRow } from "~/components/app-navbar/crawl-context-row"
+import type { ExportFormat } from "~/components/app-navbar/types"
 import {
   Command,
   CommandEmpty,
@@ -28,22 +23,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "~/components/ui/context-menu"
-import { cn } from "~/lib/utils"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
-import { CrawlContextRow } from "./crawl-context-row"
-import type { ExportFormat } from "./types"
+import { CAPSULE_RADIUS, dockTransition, panelContentMotion } from "./constants"
 
-const CARD_TRANSITION = {
-  type: "spring" as const,
-  stiffness: 380,
-  damping: 34,
-  mass: 0.9,
-}
-
-type ProjectPickerProps = {
+export type ProjectPanelProps = {
   activeProjectId?: string | null
-  activeProjectName?: string
   crawlPanelCrawls: CrawlResponse[]
   currentCrawl: CrawlResponse | null
   cancellingCrawlId: string | null
@@ -51,7 +36,6 @@ type ProjectPickerProps = {
   deletingProjectId: string | null
   exportFormat: ExportFormat
   exportingCrawlId: string | null
-  isOpen: boolean
   projectActionError: string
   projects: ProjectResponse[]
   onCancelCrawl: (crawl: CrawlResponse) => void
@@ -63,14 +47,13 @@ type ProjectPickerProps = {
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
   onExportFormatChange: (format: ExportFormat) => void
   onOpenBusinessProfile: (project: ProjectResponse) => void
-  onOpenChange: (open: boolean) => void
   onProjectHover: (projectId: string) => void
   onSelectProject: (projectId: string, crawlId?: string) => void
+  reducedMotion: boolean
 }
 
-export function ProjectPicker({
+export function ProjectPanel({
   activeProjectId,
-  activeProjectName,
   crawlPanelCrawls,
   currentCrawl,
   cancellingCrawlId,
@@ -78,7 +61,6 @@ export function ProjectPicker({
   deletingProjectId,
   exportFormat,
   exportingCrawlId,
-  isOpen,
   projectActionError,
   projects,
   onCancelCrawl,
@@ -89,128 +71,71 @@ export function ProjectPicker({
   onExportCrawl,
   onExportFormatChange,
   onOpenBusinessProfile,
-  onOpenChange,
   onProjectHover,
   onSelectProject,
-}: ProjectPickerProps) {
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  reducedMotion,
+}: ProjectPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
-  const wasOpenRef = useRef(false)
 
-  // Escape closes, and lock body scroll while open.
+  // Focus the search box as soon as the panel mounts; returning focus to the
+  // project pill on close is handled by the dock (the pill outlives this tree).
   useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false)
-    }
-    document.addEventListener("keydown", handleKeyDown)
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown)
-      document.body.style.overflow = previousOverflow
-    }
-  }, [isOpen, onOpenChange])
-
-  // On open focus the search input; on close return focus to the trigger pill.
-  useEffect(() => {
-    if (isOpen) {
-      panelRef.current
-        ?.querySelector<HTMLInputElement>("[data-slot=command-input]")
-        ?.focus()
-    } else if (wasOpenRef.current) {
-      triggerRef.current?.focus()
-    }
-    wasOpenRef.current = isOpen
-  }, [isOpen])
+    panelRef.current
+      ?.querySelector<HTMLInputElement>("[data-slot=command-input]")
+      ?.focus()
+  }, [])
 
   return (
-    <>
-      {isOpen ? (
-        <span aria-hidden className="inline-block h-9 w-72" />
-      ) : (
-        <motion.button
-          ref={triggerRef}
-          layout
-          layoutId="project-picker-card"
-          // Close (panel -> pill) is the entering pill's transition: snap it
-          // instantly so the shrink doesn't spring and distort the text.
-          transition={{ duration: 0 }}
-          type="button"
-          data-slot="button"
-          onClick={() => onOpenChange(true)}
-          className={cn(buttonVariants({ variant: "outline" }), "w-72 justify-between")}
-        >
-          <span className="min-w-0 truncate">
-            {activeProjectName || "Search projects"}
-          </span>
-          <ChevronsUpDownIcon data-icon="inline-end" />
-        </motion.button>
-      )}
-
-      <AnimatePresence>
-        {isOpen ? (
-          <motion.div
-            key="project-picker-backdrop"
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            onClick={() => onOpenChange(false)}
+    <motion.div
+      aria-label="Projects"
+      aria-modal="true"
+      className="pointer-events-auto flex h-[min(520px,70vh)] w-full min-w-0 flex-1 flex-col overflow-hidden border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+      layout
+      layoutId="dock-context"
+      ref={panelRef}
+      role="dialog"
+      style={{ borderRadius: CAPSULE_RADIUS, willChange: "transform" }}
+      transition={dockTransition(reducedMotion)}
+    >
+      <motion.div
+        className="flex min-h-0 flex-1 flex-col"
+        {...panelContentMotion(reducedMotion)}
+      >
+        <p className="sr-only">Select a project or create a new one.</p>
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_minmax(300px,0.9fr)] sm:grid-rows-1">
+          <ProjectCommandList
+            activeProjectId={activeProjectId}
+            deletingProjectId={deletingProjectId}
+            projects={projects}
+            onCreateProjectOpen={onCreateProjectOpen}
+            onDeleteProject={onDeleteProject}
+            onOpenBusinessProfile={onOpenBusinessProfile}
+            onProjectHover={onProjectHover}
+            onSelectProject={onSelectProject}
           />
-        ) : null}
-      </AnimatePresence>
 
-      {isOpen ? (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-start justify-center pt-[72px]">
-          <motion.div
-            ref={panelRef}
-            layout
-            layoutId="project-picker-card"
-            transition={CARD_TRANSITION}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Projects"
-            className="pointer-events-auto flex h-[460px] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl shadow-black/40"
-          >
-            <p className="sr-only">Select a project or create a new one.</p>
-            <div className="grid h-[460px] grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)] bg-popover">
-              <ProjectCommandList
-                activeProjectId={activeProjectId}
-                deletingProjectId={deletingProjectId}
-                projects={projects}
-                onCreateProjectOpen={onCreateProjectOpen}
-                onDeleteProject={onDeleteProject}
-                onOpenBusinessProfile={onOpenBusinessProfile}
-                onProjectHover={onProjectHover}
-                onSelectProject={onSelectProject}
-              />
-
-              <CrawlPanel
-                crawlPanelCrawls={crawlPanelCrawls}
-                currentCrawl={currentCrawl}
-                cancellingCrawlId={cancellingCrawlId}
-                deletingCrawlId={deletingCrawlId}
-                exportFormat={exportFormat}
-                exportingCrawlId={exportingCrawlId}
-                onCancelCrawl={onCancelCrawl}
-                onCompareCrawl={onCompareCrawl}
-                onDeleteCrawl={onDeleteCrawl}
-                onExportCrawl={onExportCrawl}
-                onExportFormatChange={onExportFormatChange}
-                onSelectProject={onSelectProject}
-              />
-            </div>
-            {projectActionError ? (
-              <p className="border-t border-border/50 px-4 py-3 text-sm text-destructive">
-                {projectActionError}
-              </p>
-            ) : null}
-          </motion.div>
+          <CrawlPanel
+            crawlPanelCrawls={crawlPanelCrawls}
+            currentCrawl={currentCrawl}
+            cancellingCrawlId={cancellingCrawlId}
+            deletingCrawlId={deletingCrawlId}
+            exportFormat={exportFormat}
+            exportingCrawlId={exportingCrawlId}
+            onCancelCrawl={onCancelCrawl}
+            onCompareCrawl={onCompareCrawl}
+            onDeleteCrawl={onDeleteCrawl}
+            onExportCrawl={onExportCrawl}
+            onExportFormatChange={onExportFormatChange}
+            onSelectProject={onSelectProject}
+          />
         </div>
-      ) : null}
-    </>
+        {projectActionError ? (
+          <p className="border-t border-border/50 px-4 py-3 text-sm text-destructive">
+            {projectActionError}
+          </p>
+        ) : null}
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -236,7 +161,7 @@ function ProjectCommandList({
   onSelectProject,
 }: ProjectCommandListProps) {
   return (
-    <Command className="flex h-full w-full flex-col overflow-hidden border-r border-border/50 bg-popover">
+    <Command className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent sm:border-r sm:border-border/50">
       <div className="border-b border-border/50 px-3 py-3">
         <CommandInput placeholder="Search projects..." />
       </div>
@@ -366,7 +291,7 @@ function CrawlPanel({
   onSelectProject,
 }: CrawlPanelProps) {
   return (
-    <div className="flex min-h-0 flex-col bg-muted/20">
+    <div className="flex min-h-0 flex-col border-t border-border/50 bg-muted/20 sm:border-t-0">
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {crawlPanelCrawls.length > 0 ? (
           <div className="flex flex-col gap-1">
