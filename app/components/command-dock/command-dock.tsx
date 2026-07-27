@@ -318,7 +318,7 @@ export function CommandDock({
         ) : null}
       </AnimatePresence>
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-4 sm:pb-5">
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-start px-3 pb-4 sm:pb-5">
         <div className="flex w-full max-w-[1180px] flex-col gap-2">
           <AuditTabs
             auditTab={auditTab}
