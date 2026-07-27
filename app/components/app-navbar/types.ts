@@ -4,7 +4,11 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 
-export type DashboardView = "revserp-audit" | "revserp-visibility" | "search-console"
+export type DashboardView =
+  | "revserp-audit"
+  | "revserp-visibility"
+  | "search-console"
+  | "compare"
 export type ExportFormat = "csv" | "xlsx"
 
 export type AppNavbarProps = {
@@ -14,6 +18,10 @@ export type AppNavbarProps = {
   isCrawlRunning: boolean
   crawlStatusLabel: string
   onCrawlStart: (crawl: CrawlResponse) => void
+  /** Start a comparison against the current crawl. */
+  onCompareCrawl: (crawl: CrawlResponse) => void
+  /** Set while a comparison is open, so the navbar can show its tab. */
+  compareLabel: string | null
   organizationId: string
   organizations: MeResponse["organizations"]
   projects: ProjectResponse[]

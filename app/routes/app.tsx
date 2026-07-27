@@ -29,6 +29,7 @@ import {
   type CrawlBreakdown,
   type CrawlBreakdownScores,
 } from "~/components/pillar-audit-view"
+import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { AIDock } from "~/components/ai-dock/ai-dock"
@@ -165,6 +166,7 @@ const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
   "search-console": "Search Console",
+  compare: "Compare",
 }
 
 export default function AppPage() {
@@ -185,6 +187,14 @@ export default function AppPage() {
     "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
   >("summary")
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
+  // The other side of an open comparison. The near side is always the current
+  // project/crawl selection, so a project switch closes the comparison rather
+  // than silently re-pointing it.
+  const [compareTarget, setCompareTarget] = useState<{
+    crawl: CrawlResponse
+    projectName: string
+    baseUrl: string
+  } | null>(null)
   const [aiOpenRequest, setAiOpenRequest] = useState<{
     prompt: string
     token: number
@@ -673,6 +683,49 @@ export default function AppPage() {
     []
   )
 
+  // A comparison needs a scored crawl on both sides. The near side follows the
+  // current selection, so switching project or crawl invalidates it.
+  const compareSides = useMemo(() => {
+    if (!compareTarget || !stableCurrentCrawl || !activeProject) return null
+    if (stableCurrentCrawl.status !== "completed") return null
+    if (compareTarget.crawl.project_id === activeProject.id) return null
+    return {
+      a: {
+        projectName: activeProject.name,
+        baseUrl: activeProject.base_url,
+        crawl: stableCurrentCrawl,
+      },
+      b: compareTarget,
+    }
+  }, [compareTarget, stableCurrentCrawl, activeProject])
+
+  const handleCompareCrawl = useCallback(
+    (crawl: CrawlResponse) => {
+      const project = projects.find((entry) => entry.id === crawl.project_id)
+      if (!project) return
+      setCompareTarget({
+        crawl,
+        projectName: project.name,
+        baseUrl: project.base_url,
+      })
+      setView("compare")
+    },
+    [projects]
+  )
+
+  const handleExitCompare = useCallback(() => {
+    setCompareTarget(null)
+    setView("revserp-audit")
+  }, [])
+
+  // Drop a stale comparison rather than leaving an empty tab selected.
+  useEffect(() => {
+    if (compareTarget && !compareSides) {
+      setCompareTarget(null)
+      setView((current) => (current === "compare" ? "revserp-audit" : current))
+    }
+  }, [compareTarget, compareSides])
+
   return (
     <main className="min-h-svh overflow-x-clip bg-background text-foreground">
       {cancelDialog}
@@ -683,6 +736,10 @@ export default function AppPage() {
         isCrawlRunning={isCrawlRunning}
         crawlStatusLabel={crawlStatusLabel}
         onCrawlStart={handleCrawlStart}
+        onCompareCrawl={handleCompareCrawl}
+        compareLabel={
+          compareSides ? `vs ${compareSides.b.projectName}` : null
+        }
         onViewChange={setView}
         onExportAudit={handleExportAudit}
         isExportingAudit={isExporting}
@@ -859,6 +916,12 @@ export default function AppPage() {
             </>
           ) : null}
         </div>
+      ) : view === "compare" && compareSides ? (
+        <CompareView
+          a={compareSides.a}
+          b={compareSides.b}
+          onExit={handleExitCompare}
+        />
       ) : view === "revserp-visibility" ? (
         <RevserpVisibilityView
           activeProject={activeProject}

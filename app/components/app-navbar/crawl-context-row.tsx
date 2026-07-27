@@ -1,4 +1,10 @@
-import { BanIcon, CheckIcon, DownloadIcon, TrashIcon } from "lucide-react"
+import {
+  ArrowLeftRightIcon,
+  BanIcon,
+  CheckIcon,
+  DownloadIcon,
+  TrashIcon,
+} from "lucide-react"
 
 import { ThinkingOrb } from "thinking-orbs"
 import {
@@ -28,6 +34,8 @@ type CrawlContextRowProps = {
   isDeleting: boolean
   isExporting: boolean
   onCancel: () => void
+  /** Present only when this crawl can be compared against the current one. */
+  onCompare?: () => void
   onDelete: () => void
   onExport: (format: ExportFormat) => void
   onFormatChange: (format: ExportFormat) => void
@@ -43,6 +51,7 @@ export function CrawlContextRow({
   isDeleting,
   isExporting,
   onCancel,
+  onCompare,
   onDelete,
   onExport,
   onFormatChange,
@@ -55,6 +64,7 @@ export function CrawlContextRow({
   return (
     <ContextMenu>
       <ContextMenuTrigger>
+        <div className="group/crawl relative">
         <button
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none data-[active=true]:bg-accent/80 data-[active=true]:text-accent-foreground"
           data-active={isActive}
@@ -70,10 +80,24 @@ export function CrawlContextRow({
               {formatCrawlStats(crawl)}
             </p>
           </div>
-          <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase">
+          <span
+            className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase transition data-[compare=true]:group-hover/crawl:opacity-0"
+            data-compare={onCompare !== undefined}
+          >
             {crawl.status}
           </span>
         </button>
+        {onCompare ? (
+          <button
+            className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-md border border-border/70 bg-popover px-2 py-1 text-[11px] opacity-0 transition group-hover/crawl:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
+            onClick={onCompare}
+            type="button"
+          >
+            <ArrowLeftRightIcon className="size-3" />
+            Compare
+          </button>
+        ) : null}
+        </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         <ContextMenuGroup>

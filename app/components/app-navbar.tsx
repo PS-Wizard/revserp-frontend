@@ -187,6 +187,8 @@ export const AppNavbar = memo(function AppNavbar({
   isCrawlRunning,
   crawlStatusLabel,
   onCrawlStart,
+  onCompareCrawl,
+  compareLabel,
   organizationId,
   organizations,
   projects,
@@ -484,6 +486,9 @@ export const AppNavbar = memo(function AppNavbar({
                   Revserp Visibility
                 </TabsTrigger>
                 <TabsTrigger value="search-console">Search Console</TabsTrigger>
+                {compareLabel ? (
+                  <TabsTrigger value="compare">{compareLabel}</TabsTrigger>
+                ) : null}
               </TabsList>
             </Tabs>
           </div>
@@ -505,6 +510,10 @@ export const AppNavbar = memo(function AppNavbar({
               onCancelCrawl={(crawl) =>
                 void projectActions.handleCancelCrawl(crawl)
               }
+              onCompareCrawl={(crawl) => {
+                setIsProjectMenuOpen(false)
+                onCompareCrawl(crawl)
+              }}
               onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
               onDeleteCrawl={projectActions.openDeleteCrawlDialog}
               onDeleteProject={projectActions.openDeleteProjectDialog}

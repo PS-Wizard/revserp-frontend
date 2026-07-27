@@ -503,3 +503,10 @@ export type AppBootstrapResponse = {
   selected_crawl_id?: string
   breakdown?: ScoreBreakdownResponse
 }
+
+export type CrawlPageHealthResponse = {
+  crawl_id: string
+  /** Always 7 entries: pages carrying 0,1,2,3,4,5,6-or-more issues. */
+  buckets: number[]
+  total_pages: number
+}
