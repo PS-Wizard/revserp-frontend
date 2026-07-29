@@ -99,7 +99,7 @@ export function ProfileMenu({
       <DropdownMenuContent
         align="end"
         className="w-64"
-        side={compact ? "top" : "bottom"}
+        side="bottom"
         sideOffset={10}
       >
         <DropdownMenuGroup>

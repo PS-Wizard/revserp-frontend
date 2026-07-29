@@ -1,11 +1,5 @@
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
 
-/**
- * Mutually exclusive dock states. Opening one panel closes the other by
- * construction — there is no separate "is project open" / "is AI open" flag.
- */
-export type DockView = "idle" | "project" | "ai-mini" | "ai-max"
-
 const DOCK_SPRING = {
   type: "spring" as const,
   stiffness: 380,
@@ -38,29 +32,28 @@ export function panelContentMotion(reducedMotion: boolean) {
   }
 }
 
-// Deliberately no `filter: blur()` here: these capsules also carry a
-// backdrop-filter, and animating both together forces a full re-rasterize of
-// the blurred backdrop every frame.
-export const CAPSULE_SHOWN = { opacity: 1, y: 0, scale: 1 }
-export const CAPSULE_HIDDEN = { opacity: 0, y: 6, scale: 0.96 }
-
-/** Capsules that only fade (no layoutId morph) exit faster than they enter. */
-export const CAPSULE_EXIT_TRANSITION = {
-  duration: 0.16,
-  ease: "easeIn" as const,
-}
-
 /** Shell of a dock capsule. Radius is applied inline so motion can tween it. */
 export const CAPSULE_SHELL =
   "border border-border/70 bg-card/80 p-1.5 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
 
-export const CAPSULE_RADIUS = 20
+/** Outer height of a capsule: a PILL_BASE row plus the shell's p-1.5. */
+export const CAPSULE_HEIGHT = "h-12"
+
+/**
+ * Card surface shared by the Revserp AI button and the panel it morphs into.
+ * They must match exactly — only one is mounted at a time, so the layoutId
+ * hand-off animates geometry but swaps styles in a single frame.
+ */
+export const PANEL_SURFACE =
+  "border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+
+export const CAPSULE_RADIUS = 16
 
 export const PILL_BASE =
-  "flex h-11 shrink-0 items-center gap-2 rounded-[15px] px-3 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+  "flex h-9 shrink-0 items-center gap-2 rounded-[11px] px-2.5 text-[13px] font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 
 /** Inner radius of a pill sitting inside a CAPSULE_RADIUS shell with p-1.5. */
-export const PILL_RADIUS = 15
+export const PILL_RADIUS = 11
 
 /** Hides the scrollbar on the horizontally scrolling mode rail. */
 export const HIDE_SCROLLBAR =
@@ -71,6 +64,12 @@ export const DOCK_MODES: ReadonlyArray<{ id: DashboardView; label: string }> = [
   { id: "revserp-visibility", label: "Visibility" },
   { id: "search-console", label: "Search Console" },
 ]
+
+/**
+ * Grace period before a hover-opened audit flyout closes, so the pointer can
+ * cross the gap between the Audit pill and the flyout without it collapsing.
+ */
+export const AUDIT_FLYOUT_CLOSE_DELAY_MS = 140
 
 export const DOCK_AUDIT_TABS: ReadonlyArray<{ id: AuditTab; label: string }> = [
   { id: "summary", label: "Summary" },

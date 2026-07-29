@@ -21,9 +21,7 @@ import { cn } from "~/lib/utils"
 
 import {
   CAPSULE_RADIUS,
-  CAPSULE_SHELL,
-  PILL_BASE,
-  PILL_RADIUS,
+  PANEL_SURFACE,
   dockTransition,
   panelContentMotion,
 } from "./constants"
@@ -54,44 +52,41 @@ export function AICapsule({
       size="md"
       theme="auto"
     >
-      <motion.div
+      {/* One element, not a pill nested in a glass shell: the shell drew a light
+          ring around a dark pill, and the panel this morphs into is the same
+          card surface — so the swap only reads as seamless if the button is
+          that surface too. */}
+      <motion.button
+        aria-haspopup="dialog"
+        aria-label="Open Revserp AI"
         className={cn(
-          CAPSULE_SHELL,
-          "pointer-events-auto flex h-14 shrink-0 items-center overflow-hidden"
+          PANEL_SURFACE,
+          "pointer-events-auto flex h-12 w-[13rem] max-w-[calc(100vw-2.5rem)] shrink-0 items-center justify-center gap-2 overflow-hidden px-4 text-[13px] font-medium transition-colors hover:bg-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         )}
         layout
         layoutId="dock-ai"
+        onClick={onOpen}
+        ref={buttonRef}
         style={{ borderRadius: CAPSULE_RADIUS, willChange: "transform" }}
         transition={dockTransition(reducedMotion)}
+        type="button"
       >
-        <motion.button
-          aria-haspopup="dialog"
-          aria-label="Open Revserp AI"
-          className={cn(
-            PILL_BASE,
-            "w-full justify-center gap-1.5 bg-foreground px-3.5 text-background hover:bg-foreground/90"
-          )}
-          onClick={onOpen}
-          ref={buttonRef}
-          style={{ borderRadius: PILL_RADIUS }}
-          type="button"
-          {...panelContentMotion(reducedMotion)}
-        >
-          {isSending ? (
-            <ThinkingOrb
-              aria-hidden="true"
-              className="shrink-0"
-              size={20}
-              state="solving"
-              theme="light"
-              style={{ width: 16, height: 16 }}
-            />
-          ) : (
-            <SparklesIcon className="size-4 shrink-0" />
-          )}
-          <span>{isSending ? "Working…" : "Ask AI"}</span>
-        </motion.button>
-      </motion.div>
+        {isSending ? (
+          <ThinkingOrb
+            aria-hidden="true"
+            className="shrink-0"
+            size={20}
+            state="solving"
+            // Pinned, not "auto": the app is hard-dark (<html class="dark">),
+            // so the orb must always draw light ink on this card surface.
+            theme="dark"
+            style={{ width: 16, height: 16 }}
+          />
+        ) : (
+          <SparklesIcon className="size-4 shrink-0 text-primary" />
+        )}
+        <span>{isSending ? "Working…" : "Ask Revserp AI"}</span>
+      </motion.button>
     </BorderBeam>
   )
 }
@@ -147,7 +142,7 @@ export function AIPanel({
       active={isSending}
       className={cn(
         "pointer-events-none flex min-w-0",
-        isMax ? "h-full w-full max-w-[100rem]" : "w-full flex-1"
+        isMax ? "h-full w-full max-w-[100rem]" : "shrink-0"
       )}
       colorVariant="sunset"
       size="pulse-outside"
@@ -157,8 +152,11 @@ export function AIPanel({
         aria-label="Revserp AI"
         aria-modal={isMax ? "true" : undefined}
         className={cn(
-          "pointer-events-auto flex min-w-0 flex-col overflow-hidden border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl",
-          isMax ? "h-full w-full" : "h-[min(560px,72vh)] w-full flex-1"
+          PANEL_SURFACE,
+          "pointer-events-auto flex min-w-0 flex-col overflow-hidden",
+          isMax
+            ? "h-full w-full"
+            : "h-[min(560px,72vh)] w-[27rem] max-w-[calc(100vw-1.5rem)]"
         )}
         layout
         layoutId="dock-ai"

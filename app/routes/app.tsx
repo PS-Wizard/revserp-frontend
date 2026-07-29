@@ -178,7 +178,6 @@ const PILLAR_TABS: ReadonlyArray<{
   { tab: "pagespeed", pillarId: "pagespeed", title: "PageSpeed" },
 ]
 
-
 const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
@@ -744,7 +743,8 @@ export default function AppPage() {
   }, [compareTarget, compareSides])
 
   return (
-    <main className="min-h-svh overflow-x-clip bg-background pb-36 text-foreground">
+    // pb-24 clears the floating Revserp AI button at the bottom centre.
+    <main className="min-h-svh overflow-x-clip bg-background pb-24 text-foreground">
       {cancelDialog}
       <AppNavbar
         activeProjectId={activeProject?.id}

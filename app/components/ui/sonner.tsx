@@ -23,6 +23,14 @@ function Toaster(props: ToasterProps) {
         error: <OctagonXIcon className="size-4" />,
         loading: <Loader2Icon className="size-4 animate-spin" />,
       }}
+      toastOptions={{
+        classNames: {
+          // Sonner's title/description column is a flex item with no
+          // min-width:0, so a long description resists shrinking and pushes a
+          // multi-button action row out past the toast's padding.
+          content: "min-w-0",
+        },
+      }}
       style={
         {
           "--normal-bg": "var(--popover)",

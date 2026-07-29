@@ -93,9 +93,15 @@ export function useCrawlTracking({
       // confirm dialog instead of dismissing the toast. data-button/data-cancel
       // pick up sonner's own button styling. The dialog state lives outside the
       // toast, so it survives the toast being recreated on every poll tick.
+      // shrink-0 keeps the pair intact; the description column shrinks instead
+      // (see the `content` override in ui/sonner.tsx). ml-0! cancels the
+      // `margin-left:auto` sonner puts on every [data-button] — meant for a
+      // lone action, it fights this wrapper's own ml-auto and shoves the last
+      // button past the toast's right padding.
       const cancellableAction = (
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
           <button
+            className="ml-0!"
             type="button"
             data-button=""
             data-cancel=""
@@ -104,6 +110,7 @@ export function useCrawlTracking({
             Cancel
           </button>
           <button
+            className="ml-0!"
             type="button"
             data-button=""
             onClick={() => goToCrawlRef.current(crawl.project_id, id)}
@@ -115,44 +122,60 @@ export function useCrawlTracking({
 
       switch (crawl.status) {
         case "queued":
-          toast.loading(<span className="shimmer text-muted-foreground">Queued…</span>, {
-            id,
-            duration: Infinity,
-            description: projectName
-              ? `${projectName} is waiting for another crawl to finish.`
-              : "Waiting for another crawl to finish.",
-            action: cancellableAction,
-          })
-          break
-        case "running":
-          if (crawl.phase === "analyzing") {
-            toast.loading(<span className="shimmer text-muted-foreground">Analyzing issues…</span>, {
+          toast.loading(
+            <span className="shimmer text-muted-foreground">Queued…</span>,
+            {
               id,
               duration: Infinity,
               description: projectName
-                ? `${projectName} crawl is being analyzed.`
-                : undefined,
+                ? `${projectName} is waiting for another crawl to finish.`
+                : "Waiting for another crawl to finish.",
               action: cancellableAction,
-            })
+            }
+          )
+          break
+        case "running":
+          if (crawl.phase === "analyzing") {
+            toast.loading(
+              <span className="shimmer text-muted-foreground">
+                Analyzing issues…
+              </span>,
+              {
+                id,
+                duration: Infinity,
+                description: projectName
+                  ? `${projectName} crawl is being analyzed.`
+                  : undefined,
+                action: cancellableAction,
+              }
+            )
           } else if (crawl.urls_discovered === 0) {
-            toast.loading(<span className="shimmer text-muted-foreground">Discovering URLs…</span>, {
-              id,
-              duration: Infinity,
-              description: "Analyzing sitemap…",
-              action: cancellableAction,
-            })
+            toast.loading(
+              <span className="shimmer text-muted-foreground">
+                Discovering URLs…
+              </span>,
+              {
+                id,
+                duration: Infinity,
+                description: "Analyzing sitemap…",
+                action: cancellableAction,
+              }
+            )
           } else {
-            toast.loading(<span className="shimmer text-muted-foreground">Crawling…</span>, {
-              id,
-              duration: Infinity,
-              description: (
-                <span className="t-digit-line">
-                  <NumberPopIn value={crawl.urls_crawled} /> /{" "}
-                  <NumberPopIn value={crawl.urls_discovered} /> crawled
-                </span>
-              ),
-              action: cancellableAction,
-            })
+            toast.loading(
+              <span className="shimmer text-muted-foreground">Crawling…</span>,
+              {
+                id,
+                duration: Infinity,
+                description: (
+                  <span className="t-digit-line">
+                    <NumberPopIn value={crawl.urls_crawled} /> /{" "}
+                    <NumberPopIn value={crawl.urls_discovered} /> crawled
+                  </span>
+                ),
+                action: cancellableAction,
+              }
+            )
           }
           break
         case "completed":

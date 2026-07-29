@@ -89,7 +89,7 @@ export function ProjectPanel({
     <motion.div
       aria-label="Projects"
       aria-modal="true"
-      className="pointer-events-auto flex h-[min(520px,70vh)] w-full min-w-0 flex-1 flex-col overflow-hidden border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+      className="pointer-events-auto flex h-[min(520px,70vh)] w-full max-w-[58rem] min-w-0 flex-col overflow-hidden border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
       layout
       layoutId="dock-context"
       ref={panelRef}
