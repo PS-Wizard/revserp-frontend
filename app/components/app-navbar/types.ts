@@ -1,4 +1,5 @@
 import type {
+  AICompareTarget,
   AIExportAction,
   AINavigationDestination,
 } from "~/components/ai-dock/use-ai-chat"
@@ -44,6 +45,7 @@ export type AppNavbarProps = {
   trackCrawl: (id: string) => void
   onNavigate: (destination: AINavigationDestination) => void
   onProjectSwitched: (projectId: string) => void
+  onCompare: (target: AICompareTarget) => void
   onExport: (action: AIExportAction) => void
   onAutoCrawlConfigured: () => void
   externalOpen: { prompt: string; token: number } | null

@@ -182,6 +182,7 @@ export const AppNavbar = memo(function AppNavbar({
   trackCrawl,
   onNavigate,
   onProjectSwitched,
+  onCompare,
   onExport,
   onAutoCrawlConfigured,
   externalOpen,
@@ -503,6 +504,7 @@ export const AppNavbar = memo(function AppNavbar({
         }
         onProjectHover={handleProjectHover}
         onProjectSwitched={onProjectSwitched}
+        onCompare={onCompare}
         onRunCrawlOpen={() => runCrawlDispatch({ type: "OPEN" })}
         onSelectOrganization={(value) =>
           void workspaceActions.handleSelectOrganization(value)

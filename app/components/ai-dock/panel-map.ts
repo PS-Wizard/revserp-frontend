@@ -21,6 +21,10 @@ const TOOL_PANEL_MAP: Record<string, PanelState> = {
   // minimize
   export_crawl: "mini",
   export_audit: "mini",
+  // Mini, not collapsed like the other view-changing tools: a competitor
+  // analysis both opens the compare view and explains it, so the panel has to
+  // stay readable next to the view it just opened.
+  compare_projects: "mini",
   // collapse
   start_crawl: "collapsed",
   configure_auto_crawl: "collapsed",

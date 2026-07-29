@@ -39,6 +39,12 @@ export type AIExportAction = {
   crawl_id?: string
 }
 
+/** The far side of an AI-opened comparison: a crawl of another project. */
+export type AICompareTarget = {
+  projectId: string
+  crawlId: string
+}
+
 export function aiConversationsListQueryKey(orgId: string) {
   return ["ai-conversations", orgId] as const
 }
@@ -74,6 +80,23 @@ function isProjectSwitchedPayload(
     typeof payload === "object" &&
     typeof (payload as { project_id?: unknown }).project_id === "string" &&
     (payload as { project_id: string }).project_id.trim()
+  )
+}
+
+function isCompareStartedPayload(
+  payload: unknown
+): payload is { project_id: string; crawl_id: string } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload))
+    return false
+  const { project_id, crawl_id } = payload as {
+    project_id?: unknown
+    crawl_id?: unknown
+  }
+  return (
+    typeof project_id === "string" &&
+    project_id.trim().length > 0 &&
+    typeof crawl_id === "string" &&
+    crawl_id.trim().length > 0
   )
 }
 
@@ -117,6 +140,7 @@ export type UseAIChatParams = {
   trackCrawl: (id: string) => void
   onNavigate: (destination: AINavigationDestination) => void
   onProjectSwitched: (projectId: string) => void
+  onCompare: (target: AICompareTarget) => void
   onExport: (action: AIExportAction) => void
   onAutoCrawlConfigured: () => void
   setPanelState: (state: PanelState) => void
@@ -130,6 +154,7 @@ export function useAIChat({
   trackCrawl,
   onNavigate,
   onProjectSwitched,
+  onCompare,
   onExport,
   onAutoCrawlConfigured,
   setPanelState,
@@ -162,6 +187,7 @@ export function useAIChat({
   const trackCrawlRef = useRef(trackCrawl)
   const onNavigateRef = useRef(onNavigate)
   const onProjectSwitchedRef = useRef(onProjectSwitched)
+  const onCompareRef = useRef(onCompare)
   const onExportRef = useRef(onExport)
   const setPanelStateRef = useRef(setPanelState)
   projectIdRef.current = projectId
@@ -170,6 +196,7 @@ export function useAIChat({
   trackCrawlRef.current = trackCrawl
   onNavigateRef.current = onNavigate
   onProjectSwitchedRef.current = onProjectSwitched
+  onCompareRef.current = onCompare
   onExportRef.current = onExport
   setPanelStateRef.current = setPanelState
 
@@ -522,6 +549,20 @@ export function useAIChat({
                   projectIdsRef.current.includes(payload.project_id)
                 ) {
                   onProjectSwitchedRef.current(payload.project_id)
+                }
+                break
+              }
+              case "compare_started": {
+                // Same tenancy fence as project_switched: the competitor must be
+                // a project this session can already see.
+                if (
+                  isCompareStartedPayload(payload) &&
+                  projectIdsRef.current.includes(payload.project_id)
+                ) {
+                  onCompareRef.current({
+                    projectId: payload.project_id,
+                    crawlId: payload.crawl_id,
+                  })
                 }
                 break
               }

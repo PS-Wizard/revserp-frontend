@@ -11,6 +11,7 @@ import {
 import type { PanelState } from "~/components/ai-dock/panel-map"
 import { useAIChat } from "~/components/ai-dock/use-ai-chat"
 import type {
+  AICompareTarget,
   AIExportAction,
   AINavigationDestination,
 } from "~/components/ai-dock/use-ai-chat"
@@ -89,6 +90,7 @@ export type CommandDockProps = {
   trackCrawl: (id: string) => void
   onNavigate: (destination: AINavigationDestination) => void
   onProjectSwitched: (projectId: string) => void
+  onCompare: (target: AICompareTarget) => void
   onExport: (action: AIExportAction) => void
   onAutoCrawlConfigured: () => void
   externalOpen: { prompt: string; token: number } | null
@@ -149,6 +151,7 @@ export function CommandDock({
   trackCrawl,
   onNavigate,
   onProjectSwitched,
+  onCompare,
   onExport,
   onAutoCrawlConfigured,
   externalOpen,
@@ -177,6 +180,7 @@ export function CommandDock({
     trackCrawl,
     onNavigate,
     onProjectSwitched,
+    onCompare,
     onExport,
     onAutoCrawlConfigured,
     setPanelState,

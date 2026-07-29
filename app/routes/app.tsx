@@ -35,6 +35,7 @@ import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import type {
+  AICompareTarget,
   AIExportAction,
   AINavigationDestination,
 } from "~/components/ai-dock/use-ai-chat"
@@ -734,6 +735,39 @@ export default function AppPage() {
     setView("revserp-audit")
   }, [])
 
+  // An AI-opened comparison arrives as IDs only, so the far-side crawl has to be
+  // hydrated before the compare view can render it. The generation counter fences
+  // the await: a second request must win over an in-flight fetch rather than
+  // dropping a stale competitor into the view once it resolves.
+  const compareRequestRef = useRef(0)
+  const handleAICompare = useCallback(
+    ({ projectId: targetProjectId, crawlId }: AICompareTarget) => {
+      const project = projects.find((entry) => entry.id === targetProjectId)
+      if (!project) return
+      const generation = ++compareRequestRef.current
+      void (async () => {
+        try {
+          const crawl = await clientApiFetch<CrawlResponse>(`/crawls/${crawlId}`)
+          if (generation !== compareRequestRef.current) return
+          // The agent named the project; trust the API for which crawl actually
+          // belongs to it rather than the pairing in the action frame.
+          if (crawl.project_id !== project.id) return
+          setCompareTarget({
+            crawl,
+            projectName: project.name,
+            baseUrl: project.base_url,
+          })
+          setView("compare")
+          window.scrollTo({ top: 0, behavior: "smooth" })
+        } catch {
+          // The agent has already explained the comparison in chat; a failed
+          // hydrate only means the view does not open.
+        }
+      })()
+    },
+    [projects]
+  )
+
   // Drop a stale comparison rather than leaving an empty tab selected.
   useEffect(() => {
     if (compareTarget && !compareSides) {
@@ -772,6 +806,7 @@ export default function AppPage() {
         trackCrawl={handleAITrackCrawl}
         onNavigate={handleAINavigate}
         onProjectSwitched={handleAIProjectSwitched}
+        onCompare={handleAICompare}
         onExport={handleAIExport}
         onAutoCrawlConfigured={handleAIAutoCrawlConfigured}
         externalOpen={aiOpenRequest}
