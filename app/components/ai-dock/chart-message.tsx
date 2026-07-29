@@ -1,3 +1,4 @@
+import { useId } from "react"
 import {
   Area,
   AreaChart,
@@ -24,6 +25,7 @@ const CHART_COLORS = [
   "var(--chart-3)",
   "var(--chart-4)",
   "var(--chart-5)",
+  "var(--chart-6)",
 ]
 
 function seriesColor(index: number) {
@@ -50,6 +52,9 @@ const tooltipContentStyle = {
 export function ChartMessage({ spec }: { spec: ChartSpec }) {
   const data = spec.data as Record<string, unknown>[]
   const showLegend = spec.series.length > 1 || spec.type === "pie"
+  // Gradient <defs> ids must be unique per chart instance — several charts can
+  // share a message, and duplicate ids would make them all use the first fill.
+  const gradientId = useId().replace(/:/g, "")
 
   return (
     <figure className="my-1 w-full min-w-0 rounded-xl border border-border bg-card p-3">
@@ -58,7 +63,7 @@ export function ChartMessage({ spec }: { spec: ChartSpec }) {
       </figcaption>
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          {renderChart(spec, data, showLegend)}
+          {renderChart(spec, data, showLegend, gradientId)}
         </ResponsiveContainer>
       </div>
     </figure>
@@ -68,7 +73,8 @@ export function ChartMessage({ spec }: { spec: ChartSpec }) {
 function renderChart(
   spec: ChartSpec,
   data: Record<string, unknown>[],
-  showLegend: boolean
+  showLegend: boolean,
+  gradientId: string
 ) {
   switch (spec.type) {
     case "bar":
@@ -93,13 +99,48 @@ function renderChart(
               name={series.label}
               fill={seriesColor(index)}
               radius={[3, 3, 0, 0]}
-            />
+            >
+              {/* With one series the bars are categories, not a trend, so a
+                  single fill makes every bar identical. Colour per category
+                  instead — the x-axis labels already carry the meaning, which
+                  is why no legend is shown in this case. */}
+              {spec.series.length === 1
+                ? data.map((_, cellIndex) => (
+                    <Cell key={cellIndex} fill={seriesColor(cellIndex)} />
+                  ))
+                : null}
+            </Bar>
           ))}
         </BarChart>
       )
     case "area":
       return (
         <AreaChart data={data}>
+          {/* Vertical fade under each line, matching the GSC performance
+              chart's gradient fill. A flat low-opacity wash reads as haze. */}
+          <defs>
+            {spec.series.map((series, index) => (
+              <linearGradient
+                key={series.key}
+                id={`${gradientId}-${index}`}
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={seriesColor(index)}
+                  stopOpacity={0.45}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={seriesColor(index)}
+                  stopOpacity={0.02}
+                />
+              </linearGradient>
+            ))}
+          </defs>
           <CartesianGrid
             stroke="var(--border)"
             strokeDasharray="3 3"
@@ -116,8 +157,7 @@ function renderChart(
               dataKey={series.key}
               name={series.label}
               stroke={seriesColor(index)}
-              fill={seriesColor(index)}
-              fillOpacity={0.15}
+              fill={`url(#${gradientId}-${index})`}
               strokeWidth={2}
             />
           ))}
@@ -135,6 +175,10 @@ function renderChart(
             outerRadius={90}
             innerRadius={45}
             paddingAngle={2}
+            // recharts defaults every sector to stroke="#fff", which draws a
+            // white outline around each slice. paddingAngle already separates
+            // them, so the outline is pure noise on a dark surface.
+            stroke="none"
           >
             {data.map((_, index) => (
               <Cell key={index} fill={seriesColor(index)} />
