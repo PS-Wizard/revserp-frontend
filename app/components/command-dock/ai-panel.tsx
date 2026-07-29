@@ -22,6 +22,7 @@ import { cn } from "~/lib/utils"
 import {
   CAPSULE_RADIUS,
   PANEL_SURFACE,
+  PANEL_SURFACE_OPAQUE,
   dockTransition,
   panelContentMotion,
 } from "./constants"
@@ -101,7 +102,6 @@ type AIPanelProps = {
   onRestore: () => void
   onCollapse: () => void
   cardRef: RefObject<HTMLDivElement | null>
-  messageScrollRef: RefObject<HTMLDivElement | null>
   reducedMotion: boolean
 }
 
@@ -115,7 +115,6 @@ export function AIPanel({
   onRestore,
   onCollapse,
   cardRef,
-  messageScrollRef,
   reducedMotion,
 }: AIPanelProps) {
   const {
@@ -139,7 +138,15 @@ export function AIPanel({
 
   return (
     <BorderBeam
-      active={isSending}
+      // Never beam the maximized panel. An active beam writes 18 registered
+      // `@property … { inherits: true }` custom properties onto this wrapper
+      // every frame at 30fps; an inherited registered property invalidates
+      // style for the whole subtree, and maximized that subtree is the entire
+      // conversation — so the recalc cost scales with message count. It also
+      // animates `filter: blur(8px) hue-rotate(…)` on inset-0 pseudo-elements,
+      // which at this size is a full-viewport filter pass per frame. Costs
+      // nothing to lose: the header already shows a "Working…" indicator.
+      active={isSending && !isMax}
       className={cn(
         "pointer-events-none flex min-w-0",
         isMax ? "h-full w-full max-w-[100rem]" : "shrink-0"
@@ -152,7 +159,7 @@ export function AIPanel({
         aria-label="Revserp AI"
         aria-modal={isMax ? "true" : undefined}
         className={cn(
-          PANEL_SURFACE,
+          isMax ? PANEL_SURFACE_OPAQUE : PANEL_SURFACE,
           "pointer-events-auto flex min-w-0 flex-col overflow-hidden",
           isMax
             ? "h-full w-full"
@@ -162,7 +169,14 @@ export function AIPanel({
         layoutId="dock-ai"
         ref={cardRef}
         role="dialog"
-        style={{ borderRadius: CAPSULE_RADIUS, willChange: "transform" }}
+        style={{
+          borderRadius: CAPSULE_RADIUS,
+          // Pinned only while small. A permanent `will-change: transform` on a
+          // near-fullscreen element forces the compositor to keep a viewport-
+          // sized layer alive for the whole time the panel is open; motion adds
+          // its own will-change during the layout projection anyway.
+          willChange: isMax ? undefined : "transform",
+        }}
         transition={dockTransition(reducedMotion)}
       >
         <motion.div
@@ -261,10 +275,7 @@ export function AIPanel({
                 </div>
               )}
 
-              <div
-                ref={messageScrollRef}
-                className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
-              >
+              <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
                 <AIMessageList
                   messages={messages}
                   isLoadingConversation={isLoadingConversation}

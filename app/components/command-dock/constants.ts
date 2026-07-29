@@ -39,13 +39,34 @@ export const CAPSULE_SHELL =
 /** Outer height of a capsule: a PILL_BASE row plus the shell's p-1.5. */
 export const CAPSULE_HEIGHT = "h-12"
 
+/** Edge treatment shared by every card surface: border, shadow, no fill. */
+const PANEL_SURFACE_EDGE =
+  "border border-border/70 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
+
 /**
  * Card surface shared by the Revserp AI button and the panel it morphs into.
  * They must match exactly — only one is mounted at a time, so the layoutId
  * hand-off animates geometry but swaps styles in a single frame.
  */
-export const PANEL_SURFACE =
-  "border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+export const PANEL_SURFACE = `${PANEL_SURFACE_EDGE} bg-card/95 backdrop-blur-2xl`
+
+/**
+ * Maximized-panel surface: opaque, and deliberately WITHOUT `backdrop-blur`.
+ *
+ * `backdrop-filter` costs scale with the blurred area, and this panel is very
+ * nearly the whole viewport (~4x the mini panel). Worse, it sits directly on
+ * the maximized backdrop's own full-viewport `backdrop-blur-sm`, so a 40px
+ * blur was being evaluated over an already-blurred full-viewport backdrop —
+ * two stacked full-screen backdrop-filter passes re-rasterized on every
+ * composited frame, which pegged the CPU for as long as the panel stayed open.
+ *
+ * Nothing is lost visually: at `bg-card/95` the blur showed through 5% of an
+ * opaque card, over a backdrop already darkened by `bg-black/50`. Going fully
+ * opaque also avoids showing *unblurred* content through that 5%. The glass
+ * treatment stays on the collapsed capsule and mini panel, where the blurred
+ * area is small enough to be free and the effect is actually visible.
+ */
+export const PANEL_SURFACE_OPAQUE = `${PANEL_SURFACE_EDGE} bg-card`
 
 export const CAPSULE_RADIUS = 16
 

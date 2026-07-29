@@ -181,13 +181,7 @@ export function CommandDock({
     onAutoCrawlConfigured,
     setPanelState,
   })
-  const {
-    isSending,
-    messages,
-    isLoadingConversation,
-    handleSubmit,
-    startNewChat,
-  } = chat
+  const { isSending, handleSubmit, startNewChat } = chat
 
   // Seed a fresh chat from an external request (e.g. issue-explorer's
   // "Recommend Fixes"): maximize, start a new conversation, and auto-send the
@@ -207,14 +201,9 @@ export function CommandDock({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalOpen])
 
-  const messageScrollRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (panelState === "collapsed") return
-    messageScrollRef.current?.scrollTo({
-      top: messageScrollRef.current.scrollHeight,
-      behavior: "smooth",
-    })
-  }, [messages, isLoadingConversation, panelState])
+  // The message list is deliberately never auto-scrolled: the scroll position
+  // belongs to the reader. Streaming output grows the list downward and leaves
+  // the viewport where it was put.
 
   // Clicking outside the card steps the dock down one level. Maximized is
   // handled by its backdrop (-> mini); mini has no backdrop, so watch the
@@ -339,7 +328,7 @@ export function CommandDock({
           {panelState === "maximized" ? (
             <motion.div
               animate={{ opacity: 1 }}
-              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 z-40 bg-black/60"
               exit={{ opacity: 0 }}
               initial={{ opacity: 0 }}
               key="dock-ai-backdrop"
@@ -355,7 +344,6 @@ export function CommandDock({
               cardRef={cardRef}
               chat={chat}
               historyOpen={historyOpen}
-              messageScrollRef={messageScrollRef}
               onCollapse={collapseAIPanel}
               onHistoryClose={() => setHistoryOpen(false)}
               onHistoryToggle={() => setHistoryOpen((open) => !open)}
@@ -383,7 +371,6 @@ export function CommandDock({
                 cardRef={cardRef}
                 chat={chat}
                 historyOpen={historyOpen}
-                messageScrollRef={messageScrollRef}
                 onCollapse={collapseAIPanel}
                 onHistoryClose={() => setHistoryOpen(false)}
                 onHistoryToggle={() => setHistoryOpen((open) => !open)}
