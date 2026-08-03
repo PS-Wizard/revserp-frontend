@@ -29,6 +29,7 @@ import {
   type MetricConfig,
 } from "./types"
 import { capitalize, dateTimestamp, formatCountryLabel } from "./formatters"
+import { useGSCQueries, type GSCQueryPreset } from "./use-gsc-queries"
 
 const chartMetricOrder: GSCMetricKey[] = [
   "impressions",
@@ -57,6 +58,7 @@ type OverviewState = {
   gscProjectSelectionErrorMessage: string
   activeDimensionTab: GSCDimensionTab
   tableSearch: string
+  queryPreset: GSCQueryPreset
   tableSort: TableSortState
   visibleMetrics: Record<GSCMetricKey, boolean>
   visibleChartRange: VisibleChartRange | null
@@ -69,6 +71,7 @@ type Action =
   | { type: "SET_SELECTION_ERROR"; value: string }
   | { type: "SET_DIMENSION_TAB"; value: GSCDimensionTab }
   | { type: "SET_TABLE_SEARCH"; value: string }
+  | { type: "SET_QUERY_PRESET"; value: GSCQueryPreset }
   | { type: "SET_TABLE_SORT"; value: TableSortState["column"] }
   | { type: "TOGGLE_METRIC"; value: GSCMetricKey }
   | { type: "SET_VISIBLE_CHART_RANGE"; value: VisibleChartRange | null }
@@ -85,9 +88,14 @@ function overviewReducer(state: OverviewState, action: Action): OverviewState {
     case "SET_SELECTION_ERROR":
       return { ...state, gscProjectSelectionErrorMessage: action.value }
     case "SET_DIMENSION_TAB":
-      return { ...state, activeDimensionTab: action.value }
+      // The queries tab searches at the server and the other tabs filter the
+      // rows already loaded, so a search carried across tabs would mean two
+      // different things. Clear it on the way over.
+      return { ...state, activeDimensionTab: action.value, tableSearch: "" }
     case "SET_TABLE_SEARCH":
       return { ...state, tableSearch: action.value }
+    case "SET_QUERY_PRESET":
+      return { ...state, queryPreset: action.value }
     case "SET_TABLE_SORT":
       return {
         ...state,
@@ -115,6 +123,7 @@ function overviewReducer(state: OverviewState, action: Action): OverviewState {
       return {
         ...state,
         tableSearch: "",
+        queryPreset: "all" as GSCQueryPreset,
         activeDimensionTab: "queries" as GSCDimensionTab,
         tableSort: { column: "clicks", direction: "desc" },
         visibleChartRange: null,
@@ -132,6 +141,7 @@ function createInitialState(status: ProjectGSCStatusResponse): OverviewState {
     gscProjectSelectionErrorMessage: "",
     activeDimensionTab: "queries",
     tableSearch: "",
+    queryPreset: "all",
     tableSort: { column: "clicks", direction: "desc" },
     visibleMetrics: {
       clicks: true,
@@ -269,8 +279,16 @@ export function GSCOverview({
     [currentVisibleTrendRows, previousVisibleTrendRows]
   )
 
+  const searchConsoleQueries = useGSCQueries({
+    projectID: activeProjectID,
+    siteURL: selectedSite?.site_url ?? "",
+    search: state.tableSearch,
+    preset: state.queryPreset,
+    enabled: Boolean(overviewResponse),
+  })
+
   const queryRows = toTableRows(
-    selectedWindowOverview?.top_queries ?? [],
+    searchConsoleQueries.rows,
     (row) => row.query ?? ""
   )
   const pageRows = toTableRows(
@@ -293,8 +311,14 @@ export function GSCOverview({
         : state.activeDimensionTab === "countries"
           ? countryRows
           : deviceRows
+  // Query rows arrive already filtered by Google, so only the client-side tabs
+  // run filterTableRows. Sorting stays local on both paths: it reorders the rows
+  // currently loaded, exactly as before.
+  const isQueriesTab = state.activeDimensionTab === "queries"
   const activeTableRows = sortTableRows(
-    filterTableRows(activeTableSourceRows, state.tableSearch),
+    isQueriesTab
+      ? activeTableSourceRows
+      : filterTableRows(activeTableSourceRows, state.tableSearch),
     state.tableSort
   )
   const chartSeries = useMemo(
@@ -447,6 +471,15 @@ export function GSCOverview({
             onToggleTableSort={(column) =>
               dispatch({ type: "SET_TABLE_SORT", value: column })
             }
+            onQueryPresetChange={(value) =>
+              dispatch({ type: "SET_QUERY_PRESET", value })
+            }
+            onLoadMoreQueries={searchConsoleQueries.loadMore}
+            queryPreset={state.queryPreset}
+            queriesErrorMessage={searchConsoleQueries.errorMessage}
+            queriesHasMore={searchConsoleQueries.hasMore}
+            isLoadingQueries={searchConsoleQueries.isLoading}
+            isLoadingMoreQueries={searchConsoleQueries.isLoadingMore}
             tableSearch={state.tableSearch}
             tableSort={state.tableSort}
           />
