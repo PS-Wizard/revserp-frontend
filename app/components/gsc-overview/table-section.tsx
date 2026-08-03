@@ -1,3 +1,4 @@
+import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import {
@@ -12,6 +13,7 @@ import {
 import { formatNumber, formatPercent, formatPosition } from "./formatters"
 import { dimensionTabLabel, sortIndicator, type TableSortState } from "./table"
 import type { GSCDimensionTab, TableRow, TableSortColumn } from "./types"
+import type { GSCQueryPreset } from "./use-gsc-queries"
 
 const dimensionTabs: Array<{ key: GSCDimensionTab; label: string }> = [
   { key: "queries", label: "Queries" },
@@ -20,23 +22,49 @@ const dimensionTabs: Array<{ key: GSCDimensionTab; label: string }> = [
   { key: "devices", label: "Devices" },
 ]
 
+const queryPresets: Array<{ key: GSCQueryPreset; label: string; hint: string }> =
+  [
+    { key: "all", label: "All queries", hint: "Every query, most clicks first" },
+    {
+      key: "questions",
+      label: "Questions",
+      hint: "Queries phrased as a question or a comparison",
+    },
+  ]
+
 export function GSCTableSection({
   activeDimensionTab,
   tableSearch,
   activeTableRows,
   tableSort,
+  queryPreset,
+  queriesErrorMessage,
+  queriesHasMore,
+  isLoadingQueries,
+  isLoadingMoreQueries,
   onTableSearchChange,
   onDimensionTabChange,
   onToggleTableSort,
+  onQueryPresetChange,
+  onLoadMoreQueries,
 }: {
   activeDimensionTab: GSCDimensionTab
   tableSearch: string
   activeTableRows: TableRow[]
   tableSort: TableSortState
+  queryPreset: GSCQueryPreset
+  queriesErrorMessage: string
+  queriesHasMore: boolean
+  isLoadingQueries: boolean
+  isLoadingMoreQueries: boolean
   onTableSearchChange: (value: string) => void
   onDimensionTabChange: (value: string) => void
   onToggleTableSort: (column: TableSortColumn) => void
+  onQueryPresetChange: (value: GSCQueryPreset) => void
+  onLoadMoreQueries: () => void
 }) {
+  const isQueriesTab = activeDimensionTab === "queries"
+
   return (
     <section className="mx-4 rounded-xl border border-border/50 bg-card text-foreground sm:mx-6 lg:mx-4">
       <div className="flex flex-col gap-4 border-b border-border/50 px-8 py-6 lg:flex-row lg:items-center lg:justify-between">
@@ -49,7 +77,11 @@ export function GSCTableSection({
         <Input
           className="w-full lg:max-w-sm"
           onChange={(event) => onTableSearchChange(event.currentTarget.value)}
-          placeholder={`Filter ${activeDimensionTab}...`}
+          placeholder={
+            isQueriesTab
+              ? "Search all queries..."
+              : `Filter ${activeDimensionTab}...`
+          }
           value={tableSearch}
         />
       </div>
@@ -73,17 +105,57 @@ export function GSCTableSection({
             key={tab.key}
             value={tab.key}
           >
+            {tab.key === "queries" ? (
+              <div className="flex flex-wrap gap-2">
+                {queryPresets.map((preset) => (
+                  <Button
+                    key={preset.key}
+                    onClick={() => onQueryPresetChange(preset.key)}
+                    size="sm"
+                    title={preset.hint}
+                    type="button"
+                    variant={queryPreset === preset.key ? "default" : "outline"}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+
             <p className="text-xs text-muted-foreground">
               Showing {activeTableRows.length}{" "}
-              {dimensionTabLabel(tab.key).toLowerCase()}.
+              {dimensionTabLabel(tab.key).toLowerCase()}
+              {tab.key === "queries" && queriesHasMore ? " so far" : ""}.
             </p>
+
+            {tab.key === "queries" && queriesErrorMessage ? (
+              <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {queriesErrorMessage}
+              </div>
+            ) : null}
+
             <RowsTable
-              emptyMessage={emptyMessage(tab.key)}
+              emptyMessage={
+                tab.key === "queries" && isLoadingQueries
+                  ? "Loading queries..."
+                  : emptyMessage(tab.key)
+              }
               onToggleTableSort={onToggleTableSort}
               primaryColumnLabel={dimensionTabLabel(tab.key).slice(0, -1)}
               rows={activeTableRows}
               tableSort={tableSort}
             />
+
+            {tab.key === "queries" && queriesHasMore ? (
+              <Button
+                disabled={isLoadingQueries || isLoadingMoreQueries}
+                onClick={onLoadMoreQueries}
+                type="button"
+                variant="outline"
+              >
+                {isLoadingMoreQueries ? "Loading..." : "Load more queries"}
+              </Button>
+            ) : null}
           </TabsContent>
         ))}
       </Tabs>

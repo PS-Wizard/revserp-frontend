@@ -17,6 +17,7 @@ const TOOL_PANEL_MAP: Record<string, PanelState> = {
   list_pages: "maximized",
   get_business_profile: "maximized",
   update_business_profile: "maximized",
+  get_search_console_data: "maximized",
   render_chart: "maximized",
   // minimize
   export_crawl: "mini",

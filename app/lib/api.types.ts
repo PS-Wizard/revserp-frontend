@@ -252,6 +252,24 @@ export type ProjectGSCOverviewResponse = {
   }
 }
 
+export type GSCQueryPageResponse = {
+  rows: GSCSearchAnalyticsRowResponse[]
+  days: number
+  limit: number
+  offset: number
+  has_more: boolean
+  start_date: string
+  end_date: string
+}
+
+export type ProjectGSCQueriesResponse = {
+  project_id: string
+  site_url: string
+  permission_level?: string
+  google_connection: string
+  queries: GSCQueryPageResponse
+}
+
 export type PillarScoringConfig = {
   label: string
   weight: number
