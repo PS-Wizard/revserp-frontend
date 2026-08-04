@@ -149,7 +149,7 @@ const initialRunCrawlState: RunCrawlState = {
   maxPages: "",
   delayMs: "",
   jitterMs: "",
-  fetchTimeoutSeconds: "10",
+  fetchTimeoutSeconds: "60",
   runCrawlError: "",
   isStartingCrawl: false,
 }
