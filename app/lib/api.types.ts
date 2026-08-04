@@ -11,6 +11,8 @@ export type MeResponse = {
     role: string
   }>
   active_org_id: string
+  /** Gating for the active workspace. See OrgFeatures. */
+  features: OrgFeatures
 }
 
 export type CreateOrganizationInviteResponse = {
@@ -396,6 +398,40 @@ export type AdminOrganizationResponse = {
   name: string
 }
 
+// --- Feature gating ---
+
+/**
+ * Per-workspace gating. Denylist semantics: a workspace nobody has restricted
+ * has everything enabled, and `disabled_ai_tools` holds only the exceptions.
+ * This drives what the UI offers; the backend enforces the same state on every
+ * gated route and on the AI tool set, so it is never the only thing stopping
+ * access.
+ */
+export type OrgFeatures = {
+  auto_crawl: boolean
+  gsc_connector: boolean
+  ai_chat: boolean
+  disabled_ai_tools: string[]
+}
+
+/** Tool grouping comes from the server so adding a tool needs no UI change. */
+export type AdminFeatureToolGroup = {
+  id: string
+  label: string
+  tools: string[]
+}
+
+export type AdminWorkspaceFeatures = OrgFeatures & {
+  org_id: string
+  org_name: string
+  updated_at?: string
+}
+
+export type AdminFeaturesResponse = {
+  workspaces: AdminWorkspaceFeatures[]
+  tool_groups: AdminFeatureToolGroup[]
+}
+
 export type AdminAIAppConfig = {
   context_prompt: string
   guidelines: string
@@ -505,6 +541,10 @@ export type SiteGraphNode = {
   status: number
   in: number
   out: number
+  // Server-classified health. A soft 404 answers 200 and a failed fetch has no
+  // status at all, so neither can be derived from `status` on the client.
+  broken: boolean
+  reason?: string
 }
 
 export type SiteGraphResponse = {

@@ -7,6 +7,7 @@ import { ThinkingOrb } from "thinking-orbs"
 
 import type { ExportFormat } from "~/components/app-navbar/types"
 import { formatCrawlDateTime } from "~/components/app-navbar/utils"
+import { useFeatures } from "~/lib/features"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +73,7 @@ export const ContextCapsule = memo(function ContextCapsule({
   onExportCrawl,
   reducedMotion,
 }: ContextCapsuleProps) {
+  const autoCrawlEnabled = useFeatures().auto_crawl
   const runCrawlLabel = isCrawlRunning
     ? crawlStatusLabel === "queued"
       ? "Queued"
@@ -147,6 +149,9 @@ export const ContextCapsule = memo(function ContextCapsule({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="center" className="w-56" side="bottom">
               <DropdownMenuGroup>
+                {/* AutoCrawl is gated per workspace; its settings routes
+                    reject independently. */}
+                {autoCrawlEnabled ? (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger disabled={!activeProjectId}>
                     <CogIcon />
@@ -169,6 +174,7 @@ export const ContextCapsule = memo(function ContextCapsule({
                     </DropdownMenuRadioGroup>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+                ) : null}
                 <DropdownMenuItem
                   disabled={!activeProject}
                   onClick={() =>

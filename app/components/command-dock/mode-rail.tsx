@@ -4,6 +4,7 @@ import { memo } from "react"
 import { motion } from "motion/react"
 
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
+import { useFeatures } from "~/lib/features"
 import { cn } from "~/lib/utils"
 
 import {
@@ -38,9 +39,20 @@ export const ModeRail = memo(function ModeRail({
   onAuditHoverEnd,
   reducedMotion,
 }: ModeRailProps) {
+  const features = useFeatures()
+
+  // Search Console is gated per workspace. Its routes reject independently, so
+  // dropping the pill only spares the user a dead end.
+  const availableModes = features.gsc_connector
+    ? DOCK_MODES
+    : DOCK_MODES.filter((mode) => mode.id !== "search-console")
+
   const modes = compareLabel
-    ? [...DOCK_MODES, { id: "compare" as DashboardView, label: compareLabel }]
-    : DOCK_MODES
+    ? [
+        ...availableModes,
+        { id: "compare" as DashboardView, label: compareLabel },
+      ]
+    : availableModes
 
   // Only while audit is the active view: on another view no audit sub-tab is
   // current, so claiming one in the rail would misreport where you are.

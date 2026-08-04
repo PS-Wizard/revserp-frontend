@@ -67,6 +67,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog"
+import { FeaturesTab } from "~/components/admin/features-tab"
 import { requirePlatformAdmin } from "~/lib/auth.server"
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -1029,6 +1030,7 @@ export default function AdminPage() {
             <TabsTrigger value="scoring">Scoring</TabsTrigger>
             <TabsTrigger value="ai-config">AI Config</TabsTrigger>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
+            <TabsTrigger value="features">Features</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -1036,6 +1038,7 @@ export default function AdminPage() {
         {tab === "scoring" && <ScoringTab />}
         {tab === "ai-config" && <AIConfigTab />}
         {tab === "accounts" && <AccountsTab />}
+        {tab === "features" && <FeaturesTab />}
       </div>
     </div>
   )

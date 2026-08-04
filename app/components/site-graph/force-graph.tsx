@@ -21,6 +21,7 @@ type SimNode = {
   degree: number
   depth: number
   broken: boolean
+  brokenReason: string
   appearDelay: number
   // Per-node show/hide animation, reusing the intro ease. `vis` is the live
   // 0..1 scale eased from `visFrom` toward `visTarget`, gated by
@@ -202,7 +203,7 @@ export function computeVisible(
   const depth = needDepth ? computeDepths(nodes, edges).depth : null
 
   for (let i = 0; i < n; i++) {
-    if (filter.brokenOnly && nodes[i].status < 400) {
+    if (filter.brokenOnly && !nodes[i].broken) {
       result[i] = false
       continue
     }
@@ -283,7 +284,8 @@ export const ForceGraph = memo(function ForceGraph({
         outCount: node.out,
         degree: node.in + node.out,
         depth: -1,
-        broken: node.status >= 400,
+        broken: node.broken,
+        brokenReason: node.reason ?? "",
         appearDelay: 0,
         vis: 0,
         visTarget: 1,
@@ -913,7 +915,10 @@ export const ForceGraph = memo(function ForceGraph({
         if (node.broken) {
           const brokenLine = document.createElement("div")
           brokenLine.className = "font-medium text-destructive"
-          brokenLine.textContent = `Broken — HTTP ${node.status}`
+          // The server's reason distinguishes a soft 404 and an unfetchable page
+          // from a plain 4xx; HTTP status alone cannot say which.
+          brokenLine.textContent =
+            node.brokenReason || `Broken — HTTP ${node.status}`
           tooltip.append(brokenLine)
         }
         tooltip.style.opacity = "1"

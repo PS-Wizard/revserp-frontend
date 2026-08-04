@@ -26,6 +26,8 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 
+import { useFeatures } from "~/lib/features"
+
 import { AICapsule, AIPanel } from "./ai-panel"
 import { NavIsland } from "./nav-island"
 
@@ -158,6 +160,7 @@ export function CommandDock({
   dismissToken,
 }: CommandDockProps) {
   const reducedMotion = useReducedMotion() ?? false
+  const aiChatEnabled = useFeatures().ai_chat
 
   // The top project panel and the bottom AI panel occupy different corners of
   // the screen, so they are independent — unlike the single-island layout,
@@ -342,7 +345,10 @@ export function CommandDock({
           ) : null}
         </AnimatePresence>
 
-        {panelState === "maximized" ? (
+        {/* AI chat is gated per workspace. Its conversation routes reject on
+            their own, so hiding the entry point just avoids offering a
+            surface that would fail on first use. */}
+        {!aiChatEnabled ? null : panelState === "maximized" ? (
           <div className="pointer-events-none fixed inset-0 z-50 flex justify-center p-4 sm:p-6">
             <AIPanel
               cardRef={cardRef}

@@ -48,6 +48,7 @@ import {
 } from "~/components/app-navbar/utils"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { SearchConsoleView } from "~/components/search-console-view"
+import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
   CardContent,
@@ -777,7 +778,8 @@ export default function AppPage() {
   }, [compareTarget, compareSides])
 
   return (
-    // pb-24 clears the floating Revserp AI button at the bottom centre.
+    <FeaturesProvider features={me.features}>
+    {/* pb-24 clears the floating Revserp AI button at the bottom centre. */}
     <main className="min-h-svh overflow-x-clip bg-background pb-24 text-foreground">
       {cancelDialog}
       <AppNavbar
@@ -933,7 +935,7 @@ export default function AppPage() {
           activeProject={activeProject}
           currentCrawl={stableCurrentCrawl}
         />
-      ) : deferredView === "search-console" ? (
+      ) : deferredView === "search-console" && me.features?.gsc_connector !== false ? (
         <SearchConsoleView
           activeProject={activeProject}
           completedCrawls={stableSortedCompletedCrawls}
@@ -970,6 +972,7 @@ export default function AppPage() {
         />
       )}
     </main>
+    </FeaturesProvider>
   )
 }
 
