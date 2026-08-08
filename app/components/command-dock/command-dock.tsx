@@ -235,6 +235,16 @@ export function CommandDock({
 
   const openProjectPanel = useCallback(() => setProjectPanelOpen(true), [])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return
+      event.preventDefault()
+      openProjectPanel()
+    }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [openProjectPanel])
+
   const collapseAIPanel = useCallback(() => {
     setPanelState("collapsed")
     requestAnimationFrame(() => aiTriggerRef.current?.focus())
