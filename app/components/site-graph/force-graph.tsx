@@ -184,10 +184,9 @@ function computeDepths(
 /**
  * Pure filter predicate shared by the renderer and the panel's live count so
  * the two can never drift. Returns a per-node boolean of whether the node
- * survives all ACTIVE constraints in `filter`; with no filter (or the default
- * all-visible filter) every node passes. A node matches the URL query if its
- * own url contains the query OR it is a direct (either-direction) neighbor of
- * a node whose url does — expanded over an undirected adjacency built here.
+ * survives all active constraints in `filter`; with no filter (or the default
+ * all-visible filter) every node passes. The broken-pages filter also keeps
+ * each direct inbound source so users can see which pages link to the failure.
  */
 export function computeVisible(
   nodes: SiteGraphNode[],
@@ -201,9 +200,19 @@ export function computeVisible(
   const query = filter.query.trim().toLowerCase()
   const needDepth = filter.maxHops != null || !filter.showOrphans
   const depth = needDepth ? computeDepths(nodes, edges).depth : null
+  const brokenContext = filter.brokenOnly ? new Set<number>() : null
+  if (brokenContext) {
+    for (let i = 0; i < n; i++) {
+      if (nodes[i].broken) brokenContext.add(i)
+    }
+    for (const [sourceIndex, targetIndex] of edges) {
+      if (!nodes[targetIndex]?.broken) continue
+      brokenContext.add(sourceIndex)
+    }
+  }
 
   for (let i = 0; i < n; i++) {
-    if (filter.brokenOnly && !nodes[i].broken) {
+    if (brokenContext && !brokenContext.has(i)) {
       result[i] = false
       continue
     }
@@ -303,9 +312,8 @@ export const ForceGraph = memo(function ForceGraph({
       node.appearDelay = (order / priorityOrder.length) * INTRO_TOTAL_MS
     })
 
-    // Layout/base-render edges: the spanning tree (parent links) from the
-    // shortest-click-path depths. Hover reveals the full neighborhood from the
-    // complete edge list.
+    // The normal base render uses the shortest-path tree. Broken-page mode
+    // uses every real inbound edge so each failure keeps all of its sources.
     const { depth: nodeDepths, parent: nodeParents } = computeDepths(nodes, edges)
     for (let i = 0; i < simNodes.length; i++) simNodes[i].depth = nodeDepths[i]
     const layoutEdges: Array<[number, number]> = []
@@ -318,17 +326,26 @@ export const ForceGraph = memo(function ForceGraph({
         target: simNodes[targetIndex],
       })
     )
+    const brokenInboundLinks: SimLink[] = edges
+      .filter(([, targetIndex]) => simNodes[targetIndex]?.broken)
+      .map(([sourceIndex, targetIndex]) => ({
+        source: simNodes[sourceIndex],
+        target: simNodes[targetIndex],
+      }))
 
-    // Hover highlights outgoing links only — incoming sets can be huge
-    // (every page linking a nav target) and matter less when inspecting a
-    // page; the tooltip still reports both counts.
-    const neighbors: Array<Set<number>> = simNodes.map(() => new Set())
+    // Normal hover follows outgoing links. In broken-page mode, hovering a
+    // failure instead reveals the pages that link to it.
+    const outgoingNeighbors: Array<Set<number>> = simNodes.map(() => new Set())
+    const incomingNeighbors: Array<Set<number>> = simNodes.map(() => new Set())
     for (const [sourceIndex, targetIndex] of edges) {
-      neighbors[sourceIndex].add(targetIndex)
+      outgoingNeighbors[sourceIndex].add(targetIndex)
+      incomingNeighbors[targetIndex].add(sourceIndex)
     }
 
-    const nodeFill = (node: SimNode) =>
-      node.broken ? colors.broken : depthColor(node.depth)
+    const nodeFill = (node: SimNode) => {
+      if (node.broken) return colors.broken
+      return filterRef.current?.brokenOnly ? colors.edge : depthColor(node.depth)
+    }
 
     const simulation = forceSimulation(simNodes as never[])
       .force(
@@ -458,7 +475,10 @@ export const ForceGraph = memo(function ForceGraph({
       sceneContext.lineWidth = 1 / transform.k
       sceneContext.strokeStyle = colors.edge
       sceneContext.beginPath()
-      for (const link of simLinks) {
+      const renderedLinks = filterRef.current?.brokenOnly
+        ? brokenInboundLinks
+        : simLinks
+      for (const link of renderedLinks) {
         const edgeScale = Math.min(
           scales[link.source.index],
           scales[link.target.index]
@@ -793,7 +813,10 @@ export const ForceGraph = memo(function ForceGraph({
           node.visDelay = (node.appearDelay / INTRO_TOTAL_MS) * 250
         }
       }
-      if (!changed) return
+      if (!changed) {
+        invalidateScene()
+        return
+      }
       if (reduceMotion) {
         invalidateScene()
         return
@@ -857,6 +880,16 @@ export const ForceGraph = memo(function ForceGraph({
       return best
     }
 
+    const openNode = (node: SimNode) => {
+      try {
+        const url = new URL(node.url)
+        if (url.protocol !== "http:" && url.protocol !== "https:") return
+        window.open(url.href, "_blank", "noopener,noreferrer")
+      } catch {
+        return
+      }
+    }
+
     const positionTooltip = (event: PointerEvent) => {
       const rect = container.getBoundingClientRect()
       const offsetX = event.clientX - rect.left + 14
@@ -889,7 +922,11 @@ export const ForceGraph = memo(function ForceGraph({
       if (node === hovered) return
       const hadHover = hovered !== null
       hovered = node
-      hoveredNeighbors = node ? neighbors[node.index] : null
+      hoveredNeighbors = node
+        ? filterRef.current?.brokenOnly && node.broken
+          ? incomingNeighbors[node.index]
+          : outgoingNeighbors[node.index]
+        : null
       canvas.style.cursor = node ? "pointer" : "grab"
       if (node && event) {
         tooltip.innerHTML = ""
@@ -937,6 +974,9 @@ export const ForceGraph = memo(function ForceGraph({
 
     let panning = false
     let draggingNode: SimNode | null = null
+    let pointerMoved = false
+    let pointerStartX = 0
+    let pointerStartY = 0
     let lastPointerX = 0
     let lastPointerY = 0
 
@@ -946,6 +986,9 @@ export const ForceGraph = memo(function ForceGraph({
       canvas.setPointerCapture(event.pointerId)
       const point = toGraphPoint(event)
       const node = findNode(point.x, point.y)
+      pointerMoved = false
+      pointerStartX = event.clientX
+      pointerStartY = event.clientY
       if (node) {
         draggingNode = node
         node.fx = point.x
@@ -961,6 +1004,14 @@ export const ForceGraph = memo(function ForceGraph({
 
     const onPointerMove = (event: PointerEvent) => {
       if (draggingNode) {
+        if (
+          Math.hypot(
+            event.clientX - pointerStartX,
+            event.clientY - pointerStartY
+          ) > 4
+        ) {
+          pointerMoved = true
+        }
         const point = toGraphPoint(event)
         draggingNode.fx = point.x
         draggingNode.fy = point.y
@@ -978,7 +1029,8 @@ export const ForceGraph = memo(function ForceGraph({
       setHovered(findNode(point.x, point.y), event)
     }
 
-    const onPointerUp = (event: PointerEvent) => {
+    const finishPointer = (event: PointerEvent, openClickedNode: boolean) => {
+      const clickedNode = openClickedNode && !pointerMoved ? draggingNode : null
       if (draggingNode) {
         draggingNode.fx = null
         draggingNode.fy = null
@@ -992,7 +1044,12 @@ export const ForceGraph = memo(function ForceGraph({
       if (canvas.hasPointerCapture(event.pointerId)) {
         canvas.releasePointerCapture(event.pointerId)
       }
+      pointerMoved = false
+      if (clickedNode) openNode(clickedNode)
     }
+
+    const onPointerUp = (event: PointerEvent) => finishPointer(event, true)
+    const onPointerCancel = (event: PointerEvent) => finishPointer(event, false)
 
     const onPointerLeave = () => {
       if (!panning && !draggingNode) setHovered(null)
@@ -1022,7 +1079,7 @@ export const ForceGraph = memo(function ForceGraph({
     canvas.addEventListener("pointerdown", onPointerDown)
     canvas.addEventListener("pointermove", onPointerMove)
     canvas.addEventListener("pointerup", onPointerUp)
-    canvas.addEventListener("pointercancel", onPointerUp)
+    canvas.addEventListener("pointercancel", onPointerCancel)
     canvas.addEventListener("pointerleave", onPointerLeave)
     canvas.addEventListener("wheel", onWheel, { passive: false })
     canvas.addEventListener("dblclick", onDoubleClick)
@@ -1041,7 +1098,7 @@ export const ForceGraph = memo(function ForceGraph({
       canvas.removeEventListener("pointerdown", onPointerDown)
       canvas.removeEventListener("pointermove", onPointerMove)
       canvas.removeEventListener("pointerup", onPointerUp)
-      canvas.removeEventListener("pointercancel", onPointerUp)
+      canvas.removeEventListener("pointercancel", onPointerCancel)
       canvas.removeEventListener("pointerleave", onPointerLeave)
       canvas.removeEventListener("wheel", onWheel)
       canvas.removeEventListener("dblclick", onDoubleClick)

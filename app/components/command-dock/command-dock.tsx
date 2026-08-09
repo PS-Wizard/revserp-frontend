@@ -30,6 +30,7 @@ import { useFeatures } from "~/lib/features"
 
 import { AICapsule, AIPanel } from "./ai-panel"
 import { NavIsland } from "./nav-island"
+import { GlobalCommandMenu } from "./global-command-menu"
 
 export type CommandDockProps = {
   // --- navigation ---
@@ -160,7 +161,8 @@ export function CommandDock({
   dismissToken,
 }: CommandDockProps) {
   const reducedMotion = useReducedMotion() ?? false
-  const aiChatEnabled = useFeatures().ai_chat
+  const features = useFeatures()
+  const aiChatEnabled = features.ai_chat
 
   // The top project panel and the bottom AI panel occupy different corners of
   // the screen, so they are independent — unlike the single-island layout,
@@ -235,16 +237,6 @@ export function CommandDock({
 
   const openProjectPanel = useCallback(() => setProjectPanelOpen(true), [])
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") return
-      event.preventDefault()
-      openProjectPanel()
-    }
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [openProjectPanel])
-
   const collapseAIPanel = useCallback(() => {
     setPanelState("collapsed")
     requestAnimationFrame(() => aiTriggerRef.current?.focus())
@@ -280,6 +272,28 @@ export function CommandDock({
 
   return (
     <>
+      <GlobalCommandMenu
+        activeCrawls={activeCrawls}
+        activeProject={activeProject}
+        activeProjectId={activeProjectId}
+        aiChatEnabled={aiChatEnabled}
+        auditTab={auditTab}
+        currentCrawl={currentCrawl}
+        exportingCrawlId={exportingCrawlId}
+        isCrawlRunning={isCrawlRunning}
+        isExportingAudit={isExportingAudit}
+        onAuditTabChange={onAuditTabChange}
+        onCreateProjectOpen={onCreateProjectOpen}
+        onExportAudit={onExportAudit}
+        onExportCrawl={onExportCrawl}
+        onOpenAI={() => setPanelState("mini")}
+        onRunCrawlOpen={onRunCrawlOpen}
+        onSelectProject={onSelectProject}
+        onViewChange={onViewChange}
+        projects={projects}
+        searchConsoleEnabled={features.gsc_connector}
+        view={view}
+      />
       {/* One LayoutGroup per island: the project capsule/panel share
           "dock-context" and the AI button/panel share "dock-ai", and neither
           pair should be measured against the other. */}
