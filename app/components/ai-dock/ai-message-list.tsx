@@ -110,6 +110,8 @@ export function AIMessageList({
     <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-5 px-3 py-4">
       {messages.map((message, messageIndex) => (
         <div
+          data-message-index={messageIndex}
+          data-message-role={message.role}
           key={message.id ?? `${message.role}-${messageIndex}`}
           className={cn(
             "flex",

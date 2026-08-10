@@ -1,6 +1,6 @@
 "use client"
 
-import type { RefObject } from "react"
+import { useRef, type RefObject } from "react"
 import { motion } from "motion/react"
 import { BorderBeam } from "border-beam"
 import {
@@ -14,6 +14,7 @@ import { ThinkingOrb } from "thinking-orbs"
 
 import { AIComposer } from "~/components/ai-dock/ai-composer"
 import { AIMessageList } from "~/components/ai-dock/ai-message-list"
+import { ConversationMinimap } from "~/components/ai-dock/conversation-minimap"
 import { ConversationHistory } from "~/components/ai-dock/conversation-history"
 import type { useAIChat } from "~/components/ai-dock/use-ai-chat"
 import { Button } from "~/components/ui/button"
@@ -135,6 +136,7 @@ export function AIPanel({
   } = chat
 
   const isMax = variant === "max"
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 
   return (
     <BorderBeam
@@ -275,12 +277,23 @@ export function AIPanel({
                 </div>
               )}
 
-              <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
-                <AIMessageList
-                  messages={messages}
-                  isLoadingConversation={isLoadingConversation}
-                  emptyHint={EMPTY_HINT}
-                />
+              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                <div
+                  className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+                  ref={scrollContainerRef}
+                >
+                  <AIMessageList
+                    messages={messages}
+                    isLoadingConversation={isLoadingConversation}
+                    emptyHint={EMPTY_HINT}
+                  />
+                </div>
+                {isMax ? (
+                  <ConversationMinimap
+                    messages={messages}
+                    scrollContainerRef={scrollContainerRef}
+                  />
+                ) : null}
               </div>
 
               <AIComposer
