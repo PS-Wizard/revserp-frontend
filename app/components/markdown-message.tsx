@@ -1,19 +1,117 @@
 import { useMemo } from "react"
+import {
+  ClipboardIcon,
+  DownloadIcon,
+  FileTextIcon,
+  SheetIcon,
+} from "lucide-react"
+import { toast } from "sonner"
+
+import { downloadBlob } from "~/components/app-navbar/utils"
+import { Button } from "~/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+
+type MarkdownBlock =
+  { type: "html"; html: string } | { type: "table"; rows: string[][] }
 
 export function MarkdownMessage({ content }: { content: string }) {
-  const html = useMemo(() => renderMarkdown(content), [content])
+  const blocks = useMemo(() => renderMarkdown(content), [content])
 
   return (
-    <div
-      className="markdown-message"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="markdown-message">
+      {blocks.map((block, index) =>
+        block.type === "table" ? (
+          <MarkdownTable index={index} key={index} rows={block.rows} />
+        ) : (
+          <div dangerouslySetInnerHTML={{ __html: block.html }} key={index} />
+        )
+      )}
+    </div>
+  )
+}
+
+function MarkdownTable({ rows, index }: { rows: string[][]; index: number }) {
+  const markdown = tableAsMarkdown(rows)
+  const filename = `ai-table-${index + 1}`
+
+  const download = (content: string, type: string, extension: string) => {
+    downloadBlob(new Blob([content], { type }), `${filename}.${extension}`)
+  }
+
+  const copyMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown)
+      toast.success("Table copied as Markdown")
+    } catch {
+      toast.error("Unable to copy table")
+    }
+  }
+
+  return (
+    <div className="my-3">
+      <div className="flex justify-end">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                aria-label="Download or copy table"
+                size="xs"
+                variant="outline"
+              />
+            }
+          >
+            <DownloadIcon data-icon="inline-start" />
+            Download
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => void copyMarkdown()}>
+                <ClipboardIcon />
+                Copy as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  download(markdown, "text/markdown;charset=utf-8", "md")
+                }
+              >
+                <FileTextIcon />
+                Download Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  download(tableAsCSV(rows), "text/csv;charset=utf-8", "csv")
+                }
+              >
+                <SheetIcon />
+                Download CSV
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+      <div
+        className="markdown-table-wrap mt-1!"
+        dangerouslySetInnerHTML={{ __html: renderTable(rows) }}
+      />
+    </div>
   )
 }
 
 function renderMarkdown(markdown: string) {
   const lines = markdown.split(/\r?\n/)
+  const blocks: MarkdownBlock[] = []
   const htmlParts: string[] = []
+  const flushHTML = () => {
+    if (htmlParts.length === 0) return
+    blocks.push({ type: "html", html: htmlParts.join("") })
+    htmlParts.length = 0
+  }
   let index = 0
 
   while (index < lines.length) {
@@ -37,7 +135,8 @@ function renderMarkdown(markdown: string) {
         tableRows.push(parseTableRow(lines[index]))
         index += 1
       }
-      htmlParts.push(renderTable(tableRows))
+      flushHTML()
+      blocks.push({ type: "table", rows: tableRows })
       continue
     }
 
@@ -86,7 +185,29 @@ function renderMarkdown(markdown: string) {
     htmlParts.push(`<p>${renderInline(paragraphLines.join(" "))}</p>`)
   }
 
-  return htmlParts.join("")
+  flushHTML()
+  return blocks
+}
+
+function tableAsMarkdown(rows: string[][]) {
+  const [headings = [], ...bodyRows] = rows
+  const row = (cells: string[]) =>
+    `| ${cells.map((cell) => cell.replace(/\|/g, "\\|")).join(" | ")} |`
+  return [
+    row(headings),
+    row(headings.map(() => "---")),
+    ...bodyRows.map(row),
+  ].join("\n")
+}
+
+function tableAsCSV(rows: string[][]) {
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => `"${cell.replace(/"/g, '""').replace(/\r?\n/g, " ")}"`)
+        .join(",")
+    )
+    .join("\r\n")
 }
 
 function renderInline(value: string) {
@@ -179,5 +300,5 @@ function renderTable(rows: string[][]) {
     )
     .join("")
 
-  return `<div class="markdown-table-wrap"><table><thead><tr>${headingHTML}</tr></thead><tbody>${bodyHTML}</tbody></table></div>`
+  return `<table><thead><tr>${headingHTML}</tr></thead><tbody>${bodyHTML}</tbody></table>`
 }

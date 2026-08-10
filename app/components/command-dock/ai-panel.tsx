@@ -279,7 +279,7 @@ export function AIPanel({
 
               <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div
-                  className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto"
+                  className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden"
                   ref={scrollContainerRef}
                 >
                   <AIMessageList

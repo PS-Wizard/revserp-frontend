@@ -203,6 +203,14 @@ export const IssueTreemap = memo(function IssueTreemap({
       legend: { show: false },
       dataLabels: {
         enabled: true,
+        formatter: (label, options) => {
+          if (mode === "types" || !options) return label
+          const currentSeries = options.w.config.series?.[
+            options.seriesIndex
+          ] as { data?: Array<{ y?: number }> } | undefined
+          const value = currentSeries?.data?.[options.dataPointIndex]?.y ?? 0
+          return [String(label), `${value} issue${value === 1 ? "" : "s"}`]
+        },
         style: { fontSize: "12px", fontWeight: 600 },
       },
       plotOptions: {
@@ -233,7 +241,7 @@ export const IssueTreemap = memo(function IssueTreemap({
         },
       },
     }),
-    [colors]
+    [colors, mode]
   )
 
   useApexChart(

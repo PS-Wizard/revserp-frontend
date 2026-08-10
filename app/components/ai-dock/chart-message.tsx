@@ -1,4 +1,6 @@
-import { useId } from "react"
+import { useId, useRef } from "react"
+import { DownloadIcon, ImageIcon } from "lucide-react"
+import { toast } from "sonner"
 import {
   Area,
   AreaChart,
@@ -17,6 +19,15 @@ import {
   YAxis,
 } from "recharts"
 
+import { downloadBlob } from "~/components/app-navbar/utils"
+import { Button } from "~/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
 import type { ChartSpec } from "~/lib/ai-conversation"
 
 const CHART_COLORS = [
@@ -55,11 +66,74 @@ export function ChartMessage({ spec }: { spec: ChartSpec }) {
   // Gradient <defs> ids must be unique per chart instance — several charts can
   // share a message, and duplicate ids would make them all use the first fill.
   const gradientId = useId().replace(/:/g, "")
+  const figureRef = useRef<HTMLElement>(null)
+
+  const downloadChart = async (format: "png" | "jpg") => {
+    const figure = figureRef.current
+    if (!figure) return
+
+    try {
+      const { toJpeg, toPng } = await import("html-to-image")
+      const options = {
+        backgroundColor: getComputedStyle(figure).backgroundColor,
+        cacheBust: true,
+        filter: (node: Node) =>
+          !(
+            node instanceof HTMLElement &&
+            node.dataset.chartExportControl !== undefined
+          ),
+        pixelRatio: 2,
+        quality: 0.92,
+      }
+      const dataUrl =
+        format === "png"
+          ? await toPng(figure, options)
+          : await toJpeg(figure, options)
+      const blob = await fetch(dataUrl).then((response) => response.blob())
+      const filename =
+        spec.title
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "") || "chart"
+      downloadBlob(blob, `${filename}.${format}`)
+      toast.success(`Chart downloaded as ${format.toUpperCase()}`)
+    } catch {
+      toast.error("Unable to download chart")
+    }
+  }
 
   return (
-    <figure className="my-1 w-full min-w-0 rounded-xl border border-border bg-card p-3">
-      <figcaption className="pb-2 text-xs font-medium text-muted-foreground">
-        {spec.title}
+    <figure
+      className="my-1 w-full min-w-0 rounded-xl border border-border bg-card p-3"
+      ref={figureRef}
+    >
+      <figcaption className="flex items-center justify-between gap-2 pb-2 text-xs font-medium text-muted-foreground">
+        <span>{spec.title}</span>
+        <div data-chart-export-control>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button aria-label="Download chart" size="xs" variant="ghost" />
+              }
+            >
+              <DownloadIcon data-icon="inline-start" />
+              Download
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => void downloadChart("png")}>
+                  <ImageIcon />
+                  Download PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void downloadChart("jpg")}>
+                  <ImageIcon />
+                  Download JPG
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </figcaption>
       <div className="h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">

@@ -180,7 +180,7 @@ export function ConversationMinimap({
             return (
               <button
                 aria-label={`Go to message ${messageNumber + 1}: ${label}`}
-                className="block w-full truncate rounded-lg px-2.5 py-2 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none motion-reduce:transition-none"
+                className="block w-full truncate rounded-lg px-2.5 py-2 text-left text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none motion-reduce:transition-none"
                 key={messageIndex}
                 onClick={() => scrollToMessage(messageIndex)}
                 title={label}

@@ -32,7 +32,7 @@ export function panelContentMotion(reducedMotion: boolean) {
 
 /** Shell of a dock capsule. Radius is applied inline so motion can tween it. */
 export const CAPSULE_SHELL =
-  "border border-border/70 bg-card/80 p-1.5 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+  "border border-border/70 bg-card/80 p-1.5 backdrop-blur-2xl"
 
 /** Outer height of a capsule: a PILL_BASE row plus the shell's p-1.5. */
 export const CAPSULE_HEIGHT = "h-12"

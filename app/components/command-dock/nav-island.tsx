@@ -85,7 +85,7 @@ export type NavIslandProps = {
 }
 
 /** Header padding, duplicated by the project panel so their top edges align. */
-const ROW_INSET = "px-4 pt-3 sm:px-6 sm:pt-4"
+const ROW_INSET = "px-4 pt-2 sm:px-6"
 
 export function NavIsland({
   view,
@@ -161,7 +161,7 @@ export function NavIsland({
           navigation from content that scrolls under it. */}
       <header
         className={cn(
-          "pointer-events-none sticky top-0 z-30 w-full border-b border-border/50 bg-background/95 pb-3 shadow-sm backdrop-blur-xl sm:pb-4",
+          "pointer-events-none sticky top-0 z-30 w-full border-b border-border/70 bg-muted/50 pb-2 shadow-sm backdrop-blur-xl",
           ROW_INSET
         )}
       >
