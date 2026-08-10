@@ -432,18 +432,6 @@ export type AdminFeaturesResponse = {
   tool_groups: AdminFeatureToolGroup[]
 }
 
-export type AdminAIAppConfig = {
-  context_prompt: string
-  guidelines: string
-  other_notes: string
-}
-
-export type AdminAIAppConfigResponse = {
-  config: AdminAIAppConfig
-  default_config: AdminAIAppConfig
-  updated_at?: string
-}
-
 // --- Auto-crawl types ---
 
 export type AutoCrawlConfigSnapshot = {

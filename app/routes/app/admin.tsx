@@ -76,9 +76,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 type AiConfig = {
-  context_prompt: string
-  guidelines_prompt: string
-  other_notes_prompt: string
+  internal_system_prompt: string
+  external_system_prompt: string
   question_generation_prompt: string
 }
 
@@ -409,19 +408,16 @@ function ScoringTab() {
 // --- AI Config Tab ---
 function AIConfigTab() {
   const [config, setConfig] = useState<AiConfig>({
-    context_prompt: "",
-    guidelines_prompt: "",
-    other_notes_prompt: "",
+    internal_system_prompt: "",
+    external_system_prompt: "",
     question_generation_prompt: "",
   })
   const [defaultConfig, setDefaultConfig] = useState<AiConfig>({
-    context_prompt: "",
-    guidelines_prompt: "",
-    other_notes_prompt: "",
+    internal_system_prompt: "",
+    external_system_prompt: "",
     question_generation_prompt: "",
   })
   const [saving, setSaving] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
 
   useEffect(() => {
     clientApiFetch<{ config: AiConfig; default: AiConfig }>("/admin/ai-config")
@@ -457,14 +453,6 @@ function AIConfigTab() {
     }
   }
 
-  const merged = [
-    config.context_prompt || defaultConfig.context_prompt,
-    config.guidelines_prompt,
-    config.other_notes_prompt,
-  ]
-    .filter(Boolean)
-    .join("\n\n")
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2">
@@ -483,28 +471,25 @@ function AIConfigTab() {
           >
             <RotateCcwIcon /> Reset to defaults
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPreviewOpen(!previewOpen)}
-          >
-            {previewOpen ? "Hide preview" : "Preview merged prompt"}
-          </Button>
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>Context (base assistant framing)</Label>
+            <Label>System Prompt (@revketer.ai)</Label>
             <Textarea
               className="min-h-[140px] font-mono"
-              value={config.context_prompt}
+              value={config.internal_system_prompt}
               onChange={(e) =>
-                setConfig({ ...config, context_prompt: e.target.value })
+                setConfig({
+                  ...config,
+                  internal_system_prompt: e.target.value,
+                })
               }
               placeholder={
-                defaultConfig.context_prompt || "Base assistant context..."
+                defaultConfig.internal_system_prompt ||
+                "Internal system prompt..."
               }
             />
           </CardContent>
@@ -512,41 +497,27 @@ function AIConfigTab() {
 
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>Guidelines (extra context/rules)</Label>
+            <Label>System Prompt (everyone else)</Label>
             <Textarea
               className="min-h-[120px] font-mono"
-              value={config.guidelines_prompt}
+              value={config.external_system_prompt}
               onChange={(e) =>
-                setConfig({ ...config, guidelines_prompt: e.target.value })
+                setConfig({
+                  ...config,
+                  external_system_prompt: e.target.value,
+                })
               }
-              placeholder="Additional SEO guidelines..."
+              placeholder={
+                defaultConfig.external_system_prompt ||
+                "External system prompt..."
+              }
             />
           </CardContent>
         </Card>
 
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>Other Notes (behavior tweaks)</Label>
-            <Textarea
-              className="min-h-[100px] font-mono"
-              value={config.other_notes_prompt}
-              onChange={(e) =>
-                setConfig({ ...config, other_notes_prompt: e.target.value })
-              }
-              placeholder="Extra behavior notes..."
-            />
-          </CardContent>
-        </Card>
-
-        <div className="mt-2">
-          <span className="text-sm font-semibold text-foreground">
-            LLM Visibility Question Generation
-          </span>
-        </div>
-
-        <Card size="sm">
-          <CardContent className="flex flex-col gap-1.5">
-            <Label>Question Generation Prompt</Label>
+            <Label>LLM Visibility Prompt</Label>
             <Textarea
               className="min-h-[260px] font-mono text-xs"
               value={config.question_generation_prompt}
@@ -564,15 +535,6 @@ function AIConfigTab() {
           </CardContent>
         </Card>
       </div>
-
-      {previewOpen && (
-        <div className="rounded-lg border border-border bg-muted p-4">
-          <h4 className="mb-2 text-xs font-semibold text-muted-foreground">
-            Merged System Prompt
-          </h4>
-          <pre className="font-mono text-xs whitespace-pre-wrap">{merged}</pre>
-        </div>
-      )}
     </div>
   )
 }
