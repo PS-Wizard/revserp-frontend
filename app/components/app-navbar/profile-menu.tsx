@@ -1,8 +1,10 @@
 import { useNavigate } from "react-router"
+import { useState } from "react"
 
 import {
   DoorOpenIcon,
   LogOutIcon,
+  MoonIcon,
   SendIcon,
   ShieldIcon,
   UsersIcon,
@@ -12,6 +14,7 @@ import { ThinkingOrb } from "thinking-orbs"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -68,6 +71,21 @@ export function ProfileMenu({
   const isSwitchingWorkspace = workspaceState === "switching"
   const isLeavingWorkspace = workspaceState === "leaving"
   const isLoggingOut = workspaceState === "logging-out"
+  const [isDarkMode, setIsDarkMode] = useState(
+    () =>
+      typeof document === "undefined" ||
+      document.documentElement.classList.contains("dark")
+  )
+
+  const onDarkModeChange = (enabled: boolean) => {
+    setIsDarkMode(enabled)
+    document.documentElement.classList.toggle("dark", enabled)
+    try {
+      localStorage.setItem("revserp-theme", enabled ? "dark" : "light")
+    } catch {
+      // The theme still changes when browser storage is unavailable.
+    }
+  }
 
   return (
     <DropdownMenu>
@@ -102,6 +120,16 @@ export function ProfileMenu({
         side="bottom"
         sideOffset={10}
       >
+        <DropdownMenuGroup>
+          <DropdownMenuCheckboxItem
+            checked={isDarkMode}
+            onCheckedChange={onDarkModeChange}
+          >
+            <MoonIcon />
+            Dark mode
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
           <DropdownMenuSub>

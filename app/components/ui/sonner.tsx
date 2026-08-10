@@ -1,6 +1,6 @@
 "use client"
 
-import type { CSSProperties } from "react"
+import { type CSSProperties, useEffect, useState } from "react"
 import {
   CheckCircleIcon,
   InfoIcon,
@@ -11,11 +11,23 @@ import {
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
 function Toaster(props: ToasterProps) {
+  const [theme, setTheme] = useState<"dark" | "light">("dark")
+
+  useEffect(() => {
+    const root = document.documentElement
+    const syncTheme = () =>
+      setTheme(root.classList.contains("dark") ? "dark" : "light")
+    const observer = new MutationObserver(syncTheme)
+
+    syncTheme()
+    observer.observe(root, { attributeFilter: ["class"], attributes: true })
+    return () => observer.disconnect()
+  }, [])
   return (
     <Sonner
       closeButton
       richColors
-      theme="dark"
+      theme={theme}
       icons={{
         success: <CheckCircleIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,

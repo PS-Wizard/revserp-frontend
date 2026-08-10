@@ -17,12 +17,20 @@ import { makeQueryClient } from "~/lib/query-client"
 import type { Route } from "./+types/root"
 import "./app.css"
 
+const restoreThemeScript = `try {
+  document.documentElement.classList.toggle(
+    "dark",
+    localStorage.getItem("revserp-theme") !== "light"
+  )
+} catch {}`
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html className="dark" lang="en">
+    <html className="dark" lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script dangerouslySetInnerHTML={{ __html: restoreThemeScript }} />
         <Meta />
         <Links />
       </head>
