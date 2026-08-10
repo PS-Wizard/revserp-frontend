@@ -681,19 +681,19 @@ export default function AppPage() {
   const issueFocusTokenRef = useRef(0)
   const [issueFocus, setIssueFocus] = useState<{
     pillarId?: string
-    bucketId: string
+    bucketId?: string
     issueTypeId?: string
-    autoSelect?: number
     token: number
   } | null>(null)
-  const handleSelectBucket = useCallback(
-    (pillarId: string, bucketId: string, issueTypeId?: string) => {
+  const handleTreemapSelect = useCallback(
+    (selection: {
+      pillarId: string
+      bucketId?: string
+      issueTypeId?: string
+    }) => {
       issueFocusTokenRef.current += 1
       setIssueFocus({
-        pillarId,
-        bucketId,
-        issueTypeId,
-        autoSelect: 20,
+        ...selection,
         token: issueFocusTokenRef.current,
       })
       issuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -849,21 +849,21 @@ export default function AppPage() {
                   overallPreviousValue={previousOverall}
                 />
                 <div className="px-4 lg:px-6">
-                  <IssueTreemap
-                    breakdown={stableCurrentBreakdown}
-                    onSelectBucket={handleSelectBucket}
-                  />
-                </div>
-                <div className="px-4 lg:px-6">
-                  <Separator />
-                </div>
-                <div className="scroll-mt-4" ref={issuesRef}>
-                  <IssueExplorer
-                    breakdown={stableCurrentBreakdown}
-                    focusRequest={issueFocus}
-                    onSeedAIChat={handleSeedAIChat}
-                    projectId={activeProject?.id}
-                  />
+                  <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+                    <IssueTreemap
+                      breakdown={stableCurrentBreakdown}
+                      onSelect={handleTreemapSelect}
+                    />
+                    <Separator />
+                    <div className="scroll-mt-4" ref={issuesRef}>
+                      <IssueExplorer
+                        breakdown={stableCurrentBreakdown}
+                        focusRequest={issueFocus}
+                        onSeedAIChat={handleSeedAIChat}
+                        projectId={activeProject?.id}
+                      />
+                    </div>
+                  </Card>
                 </div>
               </TabsContent>
 

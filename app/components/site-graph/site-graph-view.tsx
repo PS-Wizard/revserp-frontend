@@ -4,14 +4,14 @@ import { memo, useEffect, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   computeVisible,
-  DEPTH_COLORS,
+  DEFAULT_OPACITY_DECAY,
   ForceGraph,
-  ORPHAN_COLOR,
   type SiteGraphFilter,
 } from "~/components/site-graph/force-graph"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import { Input } from "~/components/ui/input"
+import { Slider } from "~/components/ui/slider"
 import { clientApiFetch } from "~/lib/api"
 import type { SiteGraphResponse } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
@@ -19,15 +19,6 @@ import { cn } from "~/lib/utils"
 type SiteGraphViewProps = {
   currentCrawlId?: string
 }
-
-const DEPTH_LEGEND = [
-  { color: DEPTH_COLORS[0], label: "home" },
-  { color: DEPTH_COLORS[1], label: "1 click" },
-  { color: DEPTH_COLORS[2], label: "2" },
-  { color: DEPTH_COLORS[3], label: "3" },
-  { color: DEPTH_COLORS[4], label: "4+" },
-  { color: ORPHAN_COLOR, label: "orphan" },
-]
 
 const DEFAULT_FILTER: SiteGraphFilter = {
   query: "",
@@ -46,7 +37,9 @@ const HOPS_OPTIONS: Array<{ label: string; value: number | null }> = [
 
 type FilterPanelProps = {
   filter: SiteGraphFilter
+  opacityDecay: number
   onChange: React.Dispatch<React.SetStateAction<SiteGraphFilter>>
+  onOpacityDecayChange: (decay: number) => void
   visibleCount: number
   total: number
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -54,7 +47,9 @@ type FilterPanelProps = {
 
 function FilterPanel({
   filter,
+  opacityDecay,
   onChange,
+  onOpacityDecayChange,
   visibleCount,
   total,
   containerRef,
@@ -81,6 +76,7 @@ function FilterPanel({
   const reset = () => {
     setQueryDraft("")
     onChange(DEFAULT_FILTER)
+    onOpacityDecayChange(0)
   }
 
   const onHeaderPointerDown = (event: React.PointerEvent) => {
@@ -180,6 +176,26 @@ function FilterPanel({
           </div>
         </div>
 
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <label htmlFor="site-graph-opacity-decay">Opacity decay</label>
+            <span className="tabular-nums">
+              {Math.round(opacityDecay * 100)}%
+            </span>
+          </div>
+          <Slider
+            aria-label="Opacity decay by hop depth"
+            id="site-graph-opacity-decay"
+            max={0.8}
+            min={0}
+            onValueChange={(value) =>
+              onOpacityDecayChange(Array.isArray(value) ? value[0] : value)
+            }
+            step={0.05}
+            value={[opacityDecay]}
+          />
+        </div>
+
         <div className="flex items-center justify-between text-xs">
           <span
             className="cursor-pointer select-none"
@@ -230,6 +246,7 @@ export const SiteGraphView = memo(function SiteGraphView({
 }: SiteGraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [filter, setFilter] = useState<SiteGraphFilter>(DEFAULT_FILTER)
+  const [opacityDecay, setOpacityDecay] = useState(DEFAULT_OPACITY_DECAY)
 
   const graphQuery = useQuery({
     queryKey: ["site-graph", currentCrawlId],
@@ -286,11 +303,14 @@ export const SiteGraphView = memo(function SiteGraphView({
             edges={graph.edges}
             filter={filter}
             nodes={graph.nodes}
+            opacityDecay={opacityDecay}
           />
           <FilterPanel
             containerRef={containerRef}
             filter={filter}
             onChange={setFilter}
+            onOpacityDecayChange={setOpacityDecay}
+            opacityDecay={opacityDecay}
             total={graph.nodes.length}
             visibleCount={visibleCount}
           />
@@ -305,25 +325,6 @@ export const SiteGraphView = memo(function SiteGraphView({
                 </span>
               </>
             ) : null}
-          </div>
-          <div className="pointer-events-none absolute top-4 left-4 z-10 flex items-center gap-3 text-xs text-muted-foreground lg:left-6">
-            <span className="flex items-center gap-2">
-              <span className="text-foreground/70">clicks from home</span>
-              {DEPTH_LEGEND.map((entry) => (
-                <span className="flex items-center gap-1" key={entry.label}>
-                  <span
-                    className="size-1.5 rounded-full"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  {entry.label}
-                </span>
-              ))}
-              <span className="flex items-center gap-1">
-                <span className="size-1.5 rounded-full bg-destructive" />
-                broken
-              </span>
-            </span>
-            <span>hover a node for its outgoing links</span>
           </div>
         </>
       ) : null}

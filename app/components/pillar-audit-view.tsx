@@ -131,13 +131,32 @@ export const PillarAuditView = memo(function PillarAuditView({
         />
       </div>
       <div className="px-4 lg:px-6">
-        <IssueTreemap
-          breakdown={currentBreakdown}
-          pillarId={pillarId}
-          onSelectBucket={(_pillarId, bucketId, issueTypeId) =>
-            handleRecommendBucket(bucketId, issueTypeId, 10)
-          }
-        />
+        <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+          <IssueTreemap
+            breakdown={currentBreakdown}
+            pillarId={pillarId}
+            onSelect={(selection) => {
+              if (selection.bucketId) {
+                handleRecommendBucket(selection.bucketId, selection.issueTypeId)
+                return
+              }
+              issueExplorerRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }}
+          />
+          <Separator />
+          <div className="scroll-mt-4" ref={issueExplorerRef}>
+            <IssueExplorer
+              breakdown={currentBreakdown}
+              focusRequest={bucketFocus}
+              initialPillarId={pillarId}
+              onSeedAIChat={onSeedAIChat}
+              projectId={projectId}
+            />
+          </div>
+        </Card>
       </div>
       <div className="px-4 lg:px-6">
         <BucketScoreHistoryChart
@@ -145,18 +164,6 @@ export const PillarAuditView = memo(function PillarAuditView({
           crawlBreakdowns={crawlBreakdowns}
           pillarId={pillarId}
           title={title}
-        />
-      </div>
-      <div className="px-4 lg:px-6">
-        <Separator />
-      </div>
-      <div className="scroll-mt-4" ref={issueExplorerRef}>
-        <IssueExplorer
-          breakdown={currentBreakdown}
-          focusRequest={bucketFocus}
-          initialPillarId={pillarId}
-          onSeedAIChat={onSeedAIChat}
-          projectId={projectId}
         />
       </div>
     </div>

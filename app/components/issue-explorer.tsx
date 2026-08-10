@@ -43,12 +43,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb"
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card"
 import { buildApiUrl } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
 import {
@@ -231,7 +225,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   breakdown: ScoreBreakdownResponse | null
   focusRequest?: {
     pillarId?: string
-    bucketId: string
+    bucketId?: string
     issueTypeId?: string
     autoSelect?: number
     token: number
@@ -389,8 +383,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     })
   }, [crawlId])
 
-  // --- Drill into an externally-requested bucket (e.g. from a bucket card
-  // or the issue treemap) ---
+  // --- Apply an external pillar, bucket, or issue type focus. ---
   const lastFocusTokenRef = useRef<number | null>(null)
   const autoSelectRef = useRef<number | null>(null)
   useEffect(() => {
@@ -400,11 +393,12 @@ export const IssueExplorer = memo(function IssueExplorer({
     if (!pillarId) return
     const pillar = selectedPillars.find((p) => p.id === pillarId)
     if (!pillar) return
-    const bucket = pillar.buckets.find((b) => b.id === focusRequest.bucketId)
-    if (!bucket) return
     lastFocusTokenRef.current = focusRequest.token
     autoSelectRef.current = focusRequest.autoSelect ?? null
     dispatch({ type: "DRILL_PILLAR", payload: pillarId })
+    if (!focusRequest.bucketId) return
+    const bucket = pillar.buckets.find((b) => b.id === focusRequest.bucketId)
+    if (!bucket) return
     dispatch({ type: "DRILL_BUCKET", payload: `${pillarId}::${bucket.id}` })
     if (
       focusRequest.issueTypeId &&
@@ -842,9 +836,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     selectedPillars,
   ])
 
-  if (!breakdown || !pillarOptions.length) {
-    return <NoIssueBreakdown />
-  }
+  if (!breakdown || !pillarOptions.length) return null
 
   const canAct = selectionCount > 0
 
@@ -880,7 +872,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   }
 
   return (
-    <div className="px-4 pb-24 lg:px-6 lg:pb-32">
+    <div className="px-4 lg:px-6">
       <div className="mb-4 flex items-center justify-between gap-3">
         <Breadcrumb>
           <BreadcrumbList>
@@ -1077,19 +1069,4 @@ function syncSelectedPillars({
 
   if (!areStringArraysEqual(valid, selectedPillarIds))
     setSelectedPillarIds(valid)
-}
-
-function NoIssueBreakdown() {
-  return (
-    <div className="px-4 lg:px-6">
-      <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
-        <CardHeader>
-          <CardTitle>Issues</CardTitle>
-          <CardDescription>
-            No completed crawl breakdown is available yet.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    </div>
-  )
 }

@@ -1,5 +1,3 @@
-import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
-
 const DOCK_SPRING = {
   type: "spring" as const,
   stiffness: 380,
@@ -75,27 +73,3 @@ export const PILL_BASE =
 
 /** Inner radius of a pill sitting inside a CAPSULE_RADIUS shell with p-1.5. */
 export const PILL_RADIUS = 11
-
-/** Hides the scrollbar on the horizontally scrolling mode rail. */
-export const HIDE_SCROLLBAR =
-  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-
-export const DOCK_MODES: ReadonlyArray<{ id: DashboardView; label: string }> = [
-  { id: "revserp-audit", label: "Audit" },
-  { id: "revserp-visibility", label: "Visibility" },
-  { id: "search-console", label: "Search Console" },
-]
-
-/**
- * Grace period before a hover-opened audit flyout closes, so the pointer can
- * cross the gap between the Audit pill and the flyout without it collapsing.
- */
-export const AUDIT_FLYOUT_CLOSE_DELAY_MS = 140
-
-export const DOCK_AUDIT_TABS: ReadonlyArray<{ id: AuditTab; label: string }> = [
-  { id: "summary", label: "Summary" },
-  { id: "seo", label: "SEO" },
-  { id: "aeo", label: "AEO" },
-  { id: "pagespeed", label: "PageSpeed" },
-  { id: "site-graph", label: "Site-Graph" },
-]

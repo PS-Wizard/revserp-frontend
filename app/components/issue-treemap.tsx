@@ -5,7 +5,6 @@ import type { ApexOptions } from "apexcharts"
 
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
 import {
-  Card,
   CardContent,
   CardDescription,
   CardHeader,
@@ -15,45 +14,73 @@ import { useApexChart } from "~/hooks/use-apex-chart"
 import { cn, formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 
-type Mode = "groups" | "types"
+type Mode = "pillars" | "groups" | "types"
 
 type BoxMeta = {
+  kind: Mode
   pillarId: string
   pillarLabel: string
-  bucketId: string
+  bucketId?: string
+  issueTypeId?: string
+}
+
+type Selection = {
+  pillarId: string
+  bucketId?: string
   issueTypeId?: string
 }
 
 export const IssueTreemap = memo(function IssueTreemap({
   breakdown,
   pillarId,
-  onSelectBucket,
+  onSelect,
 }: {
   breakdown: ScoreBreakdownResponse | null
   pillarId?: string
-  onSelectBucket?: (
-    pillarId: string,
-    bucketId: string,
-    issueTypeId?: string
-  ) => void
+  onSelect?: (selection: Selection) => void
 }) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
-  const [mode, setMode] = useState<Mode>("groups")
-
-  const pillars = useMemo(() => {
-    const all = breakdown?.pillars ?? []
-    return pillarId ? all.filter((p) => p.id === pillarId) : all
-  }, [breakdown, pillarId])
+  const [mode, setMode] = useState<Mode>(pillarId ? "groups" : "pillars")
+  const [selectedPillarId, setSelectedPillarId] = useState<string>()
+  const [selectedBucket, setSelectedBucket] = useState<{
+    pillarId: string
+    bucketId: string
+  }>()
 
   const { data, meta, colors, total, legendItems } = useMemo(() => {
     const meta: BoxMeta[] = []
     const colors: string[] = []
     const data: Array<{ x: string; y: number }> = []
     let total = 0
+    const pillars = breakdown?.pillars ?? []
+    const scopedPillarId = pillarId ?? selectedPillarId
+    const scopedBucket =
+      selectedBucket && (!pillarId || selectedBucket.pillarId === pillarId)
+        ? selectedBucket
+        : undefined
+
     for (const pillar of pillars) {
+      if (pillarId && pillar.id !== pillarId) continue
+
+      if (mode === "pillars") {
+        if (pillar.affected_url_count <= 0) continue
+        meta.push({
+          kind: "pillars",
+          pillarId: pillar.id,
+          pillarLabel: pillar.label,
+        })
+        colors.push(getPillarChartColor(pillar.id, 0))
+        data.push({ x: pillar.label, y: pillar.affected_url_count })
+        total += pillar.affected_url_count
+        continue
+      }
+
       if (mode === "groups") {
+        if (scopedPillarId && pillar.id !== scopedPillarId) continue
         pillar.buckets.forEach((bucket, index) => {
+          if (bucket.affected_url_count <= 0) return
           meta.push({
+            kind: "groups",
             pillarId: pillar.id,
             pillarLabel: pillar.label,
             bucketId: bucket.id,
@@ -65,37 +92,58 @@ export const IssueTreemap = memo(function IssueTreemap({
           })
           total += bucket.affected_url_count
         })
-      } else {
-        let typeIndex = 0
-        for (const bucket of pillar.buckets) {
-          for (const issue of bucket.issues) {
-            meta.push({
-              pillarId: pillar.id,
-              pillarLabel: pillar.label,
-              bucketId: bucket.id,
-              issueTypeId: issue.id,
-            })
-            colors.push(getPillarChartColor(pillar.id, typeIndex))
-            data.push({ x: issue.label, y: issue.affected_url_count })
-            total += issue.affected_url_count
-            typeIndex += 1
-          }
+        continue
+      }
+
+      if (scopedBucket) {
+        if (
+          pillar.id !== scopedBucket.pillarId ||
+          !pillar.buckets.some((bucket) => bucket.id === scopedBucket.bucketId)
+        ) {
+          continue
+        }
+      } else if (scopedPillarId && pillar.id !== scopedPillarId) {
+        continue
+      }
+
+      let typeIndex = 0
+      for (const bucket of pillar.buckets) {
+        if (scopedBucket && bucket.id !== scopedBucket.bucketId) continue
+        for (const issue of bucket.issues) {
+          const color = getPillarChartColor(pillar.id, typeIndex)
+          typeIndex += 1
+          if (issue.affected_url_count <= 0) continue
+          meta.push({
+            kind: "types",
+            pillarId: pillar.id,
+            pillarLabel: pillar.label,
+            bucketId: bucket.id,
+            issueTypeId: issue.id,
+          })
+          colors.push(color)
+          data.push({ x: issue.label, y: issue.affected_url_count })
+          total += issue.affected_url_count
         }
       }
     }
-    const legendItems = pillars.map((pillar) => ({
-      id: pillar.id,
-      label: pillar.label,
-      color: getPillarChartColor(pillar.id, 0),
-    }))
-    return { data, meta, colors, total, legendItems }
-  }, [pillars, mode])
 
-  // Refs so the chart-baked handlers always resolve the current data.
+    const representedPillarIds = new Set(meta.map((item) => item.pillarId))
+    const legendItems = pillars
+      .filter((pillar) => representedPillarIds.has(pillar.id))
+      .map((pillar) => ({
+        id: pillar.id,
+        label: pillar.label,
+        color: getPillarChartColor(pillar.id, 0),
+      }))
+
+    return { data, meta, colors, total, legendItems }
+  }, [breakdown, mode, pillarId, selectedBucket, selectedPillarId])
+
+  // Refs keep chart handlers current without new options for callback changes.
   const metaRef = useRef(meta)
   metaRef.current = meta
-  const onSelectRef = useRef(onSelectBucket)
-  onSelectRef.current = onSelectBucket
+  const onSelectRef = useRef(onSelect)
+  onSelectRef.current = onSelect
 
   const series = useMemo<NonNullable<ApexOptions["series"]>>(
     () => [{ name: "", data }],
@@ -120,12 +168,34 @@ export const IssueTreemap = memo(function IssueTreemap({
           dataPointSelection: (_event, _ctx, config) => {
             if (!config) return
             const entry = metaRef.current[config.dataPointIndex]
-            if (entry)
-              onSelectRef.current?.(
-                entry.pillarId,
-                entry.bucketId,
-                entry.issueTypeId
-              )
+            if (!entry) return
+            if (entry.kind === "pillars") {
+              setSelectedPillarId(entry.pillarId)
+              setSelectedBucket(undefined)
+              setMode("groups")
+              onSelectRef.current?.({ pillarId: entry.pillarId })
+              return
+            }
+            if (entry.kind === "groups" && entry.bucketId) {
+              setSelectedPillarId(entry.pillarId)
+              setSelectedBucket({
+                pillarId: entry.pillarId,
+                bucketId: entry.bucketId,
+              })
+              setMode("types")
+              onSelectRef.current?.({
+                pillarId: entry.pillarId,
+                bucketId: entry.bucketId,
+              })
+              return
+            }
+            if (entry.bucketId && entry.issueTypeId) {
+              onSelectRef.current?.({
+                pillarId: entry.pillarId,
+                bucketId: entry.bucketId,
+                issueTypeId: entry.issueTypeId,
+              })
+            }
           },
         },
       },
@@ -149,8 +219,7 @@ export const IssueTreemap = memo(function IssueTreemap({
         theme: "dark",
         custom: ({ dataPointIndex, seriesIndex, w }) => {
           const currentSeries = w.config.series?.[seriesIndex] as
-            | { data?: Array<{ x?: string; y?: number }> }
-            | undefined
+            { data?: Array<{ x?: string; y?: number }> } | undefined
           const point = currentSeries?.data?.[dataPointIndex]
           const info = metaRef.current[dataPointIndex]
           const label = point?.x ?? ""
@@ -175,26 +244,28 @@ export const IssueTreemap = memo(function IssueTreemap({
   )
 
   const hasData = data.length > 0 && total > 0
+  const description =
+    mode === "pillars"
+      ? "Affected URLs by pillar — click a box to explore issue groups below"
+      : mode === "groups"
+        ? "Affected URLs by issue group — click a box to explore issue types below"
+        : "Affected URLs by issue type — click a box to explore it below"
 
   return (
-    <Card className="@container/card flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+    <section className="@container/card flex flex-col gap-6">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div className="space-y-1.5">
           <CardTitle>
-            {mode === "groups" ? "Issue Groups" : "Issue Types"}
+            {mode === "pillars"
+              ? "Pillars"
+              : mode === "groups"
+                ? "Issue Groups"
+                : "Issue Types"}
           </CardTitle>
-          <CardDescription>
-            {mode === "groups"
-              ? pillarId
-                ? "Affected URLs by issue group — click a box to explore it below"
-                : "Affected URLs by issue group across all pillars — click a box to explore it below"
-              : pillarId
-                ? "Affected URLs by issue type — click a box to explore it below"
-                : "Affected URLs by issue type across all pillars — click a box to explore it below"}
-          </CardDescription>
+          <CardDescription>{description}</CardDescription>
         </div>
         <div className="inline-flex shrink-0 items-center rounded-lg border border-border/60 bg-muted/40 p-0.5 text-xs">
-          {(["groups", "types"] as const).map((value) => (
+          {(["pillars", "groups", "types"] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -206,7 +277,11 @@ export const IssueTreemap = memo(function IssueTreemap({
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {value === "groups" ? "Issue Groups" : "Issue Types"}
+              {value === "pillars"
+                ? "Pillars"
+                : value === "groups"
+                  ? "Issue Groups"
+                  : "Issue Types"}
             </button>
           ))}
         </div>
@@ -238,6 +313,6 @@ export const IssueTreemap = memo(function IssueTreemap({
           </>
         )}
       </CardContent>
-    </Card>
+    </section>
   )
 })

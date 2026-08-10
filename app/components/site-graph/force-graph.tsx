@@ -58,6 +58,7 @@ type ForceGraphProps = {
   edges: Array<[number, number]>
   className?: string
   filter?: SiteGraphFilter
+  opacityDecay: number
 }
 
 const MIN_ZOOM = 0.15
@@ -71,22 +72,15 @@ const SCENE_MARGIN = 1.3
 // How long after the last pan/zoom before the scene re-renders sharp.
 const SCENE_SETTLE_MS = 80
 
-// Sequential single-hue ramp for click depth: the homepage is the most vivid
-// and pages fade toward neutral as they get further from it. Lightness falls
-// monotonically so the ordering survives color-vision deficiencies; broken
-// pages use the reserved destructive red instead.
-export const DEPTH_COLORS = [
-  "oklch(0.79 0.16 60)", // home
-  "oklch(0.74 0.12 60)", // 1 click
-  "oklch(0.70 0.085 60)", // 2 clicks
-  "oklch(0.65 0.055 60)", // 3 clicks
-  "oklch(0.60 0.03 60)", // 4+ clicks
-]
-export const ORPHAN_COLOR = "oklch(0.45 0 0)"
+// Blue stays distinct from the destructive red for common color-vision
+// deficiencies. Click depth is encoded only through opacity, not hue.
+const SITE_NODE_COLOR = "oklch(0.72 0.14 240)"
+export const DEFAULT_OPACITY_DECAY = 0.4
 
-export function depthColor(depth: number) {
-  if (depth < 0) return ORPHAN_COLOR
-  return DEPTH_COLORS[Math.min(depth, DEPTH_COLORS.length - 1)]
+function depthOpacity(depth: number, decay: number) {
+  if (decay === 0) return 1
+  if (depth < 0) return 0.1
+  return Math.max(0.12, (1 - decay) ** depth)
 }
 
 function easeOutCubic(t: number) {
@@ -249,6 +243,7 @@ export const ForceGraph = memo(function ForceGraph({
   edges,
   className,
   filter,
+  opacityDecay,
 }: ForceGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -257,6 +252,8 @@ export const ForceGraph = memo(function ForceGraph({
   // the main effect's deps (which would rebuild the sim and replay the intro).
   const filterRef = useRef(filter)
   filterRef.current = filter
+  const opacityDecayRef = useRef(opacityDecay)
+  opacityDecayRef.current = opacityDecay
   const applyFilterRef = useRef<((f?: SiteGraphFilter) => void) | null>(null)
 
   useEffect(() => {
@@ -344,7 +341,13 @@ export const ForceGraph = memo(function ForceGraph({
 
     const nodeFill = (node: SimNode) => {
       if (node.broken) return colors.broken
-      return filterRef.current?.brokenOnly ? colors.edge : depthColor(node.depth)
+      return filterRef.current?.brokenOnly ? colors.edge : SITE_NODE_COLOR
+    }
+
+    const nodeOpacity = (node: SimNode) => {
+      if (node.broken) return 1
+      if (filterRef.current?.brokenOnly) return 0.5
+      return depthOpacity(node.depth, opacityDecayRef.current)
     }
 
     const simulation = forceSimulation(simNodes as never[])
@@ -529,7 +532,7 @@ export const ForceGraph = memo(function ForceGraph({
         ) {
           continue
         }
-        sceneContext.globalAlpha = scale
+        sceneContext.globalAlpha = scale * nodeOpacity(node)
         sceneContext.beginPath()
         sceneContext.arc(node.x, node.y, NODE_RADIUS * scale, 0, Math.PI * 2)
         sceneContext.fillStyle = nodeFill(node)
@@ -937,7 +940,8 @@ export const ForceGraph = memo(function ForceGraph({
         clicksLine.className = "flex items-center gap-1.5 text-muted-foreground"
         const clicksDot = document.createElement("span")
         clicksDot.className = "size-1.5 rounded-full"
-        clicksDot.style.backgroundColor = depthColor(node.depth)
+        clicksDot.style.backgroundColor = nodeFill(node)
+        clicksDot.style.opacity = String(nodeOpacity(node))
         clicksLine.append(clicksDot, clicksLabel(node.depth))
         const metaLine = document.createElement("div")
         metaLine.className = "text-muted-foreground"
@@ -1105,7 +1109,7 @@ export const ForceGraph = memo(function ForceGraph({
     }
   }, [nodes, edges])
 
-  // Push filter changes into the running sim without rebuilding it.
+  // Push filter and visual changes into the running sim without rebuilding it.
   useEffect(() => {
     applyFilterRef.current?.(filterRef.current)
   }, [
@@ -1113,6 +1117,7 @@ export const ForceGraph = memo(function ForceGraph({
     filter?.maxHops,
     filter?.showOrphans,
     filter?.brokenOnly,
+    opacityDecay,
   ])
 
   return (

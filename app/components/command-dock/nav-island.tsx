@@ -1,6 +1,5 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
 import type { RefObject } from "react"
 import { AnimatePresence, motion } from "motion/react"
 
@@ -17,13 +16,7 @@ import type {
 } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
-import { AuditTabs } from "./audit-tabs"
-import {
-  AUDIT_FLYOUT_CLOSE_DELAY_MS,
-  CAPSULE_HEIGHT,
-  CAPSULE_RADIUS,
-  CAPSULE_SHELL,
-} from "./constants"
+import { CAPSULE_HEIGHT, CAPSULE_RADIUS, CAPSULE_SHELL } from "./constants"
 import { ContextCapsule } from "./context-capsule"
 import { ModeRail } from "./mode-rail"
 import { ProjectPanel } from "./project-panel"
@@ -148,50 +141,6 @@ export function NavIsland({
   onSelectOrganization,
   reducedMotion,
 }: NavIslandProps) {
-  const [auditFlyoutOpen, setAuditFlyoutOpen] = useState(false)
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const cancelPendingClose = useCallback(() => {
-    if (closeTimerRef.current === null) return
-    clearTimeout(closeTimerRef.current)
-    closeTimerRef.current = null
-  }, [])
-
-  const openAuditFlyout = useCallback(() => {
-    cancelPendingClose()
-    setAuditFlyoutOpen(true)
-  }, [cancelPendingClose])
-
-  // Delayed rather than immediate so the pointer can cross from the Audit pill
-  // into the flyout, and so brushing past Audit on the way to another mode
-  // doesn't leave the flyout hanging open.
-  const closeAuditFlyout = useCallback(() => {
-    cancelPendingClose()
-    closeTimerRef.current = setTimeout(() => {
-      closeTimerRef.current = null
-      setAuditFlyoutOpen(false)
-    }, AUDIT_FLYOUT_CLOSE_DELAY_MS)
-  }, [cancelPendingClose])
-
-  useEffect(() => cancelPendingClose, [cancelPendingClose])
-
-  // The flyout floats over the page, so it must not survive the project panel
-  // taking over the row.
-  useEffect(() => {
-    if (projectPanelOpen) setAuditFlyoutOpen(false)
-  }, [projectPanelOpen])
-
-  useEffect(() => {
-    if (!auditFlyoutOpen) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return
-      cancelPendingClose()
-      setAuditFlyoutOpen(false)
-    }
-    document.addEventListener("keydown", handleKeyDown)
-    return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [auditFlyoutOpen, cancelPendingClose])
-
   return (
     <>
       <AnimatePresence>
@@ -208,62 +157,23 @@ export function NavIsland({
         ) : null}
       </AnimatePresence>
 
-      {/* Sticky so the project capsule keeps a stable viewport rect: the panel
-          morphs out of it from a fixed overlay, which only lines up while the
-          capsule is on screen. Transparent and pointer-transparent so the page
-          scrolls under the capsules the same way it did under the bottom dock. */}
+      {/* Sticky keeps the project capsule stable while the background separates
+          navigation from content that scrolls under it. */}
       <header
         className={cn(
-          "pointer-events-none sticky top-0 z-30 w-full pb-3 sm:pb-4",
+          "pointer-events-none sticky top-0 z-30 w-full border-b border-border/50 bg-background/95 pb-3 shadow-sm backdrop-blur-xl sm:pb-4",
           ROW_INSET
         )}
       >
         <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-4">
-          {/* Anchor for the audit flyout. Cannot live inside the mode rail
-              itself — that scrolls horizontally and would clip it. */}
-          <div
-            className="relative flex min-w-0 items-center justify-self-start"
-            // Focus opens the flyout, so focus leaving the rail has to close
-            // it: tabbing away fires no pointer event.
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                closeAuditFlyout()
-              }
-            }}
-          >
-            <div
-              className={cn(
-                CAPSULE_SHELL,
-                CAPSULE_HEIGHT,
-                "pointer-events-auto flex min-w-0 items-center"
-              )}
-              style={{ borderRadius: CAPSULE_RADIUS }}
-            >
-              <ModeRail
-                auditFlyoutOpen={auditFlyoutOpen}
-                auditTab={auditTab}
-                compareLabel={compareLabel}
-                onAuditHoverEnd={closeAuditFlyout}
-                onAuditHoverStart={openAuditFlyout}
-                onViewChange={onViewChange}
-                reducedMotion={reducedMotion}
-                view={view}
-              />
-            </div>
-
-            <AnimatePresence initial={false}>
-              {auditFlyoutOpen ? (
-                <AuditTabs
-                  auditTab={auditTab}
-                  key="nav-audit-flyout"
-                  onAuditTabChange={onAuditTabChange}
-                  onHoverEnd={closeAuditFlyout}
-                  onHoverStart={openAuditFlyout}
-                  onViewChange={onViewChange}
-                  reducedMotion={reducedMotion}
-                />
-              ) : null}
-            </AnimatePresence>
+          <div className="pointer-events-auto flex min-w-0 items-center justify-self-start">
+            <ModeRail
+              auditTab={auditTab}
+              compareLabel={compareLabel}
+              onAuditTabChange={onAuditTabChange}
+              onViewChange={onViewChange}
+              view={view}
+            />
           </div>
 
           {/* Deliberately not wrapped in AnimatePresence: unmounting the
