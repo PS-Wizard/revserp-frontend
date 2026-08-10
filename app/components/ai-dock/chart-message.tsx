@@ -79,8 +79,10 @@ export function ChartMessage({ spec }: { spec: ChartSpec }) {
         cacheBust: true,
         filter: (node: Node) =>
           !(
-            node instanceof HTMLElement &&
-            node.dataset.chartExportControl !== undefined
+            node instanceof Element &&
+            node.matches(
+              "[data-chart-export-control], .recharts-tooltip-wrapper, .recharts-tooltip-cursor, .recharts-active-dot"
+            )
           ),
         pixelRatio: 2,
         quality: 0.92,

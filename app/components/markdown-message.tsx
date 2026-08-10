@@ -204,10 +204,23 @@ function tableAsCSV(rows: string[][]) {
   return rows
     .map((row) =>
       row
-        .map((cell) => `"${cell.replace(/"/g, '""').replace(/\r?\n/g, " ")}"`)
+        .map(
+          (cell) =>
+            `"${plainTableCell(cell)
+              .replace(/"/g, '""')
+              .replace(/\r?\n/g, " ")}"`
+        )
         .join(",")
     )
     .join("\r\n")
+}
+
+function plainTableCell(value: string) {
+  return value
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/\*\*([^*]*)\*\*/g, "$1")
+    .replace(/\*([^*]*)\*/g, "$1")
+    .replace(/\\([^0-9A-Za-z\s])/g, "$1")
 }
 
 function renderInline(value: string) {
