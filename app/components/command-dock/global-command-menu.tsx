@@ -280,19 +280,21 @@ export function GlobalCommandMenu({
               </CommandItem>
             ))}
 
-            {activeCrawls.map((crawl) => (
-              <CommandItem
-                data-checked={crawl.id === currentCrawl?.id}
-                key={crawl.id}
-                onSelect={() =>
-                  select(() => onSelectProject(crawl.project_id, crawl.id))
-                }
-                value={`Switch to crawl ${formatCrawlDateTime(crawl)} ${crawl.id} ${crawl.status}`}
-              >
-                <GlobeIcon />
-                <CrawlLabel crawl={crawl} />
-              </CommandItem>
-            ))}
+            {search.trim()
+              ? activeCrawls.map((crawl) => (
+                  <CommandItem
+                    data-checked={crawl.id === currentCrawl?.id}
+                    key={crawl.id}
+                    onSelect={() =>
+                      select(() => onSelectProject(crawl.project_id, crawl.id))
+                    }
+                    value={`Switch to crawl ${formatCrawlDateTime(crawl)} ${crawl.id} ${crawl.status}`}
+                  >
+                    <GlobeIcon />
+                    <CrawlLabel crawl={crawl} />
+                  </CommandItem>
+                ))
+              : null}
           </CommandGroup>
 
           <CommandGroup heading="Actions">
