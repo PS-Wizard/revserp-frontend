@@ -17,12 +17,19 @@ import {
   SelectValue,
 } from "~/components/ui/select"
 import { Textarea } from "~/components/ui/textarea"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "~/components/ui/message-scroller"
 import type { AIReasoningEffort, ProjectResponse } from "~/lib/api.types"
 
 import { useRevbot } from "./use-revbot"
 
 const markdownPlugins = [remarkGfm]
-
 
 export function RevbotView({
   activeProject,
@@ -89,8 +96,8 @@ function ActiveRevbotView({
         : revbot.status[0].toUpperCase() + revbot.status.slice(1)
 
   return (
-    <section className="mx-auto flex min-h-[calc(100svh-5rem)] w-full max-w-3xl flex-col gap-6 p-4 sm:p-6">
-      <header className="flex items-center justify-between gap-4">
+    <section className="mx-auto flex h-[calc(100svh-5rem)] min-h-0 w-full max-w-3xl flex-col gap-6 overflow-hidden p-4 sm:p-6">
+      <header className="flex shrink-0 items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <BotIcon aria-hidden="true" className="size-5" />
           <div>
@@ -149,46 +156,61 @@ function ActiveRevbotView({
         </div>
       </header>
 
-      <section
-        aria-label="Conversation"
-        aria-live="polite"
-        className="flex flex-1 flex-col gap-8"
+      <MessageScrollerProvider
+        key={revbot.conversationId ?? "new"}
+        autoScroll
+        defaultScrollPosition="last-anchor"
       >
-        {revbot.messages.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            Ask Revbot a question about this project.
-          </p>
-        ) : (
-          revbot.messages.map((message) => (
-            <article key={message.id} className="flex flex-col gap-2 py-2">
-              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                {message.role === "user" ? "You" : "Revbot"}
-              </div>
-              {message.role === "assistant" ? (
-                <div className="typeset typeset-docs max-w-[42em]">
-                  <ReactMarkdown remarkPlugins={markdownPlugins}>
-                    {message.content || (active ? "…" : "")}
-                  </ReactMarkdown>
-                </div>
+        <MessageScroller className="min-h-0 flex-1">
+          <MessageScrollerViewport aria-label="Conversation">
+            <MessageScrollerContent aria-busy={active}>
+              {revbot.messages.length === 0 ? (
+                <MessageScrollerItem>
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    Ask Revbot a question about this project.
+                  </p>
+                </MessageScrollerItem>
               ) : (
-                <p className="max-w-[42em] text-base leading-7 whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                revbot.messages.map((message) => (
+                  <MessageScrollerItem
+                    key={message.id}
+                    messageId={message.id}
+                    scrollAnchor={message.role === "user"}
+                  >
+                    <article className="flex flex-col gap-2 py-2">
+                      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                        {message.role === "user" ? "You" : "Revbot"}
+                      </div>
+                      {message.role === "assistant" ? (
+                        <div className="typeset typeset-docs max-w-[42em]">
+                          <ReactMarkdown remarkPlugins={markdownPlugins}>
+                            {message.content || (active ? "…" : "")}
+                          </ReactMarkdown>
+                        </div>
+                      ) : (
+                        <p className="max-w-[42em] text-base leading-7 whitespace-pre-wrap">
+                          {message.content}
+                        </p>
+                      )}
+                    </article>
+                  </MessageScrollerItem>
+                ))
               )}
-            </article>
-          ))
-        )}
-      </section>
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton />
+        </MessageScroller>
+      </MessageScrollerProvider>
 
       {revbot.error ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="shrink-0 text-sm text-destructive" role="alert">
           {revbot.error}
         </p>
       ) : null}
 
       <section
         aria-label="Send a message"
-        className="flex flex-col gap-3 rounded-lg bg-muted/50 p-3"
+        className="flex shrink-0 flex-col gap-3 rounded-lg bg-muted/50 p-3"
       >
         <label className="sr-only" htmlFor="revbot-prompt">
           Message Revbot
