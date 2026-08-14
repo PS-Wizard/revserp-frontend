@@ -23,15 +23,6 @@ import { useRevbot } from "./use-revbot"
 
 const markdownPlugins = [remarkGfm]
 
-function conversationDate(value: string) {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleString(undefined, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
-}
 
 export function RevbotView({
   activeProject,
@@ -129,8 +120,7 @@ function ActiveRevbotView({
               <SelectGroup>
                 {revbot.conversations.map((conversation) => (
                   <SelectItem key={conversation.id} value={conversation.id}>
-                    {conversation.title} ·{" "}
-                    {conversationDate(conversation.updated_at)}
+                    {conversation.title}
                   </SelectItem>
                 ))}
               </SelectGroup>

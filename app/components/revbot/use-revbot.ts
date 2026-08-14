@@ -723,6 +723,15 @@ export function useRevbot({
           }
           return message
         }),
+        conversations: current.conversations.map((conversation) =>
+          conversation.id === conversationId &&
+          conversation.title === "New conversation"
+            ? {
+                ...conversation,
+                title: content.replace(/\s+/g, " ").slice(0, 120),
+              }
+            : conversation
+        ),
         status: turn.status,
         loading: false,
       }))
