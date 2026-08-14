@@ -14,6 +14,8 @@ const ALL_ENABLED: OrgFeatures = {
   auto_crawl: true,
   gsc_connector: true,
   ai_chat: true,
+  ai_monthly_message_limit: 50,
+  ai_allowed_reasoning_efforts: ["none", "low", "high", "max"],
 }
 
 const FeaturesContext = createContext<OrgFeatures>(ALL_ENABLED)

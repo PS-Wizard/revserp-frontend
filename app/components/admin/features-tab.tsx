@@ -3,6 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { Badge } from "~/components/ui/badge"
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "~/components/ui/field"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import {
@@ -14,10 +22,12 @@ import {
   DrawerTitle,
 } from "~/components/ui/drawer"
 import { Input } from "~/components/ui/input"
+import { Separator } from "~/components/ui/separator"
 import { clientApiFetch, clientApiPut } from "~/lib/api"
 import type {
   AdminFeaturesResponse,
   AdminWorkspaceFeatures,
+  AIReasoningEffort,
 } from "~/lib/api.types"
 
 const FEATURE_COLUMNS = [
@@ -39,6 +49,59 @@ const FEATURE_COLUMNS = [
 ] as const
 
 type FeatureKey = (typeof FEATURE_COLUMNS)[number]["key"]
+const MAX_AI_MONTHLY_MESSAGE_LIMIT = 1_000_000
+const REASONING_EFFORT_ORDER = [
+  "none",
+  "low",
+  "high",
+  "max",
+] as const satisfies readonly AIReasoningEffort[]
+const REASONING_EFFORT_OPTIONS: Array<{
+  value: AIReasoningEffort
+  label: string
+  description: string
+}> = [
+  { value: "none", label: "None", description: "Disable reasoning." },
+  { value: "low", label: "Low", description: "Use light reasoning." },
+  { value: "high", label: "High", description: "Use deeper reasoning." },
+  { value: "max", label: "Max", description: "Use the most reasoning." },
+]
+
+function normalizeReasoningEfforts(
+  efforts: readonly AIReasoningEffort[]
+): AIReasoningEffort[] {
+  return REASONING_EFFORT_ORDER.filter((effort) => efforts.includes(effort))
+}
+
+function normalizeWorkspace(
+  workspace: AdminWorkspaceFeatures
+): AdminWorkspaceFeatures {
+  return {
+    ...workspace,
+    ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
+      workspace.ai_allowed_reasoning_efforts
+    ),
+  }
+}
+
+function sameReasoningEfforts(
+  left: readonly AIReasoningEffort[],
+  right: readonly AIReasoningEffort[]
+) {
+  return (
+    left.length === right.length &&
+    left.every((effort, index) => effort === right[index])
+  )
+}
+
+function hasInvalidAISettings(workspace: AdminWorkspaceFeatures) {
+  return (
+    !Number.isInteger(workspace.ai_monthly_message_limit) ||
+    workspace.ai_monthly_message_limit < 0 ||
+    workspace.ai_monthly_message_limit > MAX_AI_MONTHLY_MESSAGE_LIMIT ||
+    workspace.ai_allowed_reasoning_efforts.length === 0
+  )
+}
 type EditedRows = Map<string, AdminWorkspaceFeatures>
 
 function ToggleRow({
@@ -101,7 +164,7 @@ export function FeaturesTab() {
     try {
       const data =
         await clientApiFetch<AdminFeaturesResponse>("/admin/features")
-      setSaved(data.workspaces ?? [])
+      setSaved((data.workspaces ?? []).map(normalizeWorkspace))
       setEdits(new Map())
     } catch {
       toast.error("Failed to load feature settings")
@@ -143,9 +206,15 @@ export function FeaturesTab() {
       const edited = edits.get(workspace.org_id)
       if (
         edited &&
-        FEATURE_COLUMNS.some(
+        (FEATURE_COLUMNS.some(
           (column) => edited[column.key] !== workspace[column.key]
-        )
+        ) ||
+          edited.ai_monthly_message_limit !==
+            workspace.ai_monthly_message_limit ||
+          !sameReasoningEfforts(
+            edited.ai_allowed_reasoning_efforts,
+            workspace.ai_allowed_reasoning_efforts
+          ))
       ) {
         changed.add(workspace.org_id)
       }
@@ -153,8 +222,23 @@ export function FeaturesTab() {
     return changed
   }, [saved, edits])
 
+  const invalidDirtyIds = useMemo(() => {
+    const invalid = new Set<string>()
+    for (const workspace of saved) {
+      const edited = edits.get(workspace.org_id)
+      if (
+        edited &&
+        dirtyIds.has(workspace.org_id) &&
+        hasInvalidAISettings(edited)
+      ) {
+        invalid.add(workspace.org_id)
+      }
+    }
+    return invalid
+  }, [dirtyIds, edits, saved])
+
   const save = useCallback(async () => {
-    if (dirtyIds.size === 0) return
+    if (dirtyIds.size === 0 || invalidDirtyIds.size > 0) return
     const workspaces = saved
       .filter((workspace) => dirtyIds.has(workspace.org_id))
       .map((workspace) => {
@@ -164,6 +248,10 @@ export function FeaturesTab() {
           auto_crawl: row.auto_crawl,
           gsc_connector: row.gsc_connector,
           ai_chat: row.ai_chat,
+          ai_monthly_message_limit: row.ai_monthly_message_limit,
+          ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
+            row.ai_allowed_reasoning_efforts
+          ),
         }
       })
 
@@ -173,7 +261,7 @@ export function FeaturesTab() {
         "/admin/features",
         { workspaces }
       )
-      setSaved(data.workspaces ?? [])
+      setSaved((data.workspaces ?? []).map(normalizeWorkspace))
       setEdits(new Map())
       toast.success(
         `Saved ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`
@@ -183,7 +271,7 @@ export function FeaturesTab() {
     } finally {
       setSaving(false)
     }
-  }, [dirtyIds, saved, rowFor])
+  }, [dirtyIds, invalidDirtyIds, saved, rowFor])
 
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -203,6 +291,14 @@ export function FeaturesTab() {
     FEATURE_COLUMNS.filter((column) => !row[column.key]).map(
       (column) => `${column.label} off`
     )
+
+  const monthlyLimitInvalid =
+    open !== null &&
+    (!Number.isInteger(open.ai_monthly_message_limit) ||
+      open.ai_monthly_message_limit < 0 ||
+      open.ai_monthly_message_limit > MAX_AI_MONTHLY_MESSAGE_LIMIT)
+  const reasoningEffortsInvalid =
+    open !== null && open.ai_allowed_reasoning_efforts.length === 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -224,7 +320,10 @@ export function FeaturesTab() {
           <Button variant="outline" onClick={load} disabled={loading || saving}>
             Reload
           </Button>
-          <Button onClick={save} disabled={dirtyIds.size === 0 || saving}>
+          <Button
+            onClick={save}
+            disabled={dirtyIds.size === 0 || invalidDirtyIds.size > 0 || saving}
+          >
             {saving
               ? "Saving…"
               : dirtyIds.size > 0
@@ -314,25 +413,110 @@ export function FeaturesTab() {
                 </DrawerDescription>
               </DrawerHeader>
 
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 pb-4">
-                {FEATURE_COLUMNS.map((column) => (
-                  <ToggleRow
-                    key={column.key}
-                    checked={open[column.key as FeatureKey]}
-                    label={column.label}
-                    description={column.description}
-                    onChange={(checked) =>
-                      updateRow(openWorkspace, { [column.key]: checked })
-                    }
-                  />
-                ))}
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+                <FieldGroup className="gap-2">
+                  {FEATURE_COLUMNS.map((column) => (
+                    <ToggleRow
+                      key={column.key}
+                      checked={open[column.key as FeatureKey]}
+                      label={column.label}
+                      description={column.description}
+                      onChange={(checked) =>
+                        updateRow(openWorkspace, { [column.key]: checked })
+                      }
+                    />
+                  ))}
+                </FieldGroup>
+                <Separator />
+                <FieldGroup>
+                  <Field data-invalid={monthlyLimitInvalid}>
+                    <FieldLabel htmlFor="ai-monthly-message-limit">
+                      Monthly message limit
+                    </FieldLabel>
+                    <Input
+                      id="ai-monthly-message-limit"
+                      type="number"
+                      min={0}
+                      max={MAX_AI_MONTHLY_MESSAGE_LIMIT}
+                      step={1}
+                      value={
+                        Number.isNaN(open.ai_monthly_message_limit)
+                          ? ""
+                          : open.ai_monthly_message_limit
+                      }
+                      aria-invalid={monthlyLimitInvalid}
+                      onChange={(event) =>
+                        updateRow(openWorkspace, {
+                          ai_monthly_message_limit:
+                            event.target.value === ""
+                              ? Number.NaN
+                              : Number(event.target.value),
+                        })
+                      }
+                    />
+                    <FieldDescription>
+                      {monthlyLimitInvalid
+                        ? "Enter an integer from 0 to 1,000,000."
+                        : "Maximum AI chat messages allowed per month."}
+                    </FieldDescription>
+                  </Field>
+                  <FieldSet
+                    data-invalid={reasoningEffortsInvalid}
+                    className="gap-3"
+                  >
+                    <FieldLegend>Allowed reasoning efforts</FieldLegend>
+                    <FieldDescription>
+                      Select the DeepSeek reasoning levels available in this
+                      workspace.
+                    </FieldDescription>
+                    <FieldGroup data-slot="checkbox-group" className="gap-2">
+                      {REASONING_EFFORT_OPTIONS.map((option) => (
+                        <ToggleRow
+                          key={option.value}
+                          checked={open.ai_allowed_reasoning_efforts.includes(
+                            option.value
+                          )}
+                          label={option.label}
+                          description={option.description}
+                          onChange={() => {
+                            const selected =
+                              open.ai_allowed_reasoning_efforts.includes(
+                                option.value
+                              )
+                            const efforts = selected
+                              ? open.ai_allowed_reasoning_efforts.filter(
+                                  (effort) => effort !== option.value
+                                )
+                              : normalizeReasoningEfforts([
+                                  ...open.ai_allowed_reasoning_efforts,
+                                  option.value,
+                                ])
+                            updateRow(openWorkspace, {
+                              ai_allowed_reasoning_efforts: efforts,
+                            })
+                          }}
+                        />
+                      ))}
+                    </FieldGroup>
+                    {reasoningEffortsInvalid ? (
+                      <FieldDescription className="text-destructive">
+                        Select at least one reasoning effort.
+                      </FieldDescription>
+                    ) : null}
+                  </FieldSet>
+                </FieldGroup>
               </div>
 
               <DrawerFooter className="flex-row justify-end gap-2">
                 <Button variant="outline" onClick={() => setOpenOrgId(null)}>
                   Close
                 </Button>
-                <Button onClick={save} disabled={dirtyIds.size === 0 || saving}>
+                <Button
+                  onClick={save}
+                  disabled={
+                    dirtyIds.size === 0 || invalidDirtyIds.size > 0 || saving
+                  }
+                >
                   {saving
                     ? "Saving…"
                     : dirtyIds.size > 0

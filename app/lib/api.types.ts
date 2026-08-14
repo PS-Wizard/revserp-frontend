@@ -354,10 +354,14 @@ export type AdminOrganizationResponse = {
 
 // --- Feature gating ---
 
+export type AIReasoningEffort = "none" | "low" | "high" | "max"
+
 export type OrgFeatures = {
   auto_crawl: boolean
   gsc_connector: boolean
   ai_chat: boolean
+  ai_monthly_message_limit: number
+  ai_allowed_reasoning_efforts: AIReasoningEffort[]
 }
 
 export type AdminWorkspaceFeatures = OrgFeatures & {
