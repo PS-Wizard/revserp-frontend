@@ -216,6 +216,7 @@ export function FeaturesTab() {
         (FEATURE_COLUMNS.some(
           (column) => edited[column.key] !== workspace[column.key]
         ) ||
+          edited.ai_use_internal_prompt !== workspace.ai_use_internal_prompt ||
           edited.ai_monthly_message_limit !==
             workspace.ai_monthly_message_limit ||
           edited.ai_concurrent_turn_limit_per_user !==
@@ -257,6 +258,7 @@ export function FeaturesTab() {
           auto_crawl: row.auto_crawl,
           gsc_connector: row.gsc_connector,
           ai_chat: row.ai_chat,
+          ai_use_internal_prompt: row.ai_use_internal_prompt,
           ai_monthly_message_limit: row.ai_monthly_message_limit,
           ai_concurrent_turn_limit_per_user:
             row.ai_concurrent_turn_limit_per_user,
@@ -446,6 +448,16 @@ export function FeaturesTab() {
                   ))}
                 </FieldGroup>
                 <Separator />
+                <ToggleRow
+                  checked={open.ai_use_internal_prompt}
+                  label="Use internal AI prompt"
+                  description="Uses the internal system prompt from AI Config. Off uses the external prompt."
+                  onChange={(checked) =>
+                    updateRow(openWorkspace, {
+                      ai_use_internal_prompt: checked,
+                    })
+                  }
+                />
                 <FieldGroup>
                   <Field data-invalid={monthlyLimitInvalid}>
                     <FieldLabel htmlFor="ai-monthly-message-limit">

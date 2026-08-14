@@ -477,7 +477,7 @@ function AIConfigTab() {
       <div className="flex flex-col gap-4">
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>System Prompt (@revketer.ai)</Label>
+            <Label>Internal system prompt</Label>
             <Textarea
               className="min-h-[140px] font-mono"
               value={config.internal_system_prompt}
@@ -497,7 +497,7 @@ function AIConfigTab() {
 
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>System Prompt (everyone else)</Label>
+            <Label>External system prompt</Label>
             <Textarea
               className="min-h-[120px] font-mono"
               value={config.external_system_prompt}

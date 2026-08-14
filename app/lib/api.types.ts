@@ -360,6 +360,7 @@ export type OrgFeatures = {
   auto_crawl: boolean
   gsc_connector: boolean
   ai_chat: boolean
+  ai_use_internal_prompt: boolean
   ai_monthly_message_limit: number
   ai_concurrent_turn_limit_per_user: number
   ai_allowed_reasoning_efforts: AIReasoningEffort[]
