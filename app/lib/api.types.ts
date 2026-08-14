@@ -510,6 +510,15 @@ export type AIConversationResponse = {
   updated_at: string
 }
 
+export type AIConversationsResponse = {
+  conversations: AIConversationResponse[]
+  pagination: PaginationResponse
+}
+
+export type AIConversationDetailResponse = AIConversationResponse & {
+  messages: AITurnMessageResponse[]
+}
+
 export type AITurnMessageResponse = {
   id: string
   role: "user" | "assistant"

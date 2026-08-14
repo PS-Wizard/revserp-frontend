@@ -9,7 +9,9 @@ import {
   clientApiSSE,
 } from "~/lib/api"
 import type {
+  AIConversationDetailResponse,
   AIConversationResponse,
+  AIConversationsResponse,
   AIReasoningEffort,
   AIStreamPhasePayload,
   AIStreamTerminalPayload,
@@ -23,12 +25,13 @@ import type {
 const STORAGE_PREFIX = "revbot-turn:"
 const RECONNECT_DELAY_MS = 700
 
-type StoredTurn = { conversationId: string; turnId: string }
+type StoredConversation = { conversationId: string; turnId?: string }
 type LocalMessage = AITurnMessageResponse & { local?: boolean }
 type RevbotStatus = AITurnResponse["status"] | "idle"
 
 type RevbotState = {
   conversationId: string | null
+  conversations: AIConversationResponse[]
   messages: LocalMessage[]
   status: RevbotStatus
   phase: AIStreamPhasePayload["phase"] | null
@@ -41,23 +44,23 @@ function storageKey(projectId: string) {
   return `${STORAGE_PREFIX}${projectId}`
 }
 
-function readStoredTurn(projectId: string): StoredTurn | null {
+function readStoredConversation(projectId: string): StoredConversation | null {
   try {
     const value: unknown = JSON.parse(
       localStorage.getItem(storageKey(projectId)) ?? "null"
     )
     if (!value || typeof value !== "object") return null
     const record = value as Record<string, unknown>
-    return typeof record.conversationId === "string" &&
-      typeof record.turnId === "string"
+    if (typeof record.conversationId !== "string") return null
+    return typeof record.turnId === "string"
       ? { conversationId: record.conversationId, turnId: record.turnId }
-      : null
+      : { conversationId: record.conversationId }
   } catch {
     return null
   }
 }
 
-function saveStoredTurn(projectId: string, value: StoredTurn) {
+function saveStoredConversation(projectId: string, value: StoredConversation) {
   try {
     localStorage.setItem(storageKey(projectId), JSON.stringify(value))
   } catch {
@@ -65,7 +68,7 @@ function saveStoredTurn(projectId: string, value: StoredTurn) {
   }
 }
 
-function clearStoredTurn(projectId: string) {
+function clearStoredConversation(projectId: string) {
   try {
     localStorage.removeItem(storageKey(projectId))
   } catch {
@@ -155,6 +158,7 @@ export function useRevbot({
   )
   const [state, setState] = useState<RevbotState>({
     conversationId: null,
+    conversations: [],
     messages: [],
     status: "idle",
     phase: null,
@@ -169,12 +173,12 @@ export function useRevbot({
   const statusRef = useRef<RevbotStatus>("idle")
   const activeRequestRef = useRef(false)
   const generationRef = useRef(0)
+  const projectGenerationRef = useRef(0)
   const observerRef = useRef<AbortController | null>(null)
   const lastEventIdRef = useRef(0)
   const seenEventIdsRef = useRef<Set<number>>(new Set())
   const assistantTextRef = useRef("")
   const assistantMessageIdRef = useRef<string | null>(null)
-  const currentMessageIdsRef = useRef<Set<string>>(new Set())
 
   const updateStatus = useCallback((status: RevbotStatus) => {
     statusRef.current = status
@@ -190,39 +194,73 @@ export function useRevbot({
     }
   }, [])
 
+  const applyConversation = useCallback(
+    (conversation: AIConversationDetailResponse, loading = false) => {
+      conversationIdRef.current = conversation.id
+      turnIdRef.current = null
+      statusRef.current = "idle"
+      activeRequestRef.current = false
+      lastEventIdRef.current = 0
+      seenEventIdsRef.current = new Set()
+      const messages = conversation.messages.map((message) => ({ ...message }))
+      const assistant = [...messages]
+        .reverse()
+        .find((message) => message.role === "assistant")
+      assistantMessageIdRef.current = assistant?.id ?? null
+      assistantTextRef.current = assistant?.content ?? ""
+      if (mountedRef.current) {
+        setState((current) => ({
+          ...current,
+          conversationId: conversation.id,
+          messages,
+          status: "idle",
+          phase: null,
+          stopping: false,
+          loading,
+          error: null,
+        }))
+      }
+    },
+    []
+  )
+
   const applyTurn = useCallback(
-    (turn: AITurnResponse, replay: boolean, replaceMessages = false) => {
+    (turn: AITurnResponse, replay: boolean) => {
       conversationIdRef.current = turn.conversation_id
       turnIdRef.current = turn.id
       activeRequestRef.current = !isTurnTerminal(turn.status)
       updateStatus(turn.status)
       if (!mountedRef.current) return
 
-      const previousMessageIds = currentMessageIdsRef.current
-      const messages: LocalMessage[] = replay
-        ? turn.messages
-            .filter((message) => message.role === "user")
-            .map((message) => ({ ...message }))
-        : turn.messages.map((message) => ({ ...message }))
-      if (replay) messages.push(assistantMessage())
-      currentMessageIdsRef.current = new Set(
-        messages.map((message) => message.id)
-      )
-      const assistant = messages.find((message) => message.role === "assistant")
+      let messages = turn.messages.map((message) => ({ ...message }))
+      if (replay) {
+        const assistantIndex = messages.findIndex(
+          (message) => message.role === "assistant"
+        )
+        if (assistantIndex === -1) {
+          messages.push(assistantMessage())
+        } else {
+          messages[assistantIndex] = {
+            ...messages[assistantIndex],
+            content: "",
+            status: "pending",
+          }
+        }
+      }
+      const messageIds = new Set(messages.map((message) => message.id))
+      const assistant = [...messages]
+        .reverse()
+        .find((message) => message.role === "assistant")
       assistantMessageIdRef.current = assistant?.id ?? null
       assistantTextRef.current = replay ? "" : (assistant?.content ?? "")
 
       setState((current) => ({
         ...current,
         conversationId: turn.conversation_id,
-        messages: replaceMessages
-          ? messages
-          : [
-              ...current.messages.filter(
-                (message) => !previousMessageIds.has(message.id)
-              ),
-              ...messages,
-            ],
+        messages: [
+          ...current.messages.filter((message) => !messageIds.has(message.id)),
+          ...messages,
+        ],
         status: turn.status,
         phase: null,
         stopping: turn.cancel_requested && !isTurnTerminal(turn.status),
@@ -371,20 +409,23 @@ export function useRevbot({
     const projectId = activeProject?.id ?? null
     generationRef.current += 1
     const generation = generationRef.current
+    projectGenerationRef.current += 1
+    const projectGeneration = projectGenerationRef.current
     stopObserver()
     projectIdRef.current = projectId
     conversationIdRef.current = null
     turnIdRef.current = null
+    statusRef.current = "idle"
     activeRequestRef.current = false
     lastEventIdRef.current = 0
     seenEventIdsRef.current = new Set()
     assistantTextRef.current = ""
     assistantMessageIdRef.current = null
-    currentMessageIdsRef.current = new Set()
     setPrompt("")
     setEffort(defaultEffort(allowedEfforts))
     setState({
       conversationId: null,
+      conversations: [],
       messages: [],
       status: "idle",
       phase: null,
@@ -394,42 +435,197 @@ export function useRevbot({
     })
     if (!projectId) return
 
-    const stored = readStoredTurn(projectId)
+    void clientApiFetch<AIConversationsResponse>(
+      `/projects/${projectId}/ai/conversations?limit=50&offset=0`
+    )
+      .then((response) => {
+        if (
+          projectGeneration !== projectGenerationRef.current ||
+          !mountedRef.current ||
+          projectId !== projectIdRef.current
+        )
+          return
+        setState((current) => ({
+          ...current,
+          conversations: [
+            ...response.conversations,
+            ...current.conversations.filter(
+              (item) =>
+                !response.conversations.some((next) => next.id === item.id)
+            ),
+          ],
+        }))
+      })
+      .catch((error: unknown) => {
+        if (
+          projectGeneration !== projectGenerationRef.current ||
+          !mountedRef.current ||
+          projectId !== projectIdRef.current
+        )
+          return
+        setState((current) => ({
+          ...current,
+          error: simpleError(error, "Unable to load Revbot conversations."),
+        }))
+      })
+
+    const stored = readStoredConversation(projectId)
     if (!stored) {
       setState((current) => ({ ...current, loading: false }))
       return
     }
-    conversationIdRef.current = stored.conversationId
-    setState((current) => ({
-      ...current,
-      conversationId: stored.conversationId,
-    }))
 
-    void clientApiFetch<AITurnResponse>(`/ai/turns/${stored.turnId}`)
-      .then((turn) => {
+    void (async () => {
+      try {
+        const conversation = await clientApiFetch<AIConversationDetailResponse>(
+          `/ai/conversations/${stored.conversationId}`
+        )
         if (generation !== generationRef.current || !mountedRef.current) return
-        applyTurn(turn, !isTurnTerminal(turn.status), true)
-        if (!isTurnTerminal(turn.status)) void observe(turn.id, generation)
-      })
-      .catch((error: unknown) => {
-        if (generation !== generationRef.current || !mountedRef.current) return
-        if (error instanceof ApiError && error.status === 404) {
-          clearStoredTurn(projectId)
-          conversationIdRef.current = stored.conversationId
+        applyConversation(conversation, Boolean(stored.turnId))
+        if (!stored.turnId) return
+
+        try {
+          const turn = await clientApiFetch<AITurnResponse>(
+            `/ai/turns/${stored.turnId}`
+          )
+          if (generation !== generationRef.current || !mountedRef.current)
+            return
+          applyTurn(turn, !isTurnTerminal(turn.status))
+          if (!isTurnTerminal(turn.status)) void observe(turn.id, generation)
+        } catch (error) {
+          if (generation !== generationRef.current || !mountedRef.current)
+            return
+          if (error instanceof ApiError && error.status === 404) {
+            saveStoredConversation(projectId, {
+              conversationId: stored.conversationId,
+            })
+            setState((current) => ({ ...current, loading: false }))
+            return
+          }
           setState((current) => ({
             ...current,
-            conversationId: stored.conversationId,
             loading: false,
+            error: simpleError(error, "Unable to restore the Revbot turn."),
           }))
+        }
+      } catch (error) {
+        if (generation !== generationRef.current || !mountedRef.current) return
+        if (error instanceof ApiError && error.status === 404) {
+          clearStoredConversation(projectId)
+          setState((current) => ({ ...current, loading: false }))
           return
         }
         setState((current) => ({
           ...current,
           loading: false,
-          error: simpleError(error, "Unable to restore the Revbot turn."),
+          error: simpleError(
+            error,
+            "Unable to restore the Revbot conversation."
+          ),
         }))
-      })
-  }, [activeProject?.id, allowedEfforts, applyTurn, observe, stopObserver])
+      }
+    })()
+  }, [
+    activeProject?.id,
+    allowedEfforts,
+    applyConversation,
+    applyTurn,
+    observe,
+    stopObserver,
+  ])
+
+  const selectConversation = useCallback(
+    async (conversationId: string) => {
+      const projectId = projectIdRef.current
+      if (
+        !projectId ||
+        activeRequestRef.current ||
+        statusRef.current === "queued" ||
+        statusRef.current === "running"
+      )
+        return
+
+      generationRef.current += 1
+      const generation = generationRef.current
+      stopObserver()
+      turnIdRef.current = null
+      statusRef.current = "idle"
+      activeRequestRef.current = false
+      assistantTextRef.current = ""
+      assistantMessageIdRef.current = null
+      setState((current) => ({
+        ...current,
+        conversationId,
+        messages: [],
+        status: "idle",
+        phase: null,
+        stopping: false,
+        loading: true,
+        error: null,
+      }))
+      saveStoredConversation(projectId, { conversationId })
+
+      try {
+        const conversation = await clientApiFetch<AIConversationDetailResponse>(
+          `/ai/conversations/${conversationId}`
+        )
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          projectId !== projectIdRef.current
+        )
+          return
+        applyConversation(conversation)
+      } catch (error) {
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          projectId !== projectIdRef.current
+        )
+          return
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: simpleError(error, "Unable to load the Revbot conversation."),
+        }))
+      }
+    },
+    [applyConversation, stopObserver]
+  )
+
+  const newChat = useCallback(() => {
+    const projectId = projectIdRef.current
+    if (
+      !projectId ||
+      activeRequestRef.current ||
+      statusRef.current === "queued" ||
+      statusRef.current === "running"
+    )
+      return
+
+    generationRef.current += 1
+    stopObserver()
+    conversationIdRef.current = null
+    turnIdRef.current = null
+    statusRef.current = "idle"
+    activeRequestRef.current = false
+    lastEventIdRef.current = 0
+    seenEventIdsRef.current = new Set()
+    assistantTextRef.current = ""
+    assistantMessageIdRef.current = null
+    clearStoredConversation(projectId)
+    setPrompt("")
+    setState((current) => ({
+      ...current,
+      conversationId: null,
+      messages: [],
+      status: "idle",
+      phase: null,
+      stopping: false,
+      loading: false,
+      error: null,
+    }))
+  }, [stopObserver])
 
   const send = useCallback(async () => {
     const projectId = projectIdRef.current
@@ -447,10 +643,6 @@ export function useRevbot({
     stopObserver()
     const optimisticUser = userMessage(content)
     const optimisticAssistant = assistantMessage()
-    currentMessageIdsRef.current = new Set([
-      optimisticUser.id,
-      optimisticAssistant.id,
-    ])
     assistantMessageIdRef.current = optimisticAssistant.id
     assistantTextRef.current = ""
     activeRequestRef.current = true
@@ -479,7 +671,17 @@ export function useRevbot({
         )
           return
         conversationIdRef.current = conversationId
-        setState((current) => ({ ...current, conversationId }))
+        saveStoredConversation(projectId, { conversationId })
+        setState((current) => ({
+          ...current,
+          conversationId,
+          conversations: [
+            conversation,
+            ...current.conversations.filter(
+              (item) => item.id !== conversation.id
+            ),
+          ],
+        }))
       }
 
       if (
@@ -504,10 +706,23 @@ export function useRevbot({
         return
       turnIdRef.current = turn.turn_id
       statusRef.current = turn.status
-      saveStoredTurn(projectId, { conversationId, turnId: turn.turn_id })
+      assistantMessageIdRef.current = turn.assistant_message_id
+      saveStoredConversation(projectId, {
+        conversationId,
+        turnId: turn.turn_id,
+      })
       setPrompt("")
       setState((current) => ({
         ...current,
+        messages: current.messages.map((message) => {
+          if (message.id === optimisticUser.id) {
+            return { ...message, id: turn.user_message_id, local: false }
+          }
+          if (message.id === optimisticAssistant.id) {
+            return { ...message, id: turn.assistant_message_id, local: false }
+          }
+          return message
+        }),
         status: turn.status,
         loading: false,
       }))
@@ -521,7 +736,6 @@ export function useRevbot({
         return
       activeRequestRef.current = false
       statusRef.current = "idle"
-      currentMessageIdsRef.current = new Set()
       assistantMessageIdRef.current = null
       setState((current) => ({
         ...current,
@@ -585,12 +799,16 @@ export function useRevbot({
   }, [state.status])
 
   return {
+    conversationId: state.conversationId,
+    conversations: state.conversations,
     effort,
     error: state.error,
     loading: state.loading,
     messages: state.messages,
+    newChat,
     phase: state.phase,
     prompt,
+    selectConversation,
     send,
     setEffort,
     setPrompt,

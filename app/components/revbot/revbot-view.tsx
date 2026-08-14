@@ -23,6 +23,16 @@ import { useRevbot } from "./use-revbot"
 
 const markdownPlugins = [remarkGfm]
 
+function conversationDate(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+}
+
 export function RevbotView({
   activeProject,
   allowedEfforts,
@@ -60,6 +70,8 @@ function ActiveRevbotView({
 }) {
   const revbot = useRevbot({ activeProject, allowedEfforts })
   const active = revbot.status === "queued" || revbot.status === "running"
+  const conversationControlsDisabled =
+    revbot.loading || active || revbot.stopping
   const canSend =
     !revbot.loading &&
     !active &&
@@ -97,17 +109,54 @@ function ActiveRevbotView({
             </p>
           </div>
         </div>
-        <Badge
-          variant={
-            active
-              ? "secondary"
-              : revbot.status === "failed"
-                ? "destructive"
-                : "outline"
-          }
-        >
-          {statusLabel}
-        </Badge>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Select
+            disabled={conversationControlsDisabled}
+            onValueChange={(value) => {
+              if (typeof value === "string")
+                void revbot.selectConversation(value)
+            }}
+            value={revbot.conversationId ?? undefined}
+          >
+            <SelectTrigger
+              aria-label="Select a Revbot conversation"
+              className="w-52"
+              size="sm"
+            >
+              <SelectValue placeholder="New chat" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {revbot.conversations.map((conversation) => (
+                  <SelectItem key={conversation.id} value={conversation.id}>
+                    {conversation.title} ·{" "}
+                    {conversationDate(conversation.updated_at)}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Button
+            disabled={conversationControlsDisabled}
+            onClick={revbot.newChat}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            New chat
+          </Button>
+          <Badge
+            variant={
+              active
+                ? "secondary"
+                : revbot.status === "failed"
+                  ? "destructive"
+                  : "outline"
+            }
+          >
+            {statusLabel}
+          </Badge>
+        </div>
       </header>
 
       <section
