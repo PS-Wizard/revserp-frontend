@@ -50,6 +50,8 @@ const FEATURE_COLUMNS = [
 
 type FeatureKey = (typeof FEATURE_COLUMNS)[number]["key"]
 const MAX_AI_MONTHLY_MESSAGE_LIMIT = 1_000_000
+const MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER = 1
+const MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER = 20
 const REASONING_EFFORT_ORDER = [
   "none",
   "low",
@@ -99,6 +101,11 @@ function hasInvalidAISettings(workspace: AdminWorkspaceFeatures) {
     !Number.isInteger(workspace.ai_monthly_message_limit) ||
     workspace.ai_monthly_message_limit < 0 ||
     workspace.ai_monthly_message_limit > MAX_AI_MONTHLY_MESSAGE_LIMIT ||
+    !Number.isInteger(workspace.ai_concurrent_turn_limit_per_user) ||
+    workspace.ai_concurrent_turn_limit_per_user <
+      MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER ||
+    workspace.ai_concurrent_turn_limit_per_user >
+      MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER ||
     workspace.ai_allowed_reasoning_efforts.length === 0
   )
 }
@@ -211,6 +218,8 @@ export function FeaturesTab() {
         ) ||
           edited.ai_monthly_message_limit !==
             workspace.ai_monthly_message_limit ||
+          edited.ai_concurrent_turn_limit_per_user !==
+            workspace.ai_concurrent_turn_limit_per_user ||
           !sameReasoningEfforts(
             edited.ai_allowed_reasoning_efforts,
             workspace.ai_allowed_reasoning_efforts
@@ -249,6 +258,8 @@ export function FeaturesTab() {
           gsc_connector: row.gsc_connector,
           ai_chat: row.ai_chat,
           ai_monthly_message_limit: row.ai_monthly_message_limit,
+          ai_concurrent_turn_limit_per_user:
+            row.ai_concurrent_turn_limit_per_user,
           ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
             row.ai_allowed_reasoning_efforts
           ),
@@ -297,6 +308,13 @@ export function FeaturesTab() {
     (!Number.isInteger(open.ai_monthly_message_limit) ||
       open.ai_monthly_message_limit < 0 ||
       open.ai_monthly_message_limit > MAX_AI_MONTHLY_MESSAGE_LIMIT)
+  const concurrentTurnLimitInvalid =
+    open !== null &&
+    (!Number.isInteger(open.ai_concurrent_turn_limit_per_user) ||
+      open.ai_concurrent_turn_limit_per_user <
+        MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER ||
+      open.ai_concurrent_turn_limit_per_user >
+        MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER)
   const reasoningEffortsInvalid =
     open !== null && open.ai_allowed_reasoning_efforts.length === 0
 
@@ -458,6 +476,37 @@ export function FeaturesTab() {
                       {monthlyLimitInvalid
                         ? "Enter an integer from 0 to 1,000,000."
                         : "Maximum AI chat messages allowed per month."}
+                    </FieldDescription>
+                  </Field>
+                  <Field data-invalid={concurrentTurnLimitInvalid}>
+                    <FieldLabel htmlFor="ai-concurrent-turn-limit-per-user">
+                      Concurrent chats per user
+                    </FieldLabel>
+                    <Input
+                      id="ai-concurrent-turn-limit-per-user"
+                      type="number"
+                      min={MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER}
+                      max={MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER}
+                      step={1}
+                      value={
+                        Number.isNaN(open.ai_concurrent_turn_limit_per_user)
+                          ? ""
+                          : open.ai_concurrent_turn_limit_per_user
+                      }
+                      aria-invalid={concurrentTurnLimitInvalid}
+                      onChange={(event) =>
+                        updateRow(openWorkspace, {
+                          ai_concurrent_turn_limit_per_user:
+                            event.target.value === ""
+                              ? Number.NaN
+                              : Number(event.target.value),
+                        })
+                      }
+                    />
+                    <FieldDescription>
+                      {concurrentTurnLimitInvalid
+                        ? "Enter an integer from 1 to 20."
+                        : "Maximum running chats for each workspace member; queued chats wait."}
                     </FieldDescription>
                   </Field>
                   <FieldSet
