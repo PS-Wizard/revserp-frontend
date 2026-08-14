@@ -175,6 +175,7 @@ export function CommandDock({
         onViewChange={onViewChange}
         projects={projects}
         searchConsoleEnabled={features.gsc_connector}
+        revbotEnabled={features.ai_chat}
         view={view}
       />
       <NavIsland

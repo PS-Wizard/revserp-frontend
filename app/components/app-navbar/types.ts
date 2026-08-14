@@ -5,7 +5,11 @@ import type {
 } from "~/lib/api.types"
 
 export type DashboardView =
-  "revserp-audit" | "revserp-visibility" | "search-console" | "compare"
+  | "revserp-audit"
+  | "revserp-visibility"
+  | "search-console"
+  | "revbot"
+  | "compare"
 export type AuditTab = "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
 

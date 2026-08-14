@@ -94,6 +94,19 @@ export const ModeRail = memo(function ModeRail({
           </NavigationMenuItem>
         ) : null}
 
+        {features.ai_chat ? (
+          <NavigationMenuItem>
+            <NavigationMenuLink
+              active={view === "revbot"}
+              className={navigationMenuTriggerStyle()}
+              onClick={() => onViewChange("revbot")}
+              render={<button type="button" />}
+            >
+              Revbot
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        ) : null}
+
         {compareLabel ? (
           <NavigationMenuItem>
             <NavigationMenuLink

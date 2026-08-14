@@ -499,3 +499,66 @@ export type CrawlPageHealthResponse = {
   buckets: number[]
   total_pages: number
 }
+
+export type AIConversationResponse = {
+  id: string
+  project_id: string
+  created_by_user_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export type AITurnMessageResponse = {
+  id: string
+  role: "user" | "assistant"
+  status: "pending" | "complete" | "partial" | "failed"
+  content: string
+  created_at: string
+  updated_at: string
+}
+
+export type AITurnStatus =
+  "queued" | "running" | "completed" | "stopped" | "failed"
+
+export type AITurnResponse = {
+  id: string
+  conversation_id: string
+  status: AITurnStatus
+  requested_effort: AIReasoningEffort
+  effective_effort: AIReasoningEffort
+  model: string
+  attempt_count: number
+  cancel_requested: boolean
+  prompt_tokens: number | null
+  reasoning_tokens: number | null
+  completion_tokens: number | null
+  total_tokens: number | null
+  error_code: string | null
+  queued_at: string
+  started_at: string | null
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+  messages: AITurnMessageResponse[]
+}
+
+export type AITurnSubmissionResponse = {
+  conversation_id: string
+  turn_id: string
+  user_message_id: string
+  assistant_message_id: string
+  status: "queued"
+}
+
+export type AIStreamPhasePayload = {
+  phase: "thinking" | "writing"
+}
+
+export type AIStreamTextDeltaPayload = {
+  text: string
+}
+
+export type AIStreamTerminalPayload = {
+  error_code?: string | null
+}

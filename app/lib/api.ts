@@ -59,29 +59,22 @@ export function clientApiDelete<T>(path: string) {
   })
 }
 
-// SSE over POST. EventSource can't POST, so we read the ReadableStream directly,
-// parse `event:`/`data:` frames (multiline data supported), and dispatch each to
-// onEvent. Aborts via `signal`. If the stream ends without a `done` frame, a
-// synthetic `error` event is emitted so callers can surface the failure.
-export async function clientApiStream(
+// Read a GET SSE stream. A normal stream end is not an error: callers decide
+// whether a reconnect is needed based on the events they received.
+export async function clientApiSSE(
   path: string,
-  body: unknown,
   {
     signal,
     onEvent,
   }: {
     signal?: AbortSignal
-    onEvent: (event: string, payload: unknown) => void
+    onEvent: (event: string, payload: unknown, eventId: string | null) => void
   }
 ) {
   const response = await fetch(buildApiUrl(path), {
-    method: "POST",
+    method: "GET",
     credentials: "include",
-    headers: new Headers({
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    }),
-    body: JSON.stringify(body),
+    headers: new Headers({ Accept: "text/event-stream" }),
     signal,
   })
 
@@ -102,7 +95,6 @@ export async function clientApiStream(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ""
-  let sawDone = false
 
   try {
     while (true) {
@@ -116,8 +108,7 @@ export async function clientApiStream(
         buffer = buffer.slice(frameEnd + 2)
         const parsedFrame = parseSSEFrame(frame)
         if (parsedFrame) {
-          if (parsedFrame.event === "done") sawDone = true
-          onEvent(parsedFrame.event, parsedFrame.data)
+          onEvent(parsedFrame.event, parsedFrame.data, parsedFrame.id)
         }
         frameEnd = buffer.indexOf("\n\n")
       }
@@ -125,18 +116,19 @@ export async function clientApiStream(
   } finally {
     reader.releaseLock()
   }
-
-  if (!sawDone) {
-    onEvent("error", { message: "Stream ended unexpectedly" })
-  }
 }
 
-function parseSSEFrame(frame: string): { event: string; data: unknown } | null {
+function parseSSEFrame(
+  frame: string
+): { event: string; data: unknown; id: string | null } | null {
   let event = "message"
+  let id: string | null = null
   const dataLines: string[] = []
 
   for (const line of frame.split("\n")) {
-    if (line.startsWith("event:")) {
+    if (line.startsWith("id:")) {
+      id = line.slice("id:".length).trim()
+    } else if (line.startsWith("event:")) {
       event = line.slice("event:".length).trim()
     } else if (line.startsWith("data:")) {
       dataLines.push(line.slice("data:".length).trim())
@@ -149,9 +141,9 @@ function parseSSEFrame(frame: string): { event: string; data: unknown } | null {
 
   const dataText = dataLines.join("\n")
   try {
-    return { event, data: JSON.parse(dataText) }
+    return { event, data: JSON.parse(dataText), id }
   } catch {
-    return { event, data: dataText }
+    return { event, data: dataText, id }
   }
 }
 

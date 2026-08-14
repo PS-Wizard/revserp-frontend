@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import {
   ActivityIcon,
+  BotIcon,
   EyeIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
@@ -45,6 +46,7 @@ export type GlobalCommandMenuProps = {
   isExportingAudit: boolean
   exportingCrawlId: string | null
   searchConsoleEnabled: boolean
+  revbotEnabled: boolean
   onViewChange: (view: DashboardView) => void
   onAuditTabChange: (tab: AuditTab) => void
   onSelectProject: (projectId: string, crawlId?: string) => void
@@ -91,6 +93,7 @@ export function GlobalCommandMenu({
   isExportingAudit,
   exportingCrawlId,
   searchConsoleEnabled,
+  revbotEnabled,
   onViewChange,
   onAuditTabChange,
   onSelectProject,
@@ -260,6 +263,16 @@ export function GlobalCommandMenu({
               >
                 <SearchCheckIcon />
                 <span>Search Console</span>
+              </CommandItem>
+            ) : null}
+            {revbotEnabled ? (
+              <CommandItem
+                data-checked={view === "revbot"}
+                onSelect={() => select(() => onViewChange("revbot"))}
+                value="Revbot"
+              >
+                <BotIcon />
+                <span>Revbot</span>
               </CommandItem>
             ) : null}
 

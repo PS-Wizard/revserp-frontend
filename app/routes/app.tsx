@@ -35,6 +35,7 @@ import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { SearchConsoleView } from "~/components/search-console-view"
+import { RevbotView } from "~/components/revbot/revbot-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
@@ -170,6 +171,7 @@ const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
   "search-console": "Search Console",
+  revbot: "Revbot",
   compare: "Compare",
 }
 
@@ -788,6 +790,11 @@ export default function AppPage() {
         <RevserpVisibilityView
           activeProject={activeProject}
           currentCrawl={stableCurrentCrawl}
+        />
+      ) : deferredView === "revbot" && me.features?.ai_chat ? (
+        <RevbotView
+          activeProject={activeProject}
+          allowedEfforts={me.features.ai_allowed_reasoning_efforts}
         />
       ) : deferredView === "search-console" && me.features?.gsc_connector !== false ? (
         <SearchConsoleView
