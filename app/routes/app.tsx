@@ -35,7 +35,6 @@ import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { SearchConsoleView } from "~/components/search-console-view"
-import { RevbotView } from "~/components/revbot/revbot-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
@@ -71,6 +70,12 @@ import type {
 const SiteGraphView = lazy(() =>
   import("~/components/site-graph/site-graph-view").then((module) => ({
     default: module.SiteGraphView,
+  }))
+)
+
+const RevbotView = lazy(() =>
+  import("~/components/revbot/revbot-view").then((module) => ({
+    default: module.RevbotView,
   }))
 )
 
@@ -792,10 +797,12 @@ export default function AppPage() {
           currentCrawl={stableCurrentCrawl}
         />
       ) : deferredView === "revbot" && me.features?.ai_chat ? (
-        <RevbotView
-          activeProject={activeProject}
-          allowedEfforts={me.features.ai_allowed_reasoning_efforts}
-        />
+        <Suspense fallback={null}>
+          <RevbotView
+            activeProject={activeProject}
+            allowedEfforts={me.features.ai_allowed_reasoning_efforts}
+          />
+        </Suspense>
       ) : deferredView === "search-console" && me.features?.gsc_connector !== false ? (
         <SearchConsoleView
           activeProject={activeProject}

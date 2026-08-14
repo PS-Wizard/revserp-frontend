@@ -3,10 +3,11 @@
 import type { KeyboardEvent } from "react"
 
 import { BotIcon, SquareIcon } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import {
   Select,
   SelectContent,
@@ -20,6 +21,8 @@ import type { AIReasoningEffort, ProjectResponse } from "~/lib/api.types"
 
 import { useRevbot } from "./use-revbot"
 
+const markdownPlugins = [remarkGfm]
+
 export function RevbotView({
   activeProject,
   allowedEfforts,
@@ -30,14 +33,12 @@ export function RevbotView({
   if (!activeProject) {
     return (
       <section className="flex min-h-[calc(100svh-5rem)] items-center justify-center p-6">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Revbot</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
+        <div className="w-full max-w-md">
+          <h1 className="text-lg font-semibold">Revbot</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
             Select a project to use Revbot.
-          </CardContent>
-        </Card>
+          </p>
+        </div>
       </section>
     )
   }
@@ -112,32 +113,30 @@ function ActiveRevbotView({
       <section
         aria-label="Conversation"
         aria-live="polite"
-        className="flex flex-1 flex-col gap-3"
+        className="flex flex-1 flex-col gap-8"
       >
         {revbot.messages.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              Ask Revbot a question about this project.
-            </CardContent>
-          </Card>
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            Ask Revbot a question about this project.
+          </p>
         ) : (
           revbot.messages.map((message) => (
-            <Card
-              key={message.id}
-              className={message.role === "user" ? "ml-8" : "mr-8"}
-            >
-              <CardHeader className="px-4 py-3">
-                <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  {message.role === "user" ? "You" : "Revbot"}
+            <article key={message.id} className="flex flex-col gap-2 py-2">
+              <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                {message.role === "user" ? "You" : "Revbot"}
+              </div>
+              {message.role === "assistant" ? (
+                <div className="typeset typeset-docs max-w-[42em]">
+                  <ReactMarkdown remarkPlugins={markdownPlugins}>
+                    {message.content || (active ? "…" : "")}
+                  </ReactMarkdown>
                 </div>
-              </CardHeader>
-              <CardContent className="px-4 pt-0 pb-4">
-                <p className="text-sm whitespace-pre-wrap">
-                  {message.content ||
-                    (active && message.role === "assistant" ? "…" : "")}
+              ) : (
+                <p className="max-w-[42em] text-base leading-7 whitespace-pre-wrap">
+                  {message.content}
                 </p>
-              </CardContent>
-            </Card>
+              )}
+            </article>
           ))
         )}
       </section>
@@ -150,12 +149,13 @@ function ActiveRevbotView({
 
       <section
         aria-label="Send a message"
-        className="flex flex-col gap-3 rounded-lg border bg-card p-3 shadow-sm"
+        className="flex flex-col gap-3 rounded-lg bg-muted/50 p-3"
       >
         <label className="sr-only" htmlFor="revbot-prompt">
           Message Revbot
         </label>
         <Textarea
+          className="border-0 shadow-none focus-visible:border-0"
           disabled={revbot.loading || active || revbot.stopping}
           id="revbot-prompt"
           onChange={(event) => revbot.setPrompt(event.target.value)}
