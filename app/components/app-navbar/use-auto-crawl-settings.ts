@@ -23,10 +23,7 @@ export const DEFAULT_AUTO_CRAWL_CONFIG: AutoCrawlConfig = {
   runAt: "03:00",
 }
 
-export function useAutoCrawlSettings(
-  activeProjectId?: string | null,
-  refreshToken?: number
-) {
+export function useAutoCrawlSettings(activeProjectId?: string | null) {
   const [enabled, setEnabled] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [config, setConfig] = useState<AutoCrawlConfig>(
@@ -93,17 +90,6 @@ export function useAutoCrawlSettings(
       void loadSettings()
     }
   }, [activeProjectId, loadSettings])
-
-  // Re-fetch when an external actor (the AI agent) changes auto-crawl settings,
-  // so the navbar reflects the new enabled/disabled state without a refresh.
-  const lastRefreshTokenRef = useRef(refreshToken)
-  useEffect(() => {
-    if (refreshToken === undefined || refreshToken === lastRefreshTokenRef.current) {
-      return
-    }
-    lastRefreshTokenRef.current = refreshToken
-    void loadSettings()
-  }, [refreshToken, loadSettings])
 
   const openDialog = useCallback(async () => {
     await loadSettings()

@@ -1,7 +1,7 @@
 import { clientApiFetch } from "~/lib/api"
 import type { ScoreBreakdownIssueURLsResponse } from "~/lib/api.types"
 
-import type { BucketScope, FixSelection, MergedIssueUrlRow } from "./types"
+import type { BucketScope, MergedIssueUrlRow } from "./types"
 
 /** Stable selection key for a URL row (a URL may appear under multiple issue types). */
 export function urlRowKey(row: MergedIssueUrlRow) {
@@ -143,7 +143,10 @@ export class BucketUrlPager {
       0
     )
     return {
-      rows: this.merged.slice(pageIndex * pageSize, pageIndex * pageSize + pageSize),
+      rows: this.merged.slice(
+        pageIndex * pageSize,
+        pageIndex * pageSize + pageSize
+      ),
       total,
     }
   }
@@ -154,7 +157,9 @@ export class BucketUrlPager {
   ): Promise<{ rows: MergedIssueUrlRow[]; total: number }> {
     await this.mergeUntil(
       () =>
-        this.cursors.every((cursor) => cursor.exhausted && !cursor.buffer.length),
+        this.cursors.every(
+          (cursor) => cursor.exhausted && !cursor.buffer.length
+        ),
       chunkSize
     )
     const total = this.cursors.reduce(
@@ -163,47 +168,4 @@ export class BucketUrlPager {
     )
     return { rows: this.merged, total }
   }
-}
-
-/**
- * Builds a single natural-language prompt describing the selected issues/URLs
- * to seed a fresh AI-dock conversation. The model then fetches the relevant
- * issue detail via its own tools — no scope IDs are sent from the client.
- * URLs are capped per selection to keep the seed prompt bounded.
- */
-export function buildBatchFixPrompt(
-  selections: FixSelection[],
-  maxUrlsPerSelection = 10
-): string {
-  return selections
-    .map((selection) =>
-      buildBatchPrompt({
-        ...selection,
-        urls: selection.urls.slice(0, maxUrlsPerSelection),
-      })
-    )
-    .join("\n\n")
-}
-
-function buildBatchPrompt(selection: FixSelection) {
-  // URL tier: selection is always scoped to a single issue type.
-  if (selection.urls.length) {
-    const issueType = selection.issueTypeIds[0] ?? ""
-    const issueTypeLabel = selection.issueTypeLabels[0] ?? issueType
-    const list = selection.urls.map((url) => `- ${url}`).join("\n")
-    return `Help me fix the "${issueTypeLabel}" issue (${selection.pillarLabel}) on these pages:\n${list}\nGive concrete, ready-to-apply fixes for each page based on the crawl.`
-  }
-
-  // Issue-type tier: selection is one or more whole issue types.
-  if (selection.issueTypeLabels.length) {
-    const issueTypes = selection.issueTypeLabels.join(", ")
-    return `Help me fix the ${issueTypes} issue${
-      selection.issueTypeLabels.length === 1 ? "" : "s"
-    } (${selection.pillarLabel}). Prioritize the most impactful affected URLs, and give concrete, ready-to-apply recommendations based only on the crawl context.`
-  }
-
-  const buckets = selection.bucketLabels.join(", ")
-  return `Help me fix all issues in the ${buckets} ${selection.pillarLabel} bucket${
-    selection.bucketLabels.length === 1 ? "" : "s"
-  }. Prioritize the most impactful issues and affected URLs, and give concrete, ready-to-apply recommendations based only on the crawl context.`
 }

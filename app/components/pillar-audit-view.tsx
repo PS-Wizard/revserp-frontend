@@ -1,14 +1,12 @@
 "use client"
 
 import { memo, useCallback, useMemo, useRef, useState } from "react"
-import { SparklesIcon } from "lucide-react"
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
 import { IssueTreemap } from "~/components/issue-treemap"
 import { NumberPopIn } from "~/components/number-pop-in"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
-import { Button } from "~/components/ui/button"
 import {
   Card,
   CardDescription,
@@ -50,9 +48,7 @@ type PillarAuditViewProps = {
   crawlBreakdowns: CrawlBreakdown[]
   currentBreakdown: ScoreBreakdownResponse | null
   currentCrawlId?: string
-  onSeedAIChat?: (prompt: string) => void
   pillarId: string
-  projectId?: string
   title: string
 }
 
@@ -61,9 +57,7 @@ export const PillarAuditView = memo(function PillarAuditView({
   crawlBreakdowns,
   currentBreakdown,
   currentCrawlId,
-  onSeedAIChat,
   pillarId,
-  projectId,
   title,
 }: PillarAuditViewProps) {
   const currentEntry =
@@ -88,7 +82,7 @@ export const PillarAuditView = memo(function PillarAuditView({
     autoSelect?: number
     token: number
   } | null>(null)
-  const handleRecommendBucket = useCallback(
+  const handleFocusBucket = useCallback(
     (bucketId: string, issueTypeId?: string, autoSelect?: number) => {
       focusTokenRef.current += 1
       setBucketFocus({
@@ -118,7 +112,6 @@ export const PillarAuditView = memo(function PillarAuditView({
         <BucketScoreCards
           crawlBreakdowns={crawlBreakdowns}
           currentCrawlId={currentCrawlId}
-          onRecommendBucket={handleRecommendBucket}
           pillarId={pillarId}
           psiResult={
             pillarId === "pagespeed"
@@ -137,7 +130,7 @@ export const PillarAuditView = memo(function PillarAuditView({
             pillarId={pillarId}
             onSelect={(selection) => {
               if (selection.bucketId) {
-                handleRecommendBucket(selection.bucketId, selection.issueTypeId)
+                handleFocusBucket(selection.bucketId, selection.issueTypeId)
                 return
               }
               issueExplorerRef.current?.scrollIntoView({
@@ -152,8 +145,6 @@ export const PillarAuditView = memo(function PillarAuditView({
               breakdown={currentBreakdown}
               focusRequest={bucketFocus}
               initialPillarId={pillarId}
-              onSeedAIChat={onSeedAIChat}
-              projectId={projectId}
             />
           </div>
         </Card>
@@ -173,13 +164,11 @@ export const PillarAuditView = memo(function PillarAuditView({
 const BucketScoreCards = memo(function BucketScoreCards({
   crawlBreakdowns,
   currentCrawlId,
-  onRecommendBucket,
   pillarId,
   psiResult,
 }: {
   crawlBreakdowns: CrawlBreakdown[]
   currentCrawlId?: string
-  onRecommendBucket: (bucketId: string) => void
   pillarId: string
   psiResult: GooglePSIStoredResult | null
 }) {
@@ -283,19 +272,6 @@ const BucketScoreCards = memo(function BucketScoreCards({
                 </div>
                 <TrendSparkline values={series} trend={delta} />
               </CardFooter>
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/40 opacity-0 backdrop-blur-[3px] transition-opacity duration-200 group-hover/card:opacity-100">
-                <Button
-                  className="pointer-events-auto shadow-sm"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onRecommendBucket(bucket.id)
-                  }}
-                  size="sm"
-                >
-                  <SparklesIcon className="size-4" />
-                  Recommend Fixes
-                </Button>
-              </div>
             </Card>
             {bucket.id === "psi_cwv" && psiResult && (
               <GooglePSIDrawer

@@ -332,52 +332,6 @@ export type GooglePSIStoredResult = {
 
 export type GooglePSIResults = GooglePSIStoredResult[]
 
-// --- Org-scoped AI (rehaul v2, used by the global AI dock) ---
-
-export type AIConversationSummary = {
-  id: string
-  org_id: string
-  created_by_user_id: string
-  title?: string
-  message_count: number
-  created_at: string
-  updated_at: string
-}
-
-export type AIDockToolCall = {
-  id: string
-  name: string
-  // Persisted as an inline JSON object by the backend; normalized to a string
-  // at the mapping boundary (see messagesFromResponses / the tool_call frame).
-  args?: unknown
-}
-
-export type AIDockMessage = {
-  id: string
-  conversation_id: string
-  role: "user" | "assistant" | "tool"
-  content: string
-  reasoning_content?: string
-  tool_calls?: AIDockToolCall[]
-  tool_call_id?: string
-  tool_name?: string
-  model?: string
-  created_at: string
-}
-
-export type AIConversationListResponse = {
-  conversations: AIConversationSummary[]
-}
-
-export type AIConversationDetail = {
-  conversation: AIConversationSummary
-  messages: AIDockMessage[]
-}
-
-export type CreateAIConversation = {
-  conversation: AIConversationSummary
-}
-
 // --- Admin types ---
 
 export type AdminUserResponse = {
@@ -400,25 +354,10 @@ export type AdminOrganizationResponse = {
 
 // --- Feature gating ---
 
-/**
- * Per-workspace gating. Denylist semantics: a workspace nobody has restricted
- * has everything enabled, and `disabled_ai_tools` holds only the exceptions.
- * This drives what the UI offers; the backend enforces the same state on every
- * gated route and on the AI tool set, so it is never the only thing stopping
- * access.
- */
 export type OrgFeatures = {
   auto_crawl: boolean
   gsc_connector: boolean
   ai_chat: boolean
-  disabled_ai_tools: string[]
-}
-
-/** Tool grouping comes from the server so adding a tool needs no UI change. */
-export type AdminFeatureToolGroup = {
-  id: string
-  label: string
-  tools: string[]
 }
 
 export type AdminWorkspaceFeatures = OrgFeatures & {
@@ -429,7 +368,6 @@ export type AdminWorkspaceFeatures = OrgFeatures & {
 
 export type AdminFeaturesResponse = {
   workspaces: AdminWorkspaceFeatures[]
-  tool_groups: AdminFeatureToolGroup[]
 }
 
 // --- Auto-crawl types ---

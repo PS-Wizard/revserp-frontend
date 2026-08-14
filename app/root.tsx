@@ -36,14 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <TooltipProvider>{children}</TooltipProvider>
-        {/* Only the mobile offset is lifted. Under 600px sonner goes full-width
-            and would bury the bottom-centre Revserp AI button; above that the
-            toast is right-aligned and 356px wide, so it clears the 13rem
-            centred button on any normal desktop width without help. */}
-        <Toaster
-          mobileOffset={{ bottom: "5.5rem", left: "1rem", right: "1rem" }}
-          position="bottom-right"
-        />
+        <Toaster position="bottom-right" />
         <ScrollRestoration />
         <Scripts />
       </body>

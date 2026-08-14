@@ -177,15 +177,6 @@ export const AppNavbar = memo(function AppNavbar({
   isPlatformAdmin,
   onExportAudit,
   isExportingAudit,
-  autoCrawlRefreshToken,
-  projectIds,
-  trackCrawl,
-  onNavigate,
-  onProjectSwitched,
-  onCompare,
-  onExport,
-  onAutoCrawlConfigured,
-  externalOpen,
 }: AppNavbarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -284,7 +275,7 @@ export const AppNavbar = memo(function AppNavbar({
     runCrawlReducer,
     initialRunCrawlState
   )
-  const autoCrawl = useAutoCrawlSettings(activeProjectId, autoCrawlRefreshToken)
+  const autoCrawl = useAutoCrawlSettings(activeProjectId)
 
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
@@ -473,7 +464,6 @@ export const AppNavbar = memo(function AppNavbar({
         dismissToken={dockDismissToken}
         exportFormat={projectActions.exportFormat}
         exportingCrawlId={projectActions.exportingCrawlId}
-        externalOpen={externalOpen}
         initials={initials}
         isActiveOrganizationOwner={workspaceActions.isActiveOrganizationOwner}
         isAutoCrawlEnabled={autoCrawl.enabled}
@@ -481,7 +471,6 @@ export const AppNavbar = memo(function AppNavbar({
         isExportingAudit={isExportingAudit}
         isPlatformAdmin={isPlatformAdmin}
         onAuditTabChange={onAuditTabChange}
-        onAutoCrawlConfigured={onAutoCrawlConfigured}
         onAutoCrawlDisable={() => void autoCrawl.handleDisable()}
         onAutoCrawlEnable={() => void autoCrawl.openDialog()}
         onCancelCrawl={(crawl) => void projectActions.handleCancelCrawl(crawl)}
@@ -489,7 +478,6 @@ export const AppNavbar = memo(function AppNavbar({
         onCreateProjectOpen={() => createProjectDispatch({ type: "OPEN" })}
         onDeleteCrawl={projectActions.openDeleteCrawlDialog}
         onDeleteProject={projectActions.openDeleteProjectDialog}
-        onExport={onExport}
         onExportAudit={onExportAudit}
         onExportCrawl={(crawl, format) =>
           void projectActions.handleExportCrawl(crawl, format)
@@ -498,13 +486,10 @@ export const AppNavbar = memo(function AppNavbar({
         onInviteOpen={workspaceActions.openInviteDialog}
         onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
         onLogout={() => void workspaceActions.handleLogout()}
-        onNavigate={onNavigate}
         onOpenBusinessProfile={(project) =>
           handleOpenBusinessProfileDrawer(project)
         }
         onProjectHover={handleProjectHover}
-        onProjectSwitched={onProjectSwitched}
-        onCompare={onCompare}
         onRunCrawlOpen={() => runCrawlDispatch({ type: "OPEN" })}
         onSelectOrganization={(value) =>
           void workspaceActions.handleSelectOrganization(value)
@@ -517,9 +502,7 @@ export const AppNavbar = memo(function AppNavbar({
         organizations={organizations}
         profileActionError={workspaceActions.profileActionError}
         projectActionError={projectActions.projectActionError}
-        projectIds={projectIds}
         projects={projects}
-        trackCrawl={trackCrawl}
         userName={userName}
         view={view}
         workspaceState={workspaceActions.workspaceState}

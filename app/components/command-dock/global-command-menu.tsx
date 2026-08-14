@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import {
   ActivityIcon,
-  BotIcon,
   EyeIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
@@ -45,7 +44,6 @@ export type GlobalCommandMenuProps = {
   isCrawlRunning: boolean
   isExportingAudit: boolean
   exportingCrawlId: string | null
-  aiChatEnabled: boolean
   searchConsoleEnabled: boolean
   onViewChange: (view: DashboardView) => void
   onAuditTabChange: (tab: AuditTab) => void
@@ -54,7 +52,6 @@ export type GlobalCommandMenuProps = {
   onRunCrawlOpen: () => void
   onExportAudit: () => void
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
-  onOpenAI: () => void
 }
 
 function CrawlLabel({ crawl }: { crawl: CrawlResponse }) {
@@ -93,7 +90,6 @@ export function GlobalCommandMenu({
   isCrawlRunning,
   isExportingAudit,
   exportingCrawlId,
-  aiChatEnabled,
   searchConsoleEnabled,
   onViewChange,
   onAuditTabChange,
@@ -102,7 +98,6 @@ export function GlobalCommandMenu({
   onRunCrawlOpen,
   onExportAudit,
   onExportCrawl,
-  onOpenAI,
 }: GlobalCommandMenuProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -370,24 +365,6 @@ export function GlobalCommandMenu({
                   {crawlExportReason ??
                     `Current crawl: ${formatCrawlDateTime(currentCrawl!)}`}
                 </span>
-              </div>
-            </CommandItem>
-            <CommandItem
-              disabled={!aiChatEnabled}
-              onSelect={() => {
-                if (!aiChatEnabled) return
-                select(onOpenAI)
-              }}
-              value="Open AI chat"
-            >
-              <BotIcon />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span>Open AI chat</span>
-                {!aiChatEnabled ? (
-                  <span className="truncate text-xs text-muted-foreground">
-                    AI chat is disabled
-                  </span>
-                ) : null}
               </div>
             </CommandItem>
           </CommandGroup>

@@ -1,9 +1,4 @@
 import type {
-  AICompareTarget,
-  AIExportAction,
-  AINavigationDestination,
-} from "~/components/ai-dock/use-ai-chat"
-import type {
   CrawlResponse,
   MeResponse,
   ProjectResponse,
@@ -21,9 +16,7 @@ export type AppNavbarProps = {
   isCrawlRunning: boolean
   crawlStatusLabel: string
   onCrawlStart: (crawl: CrawlResponse) => void
-  /** Start a comparison against the current crawl. */
   onCompareCrawl: (crawl: CrawlResponse) => void
-  /** Set while a comparison is open, so the navbar can show its tab. */
   compareLabel: string | null
   organizationId: string
   organizations: MeResponse["organizations"]
@@ -37,16 +30,4 @@ export type AppNavbarProps = {
   isPlatformAdmin: boolean
   onExportAudit: () => void
   isExportingAudit: boolean
-  // Bumped when the AI agent changes auto-crawl settings, so the navbar's
-  // auto-crawl state re-fetches instead of showing a stale enabled/disabled.
-  autoCrawlRefreshToken?: number
-  // --- Revserp AI (hosted by the command dock) ---
-  projectIds: string[]
-  trackCrawl: (id: string) => void
-  onNavigate: (destination: AINavigationDestination) => void
-  onProjectSwitched: (projectId: string) => void
-  onCompare: (target: AICompareTarget) => void
-  onExport: (action: AIExportAction) => void
-  onAutoCrawlConfigured: () => void
-  externalOpen: { prompt: string; token: number } | null
 }

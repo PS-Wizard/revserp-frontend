@@ -8,7 +8,6 @@ export default [
   route("invite/:token", "routes/invite.tsx"),
   route("account-suspended", "routes/account-suspended.tsx"),
   route("app", "routes/app.tsx"),
-  route("nav-lab", "routes/nav-lab.tsx"),
   route("app/internal/scoring", "routes/app/internal/scoring.tsx"),
   route("app/admin", "routes/app/admin.tsx"),
 ] satisfies RouteConfig

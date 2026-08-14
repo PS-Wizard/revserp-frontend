@@ -16,7 +16,6 @@ import {
 } from "react-router"
 import { redirect } from "react-router"
 import { useQuery } from "@tanstack/react-query"
-import { toast } from "sonner"
 
 import { AppNavbar, type DashboardView } from "~/components/app-navbar"
 import type { AuditTab } from "~/components/app-navbar/types"
@@ -34,18 +33,6 @@ import {
 import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
-import type {
-  AICompareTarget,
-  AIExportAction,
-  AINavigationDestination,
-} from "~/components/ai-dock/use-ai-chat"
-import {
-  downloadBlob,
-  formatCrawlDate,
-  getExportFilename,
-  getProjectFilenameSegment,
-  readExportError,
-} from "~/components/app-navbar/utils"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
@@ -62,7 +49,6 @@ import { Tabs, TabsContent } from "~/components/ui/tabs"
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
 import {
   ApiError,
-  buildApiUrl,
   clientApiFetch,
   serverApiFetch,
 } from "~/lib/api"
@@ -213,16 +199,7 @@ export default function AppPage() {
     projectName: string
     baseUrl: string
   } | null>(null)
-  const [aiOpenRequest, setAiOpenRequest] = useState<{
-    prompt: string
-    token: number
-  } | null>(null)
-  const aiOpenTokenRef = useRef(0)
-  // Bumped when the AI agent configures auto-crawl, so the navbar re-fetches.
-  const [autoCrawlRefresh, setAutoCrawlRefresh] = useState(0)
-  const handleAIAutoCrawlConfigured = useCallback(() => {
-    setAutoCrawlRefresh((token) => token + 1)
-  }, [])
+
 
   const sortedCrawls = useMemo(
     () =>
@@ -276,10 +253,7 @@ export default function AppPage() {
     }
   }, [])
 
-  const handleSeedAIChat = useCallback((prompt: string) => {
-    aiOpenTokenRef.current += 1
-    setAiOpenRequest({ prompt, token: aiOpenTokenRef.current })
-  }, [])
+
 
   const goToCrawl = useCallback(
     (projectId: string, crawlId?: string) => {
@@ -382,7 +356,7 @@ export default function AppPage() {
   const isCrawlRunning = activeRunningCrawl !== null || isStartingCrawl
   const crawlStatusLabel = activeRunningCrawl?.status ?? "starting"
 
-  // The blocking overlay + AI-tab lock should appear ONLY when the crawl the
+  // The blocking overlay should appear ONLY when the crawl the
   // user currently has selected is the one in flight. A crawl running in the
   // background (while the user views an already-completed crawl) must not block
   // the UI — that data already exists. We only auto-switch to a running crawl
@@ -604,79 +578,6 @@ export default function AppPage() {
     void exportPdfRef.current()
   }, [])
 
-  // --- Global AI dock wiring ---
-  const projectIds = useMemo(() => projects.map((p) => p.id), [projects])
-
-  const handleAINavigate = useCallback(
-    (destination: AINavigationDestination) => {
-      switch (destination) {
-        case "audit_summary":
-          setView("revserp-audit")
-          setAuditTab("summary")
-          break
-        case "audit_seo":
-          setView("revserp-audit")
-          setAuditTab("seo")
-          break
-        case "audit_aeo":
-          setView("revserp-audit")
-          setAuditTab("aeo")
-          break
-        case "audit_pagespeed":
-          setView("revserp-audit")
-          setAuditTab("pagespeed")
-          break
-        case "site_graph":
-          setView("revserp-audit")
-          setAuditTab("site-graph")
-          break
-        case "search_console":
-          setView("search-console")
-          break
-        case "visibility":
-          setView("revserp-visibility")
-          break
-      }
-      window.scrollTo({ top: 0, behavior: "smooth" })
-    },
-    []
-  )
-
-  const handleAIProjectSwitched = useCallback(
-    (switchedProjectId: string) => {
-      if (!projects.some((project) => project.id === switchedProjectId)) return
-      goToCrawl(switchedProjectId)
-      window.scrollTo({ top: 0, behavior: "smooth" })
-    },
-    [projects, goToCrawl]
-  )
-
-  const handleAITrackCrawl = useCallback(
-    (id: string) => {
-      setIsStartingCrawl(true)
-      trackCrawl(id)
-    },
-    [trackCrawl]
-  )
-
-  const handleAIExport = useCallback(
-    (action: AIExportAction) => {
-      if (action.kind === "audit" && action.format === "pdf") {
-        void exportPdfRef.current()
-        return
-      }
-      if (
-        action.kind === "crawl" &&
-        action.crawl_id &&
-        (action.format === "csv" || action.format === "xlsx")
-      ) {
-        const crawl = recentCrawls.find((c) => c.id === action.crawl_id)
-        if (crawl) void exportCrawlIssues(crawl, action.format, projects)
-      }
-    },
-    [recentCrawls, projects]
-  )
-
   const issuesRef = useRef<HTMLDivElement>(null)
   const issueFocusTokenRef = useRef(0)
   const [issueFocus, setIssueFocus] = useState<{
@@ -736,39 +637,6 @@ export default function AppPage() {
     setView("revserp-audit")
   }, [])
 
-  // An AI-opened comparison arrives as IDs only, so the far-side crawl has to be
-  // hydrated before the compare view can render it. The generation counter fences
-  // the await: a second request must win over an in-flight fetch rather than
-  // dropping a stale competitor into the view once it resolves.
-  const compareRequestRef = useRef(0)
-  const handleAICompare = useCallback(
-    ({ projectId: targetProjectId, crawlId }: AICompareTarget) => {
-      const project = projects.find((entry) => entry.id === targetProjectId)
-      if (!project) return
-      const generation = ++compareRequestRef.current
-      void (async () => {
-        try {
-          const crawl = await clientApiFetch<CrawlResponse>(`/crawls/${crawlId}`)
-          if (generation !== compareRequestRef.current) return
-          // The agent named the project; trust the API for which crawl actually
-          // belongs to it rather than the pairing in the action frame.
-          if (crawl.project_id !== project.id) return
-          setCompareTarget({
-            crawl,
-            projectName: project.name,
-            baseUrl: project.base_url,
-          })
-          setView("compare")
-          window.scrollTo({ top: 0, behavior: "smooth" })
-        } catch {
-          // The agent has already explained the comparison in chat; a failed
-          // hydrate only means the view does not open.
-        }
-      })()
-    },
-    [projects]
-  )
-
   // Drop a stale comparison rather than leaving an empty tab selected.
   useEffect(() => {
     if (compareTarget && !compareSides) {
@@ -779,8 +647,7 @@ export default function AppPage() {
 
   return (
     <FeaturesProvider features={me.features}>
-    {/* pb-24 clears the floating Revserp AI button at the bottom centre. */}
-    <main className="min-h-svh overflow-x-clip bg-background pb-24 text-foreground">
+    <main className="min-h-svh overflow-x-clip bg-background text-foreground">
       {cancelDialog}
       <AppNavbar
         activeProjectId={activeProject?.id}
@@ -803,15 +670,6 @@ export default function AppPage() {
         auditTab={auditTab}
         onAuditTabChange={setAuditTab}
         isPlatformAdmin={me.is_platform_admin}
-        autoCrawlRefreshToken={autoCrawlRefresh}
-        projectIds={projectIds}
-        trackCrawl={handleAITrackCrawl}
-        onNavigate={handleAINavigate}
-        onProjectSwitched={handleAIProjectSwitched}
-        onCompare={handleAICompare}
-        onExport={handleAIExport}
-        onAutoCrawlConfigured={handleAIAutoCrawlConfigured}
-        externalOpen={aiOpenRequest}
       />
 
       {deferredView === "revserp-audit" ? (
@@ -859,8 +717,6 @@ export default function AppPage() {
                       <IssueExplorer
                         breakdown={stableCurrentBreakdown}
                         focusRequest={issueFocus}
-                        onSeedAIChat={handleSeedAIChat}
-                        projectId={activeProject?.id}
                       />
                     </div>
                   </Card>
@@ -874,9 +730,7 @@ export default function AppPage() {
                     crawlBreakdowns={stableCrawlBreakdowns}
                     currentCrawlId={stableCurrentCrawl?.id}
                     currentBreakdown={stableCurrentBreakdown}
-                    onSeedAIChat={handleSeedAIChat}
                     pillarId={pillarId}
-                    projectId={activeProject?.id}
                     title={title}
                   />
                 </TabsContent>
@@ -974,40 +828,6 @@ export default function AppPage() {
     </main>
     </FeaturesProvider>
   )
-}
-
-// Crawl-issues export used by the AI dock's `export{kind:'crawl'}` action.
-// Mirrors the existing navbar crawl export (use-project-actions handleExportCrawl)
-// minus the reducer bookkeeping, reusing the same endpoint and filename utils.
-async function exportCrawlIssues(
-  crawl: CrawlResponse,
-  format: "csv" | "xlsx",
-  projects: ProjectResponse[]
-) {
-  if (crawl.status !== "completed") {
-    toast.error("Only completed crawls can be exported.")
-    return
-  }
-  try {
-    const response = await fetch(
-      buildApiUrl(`/crawls/${crawl.id}/score-breakdown/export.${format}`),
-      { credentials: "include" }
-    )
-    if (!response.ok) {
-      throw new Error(await readExportError(response))
-    }
-    const blob = await response.blob()
-    const project = projects.find((item) => item.id === crawl.project_id)
-    const filename = getExportFilename(
-      response.headers.get("content-disposition"),
-      `${getProjectFilenameSegment(project)}-${formatCrawlDate(crawl)}-issues.${format}`
-    )
-    downloadBlob(blob, filename)
-  } catch (error) {
-    toast.error(
-      error instanceof Error ? error.message : "Unable to export crawl issues."
-    )
-  }
 }
 
 const OVERALL_BLEND_WEIGHTS = {

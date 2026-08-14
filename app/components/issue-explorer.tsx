@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { DownloadIcon, SparklesIcon } from "lucide-react"
+import { DownloadIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { TablePagination } from "~/components/issue-explorer/scope-controls"
@@ -22,14 +22,12 @@ import {
 } from "~/components/issue-explorer/tables"
 import type {
   BucketScope,
-  FixSelection,
   MergedIssueUrlRow,
   PillarScope,
 } from "~/components/issue-explorer/types"
 import {
   areStringArraysEqual,
   BucketUrlPager,
-  buildBatchFixPrompt,
   urlRowKey,
 } from "~/components/issue-explorer/utils"
 import { useDragSelection } from "~/components/issue-explorer/use-drag-selection"
@@ -219,8 +217,6 @@ export const IssueExplorer = memo(function IssueExplorer({
   breakdown,
   focusRequest,
   initialPillarId,
-  onSeedAIChat,
-  projectId,
 }: {
   breakdown: ScoreBreakdownResponse | null
   focusRequest?: {
@@ -231,8 +227,6 @@ export const IssueExplorer = memo(function IssueExplorer({
     token: number
   } | null
   initialPillarId?: string
-  onSeedAIChat?: (prompt: string) => void
-  projectId?: string
 }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const {
@@ -643,132 +637,6 @@ export const IssueExplorer = memo(function IssueExplorer({
     )
   )
 
-  // --- Build fix selections from the current checked rows ---
-  const fixSelections = useMemo<FixSelection[]>(() => {
-    // URL tier: selection always sits inside ONE drilled issue type.
-    if (drilledBucket && drilledIssueType) {
-      const checkedSet = new Set(checkedUrlKeys)
-      const rows = loadedUrls.filter((row) => checkedSet.has(urlRowKey(row)))
-      if (!rows.length) return []
-      return [
-        {
-          pillarId: drilledBucket.pillarId,
-          pillarLabel: drilledBucket.pillarLabel,
-          bucketIds: [drilledBucket.bucketId],
-          bucketLabels: [drilledBucket.bucketLabel],
-          issueTypeIds: [drilledIssueType.id],
-          issueTypeLabels: [drilledIssueType.label],
-          urls: [...new Set(rows.map((row) => row.url))],
-        },
-      ]
-    }
-
-    // Issue-type tier: checked issue types within the drilled bucket.
-    if (drilledBucket) {
-      const checkedSet = new Set(checkedIssueTypeKeys)
-      const issues = drilledBucket.bucket.issues.filter((issue) =>
-        checkedSet.has(issue.id)
-      )
-      if (!issues.length) return []
-      return [
-        {
-          pillarId: drilledBucket.pillarId,
-          pillarLabel: drilledBucket.pillarLabel,
-          bucketIds: [drilledBucket.bucketId],
-          bucketLabels: [drilledBucket.bucketLabel],
-          issueTypeIds: issues.map((issue) => issue.id),
-          issueTypeLabels: issues.map((issue) => issue.label),
-          urls: [],
-        },
-      ]
-    }
-
-    if (effectivePillar) {
-      // Whole-bucket selection: leave issueTypeIds empty so the backend
-      // expands to every issue type in the selected buckets.
-      const checkedSet = new Set(checkedBucketKeys)
-      const scopes = bucketScopes.filter((scope) => checkedSet.has(scope.key))
-      const byPillar = new Map<string, FixSelection>()
-      for (const scope of scopes) {
-        const existing = byPillar.get(scope.pillarId)
-        if (existing) {
-          existing.bucketIds.push(scope.bucketId)
-          existing.bucketLabels.push(scope.bucketLabel)
-        } else {
-          byPillar.set(scope.pillarId, {
-            pillarId: scope.pillarId,
-            pillarLabel: scope.pillarLabel,
-            bucketIds: [scope.bucketId],
-            bucketLabels: [scope.bucketLabel],
-            issueTypeIds: [],
-            issueTypeLabels: [],
-            urls: [],
-          })
-        }
-      }
-      return [...byPillar.values()]
-    }
-
-    // Whole-pillar selection: every bucket of every checked pillar.
-    const checkedSet = new Set(checkedPillarIds)
-    return selectedPillars
-      .filter((pillar) => checkedSet.has(pillar.id))
-      .map((pillar) => ({
-        pillarId: pillar.id,
-        pillarLabel: pillar.label,
-        bucketIds: pillar.buckets.map((bucket) => bucket.id),
-        bucketLabels: pillar.buckets.map((bucket) =>
-          formatBucketLabel(bucket.id, bucket.label)
-        ),
-        issueTypeIds: [],
-        issueTypeLabels: [],
-        urls: [],
-      }))
-  }, [
-    bucketScopes,
-    checkedBucketKeys,
-    checkedIssueTypeKeys,
-    checkedPillarIds,
-    checkedUrlKeys,
-    effectivePillar,
-    loadedUrls,
-    drilledBucket,
-    drilledIssueType,
-    selectedPillars,
-  ])
-
-  const selectionCount = drilledIssueType
-    ? checkedUrlKeys.length
-    : drilledBucket
-      ? checkedIssueTypeKeys.length
-      : effectivePillar
-        ? checkedBucketKeys.length
-        : checkedPillarIds.length
-
-  const onRecommendFixes = useCallback(() => {
-    if (!crawlId || !projectId) {
-      toast.error("Recommended fixes are unavailable for this view.")
-      return
-    }
-    if (!fixSelections.length || !onSeedAIChat) return
-
-    const maxScopedUrls = 10
-    const droppedUrls = fixSelections.reduce(
-      (sum, s) => sum + Math.max(0, s.urls.length - maxScopedUrls),
-      0
-    )
-    if (droppedUrls > 0) {
-      toast.warning(
-        `Only the first ${maxScopedUrls} URLs per pillar are included; ${droppedUrls} will be skipped.`
-      )
-    }
-
-    // Seed the global AI dock with a natural-language prompt describing the
-    // selection. The dock opens maximized and the model fetches the relevant
-    // issue detail via its own tools.
-    onSeedAIChat(buildBatchFixPrompt(fixSelections, maxScopedUrls))
-  }, [crawlId, fixSelections, onSeedAIChat, projectId])
-
   const onExport = useCallback(async () => {
     if (!crawlId) return
 
@@ -838,7 +706,15 @@ export const IssueExplorer = memo(function IssueExplorer({
 
   if (!breakdown || !pillarOptions.length) return null
 
-  const canAct = selectionCount > 0
+  const canAct =
+    (drilledIssueType
+      ? checkedUrlKeys
+      : drilledBucket
+        ? checkedIssueTypeKeys
+        : effectivePillar
+          ? checkedBucketKeys
+          : checkedPillarIds
+    ).length > 0
 
   // --- Breadcrumbs ---
   const crumbs: { label: string; onClick?: () => void }[] = []
@@ -900,16 +776,6 @@ export const IssueExplorer = memo(function IssueExplorer({
             })}
           </BreadcrumbList>
         </Breadcrumb>
-        <div className="flex items-center justify-end gap-3">
-          <Button
-            disabled={!canAct || !projectId}
-            onClick={onRecommendFixes}
-            size="sm"
-          >
-            <SparklesIcon className="size-4" />
-            Recommend Fixes{selectionCount > 0 ? ` (${selectionCount})` : ""}
-          </Button>
-        </div>
       </div>
 
       <div>
