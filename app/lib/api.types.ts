@@ -369,11 +369,19 @@ export type OrgFeatures = {
 export type AdminWorkspaceFeatures = OrgFeatures & {
   org_id: string
   org_name: string
+  disabled_ai_tools: string[]
   updated_at?: string
+}
+
+export type AIToolInfo = {
+  name: string
+  label: string
+  description: string
 }
 
 export type AdminFeaturesResponse = {
   workspaces: AdminWorkspaceFeatures[]
+  ai_tools: AIToolInfo[]
 }
 
 // --- Auto-crawl types ---

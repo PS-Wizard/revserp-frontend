@@ -11,14 +11,16 @@ import {
   FieldLegend,
   FieldSet,
 } from "~/components/ui/field"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
 import {
   Drawer,
+  DrawerClose,
   DrawerContent,
   DrawerDescription,
   DrawerFooter,
   DrawerHeader,
+  DrawerNested,
   DrawerTitle,
 } from "~/components/ui/drawer"
 import { Input } from "~/components/ui/input"
@@ -28,6 +30,7 @@ import type {
   AdminFeaturesResponse,
   AdminWorkspaceFeatures,
   AIReasoningEffort,
+  AIToolInfo,
 } from "~/lib/api.types"
 
 const FEATURE_COLUMNS = [
@@ -80,19 +83,17 @@ function normalizeWorkspace(
 ): AdminWorkspaceFeatures {
   return {
     ...workspace,
+    disabled_ai_tools: workspace.disabled_ai_tools ?? [],
     ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
       workspace.ai_allowed_reasoning_efforts
     ),
   }
 }
 
-function sameReasoningEfforts(
-  left: readonly AIReasoningEffort[],
-  right: readonly AIReasoningEffort[]
-) {
+function sameStringArrays(left: readonly string[], right: readonly string[]) {
   return (
     left.length === right.length &&
-    left.every((effort, index) => effort === right[index])
+    left.every((item, index) => item === right[index])
   )
 }
 
@@ -115,11 +116,13 @@ function ToggleRow({
   checked,
   label,
   description,
+  meta,
   onChange,
 }: {
   checked: boolean
   label: string
   description: string
+  meta?: string
   onChange: (checked: boolean) => void
 }) {
   const toggle = () => onChange(!checked)
@@ -150,6 +153,11 @@ function ToggleRow({
         <span className="block truncate text-sm font-medium" title={label}>
           {label}
         </span>
+        {meta ? (
+          <span className="mt-0.5 block truncate text-xs text-muted-foreground/70">
+            {meta}
+          </span>
+        ) : null}
         <span className="mt-0.5 block text-xs text-muted-foreground">
           {description}
         </span>
@@ -162,6 +170,8 @@ export function FeaturesTab() {
   const [saved, setSaved] = useState<AdminWorkspaceFeatures[]>([])
   const [edits, setEdits] = useState<EditedRows>(new Map())
   const [openOrgId, setOpenOrgId] = useState<string | null>(null)
+  const [aiTools, setAiTools] = useState<AIToolInfo[]>([])
+  const [aiToolsOpen, setAiToolsOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -172,6 +182,7 @@ export function FeaturesTab() {
       const data =
         await clientApiFetch<AdminFeaturesResponse>("/admin/features")
       setSaved((data.workspaces ?? []).map(normalizeWorkspace))
+      setAiTools(data.ai_tools ?? [])
       setEdits(new Map())
     } catch {
       toast.error("Failed to load feature settings")
@@ -221,9 +232,13 @@ export function FeaturesTab() {
             workspace.ai_monthly_message_limit ||
           edited.ai_concurrent_turn_limit_per_user !==
             workspace.ai_concurrent_turn_limit_per_user ||
-          !sameReasoningEfforts(
+          !sameStringArrays(
             edited.ai_allowed_reasoning_efforts,
             workspace.ai_allowed_reasoning_efforts
+          ) ||
+          !sameStringArrays(
+            edited.disabled_ai_tools,
+            workspace.disabled_ai_tools
           ))
       ) {
         changed.add(workspace.org_id)
@@ -255,6 +270,7 @@ export function FeaturesTab() {
         const row = rowFor(workspace)
         return {
           org_id: row.org_id,
+          disabled_ai_tools: row.disabled_ai_tools,
           auto_crawl: row.auto_crawl,
           gsc_connector: row.gsc_connector,
           ai_chat: row.ai_chat,
@@ -417,7 +433,10 @@ export function FeaturesTab() {
         direction="right"
         open={openWorkspace !== undefined}
         onOpenChange={(isOpen) => {
-          if (!isOpen) setOpenOrgId(null)
+          if (!isOpen) {
+            setOpenOrgId(null)
+            setAiToolsOpen(false)
+          }
         }}
       >
         <DrawerContent className="sm:max-w-md">
@@ -458,6 +477,19 @@ export function FeaturesTab() {
                     })
                   }
                 />
+                <button
+                  type="button"
+                  onClick={() => setAiToolsOpen(true)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-lg border border-dashed px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">AI tools</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Choose which AI tools the assistant may call.
+                    </span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </button>
                 <FieldGroup>
                   <Field data-invalid={monthlyLimitInvalid}>
                     <FieldLabel htmlFor="ai-monthly-message-limit">
@@ -585,6 +617,52 @@ export function FeaturesTab() {
                       : "Save changes"}
                 </Button>
               </DrawerFooter>
+              <DrawerNested
+                direction="right"
+                open={aiToolsOpen}
+                onOpenChange={setAiToolsOpen}
+              >
+                <DrawerContent className="sm:max-w-md">
+                  <DrawerHeader>
+                    <DrawerTitle>AI tools</DrawerTitle>
+                    <DrawerDescription>
+                      {openWorkspace.org_name} — everything is enabled unless
+                      you turn it off. Changes apply after saving.
+                    </DrawerDescription>
+                  </DrawerHeader>
+
+                  <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+                    <FieldGroup className="gap-2">
+                      {aiTools.map((tool) => (
+                        <ToggleRow
+                          key={tool.name}
+                          checked={!open.disabled_ai_tools.includes(tool.name)}
+                          label={tool.label}
+                          description={tool.description}
+                          meta={tool.name}
+                          onChange={(checked) =>
+                            updateRow(openWorkspace, {
+                              disabled_ai_tools: checked
+                                ? open.disabled_ai_tools.filter(
+                                    (name) => name !== tool.name
+                                  )
+                                : [...open.disabled_ai_tools, tool.name],
+                            })
+                          }
+                        />
+                      ))}
+                    </FieldGroup>
+                  </div>
+
+                  <DrawerFooter className="flex-row justify-end gap-2">
+                    <DrawerClose
+                      className={buttonVariants({ variant: "outline" })}
+                    >
+                      Back
+                    </DrawerClose>
+                  </DrawerFooter>
+                </DrawerContent>
+              </DrawerNested>
             </>
           ) : null}
         </DrawerContent>
