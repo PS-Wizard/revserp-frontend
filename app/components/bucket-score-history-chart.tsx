@@ -88,47 +88,45 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     [chartRows, bucketIds]
   )
 
+  const crawlTimestamps = useMemo(
+    () =>
+      chartRows
+        .map((row) => row.timestamp)
+        .filter((timestamp): timestamp is number => typeof timestamp === "number"),
+    [chartRows]
+  )
+
   const chartOptions = useMemo<ApexOptions>(
     () => ({
+      annotations: {
+        xaxis: crawlTimestamps.map((timestamp) => ({
+          x: timestamp,
+          borderWidth: 1.5,
+          strokeDashArray: 3,
+          borderColor: "rgba(255,255,255,0.32)",
+        })),
+      },
       chart: {
-        type: "area",
+        type: "line",
         height: 340,
         background: "transparent",
         parentHeightOffset: 0,
-        toolbar: {
-          show: true,
-          tools: {
-            download: false,
-            selection: true,
-            zoom: true,
-            zoomin: true,
-            zoomout: true,
-            pan: true,
-            reset: true,
-          },
-          autoSelected: "zoom",
-        },
+        toolbar: { show: false },
         zoom: { enabled: true, type: "x", autoScaleYaxis: true },
         animations: { speed: 300 },
       },
       colors: buckets.map((_, i) => getPillarChartColor(pillarId, i)),
       dataLabels: { enabled: false },
-      fill: {
-        type: "gradient",
-        gradient: {
-          shadeIntensity: 0.2,
-          opacityFrom: 0.34,
-          opacityTo: 0.03,
-          stops: [0, 92, 100],
-        },
-      },
+      fill: { opacity: 0 },
       grid: {
         borderColor: "rgba(255,255,255,0.08)",
         strokeDashArray: 4,
-        padding: { bottom: 0, left: 8, right: 14, top: 0 },
+        padding: { bottom: 8, left: 0, right: 14, top: 0 },
+        xaxis: { lines: { show: false } },
+        yaxis: { lines: { show: false } },
       },
       legend: { show: false },
-      stroke: { curve: "smooth", width: 2.5 },
+      stroke: { curve: "smooth", width: 3.5 },
       theme: { mode: "dark" },
       tooltip: {
         theme: "dark",
@@ -141,6 +139,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
         labels: {
           style: { colors: "rgba(255,255,255,0.45)" },
           datetimeUTC: false,
+          offsetY: 0,
         },
         axisBorder: { show: false },
         axisTicks: { show: false },
@@ -150,13 +149,12 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
         min: yRange.min,
         max: yRange.max,
         tickAmount: 4,
-        labels: {
-          style: { colors: "rgba(255,255,255,0.45)" },
-          formatter: (value) => `${Math.round(Number(value))}%`,
-        },
+        labels: { show: false },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
       },
     }),
-    [buckets, yRange]
+    [buckets, crawlTimestamps, pillarId, yRange]
   )
 
   useApexChart(
@@ -166,46 +164,58 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     chartRows.length > 0 && buckets.length > 0
   )
 
+  const description = activeProjectName
+    ? `Bucket trends for ${activeProjectName}`
+    : "Bucket trends from recent completed crawls"
+  const emptyChartHeight = 340
+
+  const legend = (
+    <div className="flex flex-wrap justify-center gap-4 text-sm">
+      {buckets.map((bucket, index) => (
+        <div className="flex items-center gap-2" key={bucket.id}>
+          <span
+            className="size-2.5 shrink-0 rounded-full"
+            style={{
+              backgroundColor: getPillarChartColor(pillarId, index),
+            }}
+          />
+          <span className="truncate text-muted-foreground">
+            {formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, ""))}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+
+  const chartBody =
+    chartRows.length === 0 || buckets.length === 0 ? (
+      <div
+        className="flex w-full items-center justify-center text-sm text-muted-foreground"
+        style={{ minHeight: emptyChartHeight }}
+      >
+        No completed bucket history yet.
+      </div>
+    ) : (
+      <>
+        <div
+          className="w-full"
+          ref={chartContainerRef}
+          style={{ minHeight: emptyChartHeight }}
+        />
+        <div className="mt-auto flex min-h-10 justify-center pt-6">
+          {legend}
+        </div>
+      </>
+    )
+
   return (
     <Card className="@container/card flex h-full flex-col bg-gradient-to-br from-card via-card to-muted/30">
       <CardHeader>
         <CardTitle>{title} Score History</CardTitle>
-        <CardDescription>
-          {activeProjectName
-            ? `Bucket trends for ${activeProjectName}`
-            : "Bucket trends from recent completed crawls"}
-        </CardDescription>
+        <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col px-2 pt-2 sm:px-6">
-        {chartRows.length === 0 || buckets.length === 0 ? (
-          <div className="flex min-h-[340px] w-full items-center justify-center text-sm text-muted-foreground">
-            No completed bucket history yet.
-          </div>
-        ) : (
-          <>
-            <div className="min-h-[340px] w-full" ref={chartContainerRef} />
-            <div className="mt-auto flex min-h-10 justify-center">
-              <div className="flex flex-wrap justify-center gap-4 text-sm">
-                {buckets.map((bucket, index) => (
-                  <div className="flex items-center gap-2" key={bucket.id}>
-                    <span
-                      className="size-2.5 shrink-0 rounded-full"
-                      style={{
-                        backgroundColor: getPillarChartColor(pillarId, index),
-                      }}
-                    />
-                    <span className="truncate text-muted-foreground">
-                      {formatBucketLabel(
-                        bucket.id,
-                        bucket.label.replace(/^bucket_/, "")
-                      )}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
+        {chartBody}
       </CardContent>
     </Card>
   )

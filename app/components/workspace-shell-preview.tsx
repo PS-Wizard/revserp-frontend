@@ -288,15 +288,32 @@ export function WorkspaceShellPreview({
   }
 
   useEffect(() => {
-    if (islandState === "docked") return
+    if (!features.ai_chat) return
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return
-      if (islandState === "maximized") minimizeIsland()
-      else dockIsland()
+      if (event.key === "Escape" && islandState !== "docked") {
+        if (islandState === "maximized") minimizeIsland()
+        else dockIsland()
+        return
+      }
+
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.key !== " " ||
+        event.repeat
+      ) {
+        return
+      }
+
+      event.preventDefault()
+
+      if (islandState === "docked") openIsland()
+      else if (islandState === "minimized") maximizeIsland()
     }
+
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [islandState])
+  }, [features.ai_chat, islandState])
 
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ??

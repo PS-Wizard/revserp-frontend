@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 
 import {
   CheckIcon,
   ChevronDownIcon,
+  CommandIcon,
   Maximize2Icon,
   Minimize2Icon,
   MinusIcon,
@@ -35,7 +36,7 @@ const ISLAND_LAYOUT_ID = "ai-island"
 
 const islandSurfaceClass = "border border-border bg-black"
 
-export const islandDockedSizeClass = "h-12 w-[10.5rem]"
+export const islandDockedSizeClass = "h-12 w-[12.75rem]"
 
 /** Traditional chatbot anchor — bottom-right of the viewport. */
 const islandAnchorClass = "fixed bottom-6 right-6 z-[100]"
@@ -70,6 +71,30 @@ type DockedChromeProps = {
   transition: Transition
 }
 
+function IslandExpandShortcut() {
+  const [modKey, setModKey] = useState<"cmd" | "ctrl">("ctrl")
+
+  useEffect(() => {
+    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
+    setModKey(isApple ? "cmd" : "ctrl")
+  }, [])
+
+  return (
+    <span
+      aria-hidden="true"
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/12 bg-white/[0.06] px-1 py-0.5 text-[9px] font-medium leading-none text-white/55"
+    >
+      {modKey === "cmd" ? (
+        <CommandIcon className="size-3 shrink-0 opacity-90" />
+      ) : (
+        <span>Ctrl</span>
+      )}
+      <span className="text-white/35">+</span>
+      <span>Space</span>
+    </span>
+  )
+}
+
 /** Docked pill — one layoutId element, morphs into the panel. */
 export function DynamicIslandDockedChrome({
   active = false,
@@ -78,7 +103,7 @@ export function DynamicIslandDockedChrome({
 }: DockedChromeProps) {
   const dockedButton = (
     <motion.button
-      aria-label="Open AI island"
+      aria-label="Open AI chat (Command or Control + Space)"
       className={cn(
         "pointer-events-auto overflow-hidden rounded-lg",
         islandSurfaceClass,
@@ -91,18 +116,21 @@ export function DynamicIslandDockedChrome({
       transition={transition}
       type="button"
     >
-      <span className="flex size-full items-center justify-between px-3.5">
-        <ThinkingOrb
-          aria-hidden="true"
-          className="flex shrink-0 items-center justify-center [&_svg]:size-9"
-          paused={!active}
-          size={20}
-          state="solving"
-          theme="dark"
-        />
-        <span className="truncate text-base leading-none font-semibold text-foreground">
-          Revbot
+      <span className="flex size-full items-center justify-between gap-2 px-3">
+        <span className="flex min-w-0 items-center gap-2">
+          <ThinkingOrb
+            aria-hidden="true"
+            className="flex shrink-0 items-center justify-center [&_svg]:size-9"
+            paused={!active}
+            size={20}
+            state="solving"
+            theme="dark"
+          />
+          <span className="truncate text-base leading-none font-semibold text-foreground">
+            Revbot
+          </span>
         </span>
+        <IslandExpandShortcut />
       </span>
     </motion.button>
   )
@@ -169,6 +197,7 @@ export function DynamicIslandPanel({
   transition,
 }: IslandPanelProps) {
   const [historySearch, setHistorySearch] = useState("")
+  const [panelShadow, setPanelShadow] = useState(false)
   const isMaximized = panelState === "maximized"
   const borderRadius = isMaximized ? PANEL_RADIUS : DOCKED_RADIUS
   const shortTitle = title.split(/\s+/).slice(0, 3).join(" ")
@@ -183,12 +212,7 @@ export function DynamicIslandPanel({
       className={
         isMaximized
           ? islandMaximizedAnchorClass
-          : cn(
-              "pointer-events-none",
-              islandAnchorClass,
-              islandMinimizedSizeClass,
-              islandMinimizedShadowClass
-            )
+          : cn("pointer-events-none", islandAnchorClass)
       }
     >
       <motion.div
@@ -197,10 +221,17 @@ export function DynamicIslandPanel({
         className={cn(
           "pointer-events-auto min-h-0 overflow-hidden",
           islandPanelClass,
-          isMaximized ? "h-full w-full flex-1" : islandMinimizedSizeClass
+          isMaximized ? "h-full w-full flex-1" : islandMinimizedSizeClass,
+          !isMaximized && panelShadow && islandMinimizedShadowClass
         )}
         layout
         layoutId={ISLAND_LAYOUT_ID}
+        onLayoutAnimationComplete={() => {
+          if (!isMaximized) setPanelShadow(true)
+        }}
+        onLayoutAnimationStart={() => {
+          setPanelShadow(false)
+        }}
         role="dialog"
         style={{
           borderRadius,
