@@ -184,7 +184,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
         ) : (
           <>
             <div className="min-h-[340px] w-full" ref={chartContainerRef} />
-            <div className="mt-auto flex justify-center">
+            <div className="mt-auto flex min-h-10 justify-center">
               <div className="flex flex-wrap justify-center gap-4 text-sm">
                 {buckets.map((bucket, index) => (
                   <div className="flex items-center gap-2" key={bucket.id}>

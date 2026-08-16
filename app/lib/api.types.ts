@@ -539,6 +539,22 @@ export type AITurnMessageResponse = {
 export type AITurnStatus =
   "queued" | "running" | "completed" | "stopped" | "failed"
 
+export type AIToolCallStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "awaiting"
+
+export type AIToolCallResponse = {
+  call_id: string
+  name: string
+  args: Record<string, unknown>
+  status: AIToolCallStatus
+  summary: string
+  seq: number
+  created_at: string
+}
+
 export type AITurnResponse = {
   id: string
   conversation_id: string
@@ -559,6 +575,7 @@ export type AITurnResponse = {
   created_at: string
   updated_at: string
   messages: AITurnMessageResponse[]
+  tool_calls: AIToolCallResponse[]
 }
 
 export type AITurnSubmissionResponse = {
@@ -569,12 +586,27 @@ export type AITurnSubmissionResponse = {
   status: "queued"
 }
 
+export type AIStreamPhase = "thinking" | "writing" | "working"
+
 export type AIStreamPhasePayload = {
-  phase: "thinking" | "writing"
+  phase: AIStreamPhase
 }
 
 export type AIStreamTextDeltaPayload = {
   text: string
+}
+
+export type AIStreamToolCallPayload = {
+  id: string
+  name: string
+  args: Record<string, unknown>
+}
+
+export type AIStreamToolResultPayload = {
+  id: string
+  name: string
+  summary: string
+  status?: AIToolCallStatus
 }
 
 export type AIStreamTerminalPayload = {

@@ -305,6 +305,9 @@ export const AppNavbar = memo(function AppNavbar({
   function handleSelectProject(projectId: string, crawlId?: string) {
     const searchParams = new URLSearchParams(location.search)
     searchParams.set("project", projectId)
+    if (projectId !== activeProjectId) {
+      searchParams.delete("revbotConversation")
+    }
     if (crawlId) {
       searchParams.set("crawl", crawlId)
     } else {
@@ -591,7 +594,7 @@ export const AppNavbar = memo(function AppNavbar({
 
 // --- Dialogs ---
 
-type AppNavbarDialogsProps = {
+export type AppNavbarDialogsProps = {
   businessProfile: {
     businessProfileProject: ReturnType<
       typeof useBusinessProfile
@@ -629,7 +632,7 @@ type AppNavbarDialogsProps = {
   workspaceActions: ReturnType<typeof useWorkspaceActions>
 }
 
-function AppNavbarDialogs({
+export function AppNavbarDialogs({
   businessProfile,
   createProject,
   createProjectDispatch,
@@ -763,4 +766,4 @@ function AppNavbarDialogs({
   )
 }
 
-export type { DashboardView }
+export type { AppNavbarProps, DashboardView }

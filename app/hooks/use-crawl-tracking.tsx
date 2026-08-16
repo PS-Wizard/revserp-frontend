@@ -5,7 +5,6 @@ import {
   CancelCrawlDialog,
   type CancelCrawlTarget,
 } from "~/components/cancel-crawl-dialog"
-import { NumberPopIn } from "~/components/number-pop-in"
 import { clientApiFetch } from "~/lib/api"
 import type { ActiveCrawlsResponse, CrawlResponse } from "~/lib/api.types"
 
@@ -168,9 +167,8 @@ export function useCrawlTracking({
                 id,
                 duration: Infinity,
                 description: (
-                  <span className="t-digit-line">
-                    <NumberPopIn value={crawl.urls_crawled} /> /{" "}
-                    <NumberPopIn value={crawl.urls_discovered} /> crawled
+                  <span>
+                    {crawl.urls_crawled} / {crawl.urls_discovered} crawled
                   </span>
                 ),
                 action: cancellableAction,

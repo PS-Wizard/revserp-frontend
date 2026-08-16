@@ -3,7 +3,6 @@
 import { memo, useMemo } from "react"
 
 import type { CrawlResponse } from "~/lib/api.types"
-import { NumberPopIn } from "~/components/number-pop-in"
 import {
   Card,
   CardDescription,
@@ -93,11 +92,7 @@ export const SectionCards = memo(function SectionCards({
                   "—"
                 ) : (
                   <>
-                    <NumberPopIn
-                      value={Math.round(card.value)}
-                      replayKey={currentCrawl?.id}
-                    />
-                    %
+                    {Math.round(card.value)}%
                   </>
                 )}
               </CardTitle>

@@ -1,4 +1,8 @@
 import { ThinkingOrb } from "thinking-orbs"
+import {
+  TableHoverPill,
+  useTablePill,
+} from "~/components/ui/hover-pill"
 import { Badge } from "~/components/ui/badge"
 import { Checkbox } from "~/components/ui/checkbox"
 import {
@@ -65,6 +69,7 @@ export function PillarTable({
   onDrill,
   getRowProps,
 }: PillarTableProps) {
+  const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (!totalRows) {
     return <EmptyMessage message="No pillars found for the selected scope." />
   }
@@ -72,7 +77,12 @@ export function PillarTable({
   const checkedSet = new Set(checkedKeys)
 
   return (
-    <div className="overflow-hidden rounded-lg border select-none">
+    <div
+      className="relative overflow-hidden rounded-lg border select-none"
+      onMouseLeave={clearPill}
+      ref={containerRef}
+    >
+      <TableHoverPill pill={pill} />
       <Table>
         <TableHeader className="sticky top-0 z-10 bg-muted">
           <TableRow>
@@ -90,11 +100,15 @@ export function PillarTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <TableRow
-              className="cursor-pointer"
+              className="cursor-pointer hover:bg-transparent"
               key={row.key}
               onDoubleClick={() => onDrill(row.key)}
+              onMouseEnter={() => showPill(index)}
+              ref={(element) => {
+                rowRefs.current[index] = element
+              }}
               title="Double-click to view buckets · drag to select"
               {...getRowProps(row.key)}
             >
@@ -150,6 +164,7 @@ export function BucketTable({
   onDrill,
   getRowProps,
 }: BucketTableProps) {
+  const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (!totalRows) {
     return <EmptyMessage message="No buckets found for the selected scope." />
   }
@@ -157,7 +172,12 @@ export function BucketTable({
   const checkedSet = new Set(checkedKeys)
 
   return (
-    <div className="overflow-hidden rounded-lg border select-none">
+    <div
+      className="relative overflow-hidden rounded-lg border select-none"
+      onMouseLeave={clearPill}
+      ref={containerRef}
+    >
+      <TableHoverPill pill={pill} />
       <Table>
         <TableHeader className="sticky top-0 z-10 bg-muted">
           <TableRow>
@@ -174,11 +194,15 @@ export function BucketTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <TableRow
-              className="cursor-pointer"
+              className="cursor-pointer hover:bg-transparent"
               key={row.key}
               onDoubleClick={() => onDrill(row.key)}
+              onMouseEnter={() => showPill(index)}
+              ref={(element) => {
+                rowRefs.current[index] = element
+              }}
               title="Double-click to view affected URLs · drag to select"
               {...getRowProps(row.key)}
             >
@@ -231,6 +255,7 @@ export function IssueTypeTable({
   onDrill,
   getRowProps,
 }: IssueTypeTableProps) {
+  const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (!totalRows) {
     return (
       <EmptyMessage message="No issue types found for the selected bucket." />
@@ -240,7 +265,12 @@ export function IssueTypeTable({
   const checkedSet = new Set(checkedKeys)
 
   return (
-    <div className="overflow-hidden rounded-lg border select-none">
+    <div
+      className="relative overflow-hidden rounded-lg border select-none"
+      onMouseLeave={clearPill}
+      ref={containerRef}
+    >
+      <TableHoverPill pill={pill} />
       <Table>
         <TableHeader className="sticky top-0 z-10 bg-muted">
           <TableRow>
@@ -256,11 +286,15 @@ export function IssueTypeTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
+          {rows.map((row, index) => (
             <TableRow
-              className="cursor-pointer"
+              className="cursor-pointer hover:bg-transparent"
               key={row.id}
               onDoubleClick={() => onDrill(row.id)}
+              onMouseEnter={() => showPill(index)}
+              ref={(element) => {
+                rowRefs.current[index] = element
+              }}
               title="Double-click to view affected URLs · drag to select"
               {...getRowProps(row.id)}
             >
@@ -312,6 +346,7 @@ export function UrlIssueTable({
   onToggleAll,
   getRowProps,
 }: UrlIssueTableProps) {
+  const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (isLoading) {
     return (
       <div className="flex min-h-64 flex-col items-center justify-center gap-4 text-center">
@@ -345,7 +380,12 @@ export function UrlIssueTable({
   const checkedSet = new Set(checkedKeys)
 
   return (
-    <div className="overflow-hidden rounded-lg border select-none">
+    <div
+      className="relative overflow-hidden rounded-lg border select-none"
+      onMouseLeave={clearPill}
+      ref={containerRef}
+    >
+      <TableHoverPill pill={pill} />
       <Table>
         <TableHeader className="sticky top-0 z-10 bg-muted">
           <TableRow>
@@ -364,12 +404,16 @@ export function UrlIssueTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const key = urlRowKey(row)
             return (
               <TableRow
-                className="cursor-pointer"
+                className="cursor-pointer hover:bg-transparent"
                 key={key}
+                onMouseEnter={() => showPill(index)}
+                ref={(element) => {
+                  rowRefs.current[index] = element
+                }}
                 {...getRowProps(key)}
               >
                 <TableCell>

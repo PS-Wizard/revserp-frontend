@@ -13,6 +13,27 @@ export type DashboardView =
 export type AuditTab = "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
 
+/**
+ * Maps a revbot markdown hash link (e.g. `#seo-tab`, `#search-console`) to a
+ * workspace view and, for audit sections, the target audit tab. Accepts the
+ * canonical `-tab` suffix as well as the bare tab name.
+ */
+export function revbotHashTarget(
+  hash: string
+): { view: "revserp-audit"; tab: AuditTab } | { view: "search-console" } | null {
+  switch (hash.replace(/-tab$/, "")) {
+    case "summary":
+    case "seo":
+    case "aeo":
+    case "pagespeed":
+    case "site-graph":
+      return { view: "revserp-audit", tab: hash.replace(/-tab$/, "") as AuditTab }
+    case "search-console":
+      return { view: "search-console" }
+    default:
+      return null
+  }
+}
 export type AppNavbarProps = {
   activeProjectId?: string | null
   currentCrawl: CrawlResponse | null

@@ -24,12 +24,26 @@ const restoreThemeScript = `try {
   )
 } catch {}`
 
+// Register the service worker at module scope so it becomes active as early as
+// possible — Chrome only fires the install prompt once the worker controls the page.
+// Never in dev: the worker's static-asset cache fights Vite HMR and serves stale
+// bundles on normal reloads.
+if (
+  typeof window !== "undefined" &&
+  !import.meta.env.DEV &&
+  "serviceWorker" in navigator
+) {
+  void navigator.serviceWorker.register("/sw.js")
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html className="dark" lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#030f14" />
+        <link href="/manifest.webmanifest" rel="manifest" />
         <script dangerouslySetInnerHTML={{ __html: restoreThemeScript }} />
         <Meta />
         <Links />
@@ -49,6 +63,7 @@ export default function App() {
   // useState initializer runs once per component instance — safe for SSR because
   // each server request gets its own React tree (and thus its own QueryClient).
   const [queryClient] = useState(() => makeQueryClient())
+
 
   return (
     <QueryClientProvider client={queryClient}>

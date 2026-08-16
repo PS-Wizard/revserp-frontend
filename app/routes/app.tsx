@@ -2,7 +2,6 @@ import {
   Suspense,
   lazy,
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -16,9 +15,11 @@ import {
 } from "react-router"
 import { redirect } from "react-router"
 import { useQuery } from "@tanstack/react-query"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 
-import { AppNavbar, type DashboardView } from "~/components/app-navbar"
+import type { DashboardView } from "~/components/app-navbar/types"
 import type { AuditTab } from "~/components/app-navbar/types"
+import { revbotHashTarget } from "~/components/app-navbar/types"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
@@ -34,6 +35,7 @@ import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
+import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
@@ -46,12 +48,9 @@ import {
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent } from "~/components/ui/tabs"
 
+
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
-import {
-  ApiError,
-  clientApiFetch,
-  serverApiFetch,
-} from "~/lib/api"
+import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import type {
@@ -195,8 +194,7 @@ export default function AppPage() {
   const navigate = useNavigate()
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<AuditTab>("summary")
-  const deferredView = useDeferredValue(view)
-  const deferredAuditTab = useDeferredValue(auditTab)
+  const shouldReduceMotion = useReducedMotion() ?? false
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   // The other side of an open comparison. The near side is always the current
   // project/crawl selection, so a project switch closes the comparison rather
@@ -207,6 +205,38 @@ export default function AppPage() {
     baseUrl: string
   } | null>(null)
 
+  // Hash-based workspace navigation: `/#seo-tab`, `/#aeo-tab`, … and
+  // `/#search-console` switch the workspace. The app also mirrors the current
+  // tab back into the hash so these URLs are shareable.
+  const lastWrittenHashRef = useRef("")
+
+  useEffect(() => {
+    if (location.hash === lastWrittenHashRef.current) return
+    const target = revbotHashTarget(location.hash.replace(/^#/, ""))
+    if (!target) return
+    if (
+      target.view === "search-console" &&
+      me.features?.gsc_connector === false
+    )
+      return
+    setView(target.view)
+    if ("tab" in target) setAuditTab(target.tab)
+  }, [location.hash, me.features?.gsc_connector])
+
+  useEffect(() => {
+    const desired =
+      view === "revserp-audit"
+        ? `#${auditTab}-tab`
+        : view === "search-console"
+          ? "#search-console"
+          : ""
+    if (location.hash === desired) return
+    lastWrittenHashRef.current = desired
+    void navigate(
+      { pathname: location.pathname, search: location.search, hash: desired },
+      { replace: true }
+    )
+  }, [view, auditTab, location.hash, navigate])
 
   const sortedCrawls = useMemo(
     () =>
@@ -224,6 +254,25 @@ export default function AppPage() {
   const selectedCrawlId = useMemo(
     () => new URLSearchParams(location.search).get("crawl"),
     [location.search]
+  )
+  const revbotConversationId = useMemo(
+    () => new URLSearchParams(location.search).get("revbotConversation"),
+    [location.search]
+  )
+  const handleRevbotConversationChange = useCallback(
+    (conversationId: string | null) => {
+      const params = new URLSearchParams(location.search)
+      if (params.get("revbotConversation") === conversationId) return
+      if (conversationId) {
+        params.set("revbotConversation", conversationId)
+      } else {
+        params.delete("revbotConversation")
+      }
+      void navigate(`${location.pathname}?${params.toString()}`, {
+        replace: true,
+      })
+    },
+    [location.pathname, location.search, navigate]
   )
   // Memoize currentCrawl.
   const currentCrawl = useMemo(
@@ -260,12 +309,13 @@ export default function AppPage() {
     }
   }, [])
 
-
-
   const goToCrawl = useCallback(
     (projectId: string, crawlId?: string) => {
       const params = new URLSearchParams(location.search)
       params.set("project", projectId)
+      if (projectId !== activeProject?.id) {
+        params.delete("revbotConversation")
+      }
       if (crawlId) {
         params.set("crawl", crawlId)
       } else {
@@ -654,192 +704,219 @@ export default function AppPage() {
 
   return (
     <FeaturesProvider features={me.features}>
-    <main className="min-h-svh overflow-x-clip bg-background text-foreground">
-      {cancelDialog}
-      <AppNavbar
+      <WorkspaceShellPreview
         activeProjectId={activeProject?.id}
-        currentCrawl={currentCrawl}
-        projectCrawls={projectCrawls}
-        isCrawlRunning={isCrawlRunning}
-        crawlStatusLabel={crawlStatusLabel}
-        onCrawlStart={handleCrawlStart}
-        onCompareCrawl={handleCompareCrawl}
+        auditTab={auditTab}
         compareLabel={compareSides ? `vs ${compareSides.b.projectName}` : null}
-        onViewChange={setView}
-        onExportAudit={handleExportAudit}
+        crawlStatusLabel={crawlStatusLabel}
+        currentCrawl={currentCrawl}
+        isCrawlRunning={isCrawlRunning}
         isExportingAudit={isExporting}
+        isPlatformAdmin={me.is_platform_admin}
+        onAuditTabChange={setAuditTab}
+        onCompareCrawl={handleCompareCrawl}
+        onCrawlStart={handleCrawlStart}
+        onExportAudit={handleExportAudit}
+        onRevbotConversationChange={handleRevbotConversationChange}
+        onViewChange={setView}
         organizationId={me.active_org_id}
-        projects={projects}
         organizations={me.organizations}
+        projectCrawls={projectCrawls}
+        projects={projects}
+        revbotConversationId={revbotConversationId}
         userEmail={me.user.email}
         userName={me.user.name}
         view={view}
-        auditTab={auditTab}
-        onAuditTabChange={setAuditTab}
-        isPlatformAdmin={me.is_platform_admin}
-      />
+      >
+        {cancelDialog}
 
-      {deferredView === "revserp-audit" ? (
-        <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
-          <div
-            className={
-              isViewingRunningCrawl
-                ? "pointer-events-none blur-sm transition duration-200"
-                : "transition duration-200"
-            }
-          >
-            <Tabs value={deferredAuditTab} className="gap-6">
-              <TabsContent
-                value="summary"
-                className="flex flex-col gap-4 md:gap-6"
-              >
-                <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
-                  <ScoreRadialChart
-                    centerLabel="Overall"
-                    centerValue={currentOverall}
-                    description="Current crawl pillar scores"
-                    segments={scoreSegments}
-                    title="Overall Score"
-                  />
-                  <SummaryScoreHistoryChart
-                    activeProjectName={activeProject?.name}
-                    crawls={stableSortedCompletedCrawls}
-                  />
-                </div>
-                <SectionCards
-                  crawls={stableSortedCompletedCrawls}
-                  currentCrawl={stableCurrentCrawl}
-                  previousCrawl={stablePreviousCrawl}
-                  overallValue={currentOverall}
-                  overallPreviousValue={previousOverall}
-                />
-                <div className="px-4 lg:px-6">
-                  <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
-                    <IssueTreemap
-                      breakdown={stableCurrentBreakdown}
-                      onSelect={handleTreemapSelect}
+        {view === "revserp-audit" ? (
+          <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
+            <div
+              className={
+                isViewingRunningCrawl
+                  ? "pointer-events-none blur-sm transition duration-200"
+                  : "transition duration-200"
+              }
+            >
+              <AnimatePresence initial={false} mode="wait">
+                <motion.div
+                  animate={{ filter: "blur(0px)", opacity: 1 }}
+                  exit={{ filter: "blur(10px)", opacity: 0 }}
+                  initial={{ filter: "blur(10px)", opacity: 0 }}
+                  key={auditTab}
+                  transition={{
+                    duration: shouldReduceMotion ? 0 : 0.15,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                >
+                  <Tabs value={auditTab} className="gap-6">
+                <TabsContent
+                  value="summary"
+                  className="flex flex-col gap-4 md:gap-6"
+                >
+                  <div className="grid items-stretch gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
+                    <ScoreRadialChart
+                      centerLabel="Overall"
+                      centerValue={currentOverall}
+                      description="Current crawl pillar scores"
+                      segments={scoreSegments}
+                      title="Overall Score"
                     />
-                    <Separator />
-                    <div className="scroll-mt-4" ref={issuesRef}>
-                      <IssueExplorer
-                        breakdown={stableCurrentBreakdown}
-                        focusRequest={issueFocus}
-                      />
-                    </div>
-                  </Card>
-                </div>
-              </TabsContent>
-
-              {PILLAR_TABS.map(({ tab, pillarId, title }) => (
-                <TabsContent key={tab} value={tab}>
-                  <PillarAuditView
-                    activeProjectName={activeProject?.name}
-                    crawlBreakdowns={stableCrawlBreakdowns}
-                    currentCrawlId={stableCurrentCrawl?.id}
-                    currentBreakdown={stableCurrentBreakdown}
-                    pillarId={pillarId}
-                    title={title}
-                  />
-                </TabsContent>
-              ))}
-
-              <TabsContent value="site-graph">
-                {deferredAuditTab === "site-graph" ? (
-                  <Suspense fallback={null}>
-                    <SiteGraphView currentCrawlId={stableCurrentCrawl?.id} />
-                  </Suspense>
-                ) : null}
-              </TabsContent>
-            </Tabs>
-          </div>
-
-          {isViewingRunningCrawl ? (
-            <>
-              {/* Dimmer covers the content region only (below the navbar), so the
-                  navbar stays interactive while a crawl runs. */}
-              <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
-              {/* Card is fixed to the viewport center (~50vh) so it's visible without
-                  scrolling regardless of page height. */}
-              <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
-                <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                  <ThinkingOrb
-                    aria-hidden="true"
-                    className="shrink-0"
-                    size={64}
-                    state="working"
-                  />
-                  <div className="flex flex-col gap-1">
-                    <h2 className="text-lg font-medium">
-                      {crawlStatusLabel === "queued"
-                        ? "Queued"
-                        : "Crawl in progress"}
-                    </h2>
-                    <p className="text-sm text-muted-foreground">
-                      {activeProject?.name || "This project"} is currently{" "}
-                      {crawlStatusLabel}. Scores will refresh automatically when
-                      the crawl finishes.
-                    </p>
+                    <SummaryScoreHistoryChart
+                      activeProjectName={activeProject?.name}
+                      crawls={stableSortedCompletedCrawls}
+                    />
                   </div>
-                </CardContent>
-              </Card>
-            </>
-          ) : null}
-        </div>
-      ) : deferredView === "compare" && compareSides ? (
-        <CompareView
-          a={compareSides.a}
-          b={compareSides.b}
-          onExit={handleExitCompare}
-        />
-      ) : deferredView === "revserp-visibility" ? (
-        <RevserpVisibilityView
-          activeProject={activeProject}
-          currentCrawl={stableCurrentCrawl}
-        />
-      ) : deferredView === "revbot" && me.features?.ai_chat ? (
-        <Suspense fallback={null}>
-          <RevbotView
-            activeProject={activeProject}
-            allowedEfforts={me.features.ai_allowed_reasoning_efforts}
+                  <SectionCards
+                    crawls={stableSortedCompletedCrawls}
+                    currentCrawl={stableCurrentCrawl}
+                    previousCrawl={stablePreviousCrawl}
+                    overallValue={currentOverall}
+                    overallPreviousValue={previousOverall}
+                  />
+                  <div className="px-4 lg:px-6">
+                    <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+                      <IssueTreemap
+                        breakdown={stableCurrentBreakdown}
+                        onSelect={handleTreemapSelect}
+                      />
+                      <Separator />
+                      <div className="scroll-mt-4" ref={issuesRef}>
+                        <IssueExplorer
+                          breakdown={stableCurrentBreakdown}
+                          focusRequest={issueFocus}
+                        />
+                      </div>
+                    </Card>
+                  </div>
+                </TabsContent>
+
+                {PILLAR_TABS.map(({ tab, pillarId, title }) => (
+                  <TabsContent key={tab} value={tab}>
+                    <PillarAuditView
+                      activeProjectName={activeProject?.name}
+                      crawlBreakdowns={stableCrawlBreakdowns}
+                      currentCrawlId={stableCurrentCrawl?.id}
+                      currentBreakdown={stableCurrentBreakdown}
+                      pillarId={pillarId}
+                      title={title}
+                    />
+                  </TabsContent>
+                ))}
+
+                <TabsContent value="site-graph">
+                  {auditTab === "site-graph" ? (
+                    <Suspense fallback={null}>
+                      <SiteGraphView currentCrawlId={stableCurrentCrawl?.id} />
+                    </Suspense>
+                  ) : null}
+                </TabsContent>
+                  </Tabs>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {isViewingRunningCrawl ? (
+              <>
+                {/* Dimmer covers the content region only (below the navbar), so the
+                  navbar stays interactive while a crawl runs. */}
+                <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
+                {/* Card is fixed to the viewport center (~50vh) so it's visible without
+                  scrolling regardless of page height. */}
+                <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
+                  <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+                    <ThinkingOrb
+                      aria-hidden="true"
+                      className="shrink-0"
+                      size={64}
+                      state="working"
+                    />
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-lg font-medium">
+                        {crawlStatusLabel === "queued"
+                          ? "Queued"
+                          : "Crawl in progress"}
+                      </h2>
+                      <p className="text-sm text-muted-foreground">
+                        {activeProject?.name || "This project"} is currently{" "}
+                        {crawlStatusLabel}. Scores will refresh automatically
+                        when the crawl finishes.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : null}
+          </div>
+        ) : view === "compare" && compareSides ? (
+          <CompareView
+            a={compareSides.a}
+            b={compareSides.b}
+            onExit={handleExitCompare}
           />
-        </Suspense>
-      ) : deferredView === "search-console" && me.features?.gsc_connector !== false ? (
-        <SearchConsoleView
-          activeProject={activeProject}
-          completedCrawls={stableSortedCompletedCrawls}
-          isOrganizationOwner={isOrganizationOwner}
-        />
-      ) : (
-        <div className="p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{viewLabels[deferredView]}</CardTitle>
-              <CardDescription>
-                Placeholder app view for the protected dashboard shell.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-              <p>Current section: {viewLabels[deferredView]}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      {showPrintSections && (
-        <PdfPrintSections
-          coverRef={coverRef}
-          overallRef={overallRef}
-          seoRef={seoRef}
-          aeoRef={aeoRef}
-          pagespeedRef={pagespeedRef}
-          crawlBreakdowns={stableCrawlBreakdowns}
-          recentCrawls={stableSortedCompletedCrawls}
-          currentCrawl={stableCurrentCrawl}
-          previousCrawl={stablePreviousCrawl}
-          currentBreakdown={stableCurrentBreakdown}
-          activeProjectName={activeProject?.name}
-        />
-      )}
-    </main>
+        ) : view === "revserp-visibility" ? (
+          <RevserpVisibilityView
+            activeProject={activeProject}
+            currentCrawl={stableCurrentCrawl}
+          />
+        ) : view === "revbot" && me.features?.ai_chat ? (
+          <Suspense fallback={null}>
+            <RevbotView
+              activeProject={activeProject}
+              allowedEfforts={me.features.ai_allowed_reasoning_efforts}
+              onConversationChange={handleRevbotConversationChange}
+              onInternalLink={(hash) =>
+                void navigate(
+                  {
+                    pathname: location.pathname,
+                    search: location.search,
+                    hash,
+                  },
+                  { replace: true }
+                )
+              }
+              requestedConversationId={revbotConversationId}
+            />
+          </Suspense>
+        ) : view === "search-console" &&
+          me.features?.gsc_connector !== false ? (
+          <SearchConsoleView
+            activeProject={activeProject}
+            completedCrawls={stableSortedCompletedCrawls}
+            isOrganizationOwner={isOrganizationOwner}
+          />
+        ) : (
+          <div className="p-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{viewLabels[view]}</CardTitle>
+                <CardDescription>
+                  Placeholder app view for the protected dashboard shell.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+                <p>Current section: {viewLabels[view]}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+        {showPrintSections && (
+          <PdfPrintSections
+            coverRef={coverRef}
+            overallRef={overallRef}
+            seoRef={seoRef}
+            aeoRef={aeoRef}
+            pagespeedRef={pagespeedRef}
+            crawlBreakdowns={stableCrawlBreakdowns}
+            recentCrawls={stableSortedCompletedCrawls}
+            currentCrawl={stableCurrentCrawl}
+            previousCrawl={stablePreviousCrawl}
+            currentBreakdown={stableCurrentBreakdown}
+            activeProjectName={activeProject?.name}
+          />
+        )}
+      </WorkspaceShellPreview>
     </FeaturesProvider>
   )
 }

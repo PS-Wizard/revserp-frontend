@@ -101,21 +101,36 @@ export async function clientApiSSE(
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
-
-      let frameEnd = buffer.indexOf("\n\n")
-      while (frameEnd !== -1) {
-        const frame = buffer.slice(0, frameEnd)
-        buffer = buffer.slice(frameEnd + 2)
-        const parsedFrame = parseSSEFrame(frame)
-        if (parsedFrame) {
-          onEvent(parsedFrame.event, parsedFrame.data, parsedFrame.id)
-        }
-        frameEnd = buffer.indexOf("\n\n")
-      }
+      buffer = drainSSEFrames(buffer, onEvent)
     }
+    buffer += decoder.decode()
+    drainSSEFrames(buffer, onEvent, true)
   } finally {
     reader.releaseLock()
   }
+}
+
+function drainSSEFrames(
+  buffer: string,
+  onEvent: (event: string, payload: unknown, eventId: string | null) => void,
+  final = false
+) {
+  let separator = buffer.match(/\r?\n\r?\n/)
+  while (separator?.index !== undefined) {
+    const frame = buffer.slice(0, separator.index)
+    buffer = buffer.slice(separator.index + separator[0].length)
+    const parsedFrame = parseSSEFrame(frame)
+    if (parsedFrame)
+      onEvent(parsedFrame.event, parsedFrame.data, parsedFrame.id)
+    separator = buffer.match(/\r?\n\r?\n/)
+  }
+  if (final && buffer) {
+    const parsedFrame = parseSSEFrame(buffer)
+    if (parsedFrame)
+      onEvent(parsedFrame.event, parsedFrame.data, parsedFrame.id)
+    return ""
+  }
+  return buffer
 }
 
 function parseSSEFrame(
@@ -125,7 +140,7 @@ function parseSSEFrame(
   let id: string | null = null
   const dataLines: string[] = []
 
-  for (const line of frame.split("\n")) {
+  for (const line of frame.split(/\r?\n/)) {
     if (line.startsWith("id:")) {
       id = line.slice("id:".length).trim()
     } else if (line.startsWith("event:")) {

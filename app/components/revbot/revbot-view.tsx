@@ -1,13 +1,31 @@
 "use client"
 
-import type { KeyboardEvent } from "react"
+import { useEffect, useLayoutEffect, useState } from "react"
 
-import { BotIcon, SquareIcon } from "lucide-react"
-import ReactMarkdown from "react-markdown"
-import remarkGfm from "remark-gfm"
+import {
+  BotIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PlusIcon,
+  TrashIcon,
+} from "lucide-react"
+import type { Components } from "react-markdown"
 
-import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
+import {
+  HoverPill,
+  useHoverPill,
+} from "~/components/ui/hover-pill"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+  useMessageScroller,
+  useMessageScrollerScrollable,
+} from "~/components/ui/message-scroller"
 import {
   Select,
   SelectContent,
@@ -16,27 +34,110 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select"
-import { Textarea } from "~/components/ui/textarea"
 import {
-  MessageScroller,
-  MessageScrollerButton,
-  MessageScrollerContent,
-  MessageScrollerItem,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-} from "~/components/ui/message-scroller"
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
+import { revbotHashTarget } from "~/components/app-navbar/types"
 import type { AIReasoningEffort, ProjectResponse } from "~/lib/api.types"
+import { cn } from "~/lib/utils"
 
+import { RevbotComposer } from "./revbot-composer"
+import { RevbotMarkdown } from "./revbot-markdown"
+import { RevbotTurnActivity } from "./revbot-turn-activity"
 import { useRevbot } from "./use-revbot"
 
-const markdownPlugins = [remarkGfm]
+/** Stick to bottom while content grows; stop when the user scrolls up. */
+function RevbotScrollFollow({ followKey }: { followKey: string }) {
+  const { scrollToEnd } = useMessageScroller()
+  const scrollable = useMessageScrollerScrollable()
+
+  useLayoutEffect(() => {
+    if (scrollable.end) return
+    scrollToEnd({ behavior: "auto" })
+  }, [followKey, scrollable.end, scrollToEnd])
+
+  return null
+}
+
+/** First letter of the link's domain (external) or hash (internal). */
+function citationLetter(href: string) {
+  const seed = href.startsWith("#") ? href.slice(1) : href
+  try {
+    const host = href.startsWith("#") ? seed : new URL(href).hostname
+    return host.trim().charAt(0).toLowerCase() || "?"
+  } catch {
+    return "?"
+  }
+}
+
+/** Deterministic color per link so the same source always gets the same tint. */
+function citationColor(seed: string) {
+  let hash = 0
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
+  }
+  return `hsl(${hash % 360} 60% 42%)`
+}
+
+function StreamingAssistantMessage({
+  content,
+  messageId,
+}: {
+  content: string
+  messageId: string
+}) {
+  return (
+    <div className="typeset typeset-docs w-full whitespace-pre-wrap">
+      {content
+        ? content.split(/(\s+)/).map((word, index) =>
+            /\s/.test(word) ? (
+              word
+            ) : (
+              <span
+                className="inline-block animate-[revbot-stream-word_180ms_ease-out_both] motion-reduce:animate-none"
+                key={`${messageId}-${index}`}
+              >
+                {word}
+              </span>
+            )
+          )
+        : null}
+      <span
+        aria-hidden="true"
+        className="ml-0.5 inline-block h-[1.1em] w-px animate-pulse bg-current align-[-0.15em]"
+      />
+    </div>
+  )
+}
 
 export function RevbotView({
   activeProject,
   allowedEfforts,
+  requestedConversationId,
+  onConversationChange,
+  compact = false,
+  defaultHistoryOpen = true,
+  hideCompactHeader = false,
+  onActivityChange,
+  onInternalLink,
+  onTitleChange,
+  showMic = true,
+  variant = "default",
 }: {
   activeProject: ProjectResponse | null
   allowedEfforts: AIReasoningEffort[]
+  requestedConversationId: string | null
+  onConversationChange: (conversationId: string | null) => void
+  compact?: boolean
+  defaultHistoryOpen?: boolean
+  hideCompactHeader?: boolean
+  onActivityChange?: (active: boolean) => void
+  onInternalLink?: (hash: string) => void
+  onTitleChange?: (title: string) => void
+  showMic?: boolean
+  variant?: "default" | "dark"
 }) {
   if (!activeProject) {
     return (
@@ -55,6 +156,16 @@ export function RevbotView({
     <ActiveRevbotView
       activeProject={activeProject}
       allowedEfforts={allowedEfforts}
+      onConversationChange={onConversationChange}
+      onActivityChange={onActivityChange}
+      requestedConversationId={requestedConversationId}
+      compact={compact}
+      defaultHistoryOpen={defaultHistoryOpen}
+      hideCompactHeader={hideCompactHeader}
+      onInternalLink={onInternalLink}
+      onTitleChange={onTitleChange}
+      showMic={showMic}
+      variant={variant}
     />
   )
 }
@@ -62,108 +173,356 @@ export function RevbotView({
 function ActiveRevbotView({
   activeProject,
   allowedEfforts,
+  requestedConversationId,
+  onConversationChange,
+  compact,
+  defaultHistoryOpen,
+  hideCompactHeader,
+  onActivityChange,
+  onInternalLink,
+  onTitleChange,
+  showMic,
+  variant,
 }: {
   activeProject: ProjectResponse
   allowedEfforts: AIReasoningEffort[]
+  requestedConversationId: string | null
+  onConversationChange: (conversationId: string | null) => void
+  compact: boolean
+  defaultHistoryOpen: boolean
+  hideCompactHeader: boolean
+  onActivityChange?: (active: boolean) => void
+  onInternalLink?: (hash: string) => void
+  onTitleChange?: (title: string) => void
+  showMic: boolean
+  variant: "default" | "dark"
 }) {
-  const revbot = useRevbot({ activeProject, allowedEfforts })
-  const active = revbot.status === "queued" || revbot.status === "running"
-  const conversationControlsDisabled =
-    revbot.loading || active || revbot.stopping
-  const canSend =
-    !revbot.loading &&
-    !active &&
-    !revbot.stopping &&
-    allowedEfforts.length > 0 &&
-    revbot.prompt.trim().length > 0
-
-  function handlePromptKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== "Enter" || event.shiftKey) return
-    event.preventDefault()
-    if (canSend) void revbot.send()
+  const revbot = useRevbot({
+    activeProject,
+    allowedEfforts,
+    requestedConversationId,
+    onConversationChange,
+  })
+  const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
+  const historyPill = useHoverPill()
+  const markdownComponents: Components = {
+    a: ({ href, node: _node, children, ...props }) => {
+      if (!href) return <a {...props}>{children}</a>
+      // Citation chip only for known internal targets (#seo, #aeo-tab, …).
+      // Everything else keeps the default markdown link.
+      if (revbotHashTarget(href.replace(/^#/, "")) === null) {
+        return (
+          <a {...props} href={href} rel="noopener noreferrer" target="_blank">
+            {children}
+          </a>
+        )
+      }
+      return (
+        <a
+          {...props}
+          className="citation-link"
+          href={href}
+          onClick={(event) => {
+            event.preventDefault()
+            onInternalLink?.(href.slice(1))
+          }}
+        >
+          <span
+            aria-hidden="true"
+            className="citation-avatar"
+            style={{ backgroundColor: citationColor(href) }}
+          >
+            {citationLetter(href)}
+          </span>
+          <span className="citation-text">{children}</span>
+        </a>
+      )
+    },
   }
 
-  const statusLabel = revbot.stopping
-    ? "Stopping"
-    : revbot.phase
-      ? revbot.phase === "thinking"
-        ? "Thinking"
-        : "Writing"
-      : revbot.status === "idle"
-        ? revbot.loading
-          ? "Loading"
-          : "Ready"
-        : revbot.status[0].toUpperCase() + revbot.status.slice(1)
+  useEffect(() => {
+    setHistoryOpen(
+      window.matchMedia("(max-width: 639px)").matches
+        ? false
+        : defaultHistoryOpen
+    )
+  }, [defaultHistoryOpen])
+  const active = revbot.status === "queued" || revbot.status === "running"
+  const activeAssistantMessageId = active
+    ? [...revbot.messages]
+        .reverse()
+        .find((message) => message.role === "assistant")?.id
+    : null
+  const activeAssistantContent =
+    revbot.messages.find((message) => message.id === activeAssistantMessageId)
+      ?.content ?? ""
+  const scrollFollowKey = [
+    revbot.messages.length,
+    revbot.toolCalls.length,
+    revbot.phase,
+    activeAssistantContent.length,
+  ].join(":")
+  useEffect(() => {
+    onActivityChange?.(active)
+  }, [active, onActivityChange])
+  const conversationControlsDisabled =
+    revbot.loading || active || revbot.stopping
+
+  const activeConversation = revbot.conversations.find(
+    (conversation) => conversation.id === revbot.conversationId
+  )
+  const conversationTitle = activeConversation?.title ?? "New chat"
+  const isDark = variant === "dark"
+  const messageColumnClass = "mx-auto w-full max-w-3xl px-4"
+
+  useEffect(() => {
+    onTitleChange?.(conversationTitle)
+  }, [conversationTitle, onTitleChange])
 
   return (
-    <section className="mx-auto flex h-[calc(100svh-5rem)] min-h-0 w-full max-w-3xl flex-col gap-6 overflow-hidden p-4 sm:p-6">
-      <header className="flex shrink-0 items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <BotIcon aria-hidden="true" className="size-5" />
-          <div>
-            <h1 className="text-lg font-semibold">Revbot</h1>
-            <p className="text-sm text-muted-foreground">
-              Ask about {activeProject.name}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Select
-            disabled={conversationControlsDisabled}
-            onValueChange={(value) => {
-              if (typeof value === "string")
-                void revbot.selectConversation(value)
-            }}
-            value={revbot.conversationId ?? undefined}
-          >
-            <SelectTrigger
-              aria-label="Select a Revbot conversation"
-              className="w-52"
-              size="sm"
-            >
-              <SelectValue placeholder="New chat" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {revbot.conversations.map((conversation) => (
-                  <SelectItem key={conversation.id} value={conversation.id}>
-                    {conversation.title}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Button
-            disabled={conversationControlsDisabled}
-            onClick={revbot.newChat}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            New chat
-          </Button>
-          <Badge
-            variant={
-              active
-                ? "secondary"
-                : revbot.status === "failed"
-                  ? "destructive"
-                  : "outline"
-            }
-          >
-            {statusLabel}
-          </Badge>
-        </div>
-      </header>
+    <section
+      className={
+        compact
+          ? `grid h-full min-h-0 w-full gap-2 overflow-hidden p-2 ${
+              historyOpen
+                ? hideCompactHeader
+                  ? "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
+                  : "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
+                : hideCompactHeader
+                  ? "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
+                  : "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
+            }${isDark ? " bg-black" : ""}`
+          : "mx-auto flex h-[calc(100svh-5rem)] min-h-0 w-full max-w-3xl flex-col gap-6 overflow-hidden p-4 sm:p-6"
+      }
+    >
+      {compact ? (
+        <aside
+          aria-label="Conversation history"
+          className={cn(
+            "flex min-h-0 flex-col pr-3",
+            hideCompactHeader ? "row-span-3" : "row-span-4",
+            isDark ? "border-r border-white/10 bg-black" : "border-r border-border"
+          )}
+        >
+          {historyOpen ? (
+            <>
+              <div className="flex h-8 shrink-0 items-center justify-between gap-2 pb-2">
+                <h2 className="text-sm font-medium leading-none">
+                  Conversations
+                </h2>
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        aria-label="Collapse conversation history"
+                        className="shrink-0"
+                        onClick={() => setHistoryOpen(false)}
+                        size="icon-xs"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <PanelLeftCloseIcon aria-hidden="true" />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Collapse history</TooltipContent>
+                </Tooltip>
+              </div>
+              <button
+                className={cn(
+                  "mb-1 flex w-full shrink-0 items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-muted-foreground transition-colors hover:text-foreground",
+                  isDark
+                    ? "hover:bg-white/10"
+                    : "hover:bg-accent hover:text-accent-foreground",
+                  conversationControlsDisabled &&
+                    "pointer-events-none opacity-50"
+                )}
+                disabled={conversationControlsDisabled}
+                onClick={revbot.newChat}
+                type="button"
+              >
+                <PlusIcon aria-hidden="true" className="size-4 shrink-0" />
+                New chat
+              </button>
+              <div
+                className="relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+                onMouseLeave={historyPill.clearPill}
+              >
+                <HoverPill
+                  className={isDark ? "bg-white/10" : undefined}
+                  pill={historyPill.pill}
+                />
+                {revbot.conversations.map((conversation, index) => {
+                  const itemProps = historyPill.getItemProps(index)
+                  const isActiveConversation =
+                    conversation.id === revbot.conversationId
+                  return (
+                    <div
+                      {...itemProps}
+                      aria-current={isActiveConversation ? "page" : undefined}
+                      className={cn(
+                        itemProps.className,
+                        "group flex w-full items-center gap-0.5 rounded-md px-1 py-0.5"
+                      )}
+                      key={conversation.id}
+                    >
+                      <button
+                        className={cn(
+                          "min-w-0 flex-1 truncate rounded-md px-1 py-2 text-left text-sm",
+                          isActiveConversation
+                            ? "font-medium text-foreground"
+                            : "text-muted-foreground"
+                        )}
+                        disabled={conversationControlsDisabled}
+                        onClick={() =>
+                          void revbot.selectConversation(conversation.id)
+                        }
+                        type="button"
+                      >
+                        {conversation.title}
+                      </button>
+                      <button
+                        aria-label={`Delete ${conversation.title}`}
+                        className={cn(
+                          "shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100",
+                          isDark
+                            ? "hover:bg-white/10"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        )}
+                        disabled={conversationControlsDisabled}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          void revbot.deleteConversation(conversation.id)
+                        }}
+                        type="button"
+                      >
+                        <TrashIcon aria-hidden="true" className="size-3.5" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label="Expand conversation history"
+                      onClick={() => setHistoryOpen(true)}
+                      size="icon-xs"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <PanelLeftOpenIcon aria-hidden="true" />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="right">Expand history</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      aria-label="New chat"
+                      disabled={conversationControlsDisabled}
+                      onClick={revbot.newChat}
+                      size="icon-xs"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <PlusIcon aria-hidden="true" />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="right">New chat</TooltipContent>
+              </Tooltip>
+            </div>
+          )}
+        </aside>
+      ) : null}
+      {compact && !hideCompactHeader ? (
+        <header
+          className={cn(
+            "col-start-2 row-start-1 flex min-w-0 shrink-0 items-center",
+            messageColumnClass
+          )}
+        >
+          <h1 className="truncate text-sm font-semibold">{conversationTitle}</h1>
+        </header>
+      ) : null}
+      {!compact ? (
+        <header className="flex shrink-0 items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <BotIcon aria-hidden="true" className="size-5" />
+              <div>
+                <h1 className="text-lg font-semibold">Revbot</h1>
+                <p className="text-sm text-muted-foreground">
+                  Ask about {activeProject.name}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Select
+                disabled={conversationControlsDisabled}
+                onValueChange={(value) => {
+                  if (typeof value === "string")
+                    void revbot.selectConversation(value)
+                }}
+                value={revbot.conversationId ?? undefined}
+              >
+                <SelectTrigger
+                  aria-label="Select a Revbot conversation"
+                  className="w-52"
+                  size="sm"
+                >
+                  <SelectValue placeholder="New chat" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {revbot.conversations.map((conversation) => (
+                      <SelectItem key={conversation.id} value={conversation.id}>
+                        {conversation.title}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Button
+                disabled={conversationControlsDisabled}
+                onClick={revbot.newChat}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                New chat
+              </Button>
+            </div>
+        </header>
+      ) : null}
 
       <MessageScrollerProvider
         key={revbot.conversationId ?? "new"}
         autoScroll
-        defaultScrollPosition="last-anchor"
+        defaultScrollPosition="end"
       >
-        <MessageScroller className="min-h-0 flex-1">
+        <MessageScroller
+          className={
+            compact
+              ? hideCompactHeader
+                ? "col-start-2 row-start-1 min-h-0"
+                : "col-start-2 row-start-2 min-h-0"
+              : "min-h-0 flex-1"
+          }
+        >
+          <RevbotScrollFollow followKey={scrollFollowKey} />
           <MessageScrollerViewport aria-label="Conversation">
-            <MessageScrollerContent aria-busy={active}>
+            <MessageScrollerContent
+              aria-busy={active}
+              className={cn("gap-5 pb-24 pt-1", messageColumnClass)}
+            >
               {revbot.messages.length === 0 ? (
                 <MessageScrollerItem>
                   <p className="py-10 text-center text-sm text-muted-foreground">
@@ -173,22 +532,76 @@ function ActiveRevbotView({
               ) : (
                 revbot.messages.map((message) => (
                   <MessageScrollerItem
+                    className="w-full"
                     key={message.id}
                     messageId={message.id}
-                    scrollAnchor={message.role === "user"}
                   >
-                    <article className="flex flex-col gap-2 py-2">
-                      <div className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                        {message.role === "user" ? "You" : "Revbot"}
-                      </div>
+                    <article
+                      className={cn(
+                        "flex w-full py-1",
+                        message.role === "user"
+                          ? "justify-end"
+                          : "justify-start"
+                      )}
+                    >
                       {message.role === "assistant" ? (
-                        <div className="typeset typeset-docs max-w-[42em]">
-                          <ReactMarkdown remarkPlugins={markdownPlugins}>
-                            {message.content || (active ? "…" : "")}
-                          </ReactMarkdown>
+                        <div className="w-full min-w-0">
+                          {(() => {
+                            const isActiveMessage =
+                              message.id === activeAssistantMessageId
+                            const messageToolCalls = isActiveMessage
+                              ? revbot.toolCalls
+                              : message.toolCalls
+                            const showActivity =
+                              (isActiveMessage &&
+                                (active ||
+                                  revbot.phase ||
+                                  revbot.toolCalls.length > 0)) ||
+                              (messageToolCalls?.length ?? 0) > 0
+                            const hasToolCalls =
+                              (messageToolCalls?.length ?? 0) > 0
+                            const hasResponse =
+                              message.id === activeAssistantMessageId
+                                ? Boolean(message.content) ||
+                                  revbot.phase === "writing"
+                                : Boolean(message.content)
+
+                            return showActivity ? (
+                              <RevbotTurnActivity
+                                active={isActiveMessage && active}
+                                phase={
+                                  isActiveMessage ? revbot.phase : null
+                                }
+                                showDivider={hasToolCalls && hasResponse}
+                                startedAt={
+                                  isActiveMessage
+                                    ? revbot.activityStartedAt
+                                    : null
+                                }
+                                toolCalls={messageToolCalls ?? []}
+                                variant={variant}
+                              />
+                            ) : null
+                          })()}
+                          {message.id === activeAssistantMessageId &&
+                          (message.content || revbot.phase === "writing") ? (
+                            <StreamingAssistantMessage
+                              content={message.content}
+                              messageId={message.id}
+                            />
+                          ) : message.id !== activeAssistantMessageId ? (
+                            <RevbotMarkdown components={markdownComponents}>
+                              {message.content}
+                            </RevbotMarkdown>
+                          ) : null}
                         </div>
                       ) : (
-                        <p className="max-w-[42em] text-base leading-7 whitespace-pre-wrap">
+                        <p
+                          className={cn(
+                            "max-w-[min(85%,28rem)] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed whitespace-pre-wrap",
+                            isDark ? "bg-white/10" : "bg-muted"
+                          )}
+                        >
                           {message.content}
                         </p>
                       )}
@@ -202,92 +615,38 @@ function ActiveRevbotView({
         </MessageScroller>
       </MessageScrollerProvider>
 
-      {revbot.error ? (
-        <p className="shrink-0 text-sm text-destructive" role="alert">
-          {revbot.error}
-        </p>
-      ) : null}
-
-      <section
-        aria-label="Send a message"
-        className="flex shrink-0 flex-col gap-3 rounded-lg bg-muted/50 p-3"
+      <div
+        className={cn(
+          "relative shrink-0 pt-3 pb-4",
+          compact
+            ? hideCompactHeader
+              ? "col-start-2 row-start-3"
+              : "col-start-2 row-start-4"
+            : undefined,
+          messageColumnClass
+        )}
       >
-        <label className="sr-only" htmlFor="revbot-prompt">
-          Message Revbot
-        </label>
-        <Textarea
-          className="border-0 shadow-none focus-visible:border-0"
-          disabled={revbot.loading || active || revbot.stopping}
-          id="revbot-prompt"
-          onChange={(event) => revbot.setPrompt(event.target.value)}
-          onKeyDown={handlePromptKeyDown}
-          placeholder="Ask Revbot anything…"
-          value={revbot.prompt}
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-x-0 -top-12 h-12 bg-gradient-to-t to-transparent",
+            isDark ? "from-black" : "from-background"
+          )}
         />
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <label
-              className="text-sm text-muted-foreground"
-              htmlFor="revbot-effort"
-            >
-              Reasoning effort
-            </label>
-            <Select
-              disabled={
-                revbot.loading ||
-                active ||
-                revbot.stopping ||
-                allowedEfforts.length === 0
-              }
-              onValueChange={(value) => {
-                if (allowedEfforts.includes(value as AIReasoningEffort)) {
-                  revbot.setEffort(value as AIReasoningEffort)
-                }
-              }}
-              value={revbot.effort}
-            >
-              <SelectTrigger
-                aria-label="Reasoning effort"
-                id="revbot-effort"
-                className="w-28"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {allowedEfforts.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex gap-2">
-            {active ? (
-              <Button
-                aria-label="Stop Revbot"
-                disabled={revbot.stopping}
-                onClick={() => void revbot.stop()}
-                type="button"
-                variant="destructive"
-              >
-                <SquareIcon aria-hidden="true" data-icon="inline-start" />
-                {revbot.stopping ? "Stopping" : "Stop"}
-              </Button>
-            ) : null}
-            <Button
-              aria-label="Send message to Revbot"
-              disabled={!canSend}
-              onClick={() => void revbot.send()}
-              type="button"
-            >
-              Send
-            </Button>
-          </div>
-        </div>
-      </section>
+        <RevbotComposer
+          key={revbot.conversationId ?? "new"}
+          active={active}
+          allowedEfforts={allowedEfforts}
+          disabled={revbot.loading || active || revbot.stopping}
+          effort={revbot.effort}
+          onEffortChange={revbot.setEffort}
+          onSend={(content) => void revbot.send(content)}
+          onStop={() => void revbot.stop()}
+          showMic={showMic}
+          stopping={revbot.stopping}
+          variant={variant}
+        />
+      </div>
     </section>
   )
 }

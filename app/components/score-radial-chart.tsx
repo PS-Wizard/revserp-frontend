@@ -57,78 +57,81 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
 
   const chartData = useMemo(() => buildChartData(segments), [segments])
   const chartConfig = useMemo(() => buildChartConfig(chartData), [chartData])
+  const legendMinHeight = chartData.length > 0 ? chartData.length * 28 : 0
 
   return (
-    <Card className="flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+    <Card className="flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col justify-center gap-4">
+      <CardContent className="flex flex-col gap-4">
         {chartData.length === 0 ? (
           <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
             No score data yet.
           </div>
-        ) : !rechartsComponents ? (
-          <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
-            Loading chart...
-          </div>
         ) : (
           <>
-            <div className="relative mx-auto h-[250px] w-[250px]">
-              <ChartContainer config={chartConfig} className="h-full w-full">
-                <rechartsComponents.RadialBarChart
-                  data={chartData}
-                  innerRadius={34}
-                  outerRadius={108}
-                >
-                  <ChartTooltip
-                    cursor={false}
-                    content={
-                      <ChartTooltipContent
-                        hideLabel
-                        nameKey="key"
-                        formatter={(value, _name, _item, _index, payload) => {
-                          const label = getTooltipLabel(payload)
-                          const contribution = getTooltipContribution(payload)
+            <div className="relative mx-auto h-[250px] w-[250px] shrink-0">
+              {!rechartsComponents ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  Loading chart...
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig} className="h-full w-full">
+                  <rechartsComponents.RadialBarChart
+                    data={chartData}
+                    innerRadius={34}
+                    outerRadius={108}
+                  >
+                    <ChartTooltip
+                      cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          hideLabel
+                          nameKey="key"
+                          formatter={(value, _name, _item, _index, payload) => {
+                            const label = getTooltipLabel(payload)
+                            const contribution = getTooltipContribution(payload)
 
-                          return (
-                            <div className="flex flex-col gap-0.5">
-                              <div className="flex items-center justify-between gap-3">
-                                <span className="text-muted-foreground">
-                                  {label}
-                                </span>
-                                <span className="font-mono font-medium text-foreground tabular-nums">
-                                  {typeof value === "number"
-                                    ? `${value}%`
-                                    : String(value)}
-                                </span>
-                              </div>
-                              {typeof contribution === "number" &&
-                              Number.isFinite(contribution) ? (
-                                <div className="text-xs text-muted-foreground/70">
-                                  Contributes: {contribution}%
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="text-muted-foreground">
+                                    {label}
+                                  </span>
+                                  <span className="font-mono font-medium text-foreground tabular-nums">
+                                    {typeof value === "number"
+                                      ? `${value}%`
+                                      : String(value)}
+                                  </span>
                                 </div>
-                              ) : null}
-                            </div>
-                          )
-                        }}
-                      />
-                    }
-                  />
-                  <rechartsComponents.PolarAngleAxis
-                    type="number"
-                    domain={[0, 100]}
-                    tick={false}
-                    axisLine={false}
-                  />
-                  <rechartsComponents.PolarGrid
-                    gridType="circle"
-                    radialLines={false}
-                  />
-                  <rechartsComponents.RadialBar background dataKey="value" />
-                </rechartsComponents.RadialBarChart>
-              </ChartContainer>
+                                {typeof contribution === "number" &&
+                                Number.isFinite(contribution) ? (
+                                  <div className="text-xs text-muted-foreground/70">
+                                    Contributes: {contribution}%
+                                  </div>
+                                ) : null}
+                              </div>
+                            )
+                          }}
+                        />
+                      }
+                    />
+                    <rechartsComponents.PolarAngleAxis
+                      type="number"
+                      domain={[0, 100]}
+                      tick={false}
+                      axisLine={false}
+                    />
+                    <rechartsComponents.PolarGrid
+                      gridType="circle"
+                      radialLines={false}
+                    />
+                    <rechartsComponents.RadialBar background dataKey="value" />
+                  </rechartsComponents.RadialBarChart>
+                </ChartContainer>
+              )}
               {typeof centerValue === "number" &&
               Number.isFinite(centerValue) ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -140,10 +143,13 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
                 </div>
               ) : null}
             </div>
-            <div className="grid gap-2 text-sm">
+            <div
+              className="grid shrink-0 gap-2 text-sm"
+              style={{ minHeight: legendMinHeight }}
+            >
               {chartData.map((segment) => (
                 <div
-                  className="flex items-center justify-between gap-3"
+                  className="flex h-7 items-center justify-between gap-3"
                   key={segment.key}
                 >
                   <span className="flex min-w-0 items-center gap-2 text-muted-foreground">

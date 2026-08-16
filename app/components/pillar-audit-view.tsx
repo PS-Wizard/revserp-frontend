@@ -5,7 +5,6 @@ import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart
 
 import { IssueExplorer } from "~/components/issue-explorer"
 import { IssueTreemap } from "~/components/issue-treemap"
-import { NumberPopIn } from "~/components/number-pop-in"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import {
   Card,
@@ -101,7 +100,15 @@ export const PillarAuditView = memo(function PillarAuditView({
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      <div className="grid gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
+      <div className="px-4 lg:px-6">
+        <BucketScoreHistoryChart
+          activeProjectName={activeProjectName}
+          crawlBreakdowns={crawlBreakdowns}
+          pillarId={pillarId}
+          title={title}
+        />
+      </div>
+      <div className="grid items-stretch gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
         <ScoreRadialChart
           centerLabel={title}
           centerValue={currentPillar?.score}
@@ -148,14 +155,6 @@ export const PillarAuditView = memo(function PillarAuditView({
             />
           </div>
         </Card>
-      </div>
-      <div className="px-4 lg:px-6">
-        <BucketScoreHistoryChart
-          activeProjectName={activeProjectName}
-          crawlBreakdowns={crawlBreakdowns}
-          pillarId={pillarId}
-          title={title}
-        />
       </div>
     </div>
   )
@@ -216,7 +215,8 @@ const BucketScoreCards = memo(function BucketScoreCards({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+    <div className="@container/buckets h-full min-w-0 w-full">
+      <div className="grid h-full auto-rows-fr grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-4">
       {buckets.map((bucket) => {
         const previousBucket = previousPillar?.buckets.find(
           (item) => item.id === bucket.id
@@ -232,7 +232,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
         return (
           <>
             <Card
-              className={`@container/card relative flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
+              className={`relative flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
                 bucket.id === "psi_cwv" && psiResult
                   ? "cursor-pointer transition hover:border-primary/30"
                   : ""
@@ -249,19 +249,13 @@ const BucketScoreCards = memo(function BucketScoreCards({
                 {delta !== null && <TrendBadge delta={delta} />}
               </CardHeader>
               <div className="flex flex-1 items-center justify-center px-6 py-4">
-                <CardTitle className="text-3xl font-semibold tabular-nums @[250px]/card:text-4xl">
+                <span className="font-heading text-4xl leading-none font-semibold tabular-nums">
                   {bucket.score === undefined ? (
                     "—"
                   ) : (
-                    <>
-                      <NumberPopIn
-                        value={Math.round(bucket.score)}
-                        replayKey={currentCrawlId}
-                      />
-                      %
-                    </>
+                    <>{Math.round(bucket.score)}%</>
                   )}
-                </CardTitle>
+                </span>
               </div>
               <CardFooter className="flex items-end justify-between gap-4 text-sm">
                 <div className="flex min-w-0 flex-col gap-1">
@@ -283,6 +277,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
           </>
         )
       })}
+      </div>
     </div>
   )
 })
