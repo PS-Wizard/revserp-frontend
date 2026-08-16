@@ -167,7 +167,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
   )
 
   return (
-    <Card className="@container/card flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+    <Card className="@container/card flex h-full flex-col bg-gradient-to-br from-card via-card to-muted/30">
       <CardHeader>
         <CardTitle>{title} Score History</CardTitle>
         <CardDescription>

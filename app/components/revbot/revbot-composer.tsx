@@ -12,6 +12,7 @@ import {
   ACCENTS,
   accentChain,
   createShader,
+  cubicBezier,
   playSweep,
   type ShaderController,
 } from "glimm"
@@ -24,6 +25,12 @@ import type { AIReasoningEffort } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
 type AutocompleteMode = "source" | "command"
+
+/**
+ * Sweep easing: glimm's "snap" (cubic-bezier(1, 0, 0.35, 0.95)) with a
+ * steeper initial slope so the band enters fast, then settles dramatically.
+ */
+const SWEEP_EASING = cubicBezier(0.8, 0.5, 0.35, 0.95)
 type Autocomplete = { mode: AutocompleteMode; query: string; start: number }
 type ComposerOption = { description: string; name: string }
 
@@ -381,14 +388,14 @@ export function RevbotComposer({
     const sweep = playSweep(shader, {
       palette: RAINBOW,
       direction: "ltr",
-      sweepMs: 1200,
-      outroMs: 400,
+      sweepMs: 700,
+      outroMs: 250,
       peakAlpha: 0.55,
       bandTight: 7,
       brightness: 1,
       swellAmount: 0.25,
       waveSpeed: 0,
-      easing: "easeOutExpo",
+      easing: SWEEP_EASING,
     })
     sweepRef.current = sweep
     sweep.done.finally(() => {

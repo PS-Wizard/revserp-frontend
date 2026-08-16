@@ -131,7 +131,7 @@ export const PillarAuditView = memo(function PillarAuditView({
         />
       </div>
       <div className="px-4 lg:px-6">
-        <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+        <Card className="bg-gradient-to-br from-card via-card to-muted/30">
           <IssueTreemap
             breakdown={currentBreakdown}
             pillarId={pillarId}
@@ -203,7 +203,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
 
   if (!buckets.length) {
     return (
-      <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+      <Card className="bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader>
           <CardTitle>No bucket scores yet</CardTitle>
           <CardDescription>
@@ -232,7 +232,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
         return (
           <>
             <Card
-              className={`relative flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30 ${
+              className={`relative flex flex-col bg-gradient-to-br from-card via-card to-muted/30 ${
                 bucket.id === "psi_cwv" && psiResult
                   ? "cursor-pointer transition hover:border-primary/30"
                   : ""

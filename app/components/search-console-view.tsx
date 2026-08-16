@@ -349,7 +349,7 @@ function GSCStateCard({
 }) {
   return (
     <div className="p-6">
-      <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+      <Card className="bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader>
           <CardTitle className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">
             {title}

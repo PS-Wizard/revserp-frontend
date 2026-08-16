@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import type { MeResponse } from "~/lib/api.types"
+import { HoverPill } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 
 import { getWorkspaceInitials } from "./utils"
@@ -173,7 +174,7 @@ export function ProfileMenu({
               "flex items-center transition data-[popup-open]:bg-muted/50",
               compact
                 ? "size-9 shrink-0 justify-center rounded-md hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                : "gap-3 rounded-md bg-card px-2 py-1.5 text-left shadow-xs hover:bg-muted/50"
+                : "gap-3 rounded-md border border-border/60 bg-card px-2 py-1.5 text-left hover:bg-muted/50"
             )}
             type="button"
           />
@@ -201,17 +202,7 @@ export function ProfileMenu({
         side="bottom"
         sideOffset={10}
       >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-1 z-0 rounded-[6px] bg-accent"
-          style={{
-            height: profilePill?.height ?? 0,
-            opacity: profilePill ? 1 : 0,
-            top: profilePill?.top ?? 0,
-            transition:
-              "top 150ms cubic-bezier(0.23,1,0.32,1), height 150ms cubic-bezier(0.23,1,0.32,1), opacity 120ms ease",
-          }}
-        />
+        <HoverPill pill={profilePill} />
         <DropdownMenuGroup>
           <DropdownMenuCheckboxItem
             checked={isDarkMode}

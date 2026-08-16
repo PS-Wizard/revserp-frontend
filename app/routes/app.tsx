@@ -35,6 +35,7 @@ import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
+import { CrawlRunningGlimm } from "~/components/crawl-running-glimm"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
@@ -741,9 +742,9 @@ export default function AppPage() {
             >
               <AnimatePresence initial={false} mode="wait">
                 <motion.div
-                  animate={{ filter: "blur(0px)", opacity: 1 }}
-                  exit={{ filter: "blur(10px)", opacity: 0 }}
-                  initial={{ filter: "blur(10px)", opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0 }}
                   key={auditTab}
                   transition={{
                     duration: shouldReduceMotion ? 0 : 0.15,
@@ -776,7 +777,7 @@ export default function AppPage() {
                     overallPreviousValue={previousOverall}
                   />
                   <div className="px-4 lg:px-6">
-                    <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+                    <Card className="bg-gradient-to-br from-card via-card to-muted/30">
                       <IssueTreemap
                         breakdown={stableCurrentBreakdown}
                         onSelect={handleTreemapSelect}
@@ -822,9 +823,10 @@ export default function AppPage() {
                 {/* Dimmer covers the content region only (below the navbar), so the
                   navbar stays interactive while a crawl runs. */}
                 <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
+                <CrawlRunningGlimm />
                 {/* Card is fixed to the viewport center (~50vh) so it's visible without
                   scrolling regardless of page height. */}
-                <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 border-border/50 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
+                <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
                   <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
                     <ThinkingOrb
                       aria-hidden="true"

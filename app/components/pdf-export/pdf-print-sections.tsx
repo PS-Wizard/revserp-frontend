@@ -462,7 +462,7 @@ function PillarSection({
         segments={radialSegments}
       />
       {buckets.length === 0 ? (
-        <Card className="border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+        <Card className="bg-gradient-to-br from-card via-card to-muted/30">
           <CardHeader>
             <CardTitle>No bucket scores yet</CardTitle>
             <CardDescription>Run a completed crawl to populate this view.</CardDescription>
@@ -483,7 +483,7 @@ function PillarSection({
             return (
               <Card
                 key={bucket.id}
-                className="@container/card flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30"
+                className="@container/card flex flex-col bg-gradient-to-br from-card via-card to-muted/30"
               >
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                   <CardDescription>

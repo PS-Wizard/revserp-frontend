@@ -76,14 +76,14 @@ export const SectionCards = memo(function SectionCards({
   )
 
   return (
-    <div className="grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
       {cards.map((card) => {
         const delta = getRoundedDelta(card.value, card.previousValue)
 
         return (
           <Card
             key={card.label}
-            className="@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30"
+            className="@container/card bg-gradient-to-br from-card via-card to-muted/30"
           >
             <CardHeader>
               <CardDescription>{card.label}</CardDescription>

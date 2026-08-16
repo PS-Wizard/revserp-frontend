@@ -16,6 +16,12 @@ const DRIVE_DELAYS = Array.from({ length: 9 }, (_, index) => {
 
 type ToolOutcome = "running" | "failed" | "partial" | "success"
 
+function formatDuration(ms: number) {
+  const total = ms / 1000
+  if (total < 60) return `${total.toFixed(1)}s`
+  return `${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`
+}
+
 function useElapsed(startedAt: number | null, active: boolean) {
   const [elapsed, setElapsed] = useState("0.0s")
 
@@ -299,14 +305,50 @@ function ToolCallRow({
   )
 }
 
+function ToolCallList({
+  active,
+  isDark,
+  toolCalls,
+}: {
+  active: boolean
+  isDark: boolean
+  toolCalls: RevbotToolCall[]
+}) {
+  if (!toolCalls.length) return null
+
+  return (
+    <div className="flex w-full flex-col pb-2">
+      {toolCalls.map((call, index) => (
+        <div
+          key={call.callId}
+          style={{
+            animation: active
+              ? `revbot-fade-up 320ms cubic-bezier(0.23,1,0.32,1) ${index * 80}ms both`
+              : undefined,
+          }}
+        >
+          <ToolCallRow
+            call={call}
+            defaultOpen={active && call.status === "running"}
+            isDark={isDark}
+            isLast={index === toolCalls.length - 1}
+          />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function RevbotTurnActivity({
   active,
+  endedAt = null,
   showDivider = false,
   startedAt,
   toolCalls,
   variant = "dark",
 }: {
   active: boolean
+  endedAt?: number | null
   phase: AIStreamPhase | null
   showDivider?: boolean
   startedAt: number | null
@@ -316,8 +358,78 @@ export function RevbotTurnActivity({
   const isDark = variant === "dark"
   const elapsed = useElapsed(startedAt, active)
   const hasTools = toolCalls.length > 0
+  const isComplete =
+    !active && startedAt !== null && endedAt !== null && endedAt >= startedAt
+  const thoughtDuration =
+    isComplete && startedAt !== null && endedAt !== null
+      ? formatDuration(endedAt - startedAt)
+      : null
+  const [accordionOpen, setAccordionOpen] = useState(true)
 
-  if (!active && !hasTools) return null
+  if (!active && !hasTools && !isComplete) return null
+
+  if (isComplete && thoughtDuration) {
+    return (
+      <div className="mb-3 w-full">
+        <div
+          className={cn(
+            "overflow-hidden rounded-lg",
+            isDark ? "bg-white/[0.03]" : "bg-muted/30"
+          )}
+        >
+          <button
+            aria-expanded={accordionOpen}
+            className={cn(
+              "flex w-full items-center gap-2 px-2 py-2 text-left transition-colors duration-100",
+              isDark ? "hover:bg-white/[0.04]" : "hover:bg-muted/50"
+            )}
+            onClick={() => setAccordionOpen((current) => !current)}
+            type="button"
+          >
+            <span className="min-w-0 flex-1 text-[13px] font-medium text-zinc-400">
+              Thought for {thoughtDuration}
+            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                "size-3.5 shrink-0 text-zinc-500 transition-transform duration-300",
+                accordionOpen && "rotate-180"
+              )}
+              strokeWidth={2.2}
+            />
+          </button>
+
+          <div
+            className="grid transition-[grid-template-rows,opacity] duration-300 motion-reduce:transition-none"
+            style={{
+              gridTemplateRows: accordionOpen ? "1fr" : "0fr",
+              opacity: accordionOpen ? 1 : 0,
+              transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)",
+            }}
+          >
+            <div className="overflow-hidden">
+              <div className="px-2 pt-0">
+                <ToolCallList
+                  active={false}
+                  isDark={isDark}
+                  toolCalls={toolCalls}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {showDivider ? (
+          <hr
+            className={cn(
+              "mt-2 mb-5 border-0 border-t",
+              isDark ? "border-white/10" : "border-border"
+            )}
+          />
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <div className="mb-3 w-full">
@@ -331,34 +443,15 @@ export function RevbotTurnActivity({
         </div>
       ) : null}
 
-      {hasTools ? (
-        <>
-          <div className="flex w-full flex-col pb-2">
-            {toolCalls.map((call, index) => (
-              <div
-                key={call.callId}
-                style={{
-                  animation: `revbot-fade-up 320ms cubic-bezier(0.23,1,0.32,1) ${index * 80}ms both`,
-                }}
-              >
-                <ToolCallRow
-                  call={call}
-                  defaultOpen={active && call.status === "running"}
-                  isDark={isDark}
-                  isLast={index === toolCalls.length - 1}
-                />
-              </div>
-            ))}
-          </div>
-          {showDivider ? (
-            <hr
-              className={cn(
-                "mt-2 mb-5 border-0 border-t",
-                isDark ? "border-white/10" : "border-border"
-              )}
-            />
-          ) : null}
-        </>
+      <ToolCallList active={active} isDark={isDark} toolCalls={toolCalls} />
+
+      {showDivider ? (
+        <hr
+          className={cn(
+            "mt-2 mb-5 border-0 border-t",
+            isDark ? "border-white/10" : "border-border"
+          )}
+        />
       ) : null}
     </div>
   )

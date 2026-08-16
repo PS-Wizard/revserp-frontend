@@ -2,203 +2,348 @@
 
 import type { ReactNode } from "react"
 
-import { XIcon } from "lucide-react"
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  Maximize2Icon,
+  Minimize2Icon,
+  MinusIcon,
+  PlusIcon,
+  TrashIcon,
+  XIcon,
+} from "lucide-react"
 import { motion, type Transition } from "motion/react"
 import { BorderBeam } from "border-beam"
 import { ThinkingOrb } from "thinking-orbs"
 
+import type { AIConversationResponse } from "~/lib/api.types"
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { DropdownPillSurface } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 
-export type IslandState = "docked" | "maximized"
+export type IslandState = "docked" | "minimized" | "maximized"
+
+const ISLAND_LAYOUT_ID = "ai-island"
 
 const islandSurfaceClass = "border border-border bg-black"
 
-export const islandDockedSizeClass = "h-8 w-[6.25rem]"
+export const islandDockedSizeClass = "h-12 w-[10.5rem]"
 
-const islandMaxPanelClass = "border border-border bg-black"
+/** Traditional chatbot anchor — bottom-right of the viewport. */
+const islandAnchorClass = "fixed bottom-6 right-6 z-[100]"
 
-const islandMaxHeaderClass = "border-b border-border bg-black"
+const islandMaximizedAnchorClass =
+  "pointer-events-none fixed inset-3 z-[100] flex"
 
-const islandMaxBodyClass = "bg-black"
+export const islandMinimizedSizeClass =
+  "h-[min(560px,72vh)] w-[27rem] max-w-[calc(100vw-1.5rem)]"
 
-const maximizedPositionClass = "fixed inset-3 z-[100]"
+const islandMinimizedShadowClass =
+  "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
 
-type MorphShellProps = {
-  layoutId?: string
-  onLayoutAnimationComplete?: () => void
-  transition: Transition
-}
+const islandPanelClass = "border border-border bg-black"
 
-/** Empty morph shell — never contains Revbot label/orb. */
-export function DynamicIslandMorphShell({
-  layoutId = "ai-island",
-  onLayoutAnimationComplete,
-  state,
-  transition,
-}: MorphShellProps & { state: IslandState }) {
-  if (state === "docked") {
-    return (
-      <motion.div
-        aria-hidden="true"
-        className={cn(
-          "relative isolate overflow-hidden rounded-md",
-          islandDockedSizeClass,
-          islandSurfaceClass
-        )}
-        layout
-        layoutId={layoutId}
-        onLayoutAnimationComplete={onLayoutAnimationComplete}
-        transition={transition}
-      />
-    )
-  }
+const islandPanelHeaderClass = "border-b border-border bg-black"
 
-  return (
-    <motion.div
-      aria-hidden="true"
-      className={cn(
-        "overflow-hidden rounded-md",
-        maximizedPositionClass,
-        islandMaxPanelClass
-      )}
-      layout
-      layoutId={layoutId}
-      onLayoutAnimationComplete={onLayoutAnimationComplete}
-      style={{ zIndex: 100 }}
-      transition={transition}
-    />
-  )
+const islandPanelBodyClass = "bg-black"
+
+const DOCKED_RADIUS = 8
+const PANEL_RADIUS = 12
+
+/** Spring morph — matches the main-branch AI dock. */
+export function islandTransition(reducedMotion: boolean): Transition {
+  return reducedMotion
+    ? { duration: 0 }
+    : { type: "spring", stiffness: 380, damping: 34, mass: 0.9 }
 }
 
 type DockedChromeProps = {
   active?: boolean
   onOpen: () => void
-  visible: boolean
+  transition: Transition
 }
 
-/** Fixed docked face — sits above the morph shell, not part of layoutId. */
+/** Docked pill — one layoutId element, morphs into the panel. */
 export function DynamicIslandDockedChrome({
   active = false,
   onOpen,
-  visible,
+  transition,
 }: DockedChromeProps) {
-  if (!visible) return null
-
-  return (
-    <div
+  const dockedButton = (
+    <motion.button
+      aria-label="Open AI island"
       className={cn(
-        "pointer-events-none absolute inset-0 z-[102]",
+        "pointer-events-auto overflow-hidden rounded-lg",
+        islandSurfaceClass,
         islandDockedSizeClass
       )}
+      layout
+      layoutId={ISLAND_LAYOUT_ID}
+      onClick={onOpen}
+      style={{ borderRadius: DOCKED_RADIUS, willChange: "transform" }}
+      transition={transition}
+      type="button"
     >
-      <button
-        aria-label="Open AI island"
-        className={cn(
-          "pointer-events-auto flex items-center gap-1.5 rounded-md px-2",
-          "animate-in fade-in duration-200",
-          islandDockedSizeClass
-        )}
-        onClick={onOpen}
-        type="button"
-      >
+      <span className="flex size-full items-center justify-between px-3.5">
         <ThinkingOrb
           aria-hidden="true"
-          className="flex shrink-0 items-center justify-center [&_svg]:size-6"
+          className="flex shrink-0 items-center justify-center [&_svg]:size-9"
           paused={!active}
           size={20}
           state="solving"
           theme="dark"
         />
-        <span className="truncate text-sm font-medium leading-none text-foreground">
+        <span className="truncate text-base font-semibold leading-none text-foreground">
           Revbot
         </span>
-      </button>
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 animate-in fade-in duration-300"
-      >
+      </span>
+    </motion.button>
+  )
+
+  return (
+    <div className={cn("pointer-events-none", islandAnchorClass)}>
+      {active ? (
         <BorderBeam
-          active={active}
+          active
+          borderRadius={DOCKED_RADIUS}
           brightness={2.4}
-          className={cn("rounded-md", islandDockedSizeClass)}
+          className="pointer-events-none overflow-hidden rounded-lg"
           colorVariant="colorful"
           duration={1.2}
           hueRange={180}
-          size="pulse-outside"
           saturation={2}
+          size="pulse-outside"
           strength={1}
           theme="dark"
         >
-          <span className="block size-full" />
+          {dockedButton}
         </BorderBeam>
-      </div>
+      ) : (
+        dockedButton
+      )}
     </div>
   )
 }
 
-type MaxPanelProps = {
+type IslandPanelState = "minimized" | "maximized"
+
+type IslandPanelProps = {
   children?: ReactNode
-  /** Keep chat mounted while hidden so durable turns keep streaming. */
-  keepMounted?: boolean
+  activeConversationId: string | null
+  controlsDisabled?: boolean
+  conversations: AIConversationResponse[]
   onDock: () => void
+  onDeleteConversation: (conversationId: string) => void
+  onMaximize: () => void
+  onMinimize: () => void
+  onNewChat?: () => void
+  onSelectConversation: (conversationId: string) => void
+  panelState: IslandPanelState
   title?: string
-  revealTransition: Transition
-  visible: boolean
+  transition: Transition
 }
 
-/** Expanded overlay chrome — separate from the morph shell. */
-export function DynamicIslandMaxPanel({
+/** Chat panel — same layoutId as the docked pill for FLIP morphs. */
+export function DynamicIslandPanel({
   children,
-  keepMounted = false,
+  activeConversationId,
+  controlsDisabled = false,
+  conversations,
   onDock,
+  onDeleteConversation,
+  onMaximize,
+  onMinimize,
+  onNewChat,
+  onSelectConversation,
+  panelState,
   title = "New chat",
-  revealTransition,
-  visible,
-}: MaxPanelProps) {
-  if (!visible && !keepMounted) return null
+  transition,
+}: IslandPanelProps) {
+  const isMaximized = panelState === "maximized"
+  const borderRadius = isMaximized ? PANEL_RADIUS : DOCKED_RADIUS
+  const shortTitle = title.split(/\s+/).slice(0, 3).join(" ")
+  const displayTitle = shortTitle === title ? title : `${shortTitle}…`
 
   return (
-    <motion.div
-      animate={{ opacity: visible ? 1 : 0 }}
-      aria-hidden={!visible}
-      className={cn(
-        "flex min-h-0 flex-col overflow-hidden rounded-md",
-        visible
-          ? cn(
-              "pointer-events-auto",
-              maximizedPositionClass,
-              islandMaxPanelClass
+    <div
+      className={
+        isMaximized
+          ? islandMaximizedAnchorClass
+          : cn(
+              "pointer-events-none",
+              islandAnchorClass,
+              islandMinimizedSizeClass,
+              islandMinimizedShadowClass
             )
-          : "pointer-events-none fixed h-0 w-0 overflow-hidden opacity-0"
-      )}
-      initial={false}
-      style={visible ? { zIndex: 101 } : undefined}
-      transition={revealTransition}
+      }
     >
-      <header
+      <motion.div
+        aria-label="Revbot"
+        aria-modal={isMaximized ? "true" : undefined}
         className={cn(
-          "grid h-11 shrink-0 grid-cols-[2.5rem_1fr_2.5rem] items-center px-1",
-          islandMaxHeaderClass,
-          !visible && "hidden"
+          "pointer-events-auto min-h-0 overflow-hidden",
+          islandPanelClass,
+          isMaximized ? "h-full w-full flex-1" : islandMinimizedSizeClass
         )}
+        layout
+        layoutId={ISLAND_LAYOUT_ID}
+        role="dialog"
+        style={{
+          borderRadius,
+          willChange: isMaximized ? undefined : "transform",
+        }}
+        transition={transition}
       >
-        <span aria-hidden="true" />
-        <h2 className="min-w-0 truncate text-center text-sm font-semibold text-foreground">
-          {title}
-        </h2>
-        <button
-          aria-label="Dock AI island"
-          className="justify-self-end rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-          onClick={onDock}
-          type="button"
-          tabIndex={visible ? 0 : -1}
-        >
-          <XIcon aria-hidden="true" className="size-4" />
-        </button>
-      </header>
-      <div className={cn("min-h-0 flex-1 overflow-hidden", islandMaxBodyClass)}>
-        {children}
-      </div>
-    </motion.div>
+        <div className="flex h-full min-h-0 flex-col">
+          <header
+            className={cn(
+              "grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b px-2",
+              islandPanelHeaderClass
+            )}
+          >
+            <div className="flex min-w-0 items-center">
+              {!isMaximized && onNewChat ? (
+                <button
+                  aria-label="New chat"
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                  disabled={controlsDisabled}
+                  onClick={onNewChat}
+                  type="button"
+                >
+                  <PlusIcon aria-hidden="true" className="size-3.5" />
+                  New chat
+                </button>
+              ) : null}
+            </div>
+            {isMaximized ? (
+              <h2
+                className="min-w-0 max-w-full truncate text-center text-sm font-semibold text-foreground"
+                title={title}
+              >
+                {displayTitle}
+              </h2>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <button
+                      aria-label="Switch conversation"
+                      className="flex min-w-0 max-w-full items-center justify-center gap-1 rounded-md px-2 py-1 text-foreground hover:bg-white/10 data-[popup-open]:bg-white/10"
+                      title={title}
+                      type="button"
+                    />
+                  }
+                >
+                  <span className="min-w-0 truncate text-sm font-semibold">
+                    {displayTitle}
+                  </span>
+                  <ChevronDownIcon
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 data-[popup-open]:rotate-180"
+                  />
+                </DropdownMenuTrigger>
+                <DropdownPillSurface
+                  align="center"
+                  className="max-h-72 w-64"
+                  pillClassName="bg-white/10"
+                  positionerClassName="z-[110]"
+                  side="bottom"
+                >
+                  {(pill) =>
+                    conversations.length ? (
+                      conversations.map((conversation, index) => (
+                        <DropdownMenuItem
+                          key={conversation.id}
+                          {...pill.getItemProps(index)}
+                          disabled={controlsDisabled}
+                          onClick={() => onSelectConversation(conversation.id)}
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {conversation.title}
+                          </span>
+                          {conversation.id === activeConversationId ? (
+                            <CheckIcon aria-hidden="true" className="size-4 shrink-0" />
+                          ) : null}
+                          <button
+                            aria-label={`Delete ${conversation.title}`}
+                            className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-foreground group-hover/dropdown-menu-item:opacity-100 focus-visible:opacity-100"
+                            disabled={controlsDisabled}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              onDeleteConversation(conversation.id)
+                            }}
+                            type="button"
+                          >
+                            <TrashIcon aria-hidden="true" className="size-3.5" />
+                          </button>
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <DropdownMenuItem {...pill.getItemProps(0)} disabled>
+                        No conversations yet
+                      </DropdownMenuItem>
+                    )
+                  }
+                </DropdownPillSurface>
+              </DropdownMenu>
+            )}
+            <div className="flex min-w-0 shrink-0 items-center justify-end">
+              {isMaximized ? (
+                <>
+                  <button
+                    aria-label="Minimize AI island"
+                    className="rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    onClick={onMinimize}
+                    type="button"
+                  >
+                    <Minimize2Icon aria-hidden="true" className="size-4" />
+                  </button>
+                  <button
+                    aria-label="Dock AI island"
+                    className="rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    onClick={onDock}
+                    type="button"
+                  >
+                    <XIcon aria-hidden="true" className="size-4" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    aria-label="Maximize AI island"
+                    className="rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    onClick={onMaximize}
+                    type="button"
+                  >
+                    <Maximize2Icon aria-hidden="true" className="size-4" />
+                  </button>
+                  <button
+                    aria-label="Dock AI island"
+                    className="rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                    onClick={onDock}
+                    type="button"
+                  >
+                    <MinusIcon aria-hidden="true" className="size-4" />
+                  </button>
+                </>
+              )}
+            </div>
+          </header>
+          <div
+            className={cn("min-h-0 flex-1 overflow-hidden", islandPanelBodyClass)}
+          >
+            {children}
+          </div>
+        </div>
+      </motion.div>
+    </div>
   )
 }
+
+/** @deprecated Use DynamicIslandPanel */
+export const DynamicIslandMaxPanel = DynamicIslandPanel

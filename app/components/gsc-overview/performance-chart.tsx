@@ -238,7 +238,7 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
   }
 
   return (
-    <Card className="mx-4 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 text-foreground sm:mx-6 lg:mx-4">
+    <Card className="mx-4 overflow-hidden bg-gradient-to-br from-card via-card to-muted/30 text-foreground sm:mx-6 lg:mx-4">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div className="space-y-1.5">
           <CardTitle>Performance</CardTitle>

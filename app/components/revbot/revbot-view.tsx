@@ -40,13 +40,13 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip"
 import { revbotHashTarget } from "~/components/app-navbar/types"
-import type { AIReasoningEffort, ProjectResponse } from "~/lib/api.types"
+import type { AIReasoningEffort, AIConversationResponse, ProjectResponse } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
 import { RevbotComposer } from "./revbot-composer"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
-import { useRevbot } from "./use-revbot"
+import { useRevbot, type RevbotHandle } from "./use-revbot"
 
 /** Stick to bottom while content grows; stop when the user scrolls up. */
 function RevbotScrollFollow({ followKey }: { followKey: string }) {
@@ -112,6 +112,84 @@ function StreamingAssistantMessage({
   )
 }
 
+/** History list with isolated pill state — hover won't re-render the message column. */
+function RevbotConversationHistoryList({
+  conversations,
+  activeConversationId,
+  disabled,
+  isDark,
+  onSelectConversation,
+  onDeleteConversation,
+}: {
+  conversations: AIConversationResponse[]
+  activeConversationId: string | null
+  disabled: boolean
+  isDark: boolean
+  onSelectConversation: (id: string) => void
+  onDeleteConversation: (id: string) => void
+}) {
+  const historyPill = useHoverPill()
+
+  return (
+    <div
+      className="relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
+      onMouseLeave={historyPill.clearPill}
+    >
+      <HoverPill
+        className={isDark ? "bg-white/10" : undefined}
+        pill={historyPill.pill}
+      />
+      {conversations.map((conversation, index) => {
+        const itemProps = historyPill.getItemProps(index)
+        const isActiveConversation = conversation.id === activeConversationId
+        return (
+          <div
+            {...itemProps}
+            aria-current={isActiveConversation ? "page" : undefined}
+            className={cn(
+              itemProps.className,
+              "group flex w-full items-center gap-0.5 rounded-md px-1 py-0.5"
+            )}
+            key={conversation.id}
+          >
+            <button
+              className={cn(
+                "min-w-0 flex-1 truncate rounded-md px-1 py-2 text-left text-sm",
+                isActiveConversation
+                  ? "font-medium text-foreground"
+                  : "text-muted-foreground"
+              )}
+              disabled={disabled}
+              onClick={() => onSelectConversation(conversation.id)}
+              type="button"
+            >
+              {conversation.title}
+            </button>
+            <button
+              aria-label={`Delete ${conversation.title}`}
+              className={cn(
+                "shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100",
+                isDark
+                  ? "hover:bg-white/10"
+                  : "hover:bg-accent hover:text-accent-foreground"
+              )}
+              disabled={disabled}
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onDeleteConversation(conversation.id)
+              }}
+              type="button"
+            >
+              <TrashIcon aria-hidden="true" className="size-3.5" />
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function RevbotView({
   activeProject,
   allowedEfforts,
@@ -120,6 +198,7 @@ export function RevbotView({
   compact = false,
   defaultHistoryOpen = true,
   hideCompactHeader = false,
+  hideHistory = false,
   onActivityChange,
   onInternalLink,
   onTitleChange,
@@ -133,6 +212,7 @@ export function RevbotView({
   compact?: boolean
   defaultHistoryOpen?: boolean
   hideCompactHeader?: boolean
+  hideHistory?: boolean
   onActivityChange?: (active: boolean) => void
   onInternalLink?: (hash: string) => void
   onTitleChange?: (title: string) => void
@@ -152,32 +232,39 @@ export function RevbotView({
     )
   }
 
+  const revbot = useRevbot({
+    activeProject,
+    allowedEfforts,
+    requestedConversationId,
+    onConversationChange,
+  })
+
   return (
-    <ActiveRevbotView
+    <RevbotViewContent
       activeProject={activeProject}
       allowedEfforts={allowedEfforts}
-      onConversationChange={onConversationChange}
-      onActivityChange={onActivityChange}
-      requestedConversationId={requestedConversationId}
       compact={compact}
       defaultHistoryOpen={defaultHistoryOpen}
       hideCompactHeader={hideCompactHeader}
+      hideHistory={hideHistory}
+      onActivityChange={onActivityChange}
       onInternalLink={onInternalLink}
       onTitleChange={onTitleChange}
+      revbot={revbot}
       showMic={showMic}
       variant={variant}
     />
   )
 }
 
-function ActiveRevbotView({
+export function RevbotViewContent({
   activeProject,
   allowedEfforts,
-  requestedConversationId,
-  onConversationChange,
+  revbot,
   compact,
   defaultHistoryOpen,
   hideCompactHeader,
+  hideHistory,
   onActivityChange,
   onInternalLink,
   onTitleChange,
@@ -186,25 +273,18 @@ function ActiveRevbotView({
 }: {
   activeProject: ProjectResponse
   allowedEfforts: AIReasoningEffort[]
-  requestedConversationId: string | null
-  onConversationChange: (conversationId: string | null) => void
+  revbot: RevbotHandle
   compact: boolean
   defaultHistoryOpen: boolean
   hideCompactHeader: boolean
+  hideHistory: boolean
   onActivityChange?: (active: boolean) => void
   onInternalLink?: (hash: string) => void
   onTitleChange?: (title: string) => void
   showMic: boolean
   variant: "default" | "dark"
 }) {
-  const revbot = useRevbot({
-    activeProject,
-    allowedEfforts,
-    requestedConversationId,
-    onConversationChange,
-  })
   const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
-  const historyPill = useHoverPill()
   const markdownComponents: Components = {
     a: ({ href, node: _node, children, ...props }) => {
       if (!href) return <a {...props}>{children}</a>
@@ -284,18 +364,20 @@ function ActiveRevbotView({
       className={
         compact
           ? `grid h-full min-h-0 w-full gap-2 overflow-hidden p-2 ${
-              historyOpen
-                ? hideCompactHeader
-                  ? "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
-                  : "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
-                : hideCompactHeader
-                  ? "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
-                  : "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
+              hideHistory
+                ? "grid-cols-1 grid-rows-[minmax(0,1fr)_auto]"
+                : historyOpen
+                  ? hideCompactHeader
+                    ? "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
+                    : "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
+                  : hideCompactHeader
+                    ? "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
+                    : "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
             }${isDark ? " bg-black" : ""}`
           : "mx-auto flex h-[calc(100svh-5rem)] min-h-0 w-full max-w-3xl flex-col gap-6 overflow-hidden p-4 sm:p-6"
       }
     >
-      {compact ? (
+      {compact && !hideHistory ? (
         <aside
           aria-label="Conversation history"
           className={cn(
@@ -344,65 +426,18 @@ function ActiveRevbotView({
                 <PlusIcon aria-hidden="true" className="size-4 shrink-0" />
                 New chat
               </button>
-              <div
-                className="relative flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto"
-                onMouseLeave={historyPill.clearPill}
-              >
-                <HoverPill
-                  className={isDark ? "bg-white/10" : undefined}
-                  pill={historyPill.pill}
-                />
-                {revbot.conversations.map((conversation, index) => {
-                  const itemProps = historyPill.getItemProps(index)
-                  const isActiveConversation =
-                    conversation.id === revbot.conversationId
-                  return (
-                    <div
-                      {...itemProps}
-                      aria-current={isActiveConversation ? "page" : undefined}
-                      className={cn(
-                        itemProps.className,
-                        "group flex w-full items-center gap-0.5 rounded-md px-1 py-0.5"
-                      )}
-                      key={conversation.id}
-                    >
-                      <button
-                        className={cn(
-                          "min-w-0 flex-1 truncate rounded-md px-1 py-2 text-left text-sm",
-                          isActiveConversation
-                            ? "font-medium text-foreground"
-                            : "text-muted-foreground"
-                        )}
-                        disabled={conversationControlsDisabled}
-                        onClick={() =>
-                          void revbot.selectConversation(conversation.id)
-                        }
-                        type="button"
-                      >
-                        {conversation.title}
-                      </button>
-                      <button
-                        aria-label={`Delete ${conversation.title}`}
-                        className={cn(
-                          "shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground focus-visible:opacity-100",
-                          isDark
-                            ? "hover:bg-white/10"
-                            : "hover:bg-accent hover:text-accent-foreground"
-                        )}
-                        disabled={conversationControlsDisabled}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          void revbot.deleteConversation(conversation.id)
-                        }}
-                        type="button"
-                      >
-                        <TrashIcon aria-hidden="true" className="size-3.5" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
+              <RevbotConversationHistoryList
+                activeConversationId={revbot.conversationId}
+                conversations={revbot.conversations}
+                disabled={conversationControlsDisabled}
+                isDark={isDark}
+                onDeleteConversation={(id) =>
+                  void revbot.deleteConversation(id)
+                }
+                onSelectConversation={(id) =>
+                  void revbot.selectConversation(id)
+                }
+              />
             </>
           ) : (
             <div className="flex flex-col items-center gap-1">
@@ -511,9 +546,11 @@ function ActiveRevbotView({
         <MessageScroller
           className={
             compact
-              ? hideCompactHeader
-                ? "col-start-2 row-start-1 min-h-0"
-                : "col-start-2 row-start-2 min-h-0"
+              ? hideHistory
+                ? "row-start-1 min-h-0"
+                : hideCompactHeader
+                  ? "col-start-2 row-start-1 min-h-0"
+                  : "col-start-2 row-start-2 min-h-0"
               : "min-h-0 flex-1"
           }
         >
@@ -552,12 +589,23 @@ function ActiveRevbotView({
                             const messageToolCalls = isActiveMessage
                               ? revbot.toolCalls
                               : message.toolCalls
+                            const messageActivityStartedAt = isActiveMessage
+                              ? revbot.activityStartedAt
+                              : message.activityStartedAt ?? null
+                            const messageActivityEndedAt = isActiveMessage
+                              ? null
+                              : message.activityEndedAt ?? null
+                            const hasPersistedActivity =
+                              messageActivityStartedAt !== null &&
+                              messageActivityEndedAt !== null
                             const showActivity =
                               (isActiveMessage &&
                                 (active ||
                                   revbot.phase ||
-                                  revbot.toolCalls.length > 0)) ||
-                              (messageToolCalls?.length ?? 0) > 0
+                                  revbot.toolCalls.length > 0 ||
+                                  revbot.activityStartedAt)) ||
+                              (messageToolCalls?.length ?? 0) > 0 ||
+                              hasPersistedActivity
                             const hasToolCalls =
                               (messageToolCalls?.length ?? 0) > 0
                             const hasResponse =
@@ -569,15 +617,12 @@ function ActiveRevbotView({
                             return showActivity ? (
                               <RevbotTurnActivity
                                 active={isActiveMessage && active}
+                                endedAt={messageActivityEndedAt}
                                 phase={
                                   isActiveMessage ? revbot.phase : null
                                 }
                                 showDivider={hasToolCalls && hasResponse}
-                                startedAt={
-                                  isActiveMessage
-                                    ? revbot.activityStartedAt
-                                    : null
-                                }
+                                startedAt={messageActivityStartedAt}
                                 toolCalls={messageToolCalls ?? []}
                                 variant={variant}
                               />
@@ -619,9 +664,11 @@ function ActiveRevbotView({
         className={cn(
           "relative shrink-0 pt-3 pb-4",
           compact
-            ? hideCompactHeader
-              ? "col-start-2 row-start-3"
-              : "col-start-2 row-start-4"
+            ? hideHistory
+              ? "row-start-2"
+              : hideCompactHeader
+                ? "col-start-2 row-start-3"
+                : "col-start-2 row-start-4"
             : undefined,
           messageColumnClass
         )}

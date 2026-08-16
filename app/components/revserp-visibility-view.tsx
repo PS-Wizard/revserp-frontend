@@ -126,7 +126,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
 
   return (
     <div className="grid gap-4 px-4 lg:grid-cols-4 lg:px-6">
-      <Card className="@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+      <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Visibility Rate</CardDescription>
           <CardTitle className="text-3xl font-bold tabular-nums">
@@ -140,7 +140,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
         </CardContent>
       </Card>
 
-      <Card className="@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+      <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Total Mentions</CardDescription>
           <CardTitle className="text-3xl font-bold tabular-nums">
@@ -157,7 +157,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
         </CardContent>
       </Card>
 
-      <Card className="@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+      <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Average Rank</CardDescription>
           <CardTitle className="text-3xl font-bold tabular-nums">
@@ -171,7 +171,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
         </CardContent>
       </Card>
 
-      <Card className="@container/card border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+      <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Top Model</CardDescription>
           <CardTitle className="truncate text-xl font-bold">

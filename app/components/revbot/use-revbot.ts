@@ -43,6 +43,8 @@ export type RevbotToolCall = {
   seq: number
 }
 type LocalMessage = AITurnMessageResponse & {
+  activityEndedAt?: number | null
+  activityStartedAt?: number | null
   local?: boolean
   toolCalls?: RevbotToolCall[]
 }
@@ -222,15 +224,51 @@ function mapToolCallResponses(calls: AIToolCallResponse[] | undefined) {
   return (calls ?? []).map(mapToolCallResponse)
 }
 
-function attachToolCallsToAssistant(
+function turnActivityTimestamps(turn: AITurnResponse) {
+  if (!isTurnTerminal(turn.status)) {
+    return { endedAt: null as number | null, startedAt: null as number | null }
+  }
+  const endedAt = turn.completed_at ? Date.parse(turn.completed_at) : null
+  const startedAt = turn.started_at ? Date.parse(turn.started_at) : endedAt
+  if (
+    endedAt === null ||
+    startedAt === null ||
+    !Number.isFinite(endedAt) ||
+    !Number.isFinite(startedAt)
+  ) {
+    return { endedAt: null, startedAt: null }
+  }
+  return { endedAt, startedAt }
+}
+
+function attachTurnActivityToAssistant(
   messages: LocalMessage[],
   assistantMessageId: string | null,
-  toolCalls: RevbotToolCall[]
+  {
+    activityEndedAt,
+    activityStartedAt,
+    toolCalls,
+  }: {
+    activityEndedAt: number | null
+    activityStartedAt: number | null
+    toolCalls: RevbotToolCall[]
+  }
 ) {
-  if (!assistantMessageId || toolCalls.length === 0) return messages
+  if (!assistantMessageId) return messages
+  if (!toolCalls.length && !activityStartedAt) return messages
+
   return messages.map((message) =>
     message.id === assistantMessageId
-      ? { ...message, toolCalls: [...toolCalls] }
+      ? {
+          ...message,
+          ...(toolCalls.length ? { toolCalls: [...toolCalls] } : {}),
+          ...(activityStartedAt
+            ? {
+                activityStartedAt,
+                activityEndedAt: activityEndedAt ?? Date.now(),
+              }
+            : {}),
+        }
       : message
   )
 }
@@ -328,11 +366,16 @@ export function useRevbot({
       setState((current) => {
         const assistantMessageId = assistantMessageIdRef.current
         const messages =
-          terminal && current.toolCalls.length
-            ? attachToolCallsToAssistant(
+          terminal &&
+          (current.toolCalls.length || current.activityStartedAt)
+            ? attachTurnActivityToAssistant(
                 current.messages,
                 assistantMessageId,
-                current.toolCalls
+                {
+                  activityEndedAt: Date.now(),
+                  activityStartedAt: current.activityStartedAt,
+                  toolCalls: current.toolCalls,
+                }
               )
             : current.messages
         return {
@@ -411,18 +454,35 @@ export function useRevbot({
       assistantMessageIdRef.current = assistant?.id ?? null
       assistantTextRef.current = replay ? "" : (assistant?.content ?? "")
       const toolCalls = replay ? [] : mapToolCallResponses(turn.tool_calls)
+      const turnActivity = turnActivityTimestamps(turn)
       if (turn.status === "failed") {
         reportRevbotError(turnErrorMessage(turn.error_code))
       }
 
-      setState((current) => ({
-        ...current,
-        conversationId: turn.conversation_id,
-        messages: attachToolCallsToAssistant(
-          mergeTurnMessages(current.messages, messages),
-          assistant?.id ?? null,
-          toolCalls
-        ),
+      setState((current) => {
+        const existingClientAssistant = assistant?.id
+          ? current.messages.find((message) => message.id === assistant.id)
+          : null
+        const mergedMessages = mergeTurnMessages(current.messages, messages)
+
+        return {
+          ...current,
+          conversationId: turn.conversation_id,
+          messages: attachTurnActivityToAssistant(
+            mergedMessages,
+            assistant?.id ?? null,
+            {
+              activityEndedAt:
+                turnActivity.endedAt ??
+                existingClientAssistant?.activityEndedAt ??
+                null,
+              activityStartedAt:
+                turnActivity.startedAt ??
+                existingClientAssistant?.activityStartedAt ??
+                null,
+              toolCalls,
+            }
+          ),
         status: turn.status,
         phase: isTurnTerminal(turn.status) ? null : current.phase,
         toolCalls: isTurnTerminal(turn.status) ? [] : toolCalls,
@@ -431,7 +491,8 @@ export function useRevbot({
           : current.activityStartedAt ?? Date.now(),
         stopping: turn.cancel_requested && !isTurnTerminal(turn.status),
         loading: false,
-      }))
+      }
+      })
     },
     [notifyConversationChange, updateStatus]
   )
@@ -782,6 +843,13 @@ export function useRevbot({
       )
         return
 
+      if (
+        conversationIdRef.current === conversationId &&
+        conversationCacheRef.current.has(conversationId)
+      ) {
+        return
+      }
+
       generationRef.current += 1
       const generation = generationRef.current
       stopObserver()
@@ -1115,6 +1183,8 @@ export function useRevbot({
     toolCalls: state.toolCalls,
   }
 }
+
+export type RevbotHandle = ReturnType<typeof useRevbot>
 
 function isPhasePayload(payload: unknown): payload is AIStreamPhasePayload {
   return Boolean(

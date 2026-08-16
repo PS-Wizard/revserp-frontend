@@ -1,5 +1,9 @@
+import type { CSSProperties, ReactNode } from "react"
 import { useRef, useState } from "react"
 
+import {
+  DropdownMenuContent,
+} from "~/components/ui/dropdown-menu"
 import { cn } from "~/lib/utils"
 
 export const HOVER_PILL_TRANSITION =
@@ -8,12 +12,23 @@ export const HOVER_PILL_TRANSITION =
 export const DROPDOWN_PILL_ITEM_CLASS =
   "relative z-10 focus:bg-transparent focus:text-current data-highlighted:bg-transparent data-highlighted:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
 
+export type HoverPillRect = { height: number; top: number } | null
+
+export function hoverPillMotionStyle(pill: HoverPillRect): CSSProperties {
+  return {
+    height: pill?.height ?? 0,
+    opacity: pill ? 1 : 0,
+    top: pill?.top ?? 0,
+    transition: HOVER_PILL_TRANSITION,
+  }
+}
+
 export function HoverPill({
   className,
   pill,
 }: {
   className?: string
-  pill: { height: number; top: number } | null
+  pill: HoverPillRect
 }) {
   return (
     <span
@@ -22,18 +37,13 @@ export function HoverPill({
         "pointer-events-none absolute inset-x-1 z-0 rounded-[6px] bg-accent",
         className
       )}
-      style={{
-        height: pill?.height ?? 0,
-        opacity: pill ? 1 : 0,
-        top: pill?.top ?? 0,
-        transition: HOVER_PILL_TRANSITION,
-      }}
+      style={hoverPillMotionStyle(pill)}
     />
   )
 }
 
 export function useHoverPill() {
-  const [pill, setPill] = useState<{ height: number; top: number } | null>(null)
+  const [pill, setPill] = useState<HoverPillRect>(null)
   const itemRefs = useRef<(HTMLElement | null)[]>([])
 
   function showPill(index: number) {
@@ -65,8 +75,64 @@ export function useHoverPill() {
   return { clearPill, getItemProps, pill, showPill }
 }
 
+/** Sidebar / keyed menus — pill state stays inside the nav subtree. */
+export function useKeyedHoverPill() {
+  const [pill, setPill] = useState<HoverPillRect>(null)
+  const itemRefs = useRef<Record<string, HTMLElement | null>>({})
+
+  function showPill(id: string) {
+    const target = itemRefs.current[id]
+    if (!target) {
+      setPill(null)
+      return
+    }
+    setPill({
+      height: target.offsetHeight,
+      top: target.offsetTop,
+    })
+  }
+
+  function clearPill() {
+    setPill(null)
+  }
+
+  function setItemRef(id: string) {
+    return (element: HTMLElement | null) => {
+      itemRefs.current[id] = element
+    }
+  }
+
+  return { clearPill, pill, setItemRef, showPill }
+}
+
+export type HoverPillMenu = ReturnType<typeof useHoverPill>
+
+/** Dropdown content with isolated pill state — hover won't re-render the shell. */
+export function DropdownPillSurface({
+  children,
+  className,
+  pillClassName,
+  ...contentProps
+}: Omit<React.ComponentProps<typeof DropdownMenuContent>, "children"> & {
+  children: (menu: HoverPillMenu) => ReactNode
+  pillClassName?: string
+}) {
+  const menu = useHoverPill()
+
+  return (
+    <DropdownMenuContent
+      className={cn("relative", className)}
+      onMouseLeave={menu.clearPill}
+      {...contentProps}
+    >
+      <HoverPill className={pillClassName} pill={menu.pill} />
+      {children(menu)}
+    </DropdownMenuContent>
+  )
+}
+
 export function useTablePill() {
-  const [pill, setPill] = useState<{ height: number; top: number } | null>(null)
+  const [pill, setPill] = useState<HoverPillRect>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([])
 
@@ -92,18 +158,13 @@ export function useTablePill() {
 export function TableHoverPill({
   pill,
 }: {
-  pill: { height: number; top: number } | null
+  pill: HoverPillRect
 }) {
   return (
     <span
       aria-hidden="true"
       className="pointer-events-none absolute inset-x-0 z-0 bg-accent"
-      style={{
-        height: pill?.height ?? 0,
-        opacity: pill ? 1 : 0,
-        top: pill?.top ?? 0,
-        transition: HOVER_PILL_TRANSITION,
-      }}
+      style={hoverPillMotionStyle(pill)}
     />
   )
 }

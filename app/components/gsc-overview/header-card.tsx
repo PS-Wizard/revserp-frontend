@@ -41,7 +41,7 @@ export function GSCHeaderCard({
   onSelectedSiteChange: (nextSiteURL: string) => void | Promise<void>
 }) {
   return (
-    <Card className="mx-4 border-border/50 bg-gradient-to-br from-card via-card to-muted/30 sm:mx-6 lg:mx-4">
+    <Card className="mx-4 bg-gradient-to-br from-card via-card to-muted/30 sm:mx-6 lg:mx-4">
       <CardHeader className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <CardTitle className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">

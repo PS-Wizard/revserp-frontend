@@ -60,7 +60,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
   const legendMinHeight = chartData.length > 0 ? chartData.length * 28 : 0
 
   return (
-    <Card className="flex flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+    <Card className="flex flex-col bg-gradient-to-br from-card via-card to-muted/30">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}

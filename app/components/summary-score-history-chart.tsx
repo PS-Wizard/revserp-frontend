@@ -148,7 +148,7 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
   useApexChart(chartContainerRef, chartOptions, series, chartRows.length > 0)
 
   return (
-    <Card className="@container/card flex h-full flex-col border-border/50 bg-gradient-to-br from-card via-card to-muted/30">
+    <Card className="@container/card flex h-full flex-col bg-gradient-to-br from-card via-card to-muted/30">
       <CardHeader>
         <CardTitle>Score History</CardTitle>
         <CardDescription>

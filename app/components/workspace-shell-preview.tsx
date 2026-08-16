@@ -1,14 +1,8 @@
 "use client"
 
-import type {
-  CSSProperties,
-  FormEvent,
-  ReactElement,
-  ReactNode,
-} from "react"
+import type { CSSProperties, FormEvent, ReactNode } from "react"
 import {
-  lazy,
-  Suspense,
+  useEffect,
   useMemo,
   useReducer,
   useRef,
@@ -42,11 +36,10 @@ import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { Button } from "~/components/ui/button"
 import {
   DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { HoverPill, useHoverPill } from "~/components/ui/hover-pill"
+import { DropdownPillSurface } from "~/components/ui/hover-pill"
 import { Separator } from "~/components/ui/separator"
 import {
   Tooltip,
@@ -58,7 +51,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -78,25 +70,20 @@ import {
 import { ProjectPanel } from "~/components/command-dock/project-panel"
 import {
   DynamicIslandDockedChrome,
-  DynamicIslandMaxPanel,
-  DynamicIslandMorphShell,
-  islandDockedSizeClass,
+  DynamicIslandPanel,
+  islandTransition,
 } from "~/components/dynamic-island-poc"
+import { RevbotViewContent } from "~/components/revbot/revbot-view"
+import { useRevbot } from "~/components/revbot/use-revbot"
 import { getCrawlTimestamp } from "~/lib/crawl"
 import { clientApiFetch, clientApiPost } from "~/lib/api"
-import { cn } from "~/lib/utils"
 import type {
   CrawlResponse,
   CrawlsResponse,
   ProjectResponse,
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
-
-const RevbotView = lazy(() =>
-  import("~/components/revbot/revbot-view").then((module) => ({
-    default: module.RevbotView,
-  }))
-)
+import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 
 const auditSections = [
   ["Overview", "summary", GaugeIcon],
@@ -105,24 +92,6 @@ const auditSections = [
   ["PageSpeed", "pagespeed", ActivityIcon],
   ["Site graph", "site-graph", NetworkIcon],
 ] as const
-
-function CollapsedTooltip({
-  children,
-  label,
-  show,
-}: {
-  children: ReactElement
-  label: string
-  show: boolean
-}) {
-  if (!show) return children
-  return (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
-  )
-}
 
 type CreateProjectState = {
   isOpen: boolean
@@ -268,20 +237,14 @@ export function WorkspaceShellPreview({
   const location = useLocation()
   const revalidator = useRevalidator()
   const features = useFeatures()
-  const [islandState, setIslandState] = useState<"docked" | "maximized">(
-    "docked"
-  )
-  const [islandChromeVisible, setIslandChromeVisible] = useState(true)
-  const [islandPanelVisible, setIslandPanelVisible] = useState(false)
+  const [islandState, setIslandState] = useState<
+    "docked" | "minimized" | "maximized"
+  >("docked")
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true)
   const [isIslandThinking, setIsIslandThinking] = useState(false)
   const [islandConversationTitle, setIslandConversationTitle] =
     useState("New chat")
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false)
-  const [navPill, setNavPill] = useState<{
-    height: number
-    top: number
-  } | null>(null)
   const [createProject, createProjectDispatch] = useReducer(
     createProjectReducer,
     initialCreateProjectState
@@ -293,35 +256,23 @@ export function WorkspaceShellPreview({
   const fetchedProjectCrawls = useRef<Record<string, CrawlResponse[]>>({})
   const fetchingProjectIds = useRef(new Set<string>())
   const [, setFetchedCrawlsVersion] = useState(0)
-  const navItemRefs = useRef<Record<string, HTMLLIElement | null>>({})
   const shouldReduceMotion = useReducedMotion() ?? false
   const workspaceContentKey = view
-  const islandOpenTransition = {
-    duration: shouldReduceMotion ? 0 : 0.24,
-    ease: [0.22, 1, 0.36, 1] as const,
+  const islandMorphTransition = islandTransition(shouldReduceMotion)
+
+  function openIsland() {
+    setIslandState("minimized")
   }
-  const islandDockTransition = {
-    duration: shouldReduceMotion ? 0 : 0.2,
-    ease: [0.4, 0, 0.2, 1] as const,
-  }
-  const islandBackdropTransition = {
-    duration: shouldReduceMotion ? 0 : 0.24,
-    ease: [0.22, 1, 0.36, 1] as const,
-  }
-  const islandPanelRevealTransition = {
-    duration: shouldReduceMotion ? 0 : 0.08,
-    ease: [0.22, 1, 0.36, 1] as const,
+
+  function minimizeIsland() {
+    setIslandState("minimized")
   }
 
   function maximizeIsland() {
-    setIslandChromeVisible(false)
-    setIslandPanelVisible(false)
     setIslandState("maximized")
   }
 
   function dockIsland() {
-    setIslandPanelVisible(false)
-    setIslandChromeVisible(false)
     setIslandState("docked")
   }
 
@@ -337,18 +288,27 @@ export function WorkspaceShellPreview({
     )
   }
 
-  function handleIslandLayoutComplete() {
-    if (islandState === "maximized") {
-      setIslandPanelVisible(true)
-      return
+  useEffect(() => {
+    if (islandState === "docked") return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      if (islandState === "maximized") minimizeIsland()
+      else dockIsland()
     }
-    setIslandChromeVisible(true)
-  }
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [islandState])
 
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ??
     projects[0] ??
     null
+  const islandRevbot = useRevbot({
+    activeProject,
+    allowedEfforts: features.ai_allowed_reasoning_efforts,
+    onConversationChange: onRevbotConversationChange,
+    requestedConversationId: revbotConversationId,
+  })
   const projectActions = useProjectActions({
     projects,
     activeProjectId,
@@ -386,25 +346,8 @@ export function WorkspaceShellPreview({
         (left, right) => getCrawlTimestamp(right) - getCrawlTimestamp(left)
       )
     : []
-  const projectDropdownPill = useHoverPill()
-  const tabDropdownPill = useHoverPill()
-  const crawlDropdownPill = useHoverPill()
-  const configureDropdownPill = useHoverPill()
-  const exportDropdownPill = useHoverPill()
   const currentCrawlCompleted = currentCrawl?.status === "completed"
   const isExportingCrawl = projectActions.exportingCrawlId !== null
-
-  function showNavPill(id: string) {
-    const target = navItemRefs.current[id]
-    if (!target) {
-      setNavPill(null)
-      return
-    }
-    setNavPill({
-      height: target.offsetHeight,
-      top: target.offsetTop,
-    })
-  }
 
   function selectProject(projectId: string, crawlId?: string) {
     const params = new URLSearchParams(location.search)
@@ -650,7 +593,7 @@ export function WorkspaceShellPreview({
                         }
                         type="button"
                       >
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-xs font-semibold">
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground text-xs font-semibold text-background">
                           {activeProject?.name.slice(0, 1).toUpperCase() ?? "R"}
                         </span>
                         {isSidebarCollapsed ? null : (
@@ -668,172 +611,16 @@ export function WorkspaceShellPreview({
                   </SidebarMenu>
                 </SidebarGroup>
               </SidebarContent>
-              <nav aria-label="Workspace sections">
-                <SidebarGroup className="mt-6 p-0">
-                  {isSidebarCollapsed ? null : (
-                    <SidebarGroupLabel className="h-auto px-2 pb-1 text-[0.7rem] font-medium tracking-widest text-muted-foreground uppercase">
-                      Audit
-                    </SidebarGroupLabel>
-                  )}
-                  <SidebarMenu
-                    onMouseLeave={() => setNavPill(null)}
-                  >
-                    <SidebarMenuItem
-                      aria-hidden="true"
-                      className="pointer-events-none absolute inset-x-1 z-0 rounded-md bg-accent"
-                      style={{
-                        height: navPill?.height ?? 0,
-                        opacity: navPill ? 1 : 0,
-                        top: navPill?.top ?? 0,
-                        transition:
-                          "top 150ms cubic-bezier(0.23,1,0.32,1), height 150ms cubic-bezier(0.23,1,0.32,1), opacity 120ms ease",
-                      }}
-                    />
-                    {auditSections.map(([label, tab, Icon]) => {
-                      const active =
-                        view === "revserp-audit" && auditTab === tab
-                      return (
-                        <SidebarMenuItem
-                          key={tab}
-                          ref={(element) => {
-                            navItemRefs.current[tab] = element
-                          }}
-                        >
-                          <CollapsedTooltip
-                            label={label}
-                            show={isSidebarCollapsed}
-                          >
-                          <SidebarMenuButton
-                            className={
-                              isSidebarCollapsed
-                                ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "text-foreground font-medium" : "text-muted-foreground"}`
-                                : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "text-foreground font-medium" : "text-muted-foreground"}`
-                            }
-                            isActive={active}
-                            onClick={() =>
-                              selectWorkspace("revserp-audit", tab)
-                            }
-                            onMouseEnter={() => showNavPill(tab)}
-                            title={isSidebarCollapsed ? label : undefined}
-                            type="button"
-                          >
-                            <Icon
-                              aria-hidden="true"
-                              className="size-4 shrink-0"
-                            />
-                            {isSidebarCollapsed ? null : label}
-                            {isSidebarCollapsed ? null : (
-                              <span
-                                className={cn(
-                                  "ml-auto shrink-0",
-                                  active ? "text-foreground" : "invisible"
-                                )}
-                              >
-                                <CheckIcon className="size-4" />
-                              </span>
-                            )}
-                          </SidebarMenuButton>
-                          </CollapsedTooltip>
-                        </SidebarMenuItem>
-                      )
-                    })}
-                    <SidebarMenuItem className="my-3">
-                      <Separator />
-                    </SidebarMenuItem>
-                    <SidebarMenuItem
-                      ref={(element) => {
-                        navItemRefs.current["visibility"] = element
-                      }}
-                    >
-                      <CollapsedTooltip
-                        label="Visibility test"
-                        show={isSidebarCollapsed}
-                      >
-                      <SidebarMenuButton
-                        className={
-                          isSidebarCollapsed
-                            ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "revserp-visibility" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                            : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "revserp-visibility" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                        }
-                        isActive={view === "revserp-visibility"}
-                        onClick={() => selectWorkspace("revserp-visibility")}
-                        onMouseEnter={() => showNavPill("visibility")}
-                        title={
-                          isSidebarCollapsed ? "Visibility test" : undefined
-                        }
-                        type="button"
-                      >
-                        <EyeIcon
-                          aria-hidden="true"
-                          className="size-4 shrink-0"
-                        />
-                        {isSidebarCollapsed ? null : "Visibility test"}
-                        {isSidebarCollapsed ? null : (
-                          <span
-                            className={cn(
-                              "ml-auto shrink-0",
-                              view === "revserp-visibility"
-                                ? "text-foreground"
-                                : "invisible"
-                            )}
-                          >
-                            <CheckIcon className="size-4" />
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-                      </CollapsedTooltip>
-                    </SidebarMenuItem>
-                    {features.gsc_connector ? (
-                      <SidebarMenuItem
-                        ref={(element) => {
-                          navItemRefs.current["search-console"] = element
-                        }}
-                      >
-                        <CollapsedTooltip
-                          label="Search Console"
-                          show={isSidebarCollapsed}
-                        >
-                        <SidebarMenuButton
-                          className={
-                            isSidebarCollapsed
-                              ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "search-console" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                              : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "search-console" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                          }
-                          isActive={view === "search-console"}
-                          onClick={() => selectWorkspace("search-console")}
-                          onMouseEnter={() => showNavPill("search-console")}
-                          title={
-                            isSidebarCollapsed ? "Search Console" : undefined
-                          }
-                          type="button"
-                        >
-                          <SearchCheckIcon
-                            aria-hidden="true"
-                            className="size-4 shrink-0"
-                          />
-                          {isSidebarCollapsed ? null : "Search Console"}
-                          {isSidebarCollapsed ? null : (
-                            <span
-                              className={cn(
-                                "ml-auto shrink-0",
-                                view === "search-console"
-                                  ? "text-foreground"
-                                  : "invisible"
-                              )}
-                            >
-                              <CheckIcon className="size-4" />
-                            </span>
-                          )}
-                        </SidebarMenuButton>
-                        </CollapsedTooltip>
-                      </SidebarMenuItem>
-                    ) : null}
-                  </SidebarMenu>
-                </SidebarGroup>
-              </nav>
+              <WorkspaceSidebarNav
+                auditTab={auditTab}
+                gscConnector={features.gsc_connector}
+                isSidebarCollapsed={isSidebarCollapsed}
+                onSelectWorkspace={selectWorkspace}
+                view={view}
+              />
             </div>
             <div className="min-h-0 flex-1" />
-            <SidebarFooter className="gap-0 border-t border-border p-0 pt-3">
+            <SidebarFooter className="gap-0 p-0 pt-3">
               <ProfileMenu
                 compact
                 initials={initials}
@@ -856,7 +643,7 @@ export function WorkspaceShellPreview({
             </SidebarFooter>
           </Sidebar>
           <section className="relative ml-16 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border px-4 md:px-6">
+            <header className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
               <h1 className="flex min-w-0 items-center gap-1.5 text-sm">
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -872,40 +659,36 @@ export function WorkspaceShellPreview({
                       {activeProject?.name ?? "Select a project"}
                     </span>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="relative w-56"
-                    onMouseLeave={projectDropdownPill.clearPill}
-                    side="bottom"
-                  >
-                    <HoverPill pill={projectDropdownPill.pill} />
-                    {projects.length ? (
-                      projects.map((project, index) => (
-                        <DropdownMenuItem
-                          key={project.id}
-                          {...projectDropdownPill.getItemProps(index)}
-                          onClick={() => selectProject(project.id)}
-                        >
-                          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                            <span className="truncate">{project.name}</span>
-                            <span className="truncate text-xs text-muted-foreground">
-                              {project.base_url}
+                  <DropdownPillSurface align="start" className="w-56" side="bottom">
+                    {(pill) =>
+                      projects.length ? (
+                        projects.map((project, index) => (
+                          <DropdownMenuItem
+                            key={project.id}
+                            {...pill.getItemProps(index)}
+                            onClick={() => selectProject(project.id)}
+                          >
+                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                              <span className="truncate">{project.name}</span>
+                              <span className="truncate text-xs text-muted-foreground">
+                                {project.base_url}
+                              </span>
                             </span>
-                          </span>
-                          {project.id === activeProjectId ? (
-                            <CheckIcon className="ml-auto size-4 shrink-0" />
-                          ) : null}
+                            {project.id === activeProjectId ? (
+                              <CheckIcon className="ml-auto size-4 shrink-0" />
+                            ) : null}
+                          </DropdownMenuItem>
+                        ))
+                      ) : (
+                        <DropdownMenuItem
+                          {...pill.getItemProps(0)}
+                          disabled
+                        >
+                          No projects yet
                         </DropdownMenuItem>
-                      ))
-                    ) : (
-                      <DropdownMenuItem
-                        {...projectDropdownPill.getItemProps(0)}
-                        disabled
-                      >
-                        No projects yet
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
+                      )
+                    }
+                  </DropdownPillSurface>
                 </DropdownMenu>
                 <CircleIcon
                   aria-hidden="true"
@@ -928,37 +711,33 @@ export function WorkspaceShellPreview({
                         : "No crawl yet"}
                     </span>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="relative w-56"
-                    onMouseLeave={crawlDropdownPill.clearPill}
-                    side="bottom"
-                  >
-                    <HoverPill pill={crawlDropdownPill.pill} />
-                    {activeProjectCrawls.length ? (
-                      activeProjectCrawls.map((crawl, index) => (
+                  <DropdownPillSurface align="start" className="w-56" side="bottom">
+                    {(pill) =>
+                      activeProjectCrawls.length ? (
+                        activeProjectCrawls.map((crawl, index) => (
+                          <DropdownMenuItem
+                            key={crawl.id}
+                            {...pill.getItemProps(index)}
+                            onClick={() => selectCrawl(crawl.id)}
+                          >
+                            <span className="truncate">
+                              {formatCrawlDateTime(crawl)}
+                            </span>
+                            {currentCrawl?.id === crawl.id ? (
+                              <CheckIcon className="ml-auto size-4" />
+                            ) : null}
+                          </DropdownMenuItem>
+                        ))
+                      ) : (
                         <DropdownMenuItem
-                          key={crawl.id}
-                          {...crawlDropdownPill.getItemProps(index)}
-                          onClick={() => selectCrawl(crawl.id)}
+                          {...pill.getItemProps(0)}
+                          disabled
                         >
-                          <span className="truncate">
-                            {formatCrawlDateTime(crawl)}
-                          </span>
-                          {currentCrawl?.id === crawl.id ? (
-                            <CheckIcon className="ml-auto size-4" />
-                          ) : null}
+                          No crawls yet
                         </DropdownMenuItem>
-                      ))
-                    ) : (
-                      <DropdownMenuItem
-                        {...crawlDropdownPill.getItemProps(0)}
-                        disabled
-                      >
-                        No crawls yet
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
+                      )
+                    }
+                  </DropdownPillSurface>
                 </DropdownMenu>
                 <CircleIcon
                   aria-hidden="true"
@@ -976,53 +755,28 @@ export function WorkspaceShellPreview({
                   >
                     <span className="truncate">{headerLabel}</span>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="relative w-48"
-                    onMouseLeave={tabDropdownPill.clearPill}
-                    side="bottom"
-                  >
-                    <HoverPill pill={tabDropdownPill.pill} />
-                    {workspaceNavItems.map((item, index) => {
-                      const Icon = item.icon
-                      return (
-                        <DropdownMenuItem
-                          key={item.label}
-                          {...tabDropdownPill.getItemProps(index)}
-                          onClick={item.onSelect}
-                        >
-                          <Icon aria-hidden="true" />
-                          {item.label}
-                          {item.isActive ? (
-                            <CheckIcon className="ml-auto size-4" />
-                          ) : null}
-                        </DropdownMenuItem>
-                      )
-                    })}
-                  </DropdownMenuContent>
+                  <DropdownPillSurface align="start" className="w-48" side="bottom">
+                    {(pill) =>
+                      workspaceNavItems.map((item, index) => {
+                        const Icon = item.icon
+                        return (
+                          <DropdownMenuItem
+                            key={item.label}
+                            {...pill.getItemProps(index)}
+                            onClick={item.onSelect}
+                          >
+                            <Icon aria-hidden="true" />
+                            {item.label}
+                            {item.isActive ? (
+                              <CheckIcon className="ml-auto size-4" />
+                            ) : null}
+                          </DropdownMenuItem>
+                        )
+                      })
+                    }
+                  </DropdownPillSurface>
                 </DropdownMenu>
               </h1>
-              <div
-                className={cn(
-                  "relative z-[100] flex items-center justify-center px-2",
-                  islandDockedSizeClass
-                )}
-              >
-                {features.ai_chat && islandState === "docked" ? (
-                  <>
-                    <DynamicIslandMorphShell
-                      onLayoutAnimationComplete={handleIslandLayoutComplete}
-                      state="docked"
-                      transition={islandDockTransition}
-                    />
-                    <DynamicIslandDockedChrome
-                      active={isIslandThinking}
-                      onOpen={maximizeIsland}
-                      visible={islandChromeVisible}
-                    />
-                  </>
-                ) : null}
-              </div>
               <div className="flex shrink-0 items-center justify-end gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -1043,41 +797,39 @@ export function WorkspaceShellPreview({
                       className="size-3.5 text-muted-foreground"
                     />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="relative w-48"
-                    onMouseLeave={configureDropdownPill.clearPill}
-                    side="bottom"
-                  >
-                    <HoverPill pill={configureDropdownPill.pill} />
-                    {features.auto_crawl ? (
-                      <DropdownMenuItem
-                        {...configureDropdownPill.getItemProps(0)}
-                        disabled={!activeProject || autoCrawl.isSaving}
-                        onClick={() =>
-                          autoCrawl.enabled
-                            ? void autoCrawl.handleDisable()
-                            : void autoCrawl.openDialog()
-                        }
-                      >
-                        <SparklesIcon aria-hidden="true" />
-                        {autoCrawl.enabled ? "Auto crawl on" : "Auto crawl"}
-                      </DropdownMenuItem>
-                    ) : null}
-                    <DropdownMenuItem
-                      {...configureDropdownPill.getItemProps(
-                        features.auto_crawl ? 1 : 0
-                      )}
-                      disabled={!activeProject}
-                      onClick={() =>
-                        activeProject &&
-                        businessProfile.openBusinessProfileDrawer(activeProject)
-                      }
-                    >
-                      <Building2Icon aria-hidden="true" />
-                      Business profile
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
+                  <DropdownPillSurface align="end" className="w-48" side="bottom">
+                    {(pill) => (
+                      <>
+                        {features.auto_crawl ? (
+                          <DropdownMenuItem
+                            {...pill.getItemProps(0)}
+                            disabled={!activeProject || autoCrawl.isSaving}
+                            onClick={() =>
+                              autoCrawl.enabled
+                                ? void autoCrawl.handleDisable()
+                                : void autoCrawl.openDialog()
+                            }
+                          >
+                            <SparklesIcon aria-hidden="true" />
+                            {autoCrawl.enabled ? "Auto crawl on" : "Auto crawl"}
+                          </DropdownMenuItem>
+                        ) : null}
+                        <DropdownMenuItem
+                          {...pill.getItemProps(features.auto_crawl ? 1 : 0)}
+                          disabled={!activeProject}
+                          onClick={() =>
+                            activeProject &&
+                            businessProfile.openBusinessProfileDrawer(
+                              activeProject
+                            )
+                          }
+                        >
+                          <Building2Icon aria-hidden="true" />
+                          Business profile
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownPillSurface>
                 </DropdownMenu>
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -1100,54 +852,52 @@ export function WorkspaceShellPreview({
                       className="size-3.5 text-muted-foreground"
                     />
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="relative w-52"
-                    onMouseLeave={exportDropdownPill.clearPill}
-                    side="bottom"
-                  >
-                    <HoverPill pill={exportDropdownPill.pill} />
-                    <DropdownMenuItem
-                      {...exportDropdownPill.getItemProps(0)}
-                      disabled={
-                        !currentCrawlCompleted || isExportingAudit
-                      }
-                      onClick={onExportAudit}
-                    >
-                      <FileTextIcon aria-hidden="true" />
-                      {isExportingAudit
-                        ? "Generating audit…"
-                        : "Export PDF audit"}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      {...exportDropdownPill.getItemProps(1)}
-                      disabled={!currentCrawlCompleted || isExportingCrawl}
-                      onClick={() =>
-                        currentCrawl &&
-                        void projectActions.handleExportCrawl(
-                          currentCrawl,
-                          "xlsx"
-                        )
-                      }
-                    >
-                      <FileSpreadsheetIcon aria-hidden="true" />
-                      Export crawl as XLSX
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      {...exportDropdownPill.getItemProps(2)}
-                      disabled={!currentCrawlCompleted || isExportingCrawl}
-                      onClick={() =>
-                        currentCrawl &&
-                        void projectActions.handleExportCrawl(
-                          currentCrawl,
-                          "csv"
-                        )
-                      }
-                    >
-                      <FileSpreadsheetIcon aria-hidden="true" />
-                      Export crawl as CSV
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
+                  <DropdownPillSurface align="end" className="w-52" side="bottom">
+                    {(pill) => (
+                      <>
+                        <DropdownMenuItem
+                          {...pill.getItemProps(0)}
+                          disabled={
+                            !currentCrawlCompleted || isExportingAudit
+                          }
+                          onClick={onExportAudit}
+                        >
+                          <FileTextIcon aria-hidden="true" />
+                          {isExportingAudit
+                            ? "Generating audit…"
+                            : "Export PDF audit"}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          {...pill.getItemProps(1)}
+                          disabled={!currentCrawlCompleted || isExportingCrawl}
+                          onClick={() =>
+                            currentCrawl &&
+                            void projectActions.handleExportCrawl(
+                              currentCrawl,
+                              "xlsx"
+                            )
+                          }
+                        >
+                          <FileSpreadsheetIcon aria-hidden="true" />
+                          Export crawl as XLSX
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          {...pill.getItemProps(2)}
+                          disabled={!currentCrawlCompleted || isExportingCrawl}
+                          onClick={() =>
+                            currentCrawl &&
+                            void projectActions.handleExportCrawl(
+                              currentCrawl,
+                              "csv"
+                            )
+                          }
+                        >
+                          <FileSpreadsheetIcon aria-hidden="true" />
+                          Export crawl as CSV
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownPillSurface>
                 </DropdownMenu>
                 <Button
                   disabled={!activeProject || isCrawlRunning}
@@ -1169,9 +919,9 @@ export function WorkspaceShellPreview({
             >
               <AnimatePresence initial={false} mode="wait">
                 <motion.div
-                  animate={{ filter: "blur(0px)", opacity: 1 }}
-                  exit={{ filter: "blur(10px)", opacity: 0 }}
-                  initial={{ filter: "blur(10px)", opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  initial={{ opacity: 0 }}
                   key={workspaceContentKey}
                   transition={{
                     duration: shouldReduceMotion ? 0 : 0.15,
@@ -1184,55 +934,57 @@ export function WorkspaceShellPreview({
             </div>
           </section>
           {features.ai_chat ? (
-            <>
-              <AnimatePresence>
-                {islandState === "maximized" ? (
-                  <motion.div
-                    animate={{ opacity: 1 }}
-                    aria-hidden="true"
-                    className={cn(
-                      "fixed inset-0 z-[99] bg-black/30 backdrop-blur-md",
-                      shouldReduceMotion && "backdrop-blur-none"
-                    )}
-                    exit={{ opacity: 0 }}
-                    initial={{ opacity: 0 }}
-                    key="island-backdrop"
-                    transition={islandBackdropTransition}
-                  />
-                ) : null}
-              </AnimatePresence>
-              {islandState === "maximized" ? (
-                <DynamicIslandMorphShell
-                  onLayoutAnimationComplete={handleIslandLayoutComplete}
-                  state="maximized"
-                  transition={islandOpenTransition}
+            <LayoutGroup id="ai-island-group">
+              {islandState === "docked" ? (
+                <DynamicIslandDockedChrome
+                  active={isIslandThinking}
+                  onOpen={openIsland}
+                  transition={islandMorphTransition}
                 />
-              ) : null}
-              <DynamicIslandMaxPanel
-                keepMounted
-                onDock={dockIsland}
-                revealTransition={islandPanelRevealTransition}
-                title={islandConversationTitle}
-                visible={islandPanelVisible}
-              >
-                <Suspense fallback={null}>
-                  <RevbotView
-                    activeProject={activeProject}
-                    allowedEfforts={features.ai_allowed_reasoning_efforts}
-                    compact
-                    defaultHistoryOpen
-                    hideCompactHeader
-                    onActivityChange={setIsIslandThinking}
-                    onConversationChange={onRevbotConversationChange}
-                    onInternalLink={handleRevbotInternalLink}
-                    onTitleChange={setIslandConversationTitle}
-                    requestedConversationId={revbotConversationId}
-                    showMic={false}
-                    variant="dark"
-                  />
-                </Suspense>
-              </DynamicIslandMaxPanel>
-            </>
+              ) : (
+                <DynamicIslandPanel
+                  activeConversationId={islandRevbot.conversationId}
+                  conversations={islandRevbot.conversations}
+                  controlsDisabled={
+                    islandRevbot.loading ||
+                    isIslandThinking ||
+                    islandRevbot.stopping
+                  }
+                  onDock={dockIsland}
+                  onDeleteConversation={(id) =>
+                    void islandRevbot.deleteConversation(id)
+                  }
+                  onMaximize={maximizeIsland}
+                  onMinimize={minimizeIsland}
+                  onNewChat={() => islandRevbot.newChat()}
+                  onSelectConversation={(id) =>
+                    void islandRevbot.selectConversation(id)
+                  }
+                  panelState={
+                    islandState === "maximized" ? "maximized" : "minimized"
+                  }
+                  title={islandConversationTitle}
+                  transition={islandMorphTransition}
+                >
+                  {activeProject ? (
+                    <RevbotViewContent
+                      activeProject={activeProject}
+                      allowedEfforts={features.ai_allowed_reasoning_efforts}
+                      compact
+                      defaultHistoryOpen={islandState === "maximized"}
+                      hideCompactHeader
+                      hideHistory={islandState !== "maximized"}
+                      onActivityChange={setIsIslandThinking}
+                      onInternalLink={handleRevbotInternalLink}
+                      onTitleChange={setIslandConversationTitle}
+                      revbot={islandRevbot}
+                      showMic={false}
+                      variant="dark"
+                    />
+                  ) : null}
+                </DynamicIslandPanel>
+              )}
+            </LayoutGroup>
           ) : null}
           {isProjectPanelOpen ? (
             <>
