@@ -135,6 +135,7 @@ type IslandPanelProps = {
   activeConversationId: string | null
   controlsDisabled?: boolean
   conversations: AIConversationResponse[]
+  isConversationActive: (conversationId: string) => boolean
   onDock: () => void
   onDeleteConversation: (conversationId: string) => void
   onMaximize: () => void
@@ -152,6 +153,7 @@ export function DynamicIslandPanel({
   activeConversationId,
   controlsDisabled = false,
   conversations,
+  isConversationActive,
   onDock,
   onDeleteConversation,
   onMaximize,
@@ -265,7 +267,10 @@ export function DynamicIslandPanel({
                         <button
                           aria-label={`Delete ${conversation.title}`}
                           className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover/dropdown-menu-item:opacity-100 hover:bg-white/10 hover:text-foreground focus-visible:opacity-100"
-                          disabled={controlsDisabled}
+                          disabled={
+                            controlsDisabled ||
+                            isConversationActive(conversation.id)
+                          }
                           onClick={(event) => {
                             event.preventDefault()
                             event.stopPropagation()

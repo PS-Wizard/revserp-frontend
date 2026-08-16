@@ -377,6 +377,7 @@ export type AIToolInfo = {
   name: string
   label: string
   description: string
+  gated_by_feature?: string
 }
 
 export type AdminFeaturesResponse = {
@@ -516,6 +517,8 @@ export type AIConversationResponse = {
   title: string
   created_at: string
   updated_at: string
+  /** Status of the conversation's latest non-terminal turn, if any. */
+  turn_status: string | null
 }
 
 export type AIConversationsResponse = {
@@ -539,11 +542,7 @@ export type AITurnMessageResponse = {
 export type AITurnStatus =
   "queued" | "running" | "completed" | "stopped" | "failed"
 
-export type AIToolCallStatus =
-  | "running"
-  | "completed"
-  | "failed"
-  | "awaiting"
+export type AIToolCallStatus = "running" | "completed" | "failed" | "awaiting"
 
 export type AIToolCallResponse = {
   call_id: string

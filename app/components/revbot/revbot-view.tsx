@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react"
 
 import {
   BotIcon,
+  Loader2,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PlusIcon,
@@ -12,10 +13,7 @@ import {
 import type { Components } from "react-markdown"
 
 import { Button } from "~/components/ui/button"
-import {
-  HoverPill,
-  useHoverPill,
-} from "~/components/ui/hover-pill"
+import { HoverPill, useHoverPill } from "~/components/ui/hover-pill"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -40,7 +38,11 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip"
 import { revbotHashTarget } from "~/components/app-navbar/types"
-import type { AIReasoningEffort, AIConversationResponse, ProjectResponse } from "~/lib/api.types"
+import type {
+  AIReasoningEffort,
+  AIConversationResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
 import { RevbotComposer } from "./revbot-composer"
@@ -117,6 +119,7 @@ function RevbotConversationHistoryList({
   conversations,
   activeConversationId,
   disabled,
+  isConversationActive,
   isDark,
   onSelectConversation,
   onDeleteConversation,
@@ -124,6 +127,7 @@ function RevbotConversationHistoryList({
   conversations: AIConversationResponse[]
   activeConversationId: string | null
   disabled: boolean
+  isConversationActive: (conversationId: string) => boolean
   isDark: boolean
   onSelectConversation: (id: string) => void
   onDeleteConversation: (id: string) => void
@@ -141,11 +145,12 @@ function RevbotConversationHistoryList({
       />
       {conversations.map((conversation, index) => {
         const itemProps = historyPill.getItemProps(index)
-        const isActiveConversation = conversation.id === activeConversationId
+        const isCurrent = conversation.id === activeConversationId
+        const isRunning = isConversationActive(conversation.id)
         return (
           <div
             {...itemProps}
-            aria-current={isActiveConversation ? "page" : undefined}
+            aria-current={isCurrent ? "page" : undefined}
             className={cn(
               itemProps.className,
               "group flex w-full items-center gap-0.5 rounded-md px-1 py-0.5"
@@ -155,7 +160,7 @@ function RevbotConversationHistoryList({
             <button
               className={cn(
                 "min-w-0 flex-1 truncate rounded-md px-1 py-2 text-left text-sm",
-                isActiveConversation
+                isCurrent
                   ? "font-medium text-foreground"
                   : "text-muted-foreground"
               )}
@@ -165,6 +170,12 @@ function RevbotConversationHistoryList({
             >
               {conversation.title}
             </button>
+            {isRunning ? (
+              <Loader2
+                aria-hidden="true"
+                className="size-3.5 shrink-0 animate-spin text-muted-foreground"
+              />
+            ) : null}
             <button
               aria-label={`Delete ${conversation.title}`}
               className={cn(
@@ -173,7 +184,7 @@ function RevbotConversationHistoryList({
                   ? "hover:bg-white/10"
                   : "hover:bg-accent hover:text-accent-foreground"
               )}
-              disabled={disabled}
+              disabled={disabled || isRunning}
               onClick={(event) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -345,8 +356,8 @@ export function RevbotViewContent({
   useEffect(() => {
     onActivityChange?.(active)
   }, [active, onActivityChange])
-  const conversationControlsDisabled =
-    revbot.loading || active || revbot.stopping
+  /** New chat and history switching stay available while a turn runs. */
+  const historyControlsDisabled = revbot.loading
 
   const activeConversation = revbot.conversations.find(
     (conversation) => conversation.id === revbot.conversationId
@@ -373,7 +384,7 @@ export function RevbotViewContent({
                   : hideCompactHeader
                     ? "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
                     : "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
-            }${isDark ? " bg-black" : ""}`
+            }${isDark ? "bg-black" : ""}`
           : "mx-auto flex h-[calc(100svh-5rem)] min-h-0 w-full max-w-3xl flex-col gap-6 overflow-hidden p-4 sm:p-6"
       }
     >
@@ -383,13 +394,15 @@ export function RevbotViewContent({
           className={cn(
             "flex min-h-0 flex-col pr-3",
             hideCompactHeader ? "row-span-3" : "row-span-4",
-            isDark ? "border-r border-white/10 bg-black" : "border-r border-border"
+            isDark
+              ? "border-r border-white/10 bg-black"
+              : "border-r border-border"
           )}
         >
           {historyOpen ? (
             <>
               <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-1 pb-2">
-                <h2 className="text-sm font-medium leading-none">
+                <h2 className="text-sm leading-none font-medium">
                   Conversations
                 </h2>
                 <Tooltip>
@@ -416,10 +429,9 @@ export function RevbotViewContent({
                   isDark
                     ? "hover:bg-white/10"
                     : "hover:bg-accent hover:text-accent-foreground",
-                  conversationControlsDisabled &&
-                    "pointer-events-none opacity-50"
+                  historyControlsDisabled && "pointer-events-none opacity-50"
                 )}
-                disabled={conversationControlsDisabled}
+                disabled={historyControlsDisabled}
                 onClick={revbot.newChat}
                 type="button"
               >
@@ -429,7 +441,8 @@ export function RevbotViewContent({
               <RevbotConversationHistoryList
                 activeConversationId={revbot.conversationId}
                 conversations={revbot.conversations}
-                disabled={conversationControlsDisabled}
+                disabled={historyControlsDisabled}
+                isConversationActive={revbot.conversationActive}
                 isDark={isDark}
                 onDeleteConversation={(id) =>
                   void revbot.deleteConversation(id)
@@ -462,7 +475,7 @@ export function RevbotViewContent({
                   render={
                     <Button
                       aria-label="New chat"
-                      disabled={conversationControlsDisabled}
+                      disabled={historyControlsDisabled}
                       onClick={revbot.newChat}
                       size="icon-xs"
                       type="button"
@@ -485,56 +498,58 @@ export function RevbotViewContent({
             messageColumnClass
           )}
         >
-          <h1 className="truncate text-sm font-semibold">{conversationTitle}</h1>
+          <h1 className="truncate text-sm font-semibold">
+            {conversationTitle}
+          </h1>
         </header>
       ) : null}
       {!compact ? (
         <header className="flex shrink-0 items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <BotIcon aria-hidden="true" className="size-5" />
-              <div>
-                <h1 className="text-lg font-semibold">Revbot</h1>
-                <p className="text-sm text-muted-foreground">
-                  Ask about {activeProject.name}
-                </p>
-              </div>
+          <div className="flex items-center gap-2">
+            <BotIcon aria-hidden="true" className="size-5" />
+            <div>
+              <h1 className="text-lg font-semibold">Revbot</h1>
+              <p className="text-sm text-muted-foreground">
+                Ask about {activeProject.name}
+              </p>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Select
-                disabled={conversationControlsDisabled}
-                onValueChange={(value) => {
-                  if (typeof value === "string")
-                    void revbot.selectConversation(value)
-                }}
-                value={revbot.conversationId ?? undefined}
-              >
-                <SelectTrigger
-                  aria-label="Select a Revbot conversation"
-                  className="w-52"
-                  size="sm"
-                >
-                  <SelectValue placeholder="New chat" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {revbot.conversations.map((conversation) => (
-                      <SelectItem key={conversation.id} value={conversation.id}>
-                        {conversation.title}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              <Button
-                disabled={conversationControlsDisabled}
-                onClick={revbot.newChat}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Select
+              disabled={historyControlsDisabled}
+              onValueChange={(value) => {
+                if (typeof value === "string")
+                  void revbot.selectConversation(value)
+              }}
+              value={revbot.conversationId ?? undefined}
+            >
+              <SelectTrigger
+                aria-label="Select a Revbot conversation"
+                className="w-52"
                 size="sm"
-                type="button"
-                variant="outline"
               >
-                New chat
-              </Button>
-            </div>
+                <SelectValue placeholder="New chat" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {revbot.conversations.map((conversation) => (
+                    <SelectItem key={conversation.id} value={conversation.id}>
+                      {conversation.title}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              disabled={historyControlsDisabled}
+              onClick={revbot.newChat}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              New chat
+            </Button>
+          </div>
         </header>
       ) : null}
 
@@ -558,7 +573,7 @@ export function RevbotViewContent({
           <MessageScrollerViewport aria-label="Conversation">
             <MessageScrollerContent
               aria-busy={active}
-              className={cn("gap-5 pb-24 pt-1", messageColumnClass)}
+              className={cn("gap-5 pt-1 pb-24", messageColumnClass)}
             >
               {revbot.messages.length === 0 ? (
                 <MessageScrollerItem>
@@ -591,10 +606,10 @@ export function RevbotViewContent({
                               : message.toolCalls
                             const messageActivityStartedAt = isActiveMessage
                               ? revbot.activityStartedAt
-                              : message.activityStartedAt ?? null
+                              : (message.activityStartedAt ?? null)
                             const messageActivityEndedAt = isActiveMessage
                               ? null
-                              : message.activityEndedAt ?? null
+                              : (message.activityEndedAt ?? null)
                             const hasPersistedActivity =
                               messageActivityStartedAt !== null &&
                               messageActivityEndedAt !== null
@@ -618,9 +633,7 @@ export function RevbotViewContent({
                               <RevbotTurnActivity
                                 active={isActiveMessage && active}
                                 endedAt={messageActivityEndedAt}
-                                phase={
-                                  isActiveMessage ? revbot.phase : null
-                                }
+                                phase={isActiveMessage ? revbot.phase : null}
                                 showDivider={hasToolCalls && hasResponse}
                                 startedAt={messageActivityStartedAt}
                                 toolCalls={messageToolCalls ?? []}

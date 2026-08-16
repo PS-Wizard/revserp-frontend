@@ -1,13 +1,7 @@
 "use client"
 
 import type { CSSProperties, FormEvent, ReactNode } from "react"
-import {
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react"
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
   ActivityIcon,
@@ -28,7 +22,12 @@ import {
   SearchIcon,
   SparklesIcon,
 } from "lucide-react"
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react"
+import {
+  AnimatePresence,
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+} from "motion/react"
 
 import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
@@ -364,7 +363,6 @@ export function WorkspaceShellPreview({
     void navigate(`${location.pathname}?${params.toString()}`)
   }
 
-
   function hoverProject(projectId: string | null) {
     projectActions.onProjectHover(projectId)
     if (
@@ -659,7 +657,11 @@ export function WorkspaceShellPreview({
                       {activeProject?.name ?? "Select a project"}
                     </span>
                   </DropdownMenuTrigger>
-                  <DropdownPillSurface align="start" className="w-56" side="bottom">
+                  <DropdownPillSurface
+                    align="start"
+                    className="w-56"
+                    side="bottom"
+                  >
                     {(pill) =>
                       projects.length ? (
                         projects.map((project, index) => (
@@ -680,10 +682,7 @@ export function WorkspaceShellPreview({
                           </DropdownMenuItem>
                         ))
                       ) : (
-                        <DropdownMenuItem
-                          {...pill.getItemProps(0)}
-                          disabled
-                        >
+                        <DropdownMenuItem {...pill.getItemProps(0)} disabled>
                           No projects yet
                         </DropdownMenuItem>
                       )
@@ -699,7 +698,7 @@ export function WorkspaceShellPreview({
                     render={
                       <button
                         aria-label="Select crawl"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent data-[popup-open]:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-accent"
                         disabled={!activeProject}
                         type="button"
                       />
@@ -711,7 +710,11 @@ export function WorkspaceShellPreview({
                         : "No crawl yet"}
                     </span>
                   </DropdownMenuTrigger>
-                  <DropdownPillSurface align="start" className="w-56" side="bottom">
+                  <DropdownPillSurface
+                    align="start"
+                    className="w-56"
+                    side="bottom"
+                  >
                     {(pill) =>
                       activeProjectCrawls.length ? (
                         activeProjectCrawls.map((crawl, index) => (
@@ -729,10 +732,7 @@ export function WorkspaceShellPreview({
                           </DropdownMenuItem>
                         ))
                       ) : (
-                        <DropdownMenuItem
-                          {...pill.getItemProps(0)}
-                          disabled
-                        >
+                        <DropdownMenuItem {...pill.getItemProps(0)} disabled>
                           No crawls yet
                         </DropdownMenuItem>
                       )
@@ -755,7 +755,11 @@ export function WorkspaceShellPreview({
                   >
                     <span className="truncate">{headerLabel}</span>
                   </DropdownMenuTrigger>
-                  <DropdownPillSurface align="start" className="w-48" side="bottom">
+                  <DropdownPillSurface
+                    align="start"
+                    className="w-48"
+                    side="bottom"
+                  >
                     {(pill) =>
                       workspaceNavItems.map((item, index) => {
                         const Icon = item.icon
@@ -797,7 +801,11 @@ export function WorkspaceShellPreview({
                       className="size-3.5 text-muted-foreground"
                     />
                   </DropdownMenuTrigger>
-                  <DropdownPillSurface align="end" className="w-48" side="bottom">
+                  <DropdownPillSurface
+                    align="end"
+                    className="w-48"
+                    side="bottom"
+                  >
                     {(pill) => (
                       <>
                         {features.auto_crawl ? (
@@ -852,14 +860,16 @@ export function WorkspaceShellPreview({
                       className="size-3.5 text-muted-foreground"
                     />
                   </DropdownMenuTrigger>
-                  <DropdownPillSurface align="end" className="w-52" side="bottom">
+                  <DropdownPillSurface
+                    align="end"
+                    className="w-52"
+                    side="bottom"
+                  >
                     {(pill) => (
                       <>
                         <DropdownMenuItem
                           {...pill.getItemProps(0)}
-                          disabled={
-                            !currentCrawlCompleted || isExportingAudit
-                          }
+                          disabled={!currentCrawlCompleted || isExportingAudit}
                           onClick={onExportAudit}
                         >
                           <FileTextIcon aria-hidden="true" />
@@ -913,8 +923,8 @@ export function WorkspaceShellPreview({
             <div
               className={
                 islandState === "maximized"
-                  ? "relative z-0 min-h-0 flex-1 overflow-y-auto scrollbar-gutter-stable pointer-events-none"
-                  : "min-h-0 flex-1 overflow-y-auto scrollbar-gutter-stable"
+                  ? "pointer-events-none relative z-0 min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
+                  : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
               }
             >
               <AnimatePresence initial={false} mode="wait">
@@ -945,11 +955,8 @@ export function WorkspaceShellPreview({
                 <DynamicIslandPanel
                   activeConversationId={islandRevbot.conversationId}
                   conversations={islandRevbot.conversations}
-                  controlsDisabled={
-                    islandRevbot.loading ||
-                    isIslandThinking ||
-                    islandRevbot.stopping
-                  }
+                  controlsDisabled={islandRevbot.loading}
+                  isConversationActive={islandRevbot.conversationActive}
                   onDock={dockIsland}
                   onDeleteConversation={(id) =>
                     void islandRevbot.deleteConversation(id)

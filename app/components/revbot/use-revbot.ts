@@ -53,6 +53,8 @@ type RevbotStatus = AITurnResponse["status"] | "idle"
 type RevbotState = {
   conversationId: string | null
   conversations: AIConversationResponse[]
+  /** Last known turn status per conversation (queued/running while active). */
+  conversationStatus: Record<string, RevbotStatus>
   messages: LocalMessage[]
   status: RevbotStatus
   phase: AIStreamPhase | null
@@ -307,8 +309,7 @@ export function useRevbot({
   const setEffort = useCallback(
     (
       next:
-        | AIReasoningEffort
-        | ((current: AIReasoningEffort) => AIReasoningEffort)
+        AIReasoningEffort | ((current: AIReasoningEffort) => AIReasoningEffort)
     ) => {
       setEffortState((current) => {
         const resolved = typeof next === "function" ? next(current) : next
@@ -321,6 +322,7 @@ export function useRevbot({
   const [state, setState] = useState<RevbotState>({
     conversationId: null,
     conversations: [],
+    conversationStatus: {},
     messages: [],
     status: "idle",
     phase: null,
@@ -358,38 +360,89 @@ export function useRevbot({
     []
   )
 
-  const updateStatus = useCallback((status: RevbotStatus) => {
-    statusRef.current = status
-    const terminal = isTurnTerminal(status)
-    if (terminal) activeRequestRef.current = false
-    if (mountedRef.current) {
-      setState((current) => {
-        const assistantMessageId = assistantMessageIdRef.current
-        const messages =
-          terminal &&
-          (current.toolCalls.length || current.activityStartedAt)
-            ? attachTurnActivityToAssistant(
-                current.messages,
-                assistantMessageId,
-                {
-                  activityEndedAt: Date.now(),
-                  activityStartedAt: current.activityStartedAt,
-                  toolCalls: current.toolCalls,
-                }
-              )
-            : current.messages
-        return {
-          ...current,
-          status,
-          messages,
-          phase: terminal ? null : current.phase,
-          toolCalls: terminal ? [] : current.toolCalls,
-          activityStartedAt: terminal ? null : current.activityStartedAt,
-          stopping: terminal ? false : current.stopping,
+  /** Best-effort refresh of the conversation list and per-conversation turn statuses. */
+  const refreshConversations = useCallback(() => {
+    const projectId = projectIdRef.current
+    if (!projectId) return
+    const generation = generationRef.current
+    void clientApiFetch<AIConversationsResponse>(
+      `/projects/${projectId}/ai/conversations?limit=50&offset=0`
+    )
+      .then((response) => {
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          projectId !== projectIdRef.current
+        )
+          return
+        const statuses: Record<string, RevbotStatus> = {}
+        for (const conversation of response.conversations) {
+          statuses[conversation.id] =
+            (conversation.turn_status as RevbotStatus) ?? "idle"
         }
+        setState((current) => ({
+          ...current,
+          conversations: [
+            ...response.conversations,
+            ...current.conversations.filter(
+              (item) =>
+                !response.conversations.some((next) => next.id === item.id)
+            ),
+          ],
+          conversationStatus: {
+            ...current.conversationStatus,
+            ...statuses,
+          },
+        }))
       })
-    }
+      .catch(() => {
+        // Background refresh is best-effort; the next project load retries.
+      })
   }, [])
+
+  const updateStatus = useCallback(
+    (status: RevbotStatus) => {
+      statusRef.current = status
+      const terminal = isTurnTerminal(status)
+      if (terminal) activeRequestRef.current = false
+      const conversationId = conversationIdRef.current
+      if (mountedRef.current) {
+        setState((current) => {
+          const assistantMessageId = assistantMessageIdRef.current
+          const messages =
+            terminal && (current.toolCalls.length || current.activityStartedAt)
+              ? attachTurnActivityToAssistant(
+                  current.messages,
+                  assistantMessageId,
+                  {
+                    activityEndedAt: Date.now(),
+                    activityStartedAt: current.activityStartedAt,
+                    toolCalls: current.toolCalls,
+                  }
+                )
+              : current.messages
+          return {
+            ...current,
+            status,
+            messages,
+            phase: terminal ? null : current.phase,
+            toolCalls: terminal ? [] : current.toolCalls,
+            activityStartedAt: terminal ? null : current.activityStartedAt,
+            stopping: terminal ? false : current.stopping,
+            conversationStatus:
+              conversationId === null
+                ? current.conversationStatus
+                : {
+                    ...current.conversationStatus,
+                    [conversationId]: status,
+                  },
+          }
+        })
+        if (terminal) refreshConversations()
+      }
+    },
+    [refreshConversations]
+  )
 
   const applyConversation = useCallback(
     (conversation: AIConversationDetailResponse, loading = false) => {
@@ -407,6 +460,8 @@ export function useRevbot({
         .find((message) => message.role === "assistant")
       assistantMessageIdRef.current = assistant?.id ?? null
       assistantTextRef.current = assistant?.content ?? ""
+      const conversationStatus =
+        (conversation.turn_status as RevbotStatus) ?? "idle"
       if (mountedRef.current) {
         setState((current) => ({
           ...current,
@@ -418,6 +473,10 @@ export function useRevbot({
           activityStartedAt: null,
           stopping: false,
           loading,
+          conversationStatus: {
+            ...current.conversationStatus,
+            [conversation.id]: conversationStatus,
+          },
         }))
       }
     },
@@ -483,15 +542,15 @@ export function useRevbot({
               toolCalls,
             }
           ),
-        status: turn.status,
-        phase: isTurnTerminal(turn.status) ? null : current.phase,
-        toolCalls: isTurnTerminal(turn.status) ? [] : toolCalls,
-        activityStartedAt: isTurnTerminal(turn.status)
-          ? null
-          : current.activityStartedAt ?? Date.now(),
-        stopping: turn.cancel_requested && !isTurnTerminal(turn.status),
-        loading: false,
-      }
+          status: turn.status,
+          phase: isTurnTerminal(turn.status) ? null : current.phase,
+          toolCalls: isTurnTerminal(turn.status) ? [] : toolCalls,
+          activityStartedAt: isTurnTerminal(turn.status)
+            ? null
+            : (current.activityStartedAt ?? Date.now()),
+          stopping: turn.cancel_requested && !isTurnTerminal(turn.status),
+          loading: false,
+        }
       })
     },
     [notifyConversationChange, updateStatus]
@@ -552,10 +611,7 @@ export function useRevbot({
                   phase: payload.phase,
                   activityStartedAt: current.activityStartedAt ?? Date.now(),
                 }))
-              } else if (
-                event === "tool_call" &&
-                isToolCallPayload(payload)
-              ) {
+              } else if (event === "tool_call" && isToolCallPayload(payload)) {
                 const nextCall: RevbotToolCall = {
                   callId: payload.id,
                   name: payload.name,
@@ -609,8 +665,7 @@ export function useRevbot({
                 event === "text_delta" &&
                 isTextDeltaPayload(payload)
               ) {
-                const assistantText =
-                  assistantTextRef.current + payload.text
+                const assistantText = assistantTextRef.current + payload.text
                 assistantTextRef.current = assistantText
                 const assistantMessageId = assistantMessageIdRef.current
                 setState((current) => ({
@@ -691,7 +746,6 @@ export function useRevbot({
     generationRef.current += 1
     const generation = generationRef.current
     projectGenerationRef.current += 1
-    const projectGeneration = projectGenerationRef.current
     stopObserver()
     projectIdRef.current = projectId
     conversationIdRef.current = null
@@ -706,6 +760,7 @@ export function useRevbot({
     setState({
       conversationId: null,
       conversations: [],
+      conversationStatus: {},
       messages: [],
       status: "idle",
       phase: null,
@@ -716,38 +771,7 @@ export function useRevbot({
     })
     if (!projectId) return
 
-    void clientApiFetch<AIConversationsResponse>(
-      `/projects/${projectId}/ai/conversations?limit=50&offset=0`
-    )
-      .then((response) => {
-        if (
-          projectGeneration !== projectGenerationRef.current ||
-          !mountedRef.current ||
-          projectId !== projectIdRef.current
-        )
-          return
-        setState((current) => ({
-          ...current,
-          conversations: [
-            ...response.conversations,
-            ...current.conversations.filter(
-              (item) =>
-                !response.conversations.some((next) => next.id === item.id)
-            ),
-          ],
-        }))
-      })
-      .catch((error: unknown) => {
-        if (
-          projectGeneration !== projectGenerationRef.current ||
-          !mountedRef.current ||
-          projectId !== projectIdRef.current
-        )
-          return
-        reportRevbotError(
-          simpleError(error, "Unable to load Revbot conversations.")
-        )
-      })
+    refreshConversations()
 
     const stored = readStoredConversation(projectId)
     if (!stored) {
@@ -829,19 +853,14 @@ export function useRevbot({
     applyConversation,
     applyTurn,
     observe,
+    refreshConversations,
     stopObserver,
   ])
 
   const selectConversation = useCallback(
     async (conversationId: string) => {
       const projectId = projectIdRef.current
-      if (
-        !projectId ||
-        activeRequestRef.current ||
-        statusRef.current === "queued" ||
-        statusRef.current === "running"
-      )
-        return
+      if (!projectId) return
 
       if (
         conversationIdRef.current === conversationId &&
@@ -907,13 +926,7 @@ export function useRevbot({
 
   const newChat = useCallback(() => {
     const projectId = projectIdRef.current
-    if (
-      !projectId ||
-      activeRequestRef.current ||
-      statusRef.current === "queued" ||
-      statusRef.current === "running"
-    )
-      return
+    if (!projectId) return
 
     generationRef.current += 1
     stopObserver()
@@ -977,145 +990,146 @@ export function useRevbot({
     else newChat()
   }, [newChat, requestedConversationId, selectConversation])
 
-  const send = useCallback(async (content: string) => {
-    const projectId = projectIdRef.current
-    const trimmed = content.trim()
-    if (
-      !projectId ||
-      !trimmed ||
-      activeRequestRef.current ||
-      !allowedEfforts.includes(effort)
-    )
-      return
+  const send = useCallback(
+    async (content: string) => {
+      const projectId = projectIdRef.current
+      const trimmed = content.trim()
+      if (
+        !projectId ||
+        !trimmed ||
+        activeRequestRef.current ||
+        !allowedEfforts.includes(effort)
+      )
+        return
 
-    const generation = generationRef.current + 1
-    generationRef.current = generation
-    stopObserver()
-    const optimisticUser = userMessage(trimmed)
-    const optimisticAssistant = assistantMessage()
-    assistantMessageIdRef.current = optimisticAssistant.id
-    assistantTextRef.current = ""
-    activeRequestRef.current = true
-    setState((current) => ({
-      ...current,
-      messages: [...current.messages, optimisticUser, optimisticAssistant],
-      status: "idle",
-      phase: null,
-      toolCalls: [],
-      activityStartedAt: Date.now(),
-      stopping: false,
-      loading: true,
-    }))
+      const generation = generationRef.current + 1
+      generationRef.current = generation
+      stopObserver()
+      const optimisticUser = userMessage(trimmed)
+      const optimisticAssistant = assistantMessage()
+      assistantMessageIdRef.current = optimisticAssistant.id
+      assistantTextRef.current = ""
+      activeRequestRef.current = true
+      setState((current) => ({
+        ...current,
+        messages: [...current.messages, optimisticUser, optimisticAssistant],
+        status: "idle",
+        phase: null,
+        toolCalls: [],
+        activityStartedAt: Date.now(),
+        stopping: false,
+        loading: true,
+      }))
 
-    try {
-      let conversationId = conversationIdRef.current
-      if (!conversationId) {
-        const conversation = await clientApiPost<AIConversationResponse>(
-          `/projects/${projectId}/ai/conversations`,
-          {}
-        )
-        conversationId = conversation.id
+      try {
+        let conversationId = conversationIdRef.current
+        if (!conversationId) {
+          const conversation = await clientApiPost<AIConversationResponse>(
+            `/projects/${projectId}/ai/conversations`,
+            {}
+          )
+          conversationId = conversation.id
+          if (
+            !mountedRef.current ||
+            generation !== generationRef.current ||
+            projectId !== projectIdRef.current
+          )
+            return
+          conversationIdRef.current = conversationId
+          notifyConversationChange(conversationId)
+          saveStoredConversation(projectId, { conversationId })
+          setState((current) => ({
+            ...current,
+            conversationId,
+            conversations: [
+              conversation,
+              ...current.conversations.filter(
+                (item) => item.id !== conversation.id
+              ),
+            ],
+          }))
+        }
+
         if (
           !mountedRef.current ||
           generation !== generationRef.current ||
           projectId !== projectIdRef.current
         )
           return
-        conversationIdRef.current = conversationId
-        notifyConversationChange(conversationId)
-        saveStoredConversation(projectId, { conversationId })
+        const turn = await clientApiPost<AITurnSubmissionResponse>(
+          `/ai/conversations/${conversationId}/turns`,
+          {
+            content: trimmed,
+            reasoning_effort: effort,
+            client_request_id: crypto.randomUUID(),
+          }
+        )
+        if (
+          !mountedRef.current ||
+          generation !== generationRef.current ||
+          projectId !== projectIdRef.current
+        )
+          return
+        turnIdRef.current = turn.turn_id
+        statusRef.current = turn.status
+        assistantMessageIdRef.current = turn.assistant_message_id
+        saveStoredConversation(projectId, {
+          conversationId,
+          turnId: turn.turn_id,
+        })
         setState((current) => ({
           ...current,
-          conversationId,
-          conversations: [
-            conversation,
-            ...current.conversations.filter(
-              (item) => item.id !== conversation.id
-            ),
-          ],
+          messages: current.messages.map((message) => {
+            if (message.id === optimisticUser.id) {
+              return { ...message, id: turn.user_message_id, local: false }
+            }
+            if (message.id === optimisticAssistant.id) {
+              return { ...message, id: turn.assistant_message_id, local: false }
+            }
+            return message
+          }),
+          conversations: current.conversations.map((conversation) =>
+            conversation.id === conversationId &&
+            conversation.title === "New conversation"
+              ? {
+                  ...conversation,
+                  title: trimmed.replace(/\s+/g, " ").slice(0, 120),
+                }
+              : conversation
+          ),
+          status: turn.status,
+          loading: false,
+          conversationStatus: {
+            ...current.conversationStatus,
+            [conversationId]: turn.status,
+          },
+        }))
+        void observe(turn.turn_id, generation)
+      } catch (error) {
+        if (
+          generation !== generationRef.current ||
+          projectId !== projectIdRef.current ||
+          !mountedRef.current
+        )
+          return
+        activeRequestRef.current = false
+        statusRef.current = "idle"
+        assistantMessageIdRef.current = null
+        reportRevbotError(simpleError(error, "Unable to send your message."))
+        setState((current) => ({
+          ...current,
+          messages: current.messages.filter(
+            (message) =>
+              message.id !== optimisticUser.id &&
+              message.id !== optimisticAssistant.id
+          ),
+          status: "idle",
+          loading: false,
         }))
       }
-
-      if (
-        !mountedRef.current ||
-        generation !== generationRef.current ||
-        projectId !== projectIdRef.current
-      )
-        return
-      const turn = await clientApiPost<AITurnSubmissionResponse>(
-        `/ai/conversations/${conversationId}/turns`,
-        {
-          content: trimmed,
-          reasoning_effort: effort,
-          client_request_id: crypto.randomUUID(),
-        }
-      )
-      if (
-        !mountedRef.current ||
-        generation !== generationRef.current ||
-        projectId !== projectIdRef.current
-      )
-        return
-      turnIdRef.current = turn.turn_id
-      statusRef.current = turn.status
-      assistantMessageIdRef.current = turn.assistant_message_id
-      saveStoredConversation(projectId, {
-        conversationId,
-        turnId: turn.turn_id,
-      })
-      setState((current) => ({
-        ...current,
-        messages: current.messages.map((message) => {
-          if (message.id === optimisticUser.id) {
-            return { ...message, id: turn.user_message_id, local: false }
-          }
-          if (message.id === optimisticAssistant.id) {
-            return { ...message, id: turn.assistant_message_id, local: false }
-          }
-          return message
-        }),
-        conversations: current.conversations.map((conversation) =>
-          conversation.id === conversationId &&
-          conversation.title === "New conversation"
-            ? {
-                ...conversation,
-                title: trimmed.replace(/\s+/g, " ").slice(0, 120),
-              }
-            : conversation
-        ),
-        status: turn.status,
-        loading: false,
-      }))
-      void observe(turn.turn_id, generation)
-    } catch (error) {
-      if (
-        generation !== generationRef.current ||
-        projectId !== projectIdRef.current ||
-        !mountedRef.current
-      )
-        return
-      activeRequestRef.current = false
-      statusRef.current = "idle"
-      assistantMessageIdRef.current = null
-      reportRevbotError(simpleError(error, "Unable to send your message."))
-      setState((current) => ({
-        ...current,
-        messages: current.messages.filter(
-          (message) =>
-            message.id !== optimisticUser.id &&
-            message.id !== optimisticAssistant.id
-        ),
-        status: "idle",
-        loading: false,
-      }))
-    }
-  }, [
-    allowedEfforts,
-    effort,
-    notifyConversationChange,
-    observe,
-    stopObserver,
-  ])
+    },
+    [allowedEfforts, effort, notifyConversationChange, observe, stopObserver]
+  )
 
   const stop = useCallback(async () => {
     const turnId = turnIdRef.current
@@ -1166,6 +1180,10 @@ export function useRevbot({
 
   return {
     activityStartedAt: state.activityStartedAt,
+    conversationActive: (conversationId: string) => {
+      const status = state.conversationStatus[conversationId]
+      return status === "queued" || status === "running"
+    },
     conversationId: state.conversationId,
     conversations: state.conversations,
     deleteConversation,
