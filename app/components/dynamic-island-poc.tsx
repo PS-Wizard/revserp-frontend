@@ -1,6 +1,6 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import {
   CheckIcon,
@@ -17,6 +17,10 @@ import { BorderBeam } from "border-beam"
 import { ThinkingOrb } from "thinking-orbs"
 
 import type { AIConversationResponse } from "~/lib/api.types"
+import {
+  filterConversations,
+  RevbotConversationSearchInput,
+} from "~/components/revbot/revbot-conversation-search"
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -164,10 +168,15 @@ export function DynamicIslandPanel({
   title = "New chat",
   transition,
 }: IslandPanelProps) {
+  const [historySearch, setHistorySearch] = useState("")
   const isMaximized = panelState === "maximized"
   const borderRadius = isMaximized ? PANEL_RADIUS : DOCKED_RADIUS
   const shortTitle = title.split(/\s+/).slice(0, 3).join(" ")
   const displayTitle = shortTitle === title ? title : `${shortTitle}…`
+  const filteredConversations = filterConversations(
+    conversations,
+    historySearch
+  )
 
   return (
     <div
@@ -220,7 +229,11 @@ export function DynamicIslandPanel({
                 </button>
               ) : null}
             </div>
-            <DropdownMenu>
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (!open) setHistorySearch("")
+              }}
+            >
               <DropdownMenuTrigger
                 render={
                   <button
@@ -241,53 +254,72 @@ export function DynamicIslandPanel({
               </DropdownMenuTrigger>
               <DropdownPillSurface
                 align="center"
-                className="max-h-72 w-64"
+                className="max-h-80 w-64"
                 pillClassName="bg-white/10"
                 positionerClassName="z-[110]"
                 side="bottom"
               >
-                {(pill) =>
-                  conversations.length ? (
-                    conversations.map((conversation, index) => (
-                      <DropdownMenuItem
-                        key={conversation.id}
-                        {...pill.getItemProps(index)}
-                        disabled={controlsDisabled}
-                        onClick={() => onSelectConversation(conversation.id)}
-                      >
-                        <span className="min-w-0 flex-1 truncate">
-                          {conversation.title}
-                        </span>
-                        {conversation.id === activeConversationId ? (
-                          <CheckIcon
-                            aria-hidden="true"
-                            className="size-4 shrink-0"
-                          />
-                        ) : null}
-                        <button
-                          aria-label={`Delete ${conversation.title}`}
-                          className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover/dropdown-menu-item:opacity-100 hover:bg-white/10 hover:text-foreground focus-visible:opacity-100"
-                          disabled={
-                            controlsDisabled ||
-                            isConversationActive(conversation.id)
-                          }
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            onDeleteConversation(conversation.id)
-                          }}
-                          type="button"
+                {(pill) => (
+                  <>
+                    <div
+                      className="sticky top-0 z-10 bg-popover p-1.5 pb-2"
+                      onPointerDown={(event) => event.stopPropagation()}
+                    >
+                      <RevbotConversationSearchInput
+                        autoFocus
+                        inDropdown
+                        isDark
+                        onChange={setHistorySearch}
+                        value={historySearch}
+                      />
+                    </div>
+                    {filteredConversations.length ? (
+                      filteredConversations.map((conversation, index) => (
+                        <DropdownMenuItem
+                          key={conversation.id}
+                          {...pill.getItemProps(index)}
+                          disabled={controlsDisabled}
+                          onClick={() => onSelectConversation(conversation.id)}
                         >
-                          <TrashIcon aria-hidden="true" className="size-3.5" />
-                        </button>
+                          <span className="min-w-0 flex-1 truncate">
+                            {conversation.title}
+                          </span>
+                          {conversation.id === activeConversationId ? (
+                            <CheckIcon
+                              aria-hidden="true"
+                              className="size-4 shrink-0"
+                            />
+                          ) : null}
+                          <button
+                            aria-label={`Delete ${conversation.title}`}
+                            className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover/dropdown-menu-item:opacity-100 hover:bg-white/10 hover:text-foreground focus-visible:opacity-100"
+                            disabled={
+                              controlsDisabled ||
+                              isConversationActive(conversation.id)
+                            }
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              onDeleteConversation(conversation.id)
+                            }}
+                            type="button"
+                          >
+                            <TrashIcon
+                              aria-hidden="true"
+                              className="size-3.5"
+                            />
+                          </button>
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <DropdownMenuItem {...pill.getItemProps(0)} disabled>
+                        {historySearch.trim()
+                          ? "No matching conversations"
+                          : "No conversations yet"}
                       </DropdownMenuItem>
-                    ))
-                  ) : (
-                    <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                      No conversations yet
-                    </DropdownMenuItem>
-                  )
-                }
+                    )}
+                  </>
+                )}
               </DropdownPillSurface>
             </DropdownMenu>
             <div className="flex min-w-0 shrink-0 items-center justify-end">

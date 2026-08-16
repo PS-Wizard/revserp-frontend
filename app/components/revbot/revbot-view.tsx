@@ -45,6 +45,10 @@ import type {
 } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
+import {
+  filterConversations,
+  RevbotConversationSearchInput,
+} from "./revbot-conversation-search"
 import { RevbotComposer } from "./revbot-composer"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
@@ -165,6 +169,7 @@ function RevbotConversationHistoryList({
   conversations,
   activeConversationId,
   disabled,
+  emptyLabel = "No conversations yet",
   isConversationActive,
   isDark,
   onSelectConversation,
@@ -173,6 +178,7 @@ function RevbotConversationHistoryList({
   conversations: AIConversationResponse[]
   activeConversationId: string | null
   disabled: boolean
+  emptyLabel?: string
   isConversationActive: (conversationId: string) => boolean
   isDark: boolean
   onSelectConversation: (id: string) => void
@@ -189,6 +195,11 @@ function RevbotConversationHistoryList({
         className={isDark ? "bg-white/10" : undefined}
         pill={historyPill.pill}
       />
+      {conversations.length === 0 ? (
+        <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+          {emptyLabel}
+        </p>
+      ) : null}
       {conversations.map((conversation, index) => {
         const itemProps = historyPill.getItemProps(index)
         const isCurrent = conversation.id === activeConversationId
@@ -342,6 +353,7 @@ export function RevbotViewContent({
   variant: "default" | "dark"
 }) {
   const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
+  const [historySearch, setHistorySearch] = useState("")
   const markdownComponents: Components = {
     a: ({ href, node: _node, children, ...props }) => {
       if (!href) return <a {...props}>{children}</a>
@@ -409,6 +421,10 @@ export function RevbotViewContent({
     (conversation) => conversation.id === revbot.conversationId
   )
   const conversationTitle = activeConversation?.title ?? "New chat"
+  const filteredConversations = filterConversations(
+    revbot.conversations,
+    historySearch
+  )
   const isDark = variant === "dark"
   const messageColumnClass = "mx-auto w-full max-w-3xl px-4"
 
@@ -697,10 +713,21 @@ export function RevbotViewContent({
                 <PlusIcon aria-hidden="true" className="size-4 shrink-0" />
                 New chat
               </button>
+              <RevbotConversationSearchInput
+                className="mb-2 shrink-0 px-1"
+                isDark={isDark}
+                onChange={setHistorySearch}
+                value={historySearch}
+              />
               <RevbotConversationHistoryList
                 activeConversationId={revbot.conversationId}
-                conversations={revbot.conversations}
+                conversations={filteredConversations}
                 disabled={historyControlsDisabled}
+                emptyLabel={
+                  historySearch.trim()
+                    ? "No matching conversations"
+                    : "No conversations yet"
+                }
                 isConversationActive={revbot.conversationActive}
                 isDark={isDark}
                 onDeleteConversation={(id) =>
