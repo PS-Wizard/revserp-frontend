@@ -971,7 +971,7 @@ export function WorkspaceShellPreview({
                       activeProject={activeProject}
                       allowedEfforts={features.ai_allowed_reasoning_efforts}
                       compact
-                      defaultHistoryOpen={islandState === "maximized"}
+                      defaultHistoryOpen={false}
                       hideCompactHeader
                       hideHistory={islandState !== "maximized"}
                       onActivityChange={setIsIslandThinking}

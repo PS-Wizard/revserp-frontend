@@ -462,7 +462,7 @@ export function RevbotComposer({
           className={cn(
             "absolute inset-x-0 bottom-full z-20 mb-2 rounded-[10px] border p-1 shadow-lg",
             isDark
-              ? "border-white/10 bg-black text-foreground"
+              ? "border-white/10 bg-[#141414] text-foreground"
               : "bg-popover text-popover-foreground"
           )}
           id="revbot-autocomplete"
@@ -531,7 +531,7 @@ export function RevbotComposer({
           className={cn(
             "absolute right-0 bottom-full z-20 mb-2 w-44 rounded-[10px] border p-1 shadow-lg",
             isDark
-              ? "border-white/10 bg-black text-foreground"
+              ? "border-white/10 bg-[#141414] text-foreground"
               : "bg-popover text-popover-foreground"
           )}
           onMouseLeave={() => setEffortHovered(null)}
@@ -588,7 +588,7 @@ export function RevbotComposer({
         className={cn(
           "relative isolate flex flex-col gap-1.5 overflow-hidden rounded-[14px] border p-1.5 shadow-sm transition-[border-color,border-radius] duration-150",
           isDark
-            ? "border-white/10 bg-black focus-within:border-white/25"
+            ? "border-white/10 bg-[#141414] focus-within:border-white/25"
             : "border bg-card focus-within:border-ring"
         )}
       >

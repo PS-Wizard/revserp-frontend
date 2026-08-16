@@ -388,7 +388,7 @@ export function RevbotViewContent({
         >
           {historyOpen ? (
             <>
-              <div className="flex h-8 shrink-0 items-center justify-between gap-2 pb-2">
+              <div className="flex h-8 shrink-0 items-center justify-between gap-2 px-1 pb-2">
                 <h2 className="text-sm font-medium leading-none">
                   Conversations
                 </h2>

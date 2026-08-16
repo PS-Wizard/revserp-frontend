@@ -42,8 +42,7 @@ const islandMaximizedAnchorClass =
 export const islandMinimizedSizeClass =
   "h-[min(560px,72vh)] w-[27rem] max-w-[calc(100vw-1.5rem)]"
 
-const islandMinimizedShadowClass =
-  "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
+const islandMinimizedShadowClass = "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
 
 const islandPanelClass = "border border-border bg-black"
 
@@ -97,7 +96,7 @@ export function DynamicIslandDockedChrome({
           state="solving"
           theme="dark"
         />
-        <span className="truncate text-base font-semibold leading-none text-foreground">
+        <span className="truncate text-base leading-none font-semibold text-foreground">
           Revbot
         </span>
       </span>
@@ -206,7 +205,7 @@ export function DynamicIslandPanel({
             )}
           >
             <div className="flex min-w-0 items-center">
-              {!isMaximized && onNewChat ? (
+              {onNewChat ? (
                 <button
                   aria-label="New chat"
                   className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
@@ -219,79 +218,73 @@ export function DynamicIslandPanel({
                 </button>
               ) : null}
             </div>
-            {isMaximized ? (
-              <h2
-                className="min-w-0 max-w-full truncate text-center text-sm font-semibold text-foreground"
-                title={title}
-              >
-                {displayTitle}
-              </h2>
-            ) : (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <button
-                      aria-label="Switch conversation"
-                      className="flex min-w-0 max-w-full items-center justify-center gap-1 rounded-md px-2 py-1 text-foreground hover:bg-white/10 data-[popup-open]:bg-white/10"
-                      title={title}
-                      type="button"
-                    />
-                  }
-                >
-                  <span className="min-w-0 truncate text-sm font-semibold">
-                    {displayTitle}
-                  </span>
-                  <ChevronDownIcon
-                    aria-hidden="true"
-                    className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 data-[popup-open]:rotate-180"
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    aria-label="Switch conversation"
+                    className="flex max-w-full min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1 text-foreground hover:bg-white/10 data-[popup-open]:bg-white/10"
+                    title={title}
+                    type="button"
                   />
-                </DropdownMenuTrigger>
-                <DropdownPillSurface
-                  align="center"
-                  className="max-h-72 w-64"
-                  pillClassName="bg-white/10"
-                  positionerClassName="z-[110]"
-                  side="bottom"
-                >
-                  {(pill) =>
-                    conversations.length ? (
-                      conversations.map((conversation, index) => (
-                        <DropdownMenuItem
-                          key={conversation.id}
-                          {...pill.getItemProps(index)}
+                }
+              >
+                <span className="min-w-0 truncate text-sm font-semibold">
+                  {displayTitle}
+                </span>
+                <ChevronDownIcon
+                  aria-hidden="true"
+                  className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 data-[popup-open]:rotate-180"
+                />
+              </DropdownMenuTrigger>
+              <DropdownPillSurface
+                align="center"
+                className="max-h-72 w-64"
+                pillClassName="bg-white/10"
+                positionerClassName="z-[110]"
+                side="bottom"
+              >
+                {(pill) =>
+                  conversations.length ? (
+                    conversations.map((conversation, index) => (
+                      <DropdownMenuItem
+                        key={conversation.id}
+                        {...pill.getItemProps(index)}
+                        disabled={controlsDisabled}
+                        onClick={() => onSelectConversation(conversation.id)}
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {conversation.title}
+                        </span>
+                        {conversation.id === activeConversationId ? (
+                          <CheckIcon
+                            aria-hidden="true"
+                            className="size-4 shrink-0"
+                          />
+                        ) : null}
+                        <button
+                          aria-label={`Delete ${conversation.title}`}
+                          className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover/dropdown-menu-item:opacity-100 hover:bg-white/10 hover:text-foreground focus-visible:opacity-100"
                           disabled={controlsDisabled}
-                          onClick={() => onSelectConversation(conversation.id)}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onDeleteConversation(conversation.id)
+                          }}
+                          type="button"
                         >
-                          <span className="min-w-0 flex-1 truncate">
-                            {conversation.title}
-                          </span>
-                          {conversation.id === activeConversationId ? (
-                            <CheckIcon aria-hidden="true" className="size-4 shrink-0" />
-                          ) : null}
-                          <button
-                            aria-label={`Delete ${conversation.title}`}
-                            className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-foreground group-hover/dropdown-menu-item:opacity-100 focus-visible:opacity-100"
-                            disabled={controlsDisabled}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              onDeleteConversation(conversation.id)
-                            }}
-                            type="button"
-                          >
-                            <TrashIcon aria-hidden="true" className="size-3.5" />
-                          </button>
-                        </DropdownMenuItem>
-                      ))
-                    ) : (
-                      <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                        No conversations yet
+                          <TrashIcon aria-hidden="true" className="size-3.5" />
+                        </button>
                       </DropdownMenuItem>
-                    )
-                  }
-                </DropdownPillSurface>
-              </DropdownMenu>
-            )}
+                    ))
+                  ) : (
+                    <DropdownMenuItem {...pill.getItemProps(0)} disabled>
+                      No conversations yet
+                    </DropdownMenuItem>
+                  )
+                }
+              </DropdownPillSurface>
+            </DropdownMenu>
             <div className="flex min-w-0 shrink-0 items-center justify-end">
               {isMaximized ? (
                 <>
@@ -335,7 +328,10 @@ export function DynamicIslandPanel({
             </div>
           </header>
           <div
-            className={cn("min-h-0 flex-1 overflow-hidden", islandPanelBodyClass)}
+            className={cn(
+              "min-h-0 flex-1 overflow-hidden",
+              islandPanelBodyClass
+            )}
           >
             {children}
           </div>

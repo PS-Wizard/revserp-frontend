@@ -50,7 +50,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <TooltipProvider>{children}</TooltipProvider>
-        <Toaster position="bottom-right" />
+        <Toaster offset={{ left: 86 }} position="bottom-left" />
         <ScrollRestoration />
         <Scripts />
       </body>
