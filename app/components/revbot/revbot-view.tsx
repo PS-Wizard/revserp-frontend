@@ -114,6 +114,52 @@ function StreamingAssistantMessage({
   )
 }
 
+function RevbotEmptyState({
+  isDark,
+  projectName,
+}: {
+  isDark: boolean
+  projectName: string
+}) {
+  return (
+    <div className="flex flex-col items-center px-6 py-10 text-center">
+      <div
+        className={cn(
+          "mb-4 flex size-14 items-center justify-center rounded-2xl border shadow-sm",
+          isDark
+            ? "border-white/10 bg-white/[0.04] shadow-black/20"
+            : "border-border bg-muted/40"
+        )}
+      >
+        <BotIcon
+          aria-hidden="true"
+          className={cn(
+            "size-7",
+            isDark ? "text-white/75" : "text-muted-foreground"
+          )}
+          strokeWidth={1.5}
+        />
+      </div>
+      <p
+        className={cn(
+          "text-[15px] font-medium tracking-tight",
+          isDark ? "text-white/90" : "text-foreground"
+        )}
+      >
+        Ask Revserp about something
+      </p>
+      <p
+        className={cn(
+          "mt-2 max-w-[18rem] text-xs leading-relaxed",
+          isDark ? "text-white/40" : "text-muted-foreground"
+        )}
+      >
+        SEO, PageSpeed, crawl data — ask anything about {projectName}.
+      </p>
+    </div>
+  )
+}
+
 /** History list with isolated pill state — hover won't re-render the message column. */
 function RevbotConversationHistoryList({
   conversations,
@@ -370,30 +416,243 @@ export function RevbotViewContent({
     onTitleChange?.(conversationTitle)
   }, [conversationTitle, onTitleChange])
 
+  const chatColumn = (
+    <>
+      {compact && !hideCompactHeader ? (
+        <header
+          className={cn(
+            "flex min-w-0 shrink-0 items-center",
+            messageColumnClass
+          )}
+        >
+          <h1 className="truncate text-sm font-semibold">
+            {conversationTitle}
+          </h1>
+        </header>
+      ) : null}
+      {!compact ? (
+        <header className="flex shrink-0 items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <BotIcon aria-hidden="true" className="size-5" />
+            <div>
+              <h1 className="text-lg font-semibold">Revbot</h1>
+              <p className="text-sm text-muted-foreground">
+                Ask about {activeProject.name}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Select
+              disabled={historyControlsDisabled}
+              onValueChange={(value) => {
+                if (typeof value === "string")
+                  void revbot.selectConversation(value)
+              }}
+              value={revbot.conversationId ?? undefined}
+            >
+              <SelectTrigger
+                aria-label="Select a Revbot conversation"
+                className="w-52"
+                size="sm"
+              >
+                <SelectValue placeholder="New chat" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {revbot.conversations.map((conversation) => (
+                    <SelectItem key={conversation.id} value={conversation.id}>
+                      {conversation.title}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button
+              disabled={historyControlsDisabled}
+              onClick={revbot.newChat}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              New chat
+            </Button>
+          </div>
+        </header>
+      ) : null}
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <MessageScrollerProvider
+          key={revbot.conversationId ?? "new"}
+          autoScroll
+          defaultScrollPosition="end"
+        >
+          <MessageScroller className="min-h-0 flex-1">
+          <RevbotScrollFollow followKey={scrollFollowKey} />
+          <MessageScrollerViewport aria-label="Conversation">
+            <MessageScrollerContent
+              aria-busy={active}
+              className={cn(
+                "gap-5 pt-1",
+                revbot.messages.length > 0 ? "pb-24" : "min-h-full",
+                messageColumnClass
+              )}
+            >
+              {revbot.messages.length === 0 ? (
+                <MessageScrollerItem className="flex min-h-full items-center justify-center">
+                  <RevbotEmptyState
+                    isDark={isDark}
+                    projectName={activeProject.name}
+                  />
+                </MessageScrollerItem>
+              ) : (
+                revbot.messages.map((message) => (
+                  <MessageScrollerItem
+                    className="w-full"
+                    key={message.id}
+                    messageId={message.id}
+                  >
+                    <article
+                      className={cn(
+                        "flex w-full py-1",
+                        message.role === "user"
+                          ? "justify-end"
+                          : "justify-start"
+                      )}
+                    >
+                      {message.role === "assistant" ? (
+                        <div className="w-full min-w-0">
+                          {(() => {
+                            const isActiveMessage =
+                              message.id === activeAssistantMessageId
+                            const messageToolCalls = isActiveMessage
+                              ? revbot.toolCalls
+                              : message.toolCalls
+                            const messageActivityStartedAt = isActiveMessage
+                              ? revbot.activityStartedAt
+                              : (message.activityStartedAt ?? null)
+                            const messageActivityEndedAt = isActiveMessage
+                              ? null
+                              : (message.activityEndedAt ?? null)
+                            const hasPersistedActivity =
+                              messageActivityStartedAt !== null &&
+                              messageActivityEndedAt !== null
+                            const showActivity =
+                              (isActiveMessage &&
+                                (active ||
+                                  revbot.phase ||
+                                  revbot.toolCalls.length > 0 ||
+                                  revbot.activityStartedAt)) ||
+                              (messageToolCalls?.length ?? 0) > 0 ||
+                              hasPersistedActivity
+                            const hasToolCalls =
+                              (messageToolCalls?.length ?? 0) > 0
+                            const hasResponse =
+                              message.id === activeAssistantMessageId
+                                ? Boolean(message.content) ||
+                                  revbot.phase === "writing"
+                                : Boolean(message.content)
+
+                            return showActivity ? (
+                              <RevbotTurnActivity
+                                active={isActiveMessage && active}
+                                endedAt={messageActivityEndedAt}
+                                phase={isActiveMessage ? revbot.phase : null}
+                                showDivider={hasToolCalls && hasResponse}
+                                startedAt={messageActivityStartedAt}
+                                toolCalls={messageToolCalls ?? []}
+                                variant={variant}
+                              />
+                            ) : null
+                          })()}
+                          {message.id === activeAssistantMessageId &&
+                          (message.content || revbot.phase === "writing") ? (
+                            <StreamingAssistantMessage
+                              content={message.content}
+                              messageId={message.id}
+                            />
+                          ) : message.id !== activeAssistantMessageId ? (
+                            <RevbotMarkdown components={markdownComponents}>
+                              {message.content}
+                            </RevbotMarkdown>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p
+                          className={cn(
+                            "max-w-[min(85%,28rem)] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed whitespace-pre-wrap",
+                            isDark ? "bg-white/10" : "bg-muted"
+                          )}
+                        >
+                          {message.content}
+                        </p>
+                      )}
+                    </article>
+                  </MessageScrollerItem>
+                ))
+              )}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton />
+        </MessageScroller>
+      </MessageScrollerProvider>
+      </div>
+
+      <div
+        className={cn(
+          "relative mt-auto shrink-0 pt-3 pb-2",
+          messageColumnClass
+        )}
+      >
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-x-0 -top-12 h-12 bg-gradient-to-t to-transparent",
+            isDark ? "from-black" : "from-background"
+          )}
+        />
+        <RevbotComposer
+          key={revbot.conversationId ?? "new"}
+          active={active}
+          allowedEfforts={allowedEfforts}
+          disabled={revbot.loading || active || revbot.stopping}
+          effort={revbot.effort}
+          onEffortChange={revbot.setEffort}
+          onSend={(content) => void revbot.send(content)}
+          onStop={() => void revbot.stop()}
+          showMic={showMic}
+          stopping={revbot.stopping}
+          variant={variant}
+        />
+      </div>
+    </>
+  )
+
   return (
     <section
-      className={
+      className={cn(
+        "h-full min-h-0 w-full overflow-hidden",
         compact
-          ? `grid h-full min-h-0 w-full gap-2 overflow-hidden p-2 ${
+          ? cn(
+              "p-2",
               hideHistory
-                ? "grid-cols-1 grid-rows-[minmax(0,1fr)_auto]"
-                : historyOpen
-                  ? hideCompactHeader
-                    ? "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
-                    : "grid-cols-[13rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
-                  : hideCompactHeader
-                    ? "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto_auto]"
-                    : "grid-cols-[2.5rem_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto]"
-            }${isDark ? "bg-black" : ""}`
-          : "mx-auto flex h-[calc(100svh-5rem)] min-h-0 w-full max-w-3xl flex-col gap-6 overflow-hidden p-4 sm:p-6"
-      }
+                ? "flex flex-col"
+                : cn(
+                    "grid gap-2",
+                    historyOpen
+                      ? "grid-cols-[13rem_minmax(0,1fr)]"
+                      : "grid-cols-[2.5rem_minmax(0,1fr)]"
+                  ),
+              isDark && "bg-black"
+            )
+          : "mx-auto flex max-w-3xl flex-col gap-6 p-4 sm:p-6",
+        !compact && "h-[calc(100svh-5rem)]"
+      )}
     >
       {compact && !hideHistory ? (
         <aside
           aria-label="Conversation history"
           className={cn(
             "flex min-h-0 flex-col pr-3",
-            hideCompactHeader ? "row-span-3" : "row-span-4",
             isDark
               ? "border-r border-white/10 bg-black"
               : "border-r border-border"
@@ -491,221 +750,13 @@ export function RevbotViewContent({
           )}
         </aside>
       ) : null}
-      {compact && !hideCompactHeader ? (
-        <header
-          className={cn(
-            "col-start-2 row-start-1 flex min-w-0 shrink-0 items-center",
-            messageColumnClass
-          )}
-        >
-          <h1 className="truncate text-sm font-semibold">
-            {conversationTitle}
-          </h1>
-        </header>
-      ) : null}
-      {!compact ? (
-        <header className="flex shrink-0 items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <BotIcon aria-hidden="true" className="size-5" />
-            <div>
-              <h1 className="text-lg font-semibold">Revbot</h1>
-              <p className="text-sm text-muted-foreground">
-                Ask about {activeProject.name}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Select
-              disabled={historyControlsDisabled}
-              onValueChange={(value) => {
-                if (typeof value === "string")
-                  void revbot.selectConversation(value)
-              }}
-              value={revbot.conversationId ?? undefined}
-            >
-              <SelectTrigger
-                aria-label="Select a Revbot conversation"
-                className="w-52"
-                size="sm"
-              >
-                <SelectValue placeholder="New chat" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {revbot.conversations.map((conversation) => (
-                    <SelectItem key={conversation.id} value={conversation.id}>
-                      {conversation.title}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button
-              disabled={historyControlsDisabled}
-              onClick={revbot.newChat}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              New chat
-            </Button>
-          </div>
-        </header>
-      ) : null}
-
-      <MessageScrollerProvider
-        key={revbot.conversationId ?? "new"}
-        autoScroll
-        defaultScrollPosition="end"
-      >
-        <MessageScroller
-          className={
-            compact
-              ? hideHistory
-                ? "row-start-1 min-h-0"
-                : hideCompactHeader
-                  ? "col-start-2 row-start-1 min-h-0"
-                  : "col-start-2 row-start-2 min-h-0"
-              : "min-h-0 flex-1"
-          }
-        >
-          <RevbotScrollFollow followKey={scrollFollowKey} />
-          <MessageScrollerViewport aria-label="Conversation">
-            <MessageScrollerContent
-              aria-busy={active}
-              className={cn("gap-5 pt-1 pb-24", messageColumnClass)}
-            >
-              {revbot.messages.length === 0 ? (
-                <MessageScrollerItem>
-                  <p className="py-10 text-center text-sm text-muted-foreground">
-                    Ask Revbot a question about this project.
-                  </p>
-                </MessageScrollerItem>
-              ) : (
-                revbot.messages.map((message) => (
-                  <MessageScrollerItem
-                    className="w-full"
-                    key={message.id}
-                    messageId={message.id}
-                  >
-                    <article
-                      className={cn(
-                        "flex w-full py-1",
-                        message.role === "user"
-                          ? "justify-end"
-                          : "justify-start"
-                      )}
-                    >
-                      {message.role === "assistant" ? (
-                        <div className="w-full min-w-0">
-                          {(() => {
-                            const isActiveMessage =
-                              message.id === activeAssistantMessageId
-                            const messageToolCalls = isActiveMessage
-                              ? revbot.toolCalls
-                              : message.toolCalls
-                            const messageActivityStartedAt = isActiveMessage
-                              ? revbot.activityStartedAt
-                              : (message.activityStartedAt ?? null)
-                            const messageActivityEndedAt = isActiveMessage
-                              ? null
-                              : (message.activityEndedAt ?? null)
-                            const hasPersistedActivity =
-                              messageActivityStartedAt !== null &&
-                              messageActivityEndedAt !== null
-                            const showActivity =
-                              (isActiveMessage &&
-                                (active ||
-                                  revbot.phase ||
-                                  revbot.toolCalls.length > 0 ||
-                                  revbot.activityStartedAt)) ||
-                              (messageToolCalls?.length ?? 0) > 0 ||
-                              hasPersistedActivity
-                            const hasToolCalls =
-                              (messageToolCalls?.length ?? 0) > 0
-                            const hasResponse =
-                              message.id === activeAssistantMessageId
-                                ? Boolean(message.content) ||
-                                  revbot.phase === "writing"
-                                : Boolean(message.content)
-
-                            return showActivity ? (
-                              <RevbotTurnActivity
-                                active={isActiveMessage && active}
-                                endedAt={messageActivityEndedAt}
-                                phase={isActiveMessage ? revbot.phase : null}
-                                showDivider={hasToolCalls && hasResponse}
-                                startedAt={messageActivityStartedAt}
-                                toolCalls={messageToolCalls ?? []}
-                                variant={variant}
-                              />
-                            ) : null
-                          })()}
-                          {message.id === activeAssistantMessageId &&
-                          (message.content || revbot.phase === "writing") ? (
-                            <StreamingAssistantMessage
-                              content={message.content}
-                              messageId={message.id}
-                            />
-                          ) : message.id !== activeAssistantMessageId ? (
-                            <RevbotMarkdown components={markdownComponents}>
-                              {message.content}
-                            </RevbotMarkdown>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p
-                          className={cn(
-                            "max-w-[min(85%,28rem)] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed whitespace-pre-wrap",
-                            isDark ? "bg-white/10" : "bg-muted"
-                          )}
-                        >
-                          {message.content}
-                        </p>
-                      )}
-                    </article>
-                  </MessageScrollerItem>
-                ))
-              )}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton />
-        </MessageScroller>
-      </MessageScrollerProvider>
-
       <div
         className={cn(
-          "relative shrink-0 pt-3 pb-4",
-          compact
-            ? hideHistory
-              ? "row-start-2"
-              : hideCompactHeader
-                ? "col-start-2 row-start-3"
-                : "col-start-2 row-start-4"
-            : undefined,
-          messageColumnClass
+          "flex min-h-0 min-w-0 flex-col",
+          compact ? "flex-1" : "contents"
         )}
       >
-        <div
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute inset-x-0 -top-12 h-12 bg-gradient-to-t to-transparent",
-            isDark ? "from-black" : "from-background"
-          )}
-        />
-        <RevbotComposer
-          key={revbot.conversationId ?? "new"}
-          active={active}
-          allowedEfforts={allowedEfforts}
-          disabled={revbot.loading || active || revbot.stopping}
-          effort={revbot.effort}
-          onEffortChange={revbot.setEffort}
-          onSend={(content) => void revbot.send(content)}
-          onStop={() => void revbot.stop()}
-          showMic={showMic}
-          stopping={revbot.stopping}
-          variant={variant}
-        />
+        {chatColumn}
       </div>
     </section>
   )

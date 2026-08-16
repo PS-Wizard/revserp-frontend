@@ -519,6 +519,8 @@ export type AIConversationResponse = {
   updated_at: string
   /** Status of the conversation's latest non-terminal turn, if any. */
   turn_status: string | null
+  /** ID of that turn, when one is active — lets the client resume streaming. */
+  turn_id: string | null
 }
 
 export type AIConversationsResponse = {
@@ -537,6 +539,9 @@ export type AITurnMessageResponse = {
   content: string
   created_at: string
   updated_at: string
+  tool_calls?: AIToolCallResponse[]
+  activity_started_at?: string | null
+  activity_ended_at?: string | null
 }
 
 export type AITurnStatus =

@@ -11,8 +11,12 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import type { GSCOverviewWindowResponse } from "~/lib/api.types"
-import { cn } from "~/lib/utils"
 
+import {
+  GSCDateRangePicker,
+  type GSCChartRange,
+  type GSCRangePresetKey,
+} from "./gsc-date-range-picker"
 import {
   formatNumber,
   formatPercentFromWholeNumber,
@@ -22,15 +26,6 @@ import type { ChartSeries, GSCMetricKey, MetricConfig } from "./types"
 import { useApexChart } from "~/hooks/use-apex-chart"
 
 const scoreSeriesColor = "rgba(255,255,255,0.60)"
-const dayInMilliseconds = 24 * 60 * 60 * 1000
-
-const rangePresets = [
-  { key: "7d", label: "7D", days: 7 },
-  { key: "1m", label: "1M", days: 30 },
-  { key: "3m", label: "3M", days: 90 },
-] as const
-
-type RangePresetKey = (typeof rangePresets)[number]["key"]
 
 export const GSCPerformanceChart = memo(function GSCPerformanceChart({
   windowOverview,
@@ -50,14 +45,20 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
   onVisibleRangeChange: (range: { min: number; max: number } | null) => void
 }) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
-  const [activePreset, setActivePreset] = useState<RangePresetKey | null>(null)
+  const [activePreset, setActivePreset] = useState<GSCRangePresetKey | null>(
+    null
+  )
+  const [appliedRange, setAppliedRange] = useState<GSCChartRange | null>(null)
   // Range last applied by a preset click, so chart zoom events echoing that
   // exact range don't deselect the preset, while manual zoom/pan does.
-  const lastPresetRangeRef = useRef<{ min: number; max: number } | null>(null)
+  const lastPresetRangeRef = useRef<GSCChartRange | null>(null)
+  const skipNextRangeEventRef = useRef(false)
 
-  const handleChartRangeEvent = (
-    range: { min: number; max: number } | null
-  ) => {
+  const handleChartRangeEvent = (range: GSCChartRange | null) => {
+    if (skipNextRangeEventRef.current) {
+      skipNextRangeEventRef.current = false
+      return
+    }
     const presetRange = lastPresetRangeRef.current
     const matchesPreset =
       range !== null &&
@@ -68,6 +69,7 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
       lastPresetRangeRef.current = null
       setActivePreset(null)
     }
+    setAppliedRange(range)
     onVisibleRangeChange(range)
   }
   const onChartRangeEventRef = useRef(handleChartRangeEvent)
@@ -215,26 +217,37 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
     visibleSeries.length > 0
   )
 
-  const trendMaxTimestamp = useMemo(() => {
+  const trendBounds = useMemo(() => {
+    let min = Number.POSITIVE_INFINITY
     let max = 0
     for (const series of visibleSeries) {
       for (const point of series.data) {
+        if (point.x < min) min = point.x
         if (point.x > max) max = point.x
       }
     }
-    return max
+    if (!Number.isFinite(min)) return { min: 0, max: 0 }
+    return { min, max }
   }, [visibleSeries])
 
-  const handlePresetClick = (preset: (typeof rangePresets)[number]) => {
-    if (!trendMaxTimestamp) return
-    const range = {
-      min: trendMaxTimestamp - (preset.days - 1) * dayInMilliseconds,
-      max: trendMaxTimestamp,
-    }
-    lastPresetRangeRef.current = range
-    setActivePreset(preset.key)
+  const applyChartRange = (
+    range: GSCChartRange,
+    preset: GSCRangePresetKey | null
+  ) => {
+    lastPresetRangeRef.current = preset ? range : null
+    setActivePreset(preset)
+    setAppliedRange(range)
     chartInstanceRef.current?.zoomX(range.min, range.max)
     onVisibleRangeChange(range)
+  }
+
+  const resetChartRange = () => {
+    lastPresetRangeRef.current = null
+    setActivePreset(null)
+    setAppliedRange(null)
+    skipNextRangeEventRef.current = true
+    chartInstanceRef.current?.resetSeries(false, true)
+    onVisibleRangeChange(null)
   }
 
   return (
@@ -248,24 +261,16 @@ export const GSCPerformanceChart = memo(function GSCPerformanceChart({
               : "Search Console trend"}
           </CardDescription>
         </div>
-        {visibleSeries.length > 0 ? (
-          <div className="inline-flex shrink-0 items-center rounded-lg border border-border/60 bg-muted/40 p-0.5 text-xs">
-            {rangePresets.map((preset) => (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => handlePresetClick(preset)}
-                className={cn(
-                  "rounded-md px-2.5 py-1 font-medium transition-colors",
-                  activePreset === preset.key
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
+        {visibleSeries.length > 0 && trendBounds.max > 0 ? (
+          <GSCDateRangePicker
+            activePreset={activePreset}
+            appliedRange={appliedRange}
+            earliestTimestamp={trendBounds.min}
+            latestTimestamp={trendBounds.max}
+            onCustomRangeSelect={(range) => applyChartRange(range, null)}
+            onPresetSelect={(preset, range) => applyChartRange(range, preset)}
+            onReset={resetChartRange}
+          />
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col px-2 pt-2 sm:px-6">

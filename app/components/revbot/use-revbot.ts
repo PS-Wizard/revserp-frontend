@@ -226,6 +226,12 @@ function mapToolCallResponses(calls: AIToolCallResponse[] | undefined) {
   return (calls ?? []).map(mapToolCallResponse)
 }
 
+function parseActivityTimestamp(value: string | null | undefined) {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function turnActivityTimestamps(turn: AITurnResponse) {
   if (!isTurnTerminal(turn.status)) {
     return { endedAt: null as number | null, startedAt: null as number | null }
@@ -364,17 +370,16 @@ export function useRevbot({
   const refreshConversations = useCallback(() => {
     const projectId = projectIdRef.current
     if (!projectId) return
-    const generation = generationRef.current
+    // Deliberately NOT gated by generation: selecting a conversation bumps
+    // the generation, which would drop this refresh on mount (restored
+    // conversation id arrives right after the list fetch starts), leaving
+    // the history pane empty until the next project switch. Project and
+    // mount guards below are the correct invalidation scope.
     void clientApiFetch<AIConversationsResponse>(
       `/projects/${projectId}/ai/conversations?limit=50&offset=0`
     )
       .then((response) => {
-        if (
-          generation !== generationRef.current ||
-          !mountedRef.current ||
-          projectId !== projectIdRef.current
-        )
-          return
+        if (!mountedRef.current || projectId !== projectIdRef.current) return
         const statuses: Record<string, RevbotStatus> = {}
         for (const conversation of response.conversations) {
           statuses[conversation.id] =
@@ -454,7 +459,18 @@ export function useRevbot({
       activeRequestRef.current = false
       lastEventIdRef.current = 0
       seenEventIdsRef.current = new Set()
-      const messages = conversation.messages.map((message) => ({ ...message }))
+      const messages = conversation.messages.map((message) => {
+        const mapped: LocalMessage = { ...message }
+        if (message.role === "assistant") {
+          const toolCalls = mapToolCallResponses(message.tool_calls)
+          if (toolCalls.length) mapped.toolCalls = toolCalls
+          const startedAt = parseActivityTimestamp(message.activity_started_at)
+          const endedAt = parseActivityTimestamp(message.activity_ended_at)
+          if (startedAt !== null) mapped.activityStartedAt = startedAt
+          if (endedAt !== null) mapped.activityEndedAt = endedAt
+        }
+        return mapped
+      })
       const assistant = [...messages]
         .reverse()
         .find((message) => message.role === "assistant")
@@ -905,6 +921,39 @@ export function useRevbot({
         )
           return
         applyConversation(conversation)
+        if (
+          conversation.turn_id &&
+          (conversation.turn_status === "queued" ||
+            conversation.turn_status === "running")
+        ) {
+          saveStoredConversation(projectId, {
+            conversationId,
+            turnId: conversation.turn_id,
+          })
+          try {
+            const turn = await clientApiFetch<AITurnResponse>(
+              `/ai/turns/${conversation.turn_id}`
+            )
+            if (
+              generation !== generationRef.current ||
+              !mountedRef.current ||
+              projectId !== projectIdRef.current
+            )
+              return
+            applyTurn(turn, !isTurnTerminal(turn.status))
+            if (!isTurnTerminal(turn.status)) void observe(turn.id, generation)
+          } catch (error) {
+            if (
+              generation !== generationRef.current ||
+              !mountedRef.current ||
+              projectId !== projectIdRef.current
+            )
+              return
+            reportRevbotError(
+              simpleError(error, "Unable to resume this conversation.")
+            )
+          }
+        }
       } catch (error) {
         if (
           generation !== generationRef.current ||
@@ -921,7 +970,7 @@ export function useRevbot({
         }))
       }
     },
-    [applyConversation, stopObserver]
+    [applyConversation, applyTurn, observe, stopObserver]
   )
 
   const newChat = useCallback(() => {
@@ -1177,6 +1226,17 @@ export function useRevbot({
     if (!isTurnTerminal(statusRef.current)) return
     activeRequestRef.current = false
   }, [state.status])
+
+  // While any conversation has a turn in flight, poll the conversation list
+  // so per-conversation spinners clear once turns finish elsewhere.
+  const anyConversationActive = Object.values(state.conversationStatus).some(
+    (status) => status === "queued" || status === "running"
+  )
+  useEffect(() => {
+    if (!anyConversationActive) return
+    const timer = window.setInterval(refreshConversations, 5000)
+    return () => window.clearInterval(timer)
+  }, [anyConversationActive, refreshConversations])
 
   return {
     activityStartedAt: state.activityStartedAt,
