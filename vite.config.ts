@@ -15,6 +15,10 @@ export default defineConfig({
     include: [
       "recharts",
       "apexcharts",
+      "echarts",
+      "echarts/core",
+      "echarts/charts",
+      "echarts/components",
       "react",
       "react-dom",
       "react-dom/client",

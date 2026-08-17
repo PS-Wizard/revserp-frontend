@@ -100,15 +100,17 @@ export const PillarAuditView = memo(function PillarAuditView({
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      <div className="px-4 lg:px-6">
-        <BucketScoreHistoryChart
-          activeProjectName={activeProjectName}
-          crawlBreakdowns={crawlBreakdowns}
-          pillarId={pillarId}
-          title={title}
-        />
-      </div>
-      <div className="grid items-stretch gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
+      <BucketScoreHistoryChart
+        activeProjectName={activeProjectName}
+        crawlBreakdowns={crawlBreakdowns}
+        pillarId={pillarId}
+        title={title}
+      />
+      <div className="mt-6 md:mt-8">
+        <div className="px-6">
+          <div className="border-t border-border" />
+        </div>
+        <div className="grid items-stretch gap-4 px-4 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6 lg:pt-4">
         <ScoreRadialChart
           centerLabel={title}
           centerValue={currentPillar?.score}
@@ -129,6 +131,7 @@ export const PillarAuditView = memo(function PillarAuditView({
               : null
           }
         />
+        </div>
       </div>
       <div className="px-4 lg:px-6">
         <Card className="bg-gradient-to-br from-card via-card to-muted/30">

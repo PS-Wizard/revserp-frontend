@@ -8,6 +8,11 @@ import { ThinkingOrb } from "thinking-orbs"
 import { CrawlContextRow } from "~/components/app-navbar/crawl-context-row"
 import type { ExportFormat } from "~/components/app-navbar/types"
 import {
+  HoverPill,
+  DROPDOWN_PILL_ITEM_CLASS,
+  useHoverPill,
+} from "~/components/ui/hover-pill"
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -24,6 +29,7 @@ import {
   ContextMenuTrigger,
 } from "~/components/ui/context-menu"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
+import { cn } from "~/lib/utils"
 
 import { CAPSULE_RADIUS, dockTransition, panelContentMotion } from "./constants"
 
@@ -89,7 +95,7 @@ export function ProjectPanel({
     <motion.div
       aria-label="Projects"
       aria-modal="true"
-      className="pointer-events-auto flex h-[min(520px,70vh)] w-full max-w-[58rem] min-w-0 flex-col overflow-hidden border border-border/70 bg-card/95 shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)] backdrop-blur-2xl"
+      className="pointer-events-auto flex h-[min(520px,70vh)] w-full max-w-[58rem] min-w-0 flex-col overflow-hidden surface-dialog border border-border shadow-none"
       layout
       layoutId="dock-context"
       ref={panelRef}
@@ -160,26 +166,41 @@ function ProjectCommandList({
   onProjectHover,
   onSelectProject,
 }: ProjectCommandListProps) {
+  const pillMenu = useHoverPill()
+  const createItemProps = pillMenu.getItemProps(0)
+
   return (
     <Command className="flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent sm:border-r sm:border-border/50">
       <div className="border-b border-border/50 px-3 py-3">
         <CommandInput placeholder="Search projects..." />
       </div>
-      <CommandList className="max-h-none min-h-0 flex-1 py-2">
+      <CommandList
+        className="relative max-h-none min-h-0 flex-1 py-2"
+        onMouseLeave={pillMenu.clearPill}
+      >
+        <HoverPill className="inset-x-2 rounded-lg" pill={pillMenu.pill} />
         <CommandEmpty>No projects found.</CommandEmpty>
         <CommandGroup heading="Projects">
           <CommandItem
-            className="mx-2 rounded-lg py-2.5"
+            className={cn(
+              "relative z-10 mx-2 rounded-lg py-2.5",
+              DROPDOWN_PILL_ITEM_CLASS,
+              createItemProps.className
+            )}
+            onMouseEnter={createItemProps.onMouseEnter}
             onSelect={onCreateProjectOpen}
+            ref={createItemProps.ref}
           >
             <PlusIcon />
             Create new project
           </CommandItem>
-          {projects.map((project) => (
+          {projects.map((project, index) => (
             <ProjectCommandItem
               activeProjectId={activeProjectId}
               deletingProjectId={deletingProjectId}
+              index={index + 1}
               key={project.id}
+              pillMenu={pillMenu}
               project={project}
               onDeleteProject={onDeleteProject}
               onOpenBusinessProfile={onOpenBusinessProfile}
@@ -196,6 +217,8 @@ function ProjectCommandList({
 type ProjectCommandItemProps = {
   activeProjectId?: string | null
   deletingProjectId: string | null
+  index: number
+  pillMenu: ReturnType<typeof useHoverPill>
   project: ProjectResponse
   onDeleteProject: (project: ProjectResponse) => void
   onOpenBusinessProfile: (project: ProjectResponse) => void
@@ -206,19 +229,31 @@ type ProjectCommandItemProps = {
 function ProjectCommandItem({
   activeProjectId,
   deletingProjectId,
+  index,
+  pillMenu,
   project,
   onDeleteProject,
   onOpenBusinessProfile,
   onProjectHover,
   onSelectProject,
 }: ProjectCommandItemProps) {
+  const itemProps = pillMenu.getItemProps(index)
+
   return (
     <ContextMenu>
       <ContextMenuTrigger>
         <CommandItem
-          className="mx-2 rounded-lg py-2.5 data-[selected=true]:bg-accent/70"
-          onMouseEnter={() => onProjectHover(project.id)}
+          className={cn(
+            "relative z-10 mx-2 rounded-lg py-2.5",
+            DROPDOWN_PILL_ITEM_CLASS,
+            itemProps.className
+          )}
+          onMouseEnter={() => {
+            onProjectHover(project.id)
+            itemProps.onMouseEnter()
+          }}
           onSelect={() => onSelectProject(project.id)}
+          ref={itemProps.ref}
           value={`${project.name} ${project.base_url}`}
         >
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -290,35 +325,51 @@ function CrawlPanel({
   onExportFormatChange,
   onSelectProject,
 }: CrawlPanelProps) {
+  const pillMenu = useHoverPill()
+
   return (
     <div className="flex min-h-0 flex-col border-t border-border/50 bg-muted/20 sm:border-t-0">
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
+      <div
+        className="relative min-h-0 flex-1 overflow-y-auto p-2"
+        onMouseLeave={pillMenu.clearPill}
+      >
+        <HoverPill className="inset-x-2 rounded-lg" pill={pillMenu.pill} />
         {crawlPanelCrawls.length > 0 ? (
           <div className="flex flex-col gap-1">
-            {crawlPanelCrawls.map((crawl) => (
-              <CrawlContextRow
-                crawl={crawl}
-                disabled={deletingCrawlId !== null || exportingCrawlId !== null}
-                exportFormat={exportFormat}
-                isActive={crawl.id === currentCrawl?.id}
-                isCancelling={cancellingCrawlId === crawl.id}
-                isDeleting={deletingCrawlId === crawl.id}
-                isExporting={exportingCrawlId === crawl.id}
+            {crawlPanelCrawls.map((crawl, index) => {
+              const crawlItemProps = pillMenu.getItemProps(index)
+              return (
+              <div
+                className={cn("relative z-10 rounded-lg", crawlItemProps.className)}
                 key={crawl.id}
-                onCancel={() => onCancelCrawl(crawl)}
-                onCompare={
-                  onCompareCrawl &&
-                  crawl.status === "completed" &&
-                  crawl.project_id !== currentCrawl?.project_id
-                    ? () => onCompareCrawl(crawl)
-                    : undefined
-                }
-                onDelete={() => onDeleteCrawl(crawl)}
-                onExport={(format) => onExportCrawl(crawl, format)}
-                onFormatChange={onExportFormatChange}
-                onSelect={() => onSelectProject(crawl.project_id, crawl.id)}
-              />
-            ))}
+                onMouseEnter={crawlItemProps.onMouseEnter}
+                ref={crawlItemProps.ref}
+              >
+                <CrawlContextRow
+                  buttonClassName="hover:bg-transparent hover:text-current focus-visible:bg-transparent data-[active=true]:bg-transparent"
+                  crawl={crawl}
+                  disabled={deletingCrawlId !== null || exportingCrawlId !== null}
+                  exportFormat={exportFormat}
+                  isActive={crawl.id === currentCrawl?.id}
+                  isCancelling={cancellingCrawlId === crawl.id}
+                  isDeleting={deletingCrawlId === crawl.id}
+                  isExporting={exportingCrawlId === crawl.id}
+                  onCancel={() => onCancelCrawl(crawl)}
+                  onCompare={
+                    onCompareCrawl &&
+                    crawl.status === "completed" &&
+                    crawl.project_id !== currentCrawl?.project_id
+                      ? () => onCompareCrawl(crawl)
+                      : undefined
+                  }
+                  onDelete={() => onDeleteCrawl(crawl)}
+                  onExport={(format) => onExportCrawl(crawl, format)}
+                  onFormatChange={onExportFormatChange}
+                  onSelect={() => onSelectProject(crawl.project_id, crawl.id)}
+                />
+              </div>
+              )
+            })}
           </div>
         ) : (
           <div className="flex h-full min-h-48 items-center justify-center rounded-lg border border-dashed border-border/60 text-center text-sm text-muted-foreground">

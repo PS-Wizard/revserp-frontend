@@ -1,22 +1,16 @@
 "use client"
 
-import { memo, useMemo, useRef } from "react"
+import { memo, useMemo, useState } from "react"
 
-import type { ApexOptions } from "apexcharts"
-
-import type { CrawlResponse } from "~/lib/api.types"
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card"
-import { useApexChart } from "~/hooks/use-apex-chart"
+  EChartsAreaChart,
+  type ChartConfig,
+} from "~/components/evilcharts/charts/echarts-area-chart"
+import type { CrawlResponse } from "~/lib/api.types"
 import { formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
+import { cn } from "~/lib/utils"
 import {
-  formatTooltipDateTime,
   getScoreRange,
 } from "~/components/score-history-chart-utils"
 
@@ -30,18 +24,25 @@ type CrawlBreakdown = {
   }
 }
 
+const axisDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+})
+
+function formatAxisDate(timestamp: number) {
+  return axisDateFormatter.format(new Date(timestamp))
+}
+
 export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
-  activeProjectName,
   crawlBreakdowns,
   pillarId,
-  title,
 }: {
   activeProjectName?: string
   crawlBreakdowns: CrawlBreakdown[]
   pillarId: string
   title: string
 }) {
-  const chartContainerRef = useRef<HTMLDivElement | null>(null)
+  const [selectedBucketId, setSelectedBucketId] = useState<string | null>(null)
 
   const buckets = useMemo(
     () =>
@@ -50,174 +51,175 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     [crawlBreakdowns, pillarId]
   )
 
-  const chartRows: Array<Record<string, number | null>> = useMemo(() => {
+  const chartRows = useMemo(() => {
     return [...crawlBreakdowns].reverse().map(({ crawl, breakdown }) => {
       const pillar = breakdown.pillars.find((p) => p.id === pillarId)
       const timestamp = new Date(
         crawl.completed_at ?? crawl.created_at
       ).getTime()
-      return {
+      const row: Record<string, number | string | null> = {
         timestamp,
-        ...Object.fromEntries(
-          buckets.map((bucket) => [
-            bucket.id,
-            pillar?.buckets.find((b) => b.id === bucket.id)?.score ?? null,
-          ])
-        ),
+        date: formatAxisDate(timestamp),
       }
+      for (const bucket of buckets) {
+        row[bucket.id] =
+          pillar?.buckets.find((b) => b.id === bucket.id)?.score ?? null
+      }
+      return row
     })
   }, [crawlBreakdowns, pillarId, buckets])
-
-  const series = useMemo(
-    () =>
-      buckets.map((bucket, index) => ({
-        name: formatBucketLabel(
-          bucket.id,
-          bucket.label.replace(/^bucket_/, "")
-        ),
-        color: getPillarChartColor(pillarId, index),
-        data: chartRows.map((row) => ({ x: row.timestamp, y: row[bucket.id] })),
-      })),
-    [buckets, chartRows, pillarId]
-  )
 
   const bucketIds = useMemo(() => buckets.map((bucket) => bucket.id), [buckets])
 
   const yRange = useMemo(
-    () => getScoreRange(chartRows, bucketIds),
+    () =>
+      getScoreRange(
+        chartRows as Array<Record<string, number | null>>,
+        bucketIds
+      ),
     [chartRows, bucketIds]
   )
 
-  const crawlTimestamps = useMemo(
-    () =>
-      chartRows
-        .map((row) => row.timestamp)
-        .filter((timestamp): timestamp is number => typeof timestamp === "number"),
-    [chartRows]
-  )
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {}
+    for (const [index, bucket] of buckets.entries()) {
+      const color = getPillarChartColor(pillarId, index)
+      config[bucket.id] = {
+        label: formatBucketLabel(
+          bucket.id,
+          bucket.label.replace(/^bucket_/, "")
+        ),
+        colors: { light: [color], dark: [color] },
+      }
+    }
+    return config
+  }, [buckets, pillarId])
 
-  const chartOptions = useMemo<ApexOptions>(
-    () => ({
-      annotations: {
-        xaxis: crawlTimestamps.map((timestamp) => ({
-          x: timestamp,
-          borderWidth: 1.5,
-          strokeDashArray: 3,
-          borderColor: "rgba(255,255,255,0.32)",
-        })),
-      },
-      chart: {
-        type: "line",
-        height: 340,
-        background: "transparent",
-        parentHeightOffset: 0,
-        toolbar: { show: false },
-        zoom: { enabled: true, type: "x", autoScaleYaxis: true },
-        animations: { speed: 300 },
-      },
-      colors: buckets.map((_, i) => getPillarChartColor(pillarId, i)),
-      dataLabels: { enabled: false },
-      fill: { opacity: 0 },
-      grid: {
-        borderColor: "rgba(255,255,255,0.08)",
-        strokeDashArray: 4,
-        padding: { bottom: 8, left: 0, right: 14, top: 0 },
-        xaxis: { lines: { show: false } },
-        yaxis: { lines: { show: false } },
-      },
-      legend: { show: false },
-      stroke: { curve: "smooth", width: 3.5 },
-      theme: { mode: "dark" },
-      tooltip: {
-        theme: "dark",
-        shared: true,
-        x: { formatter: (value) => formatTooltipDateTime(Number(value)) },
-        y: { formatter: (value) => `${Math.round(Number(value))}%` },
-      },
-      xaxis: {
-        type: "datetime",
-        labels: {
-          style: { colors: "rgba(255,255,255,0.45)" },
-          datetimeUTC: false,
-          offsetY: 0,
-        },
-        axisBorder: { show: false },
-        axisTicks: { show: false },
-        tooltip: { enabled: false },
-      },
-      yaxis: {
-        min: yRange.min,
-        max: yRange.max,
-        tickAmount: 4,
-        labels: { show: false },
-        axisBorder: { show: false },
-        axisTicks: { show: false },
-      },
-    }),
-    [buckets, crawlTimestamps, pillarId, yRange]
-  )
+  const chartPlotHeight = 300
 
-  useApexChart(
-    chartContainerRef,
-    chartOptions,
-    series,
-    chartRows.length > 0 && buckets.length > 0
-  )
+  const hasData = chartRows.length > 0 && buckets.length > 0
+  const latestRow = hasData ? chartRows[chartRows.length - 1] : null
 
-  const description = activeProjectName
-    ? `Bucket trends for ${activeProjectName}`
-    : "Bucket trends from recent completed crawls"
-  const emptyChartHeight = 340
+  const bucketLegend = hasData ? (
+    <div className="px-6 pt-8 sm:pt-10">
+      <div className="flex flex-wrap justify-center lg:flex-nowrap">
+        {buckets.map((bucket, index) => {
+          const color = getPillarChartColor(pillarId, index)
+          const label = formatBucketLabel(
+            bucket.id,
+            bucket.label.replace(/^bucket_/, "")
+          )
+          const isDimmed =
+            selectedBucketId !== null && selectedBucketId !== bucket.id
+          const latest = latestRow?.[bucket.id]
+          const latestScore =
+            typeof latest === "number" ? Math.round(latest) : null
 
-  const legend = (
-    <div className="flex flex-wrap justify-center gap-4 text-sm">
-      {buckets.map((bucket, index) => (
-        <div className="flex items-center gap-2" key={bucket.id}>
-          <span
-            className="size-2.5 shrink-0 rounded-full"
-            style={{
-              backgroundColor: getPillarChartColor(pillarId, index),
-            }}
-          />
-          <span className="truncate text-muted-foreground">
-            {formatBucketLabel(bucket.id, bucket.label.replace(/^bucket_/, ""))}
-          </span>
-        </div>
-      ))}
+          const isSelected = selectedBucketId === bucket.id
+
+          return (
+            <button
+              key={bucket.id}
+              type="button"
+              title={label}
+              aria-pressed={isSelected}
+              onClick={() =>
+                setSelectedBucketId((prev) =>
+                  prev === bucket.id ? null : bucket.id
+                )
+              }
+              className={cn(
+                "flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md py-1.5 text-center transition-opacity duration-150",
+                "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                buckets.length <= 2
+                  ? "w-1/2 px-2 sm:px-3"
+                  : buckets.length === 3
+                    ? "w-1/3 px-2 sm:px-3"
+                    : "w-1/2 px-2 sm:w-1/3 sm:px-3",
+                "lg:flex-1 lg:px-2",
+                index > 0 && "border-l border-border",
+                isDimmed && "opacity-40"
+              )}
+            >
+              <div className="flex max-w-full min-w-0 items-center justify-center gap-1.5 text-xs font-medium text-foreground">
+                <span
+                  className="size-2 shrink-0 rounded-[2px]"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="truncate">{label}</span>
+              </div>
+              <div className="leading-none">
+                <span className="text-base font-medium tracking-tight text-foreground sm:text-lg lg:text-xl">
+                  {latestScore ?? "—"}
+                </span>
+                {latestScore !== null ? (
+                  <span className="ml-0.5 text-xs font-light text-muted-foreground sm:text-sm">
+                    %
+                  </span>
+                ) : null}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
+
+  const chartBody = !hasData ? (
+    <div
+      className="flex w-full items-center justify-center text-sm text-muted-foreground"
+      style={{ minHeight: chartPlotHeight }}
+    >
+      No completed bucket history yet.
+    </div>
+  ) : (
+    <div className="w-full">
+      <div style={{ height: chartPlotHeight }}>
+        <EChartsAreaChart
+          data={chartRows}
+          config={chartConfig}
+          xDataKey="date"
+          className="h-full w-full"
+          curveType="monotone"
+          enableHoverHighlight
+          selectedDataKey={selectedBucketId}
+          onSelectionChange={setSelectedBucketId}
+          chartOptions={{
+            grid: { left: 24, right: 24, top: 8, bottom: 28 },
+            yAxis: {
+              type: "value",
+              show: false,
+              scale: true,
+              min: yRange.min,
+              max: yRange.max,
+              boundaryGap: ["14%", "18%"],
+            },
+          }}
+        >
+          <EChartsAreaChart.Grid />
+          <EChartsAreaChart.XAxis dataKey="date" />
+          <EChartsAreaChart.YAxis />
+          <EChartsAreaChart.Tooltip variant="default" />
+          {buckets.map((bucket) => (
+            <EChartsAreaChart.Area
+              key={bucket.id}
+              dataKey={bucket.id}
+              variant="lines"
+              strokeVariant="solid"
+              strokeWidth={2.5}
+              isClickable
+            >
+              <EChartsAreaChart.Dot variant="border" />
+              <EChartsAreaChart.ActiveDot variant="default" />
+            </EChartsAreaChart.Area>
+          ))}
+        </EChartsAreaChart>
+      </div>
+      {bucketLegend}
     </div>
   )
 
-  const chartBody =
-    chartRows.length === 0 || buckets.length === 0 ? (
-      <div
-        className="flex w-full items-center justify-center text-sm text-muted-foreground"
-        style={{ minHeight: emptyChartHeight }}
-      >
-        No completed bucket history yet.
-      </div>
-    ) : (
-      <>
-        <div
-          className="w-full"
-          ref={chartContainerRef}
-          style={{ minHeight: emptyChartHeight }}
-        />
-        <div className="mt-auto flex min-h-10 justify-center pt-6">
-          {legend}
-        </div>
-      </>
-    )
-
   return (
-    <Card className="@container/card flex h-full flex-col bg-gradient-to-br from-card via-card to-muted/30">
-      <CardHeader>
-        <CardTitle>{title} Score History</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col px-2 pt-2 sm:px-6">
-        {chartBody}
-      </CardContent>
-    </Card>
+    <section className="w-full min-w-0">{chartBody}</section>
   )
 })
-

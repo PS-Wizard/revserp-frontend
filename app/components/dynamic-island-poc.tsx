@@ -6,6 +6,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   CommandIcon,
+  Loader2,
   Maximize2Icon,
   Minimize2Icon,
   MinusIcon,
@@ -14,8 +15,6 @@ import {
   XIcon,
 } from "lucide-react"
 import { motion, type Transition } from "motion/react"
-import { BorderBeam } from "border-beam"
-import { ThinkingOrb } from "thinking-orbs"
 
 import type { AIConversationResponse } from "~/lib/api.types"
 import {
@@ -34,7 +33,7 @@ export type IslandState = "docked" | "minimized" | "maximized"
 
 const ISLAND_LAYOUT_ID = "ai-island"
 
-const islandSurfaceClass = "border border-border bg-black"
+const islandSurfaceClass = "surface-dialog border border-border text-foreground"
 
 export const islandDockedSizeClass = "h-12 w-[12.75rem]"
 
@@ -49,11 +48,11 @@ export const islandMinimizedSizeClass =
 
 const islandMinimizedShadowClass = "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
 
-const islandPanelClass = "border border-border bg-black"
+const islandPanelClass = "surface-dialog border border-border text-foreground"
 
-const islandPanelHeaderClass = "border-b border-border bg-black"
+const islandPanelHeaderClass = "border-b border-border surface-card"
 
-const islandPanelBodyClass = "bg-black"
+const islandPanelBodyClass = "surface-card"
 
 const DOCKED_RADIUS = 8
 const PANEL_RADIUS = 12
@@ -90,7 +89,7 @@ function IslandExpandShortcut() {
         <span>Ctrl</span>
       )}
       <span className="text-white/35">+</span>
-      <span>Space</span>
+      <span>K</span>
     </span>
   )
 }
@@ -103,7 +102,7 @@ export function DynamicIslandDockedChrome({
 }: DockedChromeProps) {
   const dockedButton = (
     <motion.button
-      aria-label="Open AI chat (Command or Control + Space)"
+      aria-label="Open AI chat (Command or Control + K)"
       className={cn(
         "pointer-events-auto overflow-hidden rounded-lg",
         islandSurfaceClass,
@@ -118,14 +117,12 @@ export function DynamicIslandDockedChrome({
     >
       <span className="flex size-full items-center justify-between gap-2 px-3">
         <span className="flex min-w-0 items-center gap-2">
-          <ThinkingOrb
-            aria-hidden="true"
-            className="flex shrink-0 items-center justify-center [&_svg]:size-9"
-            paused={!active}
-            size={20}
-            state="solving"
-            theme="dark"
-          />
+          {active ? (
+            <Loader2
+              aria-hidden="true"
+              className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+            />
+          ) : null}
           <span className="truncate text-base leading-none font-semibold text-foreground">
             Revbot
           </span>
@@ -137,25 +134,7 @@ export function DynamicIslandDockedChrome({
 
   return (
     <div className={cn("pointer-events-none", islandAnchorClass)}>
-      {active ? (
-        <BorderBeam
-          active
-          borderRadius={DOCKED_RADIUS}
-          brightness={2.4}
-          className="pointer-events-none overflow-hidden rounded-lg"
-          colorVariant="colorful"
-          duration={1.2}
-          hueRange={180}
-          saturation={2}
-          size="pulse-outside"
-          strength={1}
-          theme="dark"
-        >
-          {dockedButton}
-        </BorderBeam>
-      ) : (
-        dockedButton
-      )}
+      {dockedButton}
     </div>
   )
 }

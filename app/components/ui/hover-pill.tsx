@@ -10,7 +10,7 @@ export const HOVER_PILL_TRANSITION =
   "top 150ms cubic-bezier(0.23,1,0.32,1), height 150ms cubic-bezier(0.23,1,0.32,1), opacity 120ms ease"
 
 export const DROPDOWN_PILL_ITEM_CLASS =
-  "relative z-10 focus:bg-transparent focus:text-current data-highlighted:bg-transparent data-highlighted:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+  "relative z-10 focus:bg-transparent focus:text-current data-highlighted:bg-transparent data-highlighted:text-current data-selected:!bg-transparent data-selected:!text-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
 
 export type HoverPillRect = { height: number; top: number } | null
 

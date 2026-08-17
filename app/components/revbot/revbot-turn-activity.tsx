@@ -190,22 +190,29 @@ function ToolOutcomeIcon({ outcome }: { outcome: ToolOutcome }) {
 
 function ToolCallRow({
   call,
-  defaultOpen,
   isDark,
   isLast,
 }: {
   call: RevbotToolCall
-  defaultOpen: boolean
   isDark: boolean
   isLast: boolean
 }) {
   const meta = formatToolMeta(call.name, call.args)
   const outcome = resolveToolOutcome(call)
   const [open, setOpen] = useState(
-    defaultOpen || outcome === "failed" || outcome === "partial"
+    outcome === "failed" || outcome === "partial"
   )
   const detail = call.summary?.trim()
   const expandable = Boolean(detail || meta)
+
+  useEffect(() => {
+    if (outcome === "failed" || outcome === "partial") {
+      setOpen(true)
+      return
+    }
+
+    setOpen(false)
+  }, [outcome])
 
   return (
     <div
@@ -233,8 +240,8 @@ function ToolCallRow({
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-200">
           {formatToolName(call.name)}
         </span>
-        {meta ? (
-          <span className="hidden min-w-0 truncate text-[12px] text-zinc-500 sm:inline">
+        {meta && open ? (
+          <span className="min-w-0 truncate text-[12px] text-zinc-500">
             {meta}
           </span>
         ) : null}
@@ -292,11 +299,6 @@ function ToolCallRow({
               ) : outcome === "partial" ? (
                 <p className="text-[12px] text-zinc-500">No results returned.</p>
               ) : null}
-              {meta ? (
-                <p className="mt-1 text-[11.5px] text-zinc-500 sm:hidden">
-                  {meta}
-                </p>
-              ) : null}
             </div>
           </div>
         </div>
@@ -329,7 +331,6 @@ function ToolCallList({
         >
           <ToolCallRow
             call={call}
-            defaultOpen={active && call.status === "running"}
             isDark={isDark}
             isLast={index === toolCalls.length - 1}
           />

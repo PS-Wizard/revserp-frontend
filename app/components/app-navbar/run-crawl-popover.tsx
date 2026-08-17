@@ -64,7 +64,7 @@ export function RunCrawlPopover({
         ) : null}
         Run Crawl
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" className="w-80 surface-dialog">
         <form className="flex flex-col gap-4" onSubmit={onSubmit}>
           <PopoverHeader>
             <PopoverTitle>Run Crawl</PopoverTitle>

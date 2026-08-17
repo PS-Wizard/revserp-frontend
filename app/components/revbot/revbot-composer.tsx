@@ -122,6 +122,21 @@ type SpeechRecognitionWindow = typeof window & {
   webkitSpeechRecognition?: DictationRecognitionConstructor
 }
 
+export const REVBOT_PROMPT_INPUT_ID = "revbot-prompt"
+
+export function focusRevbotPrompt(container?: ParentNode | null) {
+  const root = container ?? document
+  const input = root.querySelector<HTMLTextAreaElement>(
+    `#${REVBOT_PROMPT_INPUT_ID}`
+  )
+  if (!input || input.disabled) return false
+
+  input.focus()
+  const end = input.value.length
+  input.setSelectionRange(end, end)
+  return true
+}
+
 type RevbotComposerProps = {
   active: boolean
   allowedEfforts: AIReasoningEffort[]
@@ -658,7 +673,7 @@ export function RevbotComposer({
                 : "dark:bg-transparent"
             )}
             disabled={disabled}
-            id="revbot-prompt"
+            id={REVBOT_PROMPT_INPUT_ID}
             onChange={(event) =>
               updatePrompt(event.target.value, event.target.selectionStart)
             }

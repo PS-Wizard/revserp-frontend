@@ -42,13 +42,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#030f14" />
+        <meta name="theme-color" content="#050505" />
         <link href="/manifest.webmanifest" rel="manifest" />
         <script dangerouslySetInnerHTML={{ __html: restoreThemeScript }} />
         <Meta />
         <Links />
       </head>
       <body>
+        <div aria-hidden="true" className="app-noise" />
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster offset={{ left: 86 }} position="bottom-left" />
         <ScrollRestoration />

@@ -24,8 +24,10 @@ import type { CrawlResponse } from "~/lib/api.types"
 
 import type { ExportFormat } from "./types"
 import { formatCrawlDateTime, formatCrawlStats } from "./utils"
+import { cn } from "~/lib/utils"
 
 type CrawlContextRowProps = {
+  buttonClassName?: string
   crawl: CrawlResponse
   disabled: boolean
   exportFormat: ExportFormat
@@ -43,6 +45,7 @@ type CrawlContextRowProps = {
 }
 
 export function CrawlContextRow({
+  buttonClassName,
   crawl,
   disabled,
   exportFormat,
@@ -66,7 +69,10 @@ export function CrawlContextRow({
       <ContextMenuTrigger>
         <div className="group/crawl relative">
         <button
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none data-[active=true]:bg-accent/80 data-[active=true]:text-accent-foreground"
+          className={cn(
+            "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground focus-visible:outline-none data-[active=true]:bg-accent/80 data-[active=true]:text-accent-foreground",
+            buttonClassName
+          )}
           data-active={isActive}
           onClick={onSelect}
           type="button"

@@ -72,6 +72,7 @@ import {
   DynamicIslandPanel,
   islandTransition,
 } from "~/components/dynamic-island-poc"
+import { focusRevbotPrompt } from "~/components/revbot/revbot-composer"
 import { RevbotViewContent } from "~/components/revbot/revbot-view"
 import { useRevbot } from "~/components/revbot/use-revbot"
 import { getCrawlTimestamp } from "~/lib/crawl"
@@ -258,6 +259,18 @@ export function WorkspaceShellPreview({
   const shouldReduceMotion = useReducedMotion() ?? false
   const workspaceContentKey = view
   const islandMorphTransition = islandTransition(shouldReduceMotion)
+  const pendingIslandPromptFocusRef = useRef(false)
+
+  function focusIslandRevbotPrompt() {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const panel = document.querySelector(
+          '[role="dialog"][aria-label="Revbot"]'
+        )
+        focusRevbotPrompt(panel)
+      })
+    })
+  }
 
   function openIsland() {
     setIslandState("minimized")
@@ -276,7 +289,6 @@ export function WorkspaceShellPreview({
   }
 
   function handleRevbotInternalLink(hash: string) {
-    dockIsland()
     navigate(
       {
         pathname: location.pathname,
@@ -299,7 +311,7 @@ export function WorkspaceShellPreview({
 
       if (
         !(event.metaKey || event.ctrlKey) ||
-        event.key !== " " ||
+        event.key.toLowerCase() !== "k" ||
         event.repeat
       ) {
         return
@@ -307,8 +319,26 @@ export function WorkspaceShellPreview({
 
       event.preventDefault()
 
-      if (islandState === "docked") openIsland()
-      else if (islandState === "minimized") maximizeIsland()
+      // Ctrl+K is "expand + focus". Keep the stepwise expansion chain
+      // (docked -> minimized -> maximized) from the original shortcut:
+      // the second press must still expand further instead of being
+      // swallowed by a focus-only path. The focus request is consumed by
+      // the effect below after the expansion commits, so the focus never
+      // fires mid-morph or in place of an expansion.
+      if (islandState === "docked") {
+        pendingIslandPromptFocusRef.current = true
+        openIsland()
+        return
+      }
+
+      if (islandState === "minimized") {
+        pendingIslandPromptFocusRef.current = true
+        maximizeIsland()
+        return
+      }
+
+      // Maximized: no further expansion, just focus.
+      focusIslandRevbotPrompt()
     }
 
     document.addEventListener("keydown", handleKeyDown)
@@ -319,6 +349,15 @@ export function WorkspaceShellPreview({
     projects.find((project) => project.id === activeProjectId) ??
     projects[0] ??
     null
+
+  useEffect(() => {
+    if (!features.ai_chat || islandState === "docked") return
+    if (!pendingIslandPromptFocusRef.current) return
+
+    pendingIslandPromptFocusRef.current = false
+    focusIslandRevbotPrompt()
+  }, [features.ai_chat, islandState, activeProject?.id])
+
   const islandRevbot = useRevbot({
     activeProject,
     allowedEfforts: features.ai_allowed_reasoning_efforts,
@@ -542,8 +581,8 @@ export function WorkspaceShellPreview({
             collapsible="none"
             className={
               isSidebarCollapsed
-                ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-black p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none"
-                : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-black p-3 text-foreground shadow-lg transition-[width,padding] duration-200 ease-out motion-reduce:transition-none"
+                ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-sidebar p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none"
+                : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-sidebar p-3 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none"
             }
           >
             <div>
@@ -1010,16 +1049,24 @@ export function WorkspaceShellPreview({
               )}
             </LayoutGroup>
           ) : null}
-          {isProjectPanelOpen ? (
-            <>
-              <button
+          <AnimatePresence>
+            {isProjectPanelOpen ? (
+              <motion.button
+                animate={{ opacity: 1 }}
                 aria-label="Close project selector"
-                className="fixed inset-0 z-40 cursor-default bg-black/60"
+                className="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm"
+                exit={{ opacity: 0 }}
+                initial={{ opacity: 0 }}
+                key="project-panel-backdrop"
                 onClick={() => setIsProjectPanelOpen(false)}
+                transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
                 type="button"
               />
-              <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-                <ProjectPanel
+            ) : null}
+          </AnimatePresence>
+          {isProjectPanelOpen ? (
+            <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+              <ProjectPanel
                   activeProjectId={activeProjectId}
                   cancellingCrawlId={projectActions.cancellingCrawlId}
                   crawlPanelCrawls={crawlPanelCrawls}
@@ -1058,8 +1105,7 @@ export function WorkspaceShellPreview({
                   projects={projects}
                   reducedMotion={shouldReduceMotion}
                 />
-              </div>
-            </>
+            </div>
           ) : null}
         </motion.main>
       </SidebarProvider>
