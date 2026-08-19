@@ -206,14 +206,23 @@ export function RevbotComposer({
   const effortIndex = allowedEfforts.indexOf(effort)
   const isDark = variant === "dark"
   const canSend = !disabled && prompt.trim().length > 0
-  const actionColCount = showMic ? 3 : 2
-  const sendColClass = expanded
-    ? showMic
-      ? "col-start-4 row-start-2"
-      : "col-start-3 row-start-2"
-    : showMic
-      ? "col-start-5 row-start-1"
-      : "col-start-4 row-start-1"
+  const showEffort = allowedEfforts.length > 1
+  const actionColCount = (showMic ? 2 : 1) + (showEffort ? 1 : 0)
+  const sendColClass = showEffort
+    ? expanded
+      ? showMic
+        ? "col-start-4 row-start-2"
+        : "col-start-3 row-start-2"
+      : showMic
+        ? "col-start-5 row-start-1"
+        : "col-start-4 row-start-1"
+    : expanded
+      ? showMic
+        ? "col-start-3 row-start-2"
+        : "col-start-2 row-start-2"
+      : showMic
+        ? "col-start-4 row-start-1"
+        : "col-start-3 row-start-1"
 
   useEffect(() => {
     promptRef.current = prompt
@@ -247,10 +256,11 @@ export function RevbotComposer({
     const textarea = textareaRef.current
     const controls = controlsRef.current
     const measure = measureRef.current
-    const effortButton = effortButtonRef.current
-    if (!textarea || !controls || !measure || !effortButton) return
+    if (!textarea || !controls || !measure) return
 
-    const fixedControlsWidth = 28 * actionColCount + effortButton.offsetWidth
+    const fixedControlsWidth =
+      28 * actionColCount + (effortButtonRef.current?.offsetWidth ?? 0)
+
     const inlineGaps = 4 * 4
     const inlineInputWidth = controls.clientWidth - fixedControlsWidth - inlineGaps
     const needsFullWidth =
@@ -623,13 +633,21 @@ export function RevbotComposer({
         <div
           className={cn(
             "relative z-10 grid items-end gap-x-1 gap-y-1.5",
-            expanded
-              ? showMic
-                ? "grid-cols-[minmax(0,1fr)_auto_28px_28px]"
-                : "grid-cols-[minmax(0,1fr)_auto_28px]"
-              : showMic
-                ? "grid-cols-[28px_minmax(0,1fr)_auto_28px_28px]"
-                : "grid-cols-[28px_minmax(0,1fr)_auto_28px]"
+            showEffort
+              ? expanded
+                ? showMic
+                  ? "grid-cols-[minmax(0,1fr)_auto_28px_28px]"
+                  : "grid-cols-[minmax(0,1fr)_auto_28px]"
+                : showMic
+                  ? "grid-cols-[28px_minmax(0,1fr)_auto_28px_28px]"
+                  : "grid-cols-[28px_minmax(0,1fr)_auto_28px]"
+              : expanded
+                ? showMic
+                  ? "grid-cols-[minmax(0,1fr)_28px_28px]"
+                  : "grid-cols-[minmax(0,1fr)_28px]"
+                : showMic
+                  ? "grid-cols-[28px_minmax(0,1fr)_28px_28px]"
+                  : "grid-cols-[28px_minmax(0,1fr)_28px]"
           )}
           ref={controlsRef}
         >
@@ -683,29 +701,33 @@ export function RevbotComposer({
             rows={1}
             value={prompt}
           />
-          <button
-            aria-expanded={effortOpen}
-            aria-label="Choose reasoning effort"
-            className={cn(
-              "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
-              isDark && "hover:bg-white/10",
-              expanded ? "col-start-2 row-start-2" : "col-start-3 row-start-1"
-            )}
-            disabled={disabled || allowedEfforts.length === 0}
-            onClick={() => {
-              setAutocomplete(null)
-              setEffortOpen((open) => !open)
-            }}
-            ref={effortButtonRef}
-            type="button"
-          >
-            {effort}
-            <span className="text-muted-foreground">
-              <Icon size={11} strokeWidth={2.4}>
-                <path d="m6 9 6 6 6-6" />
-              </Icon>
-            </span>
-          </button>
+          {showEffort ? (
+            <button
+              aria-expanded={effortOpen}
+              aria-label="Choose reasoning effort"
+              className={cn(
+                "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                isDark && "hover:bg-white/10",
+                expanded
+                  ? "col-start-2 row-start-2"
+                  : "col-start-3 row-start-1"
+              )}
+              disabled={disabled}
+              onClick={() => {
+                setAutocomplete(null)
+                setEffortOpen((open) => !open)
+              }}
+              ref={effortButtonRef}
+              type="button"
+            >
+              {effort}
+              <span className="text-muted-foreground">
+                <Icon size={11} strokeWidth={2.4}>
+                  <path d="m6 9 6 6 6-6" />
+                </Icon>
+              </span>
+            </button>
+          ) : null}
           {showMic ? (
             <Button
               aria-label={
@@ -718,7 +740,13 @@ export function RevbotComposer({
               aria-pressed={listening}
               className={cn(
                 "size-7 rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
-                expanded ? "col-start-3 row-start-2" : "col-start-4 row-start-1",
+                showEffort
+                  ? expanded
+                    ? "col-start-3 row-start-2"
+                    : "col-start-4 row-start-1"
+                  : expanded
+                    ? "col-start-2 row-start-2"
+                    : "col-start-3 row-start-1",
                 listening &&
                   "bg-destructive text-destructive-foreground hover:bg-destructive/90"
               )}

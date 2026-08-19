@@ -365,7 +365,8 @@ export function RevbotTurnActivity({
     isComplete && startedAt !== null && endedAt !== null
       ? formatDuration(endedAt - startedAt)
       : null
-  const [accordionOpen, setAccordionOpen] = useState(true)
+  const [accordionOpen, setAccordionOpen] = useState(false)
+  const [liveToolsOpen, setLiveToolsOpen] = useState(false)
 
   if (!active && !hasTools && !isComplete) return null
 
@@ -428,16 +429,29 @@ export function RevbotTurnActivity({
   return (
     <div className="mb-3 w-full">
       {active ? (
-        <div className="mb-1 flex items-center gap-2 py-1">
+        <button
+          aria-expanded={liveToolsOpen}
+          className={cn(
+            "mb-1 flex w-full items-center gap-2 rounded-md py-1 text-left transition-colors duration-100",
+            isDark ? "hover:bg-white/[0.04]" : "hover:bg-muted/50"
+          )}
+          onClick={() => setLiveToolsOpen((open) => !open)}
+          type="button"
+        >
           <DriveSpinner />
           <ShimmerLabel>Churning…</ShimmerLabel>
           <span className="font-mono text-[12px] text-zinc-500 tabular-nums">
             {elapsed}
           </span>
-        </div>
+        </button>
       ) : null}
 
-      <ToolCallList active={active} isDark={isDark} toolCalls={toolCalls} />
+      {active && liveToolsOpen ? (
+        <ToolCallList active isDark={isDark} toolCalls={toolCalls} />
+      ) : null}
+      {!active ? (
+        <ToolCallList active={false} isDark={isDark} toolCalls={toolCalls} />
+      ) : null}
 
       {showDivider ? (
         <hr
