@@ -10,7 +10,8 @@ export type DashboardView =
   | "search-console"
   | "revbot"
   | "compare"
-export type AuditTab = "summary" | "seo" | "aeo" | "pagespeed" | "site-graph"
+export type AuditTab =
+  "summary" | "overview" | "seo" | "aeo" | "pagespeed" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
 
 /**
@@ -20,14 +21,19 @@ export type ExportFormat = "csv" | "xlsx"
  */
 export function revbotHashTarget(
   hash: string
-): { view: "revserp-audit"; tab: AuditTab } | { view: "search-console" } | null {
+):
+  { view: "revserp-audit"; tab: AuditTab } | { view: "search-console" } | null {
   switch (hash.replace(/-tab$/, "")) {
     case "summary":
+    case "overview":
     case "seo":
     case "aeo":
     case "pagespeed":
     case "site-graph":
-      return { view: "revserp-audit", tab: hash.replace(/-tab$/, "") as AuditTab }
+      return {
+        view: "revserp-audit",
+        tab: hash.replace(/-tab$/, "") as AuditTab,
+      }
     case "search-console":
       return { view: "search-console" }
     default:

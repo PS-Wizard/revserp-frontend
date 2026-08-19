@@ -1,5 +1,4 @@
-import { Link } from "react-router"
-import { Asterisk } from "lucide-react"
+import { RevserpLogoLink } from "~/components/revserp-logo"
 
 import { AuthForm } from "~/components/login-form"
 import { redirectAuthenticatedUser } from "~/lib/auth.server"
@@ -24,16 +23,7 @@ export default function SignupPage() {
       </div>
       <div className="flex flex-col gap-4 p-6 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
-          <Link
-            to="/"
-            prefetch="intent"
-            className="flex items-center gap-2 font-medium"
-          >
-            <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Asterisk />
-            </div>
-            Revserp.ai
-          </Link>
+          <RevserpLogoLink />
         </div>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm">

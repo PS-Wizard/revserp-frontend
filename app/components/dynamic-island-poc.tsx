@@ -50,9 +50,9 @@ const islandMinimizedShadowClass = "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
 
 const islandPanelClass = "surface-dialog border border-border text-foreground"
 
-const islandPanelHeaderClass = "border-b border-border surface-card"
+const islandPanelHeaderClass = "border-b border-border surface-dialog"
 
-const islandPanelBodyClass = "surface-card"
+const islandPanelBodyClass = "surface-dialog"
 
 const DOCKED_RADIUS = 8
 const PANEL_RADIUS = 12
@@ -272,7 +272,7 @@ export function DynamicIslandPanel({
                 {(pill) => (
                   <>
                     <div
-                      className="sticky top-0 z-10 bg-popover p-1.5 pb-2"
+                      className="sticky top-0 z-10 surface-dialog p-1.5 pb-2"
                       onPointerDown={(event) => event.stopPropagation()}
                     >
                       <RevbotConversationSearchInput

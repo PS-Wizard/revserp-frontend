@@ -11,6 +11,7 @@ import {
   SearchCheckIcon,
   SearchIcon,
   SparklesIcon,
+  SummaryIcon,
 } from "lucide-react"
 
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
@@ -30,8 +31,11 @@ import {
 import { HoverPill, useKeyedHoverPill } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 
+// The calm summary home is a separate section from the audit breakdowns —
+// same treatment the Visibility/Search Console section gets below. Overview
+// keeps the audit tab set as it always was.
 const auditSections = [
-  ["Overview", "summary", GaugeIcon],
+  ["Overview", "overview", GaugeIcon],
   ["SEO", "seo", SearchIcon],
   ["AEO", "aeo", SparklesIcon],
   ["PageSpeed", "pagespeed", ActivityIcon],
@@ -56,14 +60,63 @@ function CollapsedTooltip({
   )
 }
 
+type NavItemProps = {
+  label: string
+  icon: typeof GaugeIcon
+  active: boolean
+  collapsed: boolean
+  onClick: () => void
+  itemRef: (element: HTMLElement | null) => void
+  onMouseEnter: () => void
+}
+
+function NavItem({
+  label,
+  icon: Icon,
+  active,
+  collapsed,
+  onClick,
+  itemRef,
+  onMouseEnter,
+}: NavItemProps) {
+  return (
+    <SidebarMenuItem ref={itemRef}>
+      <CollapsedTooltip label={label} show={collapsed}>
+        <SidebarMenuButton
+          className={
+            collapsed
+              ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"}`
+              : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"}`
+          }
+          isActive={active}
+          onClick={onClick}
+          onMouseEnter={onMouseEnter}
+          title={collapsed ? label : undefined}
+          type="button"
+        >
+          <Icon aria-hidden="true" className="size-4 shrink-0" />
+          {collapsed ? null : label}
+          {collapsed ? null : (
+            <span
+              className={cn(
+                "ml-auto shrink-0",
+                active ? "text-foreground" : "invisible"
+              )}
+            >
+              <CheckIcon className="size-4" />
+            </span>
+          )}
+        </SidebarMenuButton>
+      </CollapsedTooltip>
+    </SidebarMenuItem>
+  )
+}
+
 type WorkspaceSidebarNavProps = {
   auditTab: AuditTab
   gscConnector: boolean
   isSidebarCollapsed: boolean
-  onSelectWorkspace: (
-    nextView: DashboardView,
-    nextAuditTab?: AuditTab
-  ) => void
+  onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
   view: DashboardView
 }
 
@@ -85,119 +138,53 @@ export function WorkspaceSidebarNav({
           </SidebarGroupLabel>
         )}
         <SidebarMenu className="relative" onMouseLeave={clearPill}>
-          <HoverPill
-            className="inset-x-1 rounded-md"
-            pill={pill}
+          <HoverPill className="inset-x-1 rounded-md" pill={pill} />
+          <NavItem
+            label="Summary"
+            icon={SummaryIcon}
+            active={view === "revserp-audit" && auditTab === "summary"}
+            collapsed={isSidebarCollapsed}
+            onClick={() => onSelectWorkspace("revserp-audit", "summary")}
+            itemRef={setItemRef("summary")}
+            onMouseEnter={() => showPill("summary")}
           />
-          {auditSections.map(([label, tab, Icon]) => {
-            const active = view === "revserp-audit" && auditTab === tab
-            return (
-              <SidebarMenuItem key={tab} ref={setItemRef(tab)}>
-                <CollapsedTooltip label={label} show={isSidebarCollapsed}>
-                  <SidebarMenuButton
-                    className={
-                      isSidebarCollapsed
-                        ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "text-foreground font-medium" : "text-muted-foreground"}`
-                        : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "text-foreground font-medium" : "text-muted-foreground"}`
-                    }
-                    isActive={active}
-                    onClick={() => onSelectWorkspace("revserp-audit", tab)}
-                    onMouseEnter={() => showPill(tab)}
-                    title={isSidebarCollapsed ? label : undefined}
-                    type="button"
-                  >
-                    <Icon aria-hidden="true" className="size-4 shrink-0" />
-                    {isSidebarCollapsed ? null : label}
-                    {isSidebarCollapsed ? null : (
-                      <span
-                        className={cn(
-                          "ml-auto shrink-0",
-                          active ? "text-foreground" : "invisible"
-                        )}
-                      >
-                        <CheckIcon className="size-4" />
-                      </span>
-                    )}
-                  </SidebarMenuButton>
-                </CollapsedTooltip>
-              </SidebarMenuItem>
-            )
-          })}
           <SidebarMenuItem className="my-3">
             <Separator />
           </SidebarMenuItem>
-          <SidebarMenuItem ref={setItemRef("visibility")}>
-            <CollapsedTooltip
-              label="Visibility test"
-              show={isSidebarCollapsed}
-            >
-              <SidebarMenuButton
-                className={
-                  isSidebarCollapsed
-                    ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "revserp-visibility" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                    : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "revserp-visibility" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                }
-                isActive={view === "revserp-visibility"}
-                onClick={() => onSelectWorkspace("revserp-visibility")}
-                onMouseEnter={() => showPill("visibility")}
-                title={isSidebarCollapsed ? "Visibility test" : undefined}
-                type="button"
-              >
-                <EyeIcon aria-hidden="true" className="size-4 shrink-0" />
-                {isSidebarCollapsed ? null : "Visibility test"}
-                {isSidebarCollapsed ? null : (
-                  <span
-                    className={cn(
-                      "ml-auto shrink-0",
-                      view === "revserp-visibility"
-                        ? "text-foreground"
-                        : "invisible"
-                    )}
-                  >
-                    <CheckIcon className="size-4" />
-                  </span>
-                )}
-              </SidebarMenuButton>
-            </CollapsedTooltip>
+          {auditSections.map(([label, tab, Icon]) => (
+            <NavItem
+              key={tab}
+              label={label}
+              icon={Icon}
+              active={view === "revserp-audit" && auditTab === tab}
+              collapsed={isSidebarCollapsed}
+              onClick={() => onSelectWorkspace("revserp-audit", tab)}
+              itemRef={setItemRef(tab)}
+              onMouseEnter={() => showPill(tab)}
+            />
+          ))}
+          <SidebarMenuItem className="my-3">
+            <Separator />
           </SidebarMenuItem>
+          <NavItem
+            label="Visibility test"
+            icon={EyeIcon}
+            active={view === "revserp-visibility"}
+            collapsed={isSidebarCollapsed}
+            onClick={() => onSelectWorkspace("revserp-visibility")}
+            itemRef={setItemRef("visibility")}
+            onMouseEnter={() => showPill("visibility")}
+          />
           {gscConnector ? (
-            <SidebarMenuItem ref={setItemRef("search-console")}>
-              <CollapsedTooltip
-                label="Search Console"
-                show={isSidebarCollapsed}
-              >
-                <SidebarMenuButton
-                  className={
-                    isSidebarCollapsed
-                      ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "search-console" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                      : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${view === "search-console" ? "text-foreground font-medium" : "text-muted-foreground"}`
-                  }
-                  isActive={view === "search-console"}
-                  onClick={() => onSelectWorkspace("search-console")}
-                  onMouseEnter={() => showPill("search-console")}
-                  title={isSidebarCollapsed ? "Search Console" : undefined}
-                  type="button"
-                >
-                  <SearchCheckIcon
-                    aria-hidden="true"
-                    className="size-4 shrink-0"
-                  />
-                  {isSidebarCollapsed ? null : "Search Console"}
-                  {isSidebarCollapsed ? null : (
-                    <span
-                      className={cn(
-                        "ml-auto shrink-0",
-                        view === "search-console"
-                          ? "text-foreground"
-                          : "invisible"
-                      )}
-                    >
-                      <CheckIcon className="size-4" />
-                    </span>
-                  )}
-                </SidebarMenuButton>
-              </CollapsedTooltip>
-            </SidebarMenuItem>
+            <NavItem
+              label="Search Console"
+              icon={SearchCheckIcon}
+              active={view === "search-console"}
+              collapsed={isSidebarCollapsed}
+              onClick={() => onSelectWorkspace("search-console")}
+              itemRef={setItemRef("search-console")}
+              onMouseEnter={() => showPill("search-console")}
+            />
           ) : null}
         </SidebarMenu>
       </SidebarGroup>

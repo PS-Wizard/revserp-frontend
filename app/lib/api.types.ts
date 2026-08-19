@@ -616,3 +616,46 @@ export type AIStreamToolResultPayload = {
 export type AIStreamTerminalPayload = {
   error_code?: string | null
 }
+
+// ── Score potential (project summary) ───────────────────────────────────────
+// GET /projects/{projectID}/score-potential — simulated scores from rerunning
+// the real scorer with selected buckets' issues removed. Every score and delta
+// is computed server-side; the client must never re-derive deltas.
+
+export type ScorePotentialScores = {
+  overall: number
+  seo: number
+  aeo: number
+  pagespeed: number
+}
+
+export type ScorePotentialOpportunity = {
+  bucket: string
+  pillar: string
+  scores_if_fixed: ScorePotentialScores
+  delta: ScorePotentialScores
+}
+
+export type ScorePotentialScenario = {
+  buckets: string[]
+  scores_if_fixed: ScorePotentialScores
+  delta: ScorePotentialScores
+}
+
+export type ScorePotentialScenarios = {
+  best_bucket: ScorePotentialScenario
+  top_3: ScorePotentialScenario
+  recommended: ScorePotentialScenario
+}
+
+export type ScorePotentialResponse =
+  | {
+      potential_available: true
+      current: ScorePotentialScores
+      opportunities: ScorePotentialOpportunity[]
+      scenarios: ScorePotentialScenarios
+    }
+  | {
+      potential_available: false
+      reason?: string
+    }

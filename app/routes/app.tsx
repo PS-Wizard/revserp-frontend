@@ -22,6 +22,7 @@ import type { AuditTab } from "~/components/app-navbar/types"
 import { revbotHashTarget } from "~/components/app-navbar/types"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
+import { SummaryView } from "~/components/summary/summary-view"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { ThinkingOrb } from "thinking-orbs"
 import { IssueExplorer } from "~/components/issue-explorer"
@@ -48,7 +49,6 @@ import {
 } from "~/components/ui/card"
 import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent } from "~/components/ui/tabs"
-
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
@@ -194,7 +194,7 @@ export default function AppPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const [view, setView] = useState<DashboardView>("revserp-audit")
-  const [auditTab, setAuditTab] = useState<AuditTab>("summary")
+  const [auditTab, setAuditTab] = useState<AuditTab>("overview")
   const shouldReduceMotion = useReducedMotion() ?? false
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
   // The other side of an open comparison. The near side is always the current
@@ -752,67 +752,86 @@ export default function AppPage() {
                   }}
                 >
                   <Tabs value={auditTab} className="gap-6">
-                <TabsContent
-                  value="summary"
-                  className="flex flex-col gap-4 md:gap-6"
-                >
-                  <div className="grid items-stretch gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
-                    <ScoreRadialChart
-                      centerLabel="Overall"
-                      centerValue={currentOverall}
-                      description="Current crawl pillar scores"
-                      segments={scoreSegments}
-                      title="Overall Score"
-                    />
-                    <SummaryScoreHistoryChart
-                      activeProjectName={activeProject?.name}
-                      crawls={stableSortedCompletedCrawls}
-                    />
-                  </div>
-                  <SectionCards
-                    crawls={stableSortedCompletedCrawls}
-                    currentCrawl={stableCurrentCrawl}
-                    previousCrawl={stablePreviousCrawl}
-                    overallValue={currentOverall}
-                    overallPreviousValue={previousOverall}
-                  />
-                  <div className="px-4 lg:px-6">
-                    <Card className="bg-gradient-to-br from-card via-card to-muted/30">
-                      <IssueTreemap
-                        breakdown={stableCurrentBreakdown}
-                        onSelect={handleTreemapSelect}
+                    <TabsContent
+                      value="summary"
+                      className="flex flex-col gap-4 md:gap-6"
+                    >
+                      <SummaryView
+                        userName={me.user.name}
+                        userEmail={me.user.email}
+                        activeProject={activeProject}
+                        latestCompletedCrawl={
+                          stableSortedCompletedCrawls[0] ?? null
+                        }
+                        crawls={stableSortedCompletedCrawls}
+                        crawlBreakdowns={stableCrawlBreakdowns}
+                        onNavigateToTab={setAuditTab}
                       />
-                      <Separator />
-                      <div className="scroll-mt-4" ref={issuesRef}>
-                        <IssueExplorer
-                          breakdown={stableCurrentBreakdown}
-                          focusRequest={issueFocus}
+                    </TabsContent>
+
+                    <TabsContent
+                      value="overview"
+                      className="flex flex-col gap-4 md:gap-6"
+                    >
+                      <div className="grid items-stretch gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
+                        <ScoreRadialChart
+                          centerLabel="Overall"
+                          centerValue={currentOverall}
+                          description="Current crawl pillar scores"
+                          segments={scoreSegments}
+                          title="Overall Score"
+                        />
+                        <SummaryScoreHistoryChart
+                          activeProjectName={activeProject?.name}
+                          crawls={stableSortedCompletedCrawls}
                         />
                       </div>
-                    </Card>
-                  </div>
-                </TabsContent>
+                      <SectionCards
+                        crawls={stableSortedCompletedCrawls}
+                        currentCrawl={stableCurrentCrawl}
+                        previousCrawl={stablePreviousCrawl}
+                        overallValue={currentOverall}
+                        overallPreviousValue={previousOverall}
+                      />
+                      <div className="px-4 lg:px-6">
+                        <Card className="bg-gradient-to-br from-card via-card to-muted/30">
+                          <IssueTreemap
+                            breakdown={stableCurrentBreakdown}
+                            onSelect={handleTreemapSelect}
+                          />
+                          <Separator />
+                          <div className="scroll-mt-4" ref={issuesRef}>
+                            <IssueExplorer
+                              breakdown={stableCurrentBreakdown}
+                              focusRequest={issueFocus}
+                            />
+                          </div>
+                        </Card>
+                      </div>
+                    </TabsContent>
 
-                {PILLAR_TABS.map(({ tab, pillarId, title }) => (
-                  <TabsContent key={tab} value={tab}>
-                    <PillarAuditView
-                      activeProjectName={activeProject?.name}
-                      crawlBreakdowns={stableCrawlBreakdowns}
-                      currentCrawlId={stableCurrentCrawl?.id}
-                      currentBreakdown={stableCurrentBreakdown}
-                      pillarId={pillarId}
-                      title={title}
-                    />
-                  </TabsContent>
-                ))}
+                    {PILLAR_TABS.map(({ tab, pillarId, title }) => (
+                      <TabsContent key={tab} value={tab}>
+                        <PillarAuditView
+                          activeProjectName={activeProject?.name}
+                          crawlBreakdowns={stableCrawlBreakdowns}
+                          currentCrawlId={stableCurrentCrawl?.id}
+                          currentBreakdown={stableCurrentBreakdown}
+                          pillarId={pillarId}
+                          title={title}
+                        />
+                      </TabsContent>
+                    ))}
 
-                <TabsContent value="site-graph">
-                  {auditTab === "site-graph" ? (
-                    <Suspense fallback={null}>
-                      <SiteGraphView currentCrawlId={stableCurrentCrawl?.id} />
-                    </Suspense>
-                  ) : null}
-                </TabsContent>
+                    <TabsContent value="site-graph">
+                      {auditTab === "site-graph" ? (
+                        <Suspense fallback={null}>
+                          <SiteGraphView
+                            currentCrawlId={stableCurrentCrawl?.id}
+                          />
+                        </Suspense>
+                      ) : null}
+                    </TabsContent>
                   </Tabs>
                 </motion.div>
               </AnimatePresence>

@@ -372,17 +372,12 @@ export function RevbotTurnActivity({
   if (isComplete && thoughtDuration) {
     return (
       <div className="mb-3 w-full">
-        <div
-          className={cn(
-            "overflow-hidden rounded-lg",
-            isDark ? "bg-white/[0.03]" : "bg-muted/30"
-          )}
-        >
+        <div className="overflow-hidden">
           <button
             aria-expanded={accordionOpen}
             className={cn(
-              "flex w-full items-center gap-2 px-2 py-2 text-left transition-colors duration-100",
-              isDark ? "hover:bg-white/[0.04]" : "hover:bg-muted/50"
+              "flex min-h-8 w-full items-center gap-2 py-1.5 text-left transition-colors duration-100",
+              isDark ? "hover:bg-white/[0.03]" : "hover:bg-muted/50"
             )}
             onClick={() => setAccordionOpen((current) => !current)}
             type="button"
@@ -409,13 +404,11 @@ export function RevbotTurnActivity({
             }}
           >
             <div className="overflow-hidden">
-              <div className="px-2 pt-0">
-                <ToolCallList
-                  active={false}
-                  isDark={isDark}
-                  toolCalls={toolCalls}
-                />
-              </div>
+              <ToolCallList
+                active={false}
+                isDark={isDark}
+                toolCalls={toolCalls}
+              />
             </div>
           </div>
         </div>

@@ -103,9 +103,10 @@ const REVEAL_DURATION = 1000; // intro draw-in length, in milliseconds
 // easing was tried and abandoned — ECharts hardcodes the line-entrance clip to
 // linear and ignores animationEasing at every level (verified empirically).
 const LOADING_DEFAULT_POINTS = 14;
-// Buffer line: the last segment's stroke renders as this dash while the rest of
+// Buffer line: the last N segments' stroke renders as this dash while the rest of
 // the area stays solid, echoing the Recharts twin's 4px dash / 3px gap forecast
-// tail. Ported from the line-chart twin.
+// tail. Ported from the line-chart twin. N comes from the <Area> enableBufferLine
+// (a number of segments; `true` = one segment).
 const BUFFER_DASH: [number, number] = [4, 3];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,7 +202,7 @@ export interface AreaProps {
   animationType?: AreaAnimationType; // intro reveal — first area drives the wrapper wipe
   connectNulls?: boolean; // join segments across null/missing values
   isClickable?: boolean; // lets this area be selected by clicking it
-  enableBufferLine?: boolean; // renders this area's last segment as a dashed, fill-less buffer
+  enableBufferLine?: boolean | number; // renders the last 1..N segments as a dashed, fill-less buffer tail (`true` = last segment)
   children?: ReactNode; // optional <Dot> and <ActiveDot> config
 }
 
@@ -282,7 +283,7 @@ type AreaSeriesConfig = {
   animationType?: AreaAnimationType;
   connectNulls: boolean;
   isClickable: boolean;
-  enableBufferLine: boolean;
+  enableBufferLine: boolean | number; // number of dashed tail segments, or `true` for one
   dotVariant: DotVariant; // "none" when no <Dot> child is present
   activeDotVariant: DotVariant; // "none" when no <ActiveDot> child is present
 };
@@ -1138,7 +1139,16 @@ function buildAreaSeries(ctx: OptionBuildContext): LineSeriesOption[] {
     // Hover-reveal is a root-level mode and owns the whole area rendering, so it
     // takes precedence over a per-area buffer tail when both are set.
     const reveal = enableHoverReveal;
-    const buffer = !reveal && area.enableBufferLine && n >= 2;
+    // A number counts the dashed tail SEGMENTS (each segment = one projection
+    // point past the solid history); `true` means a single segment, the
+    // original buffer tail. Clamped so the tail never eats the whole series.
+    const bufferCount =
+      typeof area.enableBufferLine === "number"
+        ? Math.max(0, Math.min(area.enableBufferLine, n - 1))
+        : area.enableBufferLine && n >= 2
+          ? 1
+          : 0;
+    const buffer = !reveal && bufferCount > 0 && n >= 2;
     const revealActive = reveal && revealIndex !== null;
 
     const restingDot = dotStyle(area.dotVariant, paint, resolved.tokens.background);
@@ -1205,20 +1215,20 @@ function buildAreaSeries(ctx: OptionBuildContext): LineSeriesOption[] {
             };
           });
 
-    // Buffer area: the solid MAIN part drops the last point (its final segment —
-    // both fill and stroke — becomes the dashed, fill-less overlay); the overlay
-    // carries only the last two points. Reveal instead TRUNCATES the real series
-    // at the cursor's x-index (points beyond it null'd), so its line + fill stop
-    // there and the muted base layer shows through past it. When idle
-    // (revealIndex null) the real series carries its full data — the chart looks
-    // completely normal.
+    // Buffer area: the solid MAIN part drops the last bufferCount points (its
+    // final segments — both fill and stroke — become the dashed, fill-less
+    // overlay); the overlay carries only the last bufferCount+1 points. Reveal
+    // instead TRUNCATES the real series at the cursor's x-index (points beyond
+    // it null'd), so its line + fill stop there and the muted base layer shows
+    // through past it. When idle (revealIndex null) the real series carries its
+    // full data — the chart looks completely normal.
     // Snapshot the FULL per-datum points (with the multi-color dot itemStyle) so
     // the reveal hover handler can slice them without losing each dot's sampled
     // gradient color — plain values would fall back to the default palette.
     if (reveal) revealSink[key] = toPoints(values);
 
     const mainValues: (number | null)[] = buffer
-      ? values.map((v, i) => (i === n - 1 ? null : v))
+      ? values.map((v, i) => (i >= n - bufferCount ? null : v))
       : revealActive
         ? sliceToNull(values, revealIndex as number)
         : values;
@@ -1326,11 +1336,12 @@ function buildAreaSeries(ctx: OptionBuildContext): LineSeriesOption[] {
 
     if (!buffer) return [mainSeries];
 
-    // Dashed forecast overlay — draws ONLY the last segment's stroke, with NO
-    // fill (matching the line twin's fill-less buffer). Silent, so it never
-    // intercepts clicks/hover; it still feeds the axis tooltip (silent series
-    // are aggregated by axis), which is why the last point keeps its number.
-    const bufferValues: (number | null)[] = values.map((v, i) => (i >= n - 2 ? v : null));
+    // Dashed forecast overlay — draws ONLY the last bufferCount segments'
+    // stroke, with NO fill (matching the line twin's fill-less buffer). Silent,
+    // so it never intercepts clicks/hover; it still feeds the axis tooltip
+    // (silent series are aggregated by axis), which is why the tail points keep
+    // their numbers.
+    const bufferValues: (number | null)[] = values.map((v, i) => (i >= n - 1 - bufferCount ? v : null));
     const bufferSeries: LineSeriesOption = {
       id: `${BUFFER_PREFIX}${key}`,
       type: "line",

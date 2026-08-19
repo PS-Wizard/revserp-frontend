@@ -623,7 +623,7 @@ export function RevbotViewContent({
           aria-hidden="true"
           className={cn(
             "pointer-events-none absolute inset-x-0 -top-12 h-12 bg-gradient-to-t to-transparent",
-            isDark ? "from-card" : "from-background"
+            isDark ? "from-[#0b0b0c]" : "from-background"
           )}
         />
         <RevbotComposer
@@ -658,7 +658,7 @@ export function RevbotViewContent({
                       ? "grid-cols-[13rem_minmax(0,1fr)]"
                       : "grid-cols-[2.5rem_minmax(0,1fr)]"
                   ),
-              isDark && "surface-card"
+              isDark && "surface-dialog"
             )
           : "mx-auto flex max-w-3xl flex-col gap-6 p-4 sm:p-6",
         !compact && "h-[calc(100svh-5rem)]"
@@ -670,7 +670,7 @@ export function RevbotViewContent({
           className={cn(
             "flex min-h-0 flex-col pr-3",
             isDark
-              ? "border-r border-white/10 surface-card"
+              ? "border-r border-white/10 surface-dialog"
               : "border-r border-border"
           )}
         >

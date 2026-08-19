@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Link, redirect, useLoaderData, useNavigate } from "react-router"
-import { Asterisk } from "lucide-react"
+import { RevserpLogoLink } from "~/components/revserp-logo"
 
 import { ApiError, clientApiPost, serverApiFetch } from "~/lib/api"
 import type { MeResponse } from "~/lib/api.types"
@@ -136,16 +136,7 @@ export default function InvitePage() {
 
   return (
     <div className="flex min-h-svh flex-col bg-background px-6 py-8 text-foreground">
-      <Link
-        to="/"
-        prefetch="intent"
-        className="flex w-fit items-center gap-2 font-medium"
-      >
-        <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <Asterisk />
-        </div>
-        Revserp.ai
-      </Link>
+      <RevserpLogoLink />
 
       <main className="flex flex-1 items-center justify-center">
         <Card className="w-full max-w-xl border-border/60 bg-card/80 shadow-2xl backdrop-blur">

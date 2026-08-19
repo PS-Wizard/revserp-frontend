@@ -1,7 +1,14 @@
 "use client"
 
 import type { CSSProperties, FormEvent, ReactNode } from "react"
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
   ActivityIcon,
@@ -66,6 +73,7 @@ import {
   getCrawlValidationError,
   getInitials,
 } from "~/components/app-navbar/utils"
+import { ProjectPanelOpenContext } from "~/components/summary/project-panel-context"
 import { ProjectPanel } from "~/components/command-dock/project-panel"
 import {
   DynamicIslandDockedChrome,
@@ -86,7 +94,7 @@ import { useFeatures } from "~/lib/features"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 
 const auditSections = [
-  ["Overview", "summary", GaugeIcon],
+  ["Overview", "overview", GaugeIcon],
   ["SEO", "seo", SearchIcon],
   ["AEO", "aeo", SparklesIcon],
   ["PageSpeed", "pagespeed", ActivityIcon],
@@ -245,6 +253,8 @@ export function WorkspaceShellPreview({
   const [islandConversationTitle, setIslandConversationTitle] =
     useState("New chat")
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false)
+  // Stable opener handed to in-shell views (summary greeting) through context.
+  const openProjectPanel = useCallback(() => setIsProjectPanelOpen(true), [])
   const [createProject, createProjectDispatch] = useReducer(
     createProjectReducer,
     initialCreateProjectState
@@ -554,9 +564,15 @@ export function WorkspaceShellPreview({
     }
   }
 
+  // The calm summary home hides the project/crawl/action chrome — the greeting
+  // inside the tab replaces project switching, and the graph is about the
+  // latest completed crawl, so the breadcrumb/action bar would be noise here.
+  const isSummaryTab = view === "revserp-audit" && auditTab === "summary"
+
   const headerLabel =
     view === "revserp-audit"
-      ? (auditSections.find(([, tab]) => tab === auditTab)?.[0] ?? "Overview")
+      ? (auditSections.find(([, tab]) => tab === auditTab)?.[0] ??
+        (auditTab === "summary" ? "Summary" : "Overview"))
       : view === "revserp-visibility"
         ? "Visibility test"
         : view === "search-console"
@@ -697,285 +713,295 @@ export function WorkspaceShellPreview({
             </SidebarFooter>
           </Sidebar>
           <section className="relative ml-16 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <header className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
-              <h1 className="flex min-w-0 items-center gap-1.5 text-sm">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <button
-                        aria-label="Switch project"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-semibold text-foreground hover:bg-accent data-[popup-open]:bg-accent"
-                        type="button"
-                      />
-                    }
-                  >
-                    <span className="truncate">
-                      {activeProject?.name ?? "Select a project"}
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="start"
-                    className="w-56"
-                    side="bottom"
-                  >
-                    {(pill) =>
-                      projects.length ? (
-                        projects.map((project, index) => (
-                          <DropdownMenuItem
-                            key={project.id}
-                            {...pill.getItemProps(index)}
-                            onClick={() => selectProject(project.id)}
-                          >
-                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                              <span className="truncate">{project.name}</span>
-                              <span className="truncate text-xs text-muted-foreground">
-                                {project.base_url}
+            {!isSummaryTab ? (
+              <header className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
+                <h1 className="flex min-w-0 items-center gap-1.5 text-sm">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          aria-label="Switch project"
+                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-semibold text-foreground hover:bg-accent data-[popup-open]:bg-accent"
+                          type="button"
+                        />
+                      }
+                    >
+                      <span className="truncate">
+                        {activeProject?.name ?? "Select a project"}
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="start"
+                      className="w-56"
+                      side="bottom"
+                    >
+                      {(pill) =>
+                        projects.length ? (
+                          projects.map((project, index) => (
+                            <DropdownMenuItem
+                              key={project.id}
+                              {...pill.getItemProps(index)}
+                              onClick={() => selectProject(project.id)}
+                            >
+                              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="truncate">{project.name}</span>
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {project.base_url}
+                                </span>
                               </span>
-                            </span>
-                            {project.id === activeProjectId ? (
-                              <CheckIcon className="ml-auto size-4 shrink-0" />
-                            ) : null}
-                          </DropdownMenuItem>
-                        ))
-                      ) : (
-                        <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                          No projects yet
-                        </DropdownMenuItem>
-                      )
-                    }
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <CircleIcon
-                  aria-hidden="true"
-                  className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <button
-                        aria-label="Select crawl"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-accent"
-                        disabled={!activeProject}
-                        type="button"
-                      />
-                    }
-                  >
-                    <span className="truncate">
-                      {currentCrawl
-                        ? formatCrawlDateTime(currentCrawl)
-                        : "No crawl yet"}
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="start"
-                    className="w-56"
-                    side="bottom"
-                  >
-                    {(pill) =>
-                      activeProjectCrawls.length ? (
-                        activeProjectCrawls.map((crawl, index) => (
-                          <DropdownMenuItem
-                            key={crawl.id}
-                            {...pill.getItemProps(index)}
-                            onClick={() => selectCrawl(crawl.id)}
-                          >
-                            <span className="truncate">
-                              {formatCrawlDateTime(crawl)}
-                            </span>
-                            {currentCrawl?.id === crawl.id ? (
-                              <CheckIcon className="ml-auto size-4" />
-                            ) : null}
-                          </DropdownMenuItem>
-                        ))
-                      ) : (
-                        <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                          No crawls yet
-                        </DropdownMenuItem>
-                      )
-                    }
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <CircleIcon
-                  aria-hidden="true"
-                  className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <button
-                        aria-label="Switch workspace section"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-medium text-foreground hover:bg-accent data-[popup-open]:bg-accent"
-                        type="button"
-                      />
-                    }
-                  >
-                    <span className="truncate">{headerLabel}</span>
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="start"
-                    className="w-48"
-                    side="bottom"
-                  >
-                    {(pill) =>
-                      workspaceNavItems.map((item, index) => {
-                        const Icon = item.icon
-                        return (
-                          <DropdownMenuItem
-                            key={item.label}
-                            {...pill.getItemProps(index)}
-                            onClick={item.onSelect}
-                          >
-                            <Icon aria-hidden="true" />
-                            {item.label}
-                            {item.isActive ? (
-                              <CheckIcon className="ml-auto size-4" />
-                            ) : null}
+                              {project.id === activeProjectId ? (
+                                <CheckIcon className="ml-auto size-4 shrink-0" />
+                              ) : null}
+                            </DropdownMenuItem>
+                          ))
+                        ) : (
+                          <DropdownMenuItem {...pill.getItemProps(0)} disabled>
+                            No projects yet
                           </DropdownMenuItem>
                         )
-                      })
-                    }
-                  </DropdownPillSurface>
-                </DropdownMenu>
-              </h1>
-              <div className="flex shrink-0 items-center justify-end gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        className="hidden lg:inline-flex"
-                        disabled={!activeProject}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
+                      }
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <CircleIcon
+                    aria-hidden="true"
+                    className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          aria-label="Select crawl"
+                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-accent"
+                          disabled={!activeProject}
+                          type="button"
+                        />
+                      }
+                    >
+                      <span className="truncate">
+                        {currentCrawl
+                          ? formatCrawlDateTime(currentCrawl)
+                          : "No crawl yet"}
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="start"
+                      className="w-56"
+                      side="bottom"
+                    >
+                      {(pill) =>
+                        activeProjectCrawls.length ? (
+                          activeProjectCrawls.map((crawl, index) => (
+                            <DropdownMenuItem
+                              key={crawl.id}
+                              {...pill.getItemProps(index)}
+                              onClick={() => selectCrawl(crawl.id)}
+                            >
+                              <span className="truncate">
+                                {formatCrawlDateTime(crawl)}
+                              </span>
+                              {currentCrawl?.id === crawl.id ? (
+                                <CheckIcon className="ml-auto size-4" />
+                              ) : null}
+                            </DropdownMenuItem>
+                          ))
+                        ) : (
+                          <DropdownMenuItem {...pill.getItemProps(0)} disabled>
+                            No crawls yet
+                          </DropdownMenuItem>
+                        )
+                      }
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <CircleIcon
+                    aria-hidden="true"
+                    className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          aria-label="Switch workspace section"
+                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-medium text-foreground hover:bg-accent data-[popup-open]:bg-accent"
+                          type="button"
+                        />
+                      }
+                    >
+                      <span className="truncate">{headerLabel}</span>
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="start"
+                      className="w-48"
+                      side="bottom"
+                    >
+                      {(pill) =>
+                        workspaceNavItems.map((item, index) => {
+                          const Icon = item.icon
+                          return (
+                            <DropdownMenuItem
+                              key={item.label}
+                              {...pill.getItemProps(index)}
+                              onClick={item.onSelect}
+                            >
+                              <Icon aria-hidden="true" />
+                              {item.label}
+                              {item.isActive ? (
+                                <CheckIcon className="ml-auto size-4" />
+                              ) : null}
+                            </DropdownMenuItem>
+                          )
+                        })
+                      }
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                </h1>
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          className="hidden lg:inline-flex"
+                          disabled={!activeProject}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        />
+                      }
+                    >
+                      <CogIcon aria-hidden="true" />
+                      Configure
+                      <ChevronDownIcon
+                        aria-hidden="true"
+                        className="size-3.5 text-muted-foreground"
                       />
-                    }
-                  >
-                    <CogIcon aria-hidden="true" />
-                    Configure
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="end"
-                    className="w-48"
-                    side="bottom"
-                  >
-                    {(pill) => (
-                      <>
-                        {features.auto_crawl ? (
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="end"
+                      className="w-48"
+                      side="bottom"
+                    >
+                      {(pill) => (
+                        <>
+                          {features.auto_crawl ? (
+                            <DropdownMenuItem
+                              {...pill.getItemProps(0)}
+                              disabled={!activeProject || autoCrawl.isSaving}
+                              onClick={() =>
+                                autoCrawl.enabled
+                                  ? void autoCrawl.handleDisable()
+                                  : void autoCrawl.openDialog()
+                              }
+                            >
+                              <SparklesIcon aria-hidden="true" />
+                              {autoCrawl.enabled
+                                ? "Auto crawl on"
+                                : "Auto crawl"}
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem
-                            {...pill.getItemProps(0)}
-                            disabled={!activeProject || autoCrawl.isSaving}
+                            {...pill.getItemProps(features.auto_crawl ? 1 : 0)}
+                            disabled={!activeProject}
                             onClick={() =>
-                              autoCrawl.enabled
-                                ? void autoCrawl.handleDisable()
-                                : void autoCrawl.openDialog()
+                              activeProject &&
+                              businessProfile.openBusinessProfileDrawer(
+                                activeProject
+                              )
                             }
                           >
-                            <SparklesIcon aria-hidden="true" />
-                            {autoCrawl.enabled ? "Auto crawl on" : "Auto crawl"}
+                            <Building2Icon aria-hidden="true" />
+                            Business profile
                           </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem
-                          {...pill.getItemProps(features.auto_crawl ? 1 : 0)}
-                          disabled={!activeProject}
-                          onClick={() =>
-                            activeProject &&
-                            businessProfile.openBusinessProfileDrawer(
-                              activeProject
-                            )
-                          }
-                        >
-                          <Building2Icon aria-hidden="true" />
-                          Business profile
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        className="hidden md:inline-flex"
-                        disabled={!currentCrawl}
-                        size="sm"
-                        type="button"
-                        variant="outline"
+                        </>
+                      )}
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          className="hidden md:inline-flex"
+                          disabled={!currentCrawl}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        />
+                      }
+                    >
+                      <DownloadIcon aria-hidden="true" />
+                      {isExportingAudit || isExportingCrawl
+                        ? "Exporting…"
+                        : "Export"}
+                      <ChevronDownIcon
+                        aria-hidden="true"
+                        className="size-3.5 text-muted-foreground"
                       />
-                    }
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="end"
+                      className="w-52"
+                      side="bottom"
+                    >
+                      {(pill) => (
+                        <>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(0)}
+                            disabled={
+                              !currentCrawlCompleted || isExportingAudit
+                            }
+                            onClick={onExportAudit}
+                          >
+                            <FileTextIcon aria-hidden="true" />
+                            {isExportingAudit
+                              ? "Generating audit…"
+                              : "Export PDF audit"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(1)}
+                            disabled={
+                              !currentCrawlCompleted || isExportingCrawl
+                            }
+                            onClick={() =>
+                              currentCrawl &&
+                              void projectActions.handleExportCrawl(
+                                currentCrawl,
+                                "xlsx"
+                              )
+                            }
+                          >
+                            <FileSpreadsheetIcon aria-hidden="true" />
+                            Export crawl as XLSX
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(2)}
+                            disabled={
+                              !currentCrawlCompleted || isExportingCrawl
+                            }
+                            onClick={() =>
+                              currentCrawl &&
+                              void projectActions.handleExportCrawl(
+                                currentCrawl,
+                                "csv"
+                              )
+                            }
+                          >
+                            <FileSpreadsheetIcon aria-hidden="true" />
+                            Export crawl as CSV
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <Button
+                    disabled={!activeProject || isCrawlRunning}
+                    onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                    size="sm"
+                    type="button"
                   >
-                    <DownloadIcon aria-hidden="true" />
-                    {isExportingAudit || isExportingCrawl
-                      ? "Exporting…"
-                      : "Export"}
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="end"
-                    className="w-52"
-                    side="bottom"
-                  >
-                    {(pill) => (
-                      <>
-                        <DropdownMenuItem
-                          {...pill.getItemProps(0)}
-                          disabled={!currentCrawlCompleted || isExportingAudit}
-                          onClick={onExportAudit}
-                        >
-                          <FileTextIcon aria-hidden="true" />
-                          {isExportingAudit
-                            ? "Generating audit…"
-                            : "Export PDF audit"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...pill.getItemProps(1)}
-                          disabled={!currentCrawlCompleted || isExportingCrawl}
-                          onClick={() =>
-                            currentCrawl &&
-                            void projectActions.handleExportCrawl(
-                              currentCrawl,
-                              "xlsx"
-                            )
-                          }
-                        >
-                          <FileSpreadsheetIcon aria-hidden="true" />
-                          Export crawl as XLSX
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...pill.getItemProps(2)}
-                          disabled={!currentCrawlCompleted || isExportingCrawl}
-                          onClick={() =>
-                            currentCrawl &&
-                            void projectActions.handleExportCrawl(
-                              currentCrawl,
-                              "csv"
-                            )
-                          }
-                        >
-                          <FileSpreadsheetIcon aria-hidden="true" />
-                          Export crawl as CSV
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <Button
-                  disabled={!activeProject || isCrawlRunning}
-                  onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                  size="sm"
-                  type="button"
-                >
-                  <PlayIcon aria-hidden="true" />
-                  {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                </Button>
-              </div>
-            </header>
+                    <PlayIcon aria-hidden="true" />
+                    {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                  </Button>
+                </div>
+              </header>
+            ) : null}
             <div
               className={
                 islandState === "maximized"
@@ -994,7 +1020,9 @@ export function WorkspaceShellPreview({
                     ease: [0.22, 1, 0.36, 1],
                   }}
                 >
-                  {children}
+                  <ProjectPanelOpenContext.Provider value={openProjectPanel}>
+                    {children}
+                  </ProjectPanelOpenContext.Provider>
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -1067,44 +1095,44 @@ export function WorkspaceShellPreview({
           {isProjectPanelOpen ? (
             <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
               <ProjectPanel
-                  activeProjectId={activeProjectId}
-                  cancellingCrawlId={projectActions.cancellingCrawlId}
-                  crawlPanelCrawls={crawlPanelCrawls}
-                  currentCrawl={currentCrawl}
-                  deletingCrawlId={projectActions.deletingCrawlId}
-                  deletingProjectId={projectActions.deletingProjectId}
-                  exportFormat={projectActions.exportFormat}
-                  exportingCrawlId={projectActions.exportingCrawlId}
-                  onCancelCrawl={(crawl) =>
-                    void projectActions.handleCancelCrawl(crawl)
-                  }
-                  onCompareCrawl={(crawl) => {
-                    setIsProjectPanelOpen(false)
-                    onCompareCrawl(crawl)
-                  }}
-                  onCreateProjectOpen={() => {
-                    setIsProjectPanelOpen(false)
-                    createProjectDispatch({ type: "OPEN" })
-                  }}
-                  onDeleteCrawl={projectActions.openDeleteCrawlDialog}
-                  onDeleteProject={projectActions.openDeleteProjectDialog}
-                  onExportCrawl={(crawl, format) =>
-                    void projectActions.handleExportCrawl(crawl, format)
-                  }
-                  onExportFormatChange={projectActions.onExportFormatChange}
-                  onOpenBusinessProfile={(project) => {
-                    setIsProjectPanelOpen(false)
-                    businessProfile.openBusinessProfileDrawer(project)
-                  }}
-                  onProjectHover={(id) => hoverProject(id)}
-                  onSelectProject={(projectId, crawlId) => {
-                    setIsProjectPanelOpen(false)
-                    selectProject(projectId, crawlId)
-                  }}
-                  projectActionError={projectActions.projectActionError}
-                  projects={projects}
-                  reducedMotion={shouldReduceMotion}
-                />
+                activeProjectId={activeProjectId}
+                cancellingCrawlId={projectActions.cancellingCrawlId}
+                crawlPanelCrawls={crawlPanelCrawls}
+                currentCrawl={currentCrawl}
+                deletingCrawlId={projectActions.deletingCrawlId}
+                deletingProjectId={projectActions.deletingProjectId}
+                exportFormat={projectActions.exportFormat}
+                exportingCrawlId={projectActions.exportingCrawlId}
+                onCancelCrawl={(crawl) =>
+                  void projectActions.handleCancelCrawl(crawl)
+                }
+                onCompareCrawl={(crawl) => {
+                  setIsProjectPanelOpen(false)
+                  onCompareCrawl(crawl)
+                }}
+                onCreateProjectOpen={() => {
+                  setIsProjectPanelOpen(false)
+                  createProjectDispatch({ type: "OPEN" })
+                }}
+                onDeleteCrawl={projectActions.openDeleteCrawlDialog}
+                onDeleteProject={projectActions.openDeleteProjectDialog}
+                onExportCrawl={(crawl, format) =>
+                  void projectActions.handleExportCrawl(crawl, format)
+                }
+                onExportFormatChange={projectActions.onExportFormatChange}
+                onOpenBusinessProfile={(project) => {
+                  setIsProjectPanelOpen(false)
+                  businessProfile.openBusinessProfileDrawer(project)
+                }}
+                onProjectHover={(id) => hoverProject(id)}
+                onSelectProject={(projectId, crawlId) => {
+                  setIsProjectPanelOpen(false)
+                  selectProject(projectId, crawlId)
+                }}
+                projectActionError={projectActions.projectActionError}
+                projects={projects}
+                reducedMotion={shouldReduceMotion}
+              />
             </div>
           ) : null}
         </motion.main>
