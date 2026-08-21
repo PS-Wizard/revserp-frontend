@@ -887,6 +887,18 @@ export default function AppPage() {
               activeProject={activeProject}
               allowedEfforts={me.features.ai_allowed_reasoning_efforts}
               onConversationChange={handleRevbotConversationChange}
+              onEditorLink={(url) => {
+                const params = new URLSearchParams(location.search)
+                params.set("editorUrl", url)
+                if (!params.has("crawl") && stableCurrentCrawl?.id) {
+                  params.set("crawl", stableCurrentCrawl.id)
+                }
+                void navigate({
+                  pathname: location.pathname,
+                  search: params.toString(),
+                  hash: location.hash,
+                })
+              }}
               onInternalLink={(hash) =>
                 void navigate(
                   {

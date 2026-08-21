@@ -75,6 +75,7 @@ import {
 } from "~/components/app-navbar/utils"
 import { ProjectPanelOpenContext } from "~/components/summary/project-panel-context"
 import { ProjectPanel } from "~/components/command-dock/project-panel"
+import { PageEditor } from "~/components/editor/page-editor"
 import {
   DynamicIslandDockedChrome,
   DynamicIslandPanel,
@@ -307,6 +308,19 @@ export function WorkspaceShellPreview({
       },
       { replace: true }
     )
+  }
+
+  function handleRevbotEditorLink(url: string) {
+    const params = new URLSearchParams(location.search)
+    params.set("editorUrl", url)
+    if (!params.has("crawl") && currentCrawl?.id) {
+      params.set("crawl", currentCrawl.id)
+    }
+    navigate({
+      pathname: location.pathname,
+      search: params.toString(),
+      hash: location.hash,
+    })
   }
 
   useEffect(() => {
@@ -1066,6 +1080,7 @@ export function WorkspaceShellPreview({
                       hideCompactHeader
                       hideHistory={islandState !== "maximized"}
                       onActivityChange={setIsIslandThinking}
+                      onEditorLink={handleRevbotEditorLink}
                       onInternalLink={handleRevbotInternalLink}
                       onTitleChange={setIslandConversationTitle}
                       revbot={islandRevbot}
@@ -1137,6 +1152,7 @@ export function WorkspaceShellPreview({
           ) : null}
         </motion.main>
       </SidebarProvider>
+      <PageEditor />
       <RunCrawlDialog
         activeProject={activeProject}
         activeProjectId={activeProjectId}

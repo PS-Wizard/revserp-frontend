@@ -175,8 +175,6 @@
   }
 }
 
-
-
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -341,6 +339,10 @@
     color 150ms ease,
     border-color 150ms ease;
 }
+.typeset .editor-link-row {
+  display: block;
+  margin-top: 0.75rem;
+}
 .typeset .citation-link:hover {
   background: rgb(255 255 255 / 0.16);
   border-color: rgb(255 255 255 / 0.2);
@@ -402,4 +404,40 @@
   .typeset .citation-link:hover {
     transition: none;
   }
+}
+
+/* Extracted page editor open and close motion. */
+.page-editor-shell {
+  transform: translateY(-100vh);
+  opacity: 0;
+  filter: blur(2px);
+  pointer-events: none;
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform, opacity, filter;
+}
+.page-editor-shell[data-open="true"] {
+  transform: translateY(0);
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transition:
+    transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 400ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-editor-shell {
+    transition: none !important;
+  }
+}
+
+/* Keep the editable page neutral while it has focus. */
+.page-editor-content:focus,
+.page-editor-content:focus-visible {
+  outline: none;
+  box-shadow: none;
 }

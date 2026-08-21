@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useState } from "react"
 import {
   BotIcon,
   Loader2,
+  FilePenLineIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PlusIcon,
@@ -268,6 +269,7 @@ export function RevbotView({
   hideCompactHeader = false,
   hideHistory = false,
   onActivityChange,
+  onEditorLink,
   onInternalLink,
   onTitleChange,
   showMic = true,
@@ -282,6 +284,7 @@ export function RevbotView({
   hideCompactHeader?: boolean
   hideHistory?: boolean
   onActivityChange?: (active: boolean) => void
+  onEditorLink?: (url: string) => void
   onInternalLink?: (hash: string) => void
   onTitleChange?: (title: string) => void
   showMic?: boolean
@@ -316,6 +319,7 @@ export function RevbotView({
       hideCompactHeader={hideCompactHeader}
       hideHistory={hideHistory}
       onActivityChange={onActivityChange}
+      onEditorLink={onEditorLink}
       onInternalLink={onInternalLink}
       onTitleChange={onTitleChange}
       revbot={revbot}
@@ -334,6 +338,7 @@ export function RevbotViewContent({
   hideCompactHeader,
   hideHistory,
   onActivityChange,
+  onEditorLink,
   onInternalLink,
   onTitleChange,
   showMic,
@@ -347,6 +352,7 @@ export function RevbotViewContent({
   hideCompactHeader: boolean
   hideHistory: boolean
   onActivityChange?: (active: boolean) => void
+  onEditorLink?: (url: string) => void
   onInternalLink?: (hash: string) => void
   onTitleChange?: (title: string) => void
   showMic: boolean
@@ -355,13 +361,45 @@ export function RevbotViewContent({
   const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
   const [historySearch, setHistorySearch] = useState("")
   const markdownComponents: Components = {
-    a: ({ href, node: _node, children, ...props }) => {
+    a: ({ href, node: _node, title, children, ...props }) => {
       if (!href) return <a {...props}>{children}</a>
+      if (title === "revserp-editor") {
+        return (
+          <span className="editor-link-row">
+            <a
+              {...props}
+              className="citation-link editor-link"
+              href={href}
+              onClick={(event) => {
+                if (!onEditorLink) return
+                event.preventDefault()
+                onEditorLink(href)
+              }}
+              rel="noopener noreferrer"
+            >
+              <span
+                aria-hidden="true"
+                className="citation-avatar"
+                style={{ backgroundColor: citationColor(href) }}
+              >
+                <FilePenLineIcon className="size-3" />
+              </span>
+              <span className="citation-text">{children}</span>
+            </a>
+          </span>
+        )
+      }
       // Citation chip only for known internal targets (#seo, #aeo-tab, …).
       // Everything else keeps the default markdown link.
       if (revbotHashTarget(href.replace(/^#/, "")) === null) {
         return (
-          <a {...props} href={href} rel="noopener noreferrer" target="_blank">
+          <a
+            {...props}
+            href={href}
+            rel="noopener noreferrer"
+            target="_blank"
+            title={title}
+          >
             {children}
           </a>
         )
@@ -503,114 +541,114 @@ export function RevbotViewContent({
           defaultScrollPosition="end"
         >
           <MessageScroller className="min-h-0 flex-1">
-          <RevbotScrollFollow followKey={scrollFollowKey} />
-          <MessageScrollerViewport aria-label="Conversation">
-            <MessageScrollerContent
-              aria-busy={active}
-              className={cn(
-                "gap-5 pt-1",
-                revbot.messages.length > 0 ? "pb-24" : "min-h-full",
-                messageColumnClass
-              )}
-            >
-              {revbot.messages.length === 0 ? (
-                <MessageScrollerItem className="flex min-h-full items-center justify-center">
-                  <RevbotEmptyState
-                    isDark={isDark}
-                    projectName={activeProject.name}
-                  />
-                </MessageScrollerItem>
-              ) : (
-                revbot.messages.map((message) => (
-                  <MessageScrollerItem
-                    className="w-full"
-                    key={message.id}
-                    messageId={message.id}
-                  >
-                    <article
-                      className={cn(
-                        "flex w-full py-1",
-                        message.role === "user"
-                          ? "justify-end"
-                          : "justify-start"
-                      )}
-                    >
-                      {message.role === "assistant" ? (
-                        <div className="w-full min-w-0">
-                          {(() => {
-                            const isActiveMessage =
-                              message.id === activeAssistantMessageId
-                            const messageToolCalls = isActiveMessage
-                              ? revbot.toolCalls
-                              : message.toolCalls
-                            const messageActivityStartedAt = isActiveMessage
-                              ? revbot.activityStartedAt
-                              : (message.activityStartedAt ?? null)
-                            const messageActivityEndedAt = isActiveMessage
-                              ? null
-                              : (message.activityEndedAt ?? null)
-                            const hasPersistedActivity =
-                              messageActivityStartedAt !== null &&
-                              messageActivityEndedAt !== null
-                            const showActivity =
-                              (isActiveMessage &&
-                                (active ||
-                                  revbot.phase ||
-                                  revbot.toolCalls.length > 0 ||
-                                  revbot.activityStartedAt)) ||
-                              (messageToolCalls?.length ?? 0) > 0 ||
-                              hasPersistedActivity
-                            const hasToolCalls =
-                              (messageToolCalls?.length ?? 0) > 0
-                            const hasResponse =
-                              message.id === activeAssistantMessageId
-                                ? Boolean(message.content) ||
-                                  revbot.phase === "writing"
-                                : Boolean(message.content)
-
-                            return showActivity ? (
-                              <RevbotTurnActivity
-                                active={isActiveMessage && active}
-                                endedAt={messageActivityEndedAt}
-                                phase={isActiveMessage ? revbot.phase : null}
-                                showDivider={hasToolCalls && hasResponse}
-                                startedAt={messageActivityStartedAt}
-                                toolCalls={messageToolCalls ?? []}
-                                variant={variant}
-                              />
-                            ) : null
-                          })()}
-                          {message.id === activeAssistantMessageId &&
-                          (message.content || revbot.phase === "writing") ? (
-                            <StreamingAssistantMessage
-                              content={message.content}
-                              messageId={message.id}
-                            />
-                          ) : message.id !== activeAssistantMessageId ? (
-                            <RevbotMarkdown components={markdownComponents}>
-                              {message.content}
-                            </RevbotMarkdown>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <p
-                          className={cn(
-                            "max-w-[min(85%,28rem)] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed whitespace-pre-wrap",
-                            isDark ? "bg-white/10" : "bg-muted"
-                          )}
-                        >
-                          {message.content}
-                        </p>
-                      )}
-                    </article>
+            <RevbotScrollFollow followKey={scrollFollowKey} />
+            <MessageScrollerViewport aria-label="Conversation">
+              <MessageScrollerContent
+                aria-busy={active}
+                className={cn(
+                  "gap-5 pt-1",
+                  revbot.messages.length > 0 ? "pb-24" : "min-h-full",
+                  messageColumnClass
+                )}
+              >
+                {revbot.messages.length === 0 ? (
+                  <MessageScrollerItem className="flex min-h-full items-center justify-center">
+                    <RevbotEmptyState
+                      isDark={isDark}
+                      projectName={activeProject.name}
+                    />
                   </MessageScrollerItem>
-                ))
-              )}
-            </MessageScrollerContent>
-          </MessageScrollerViewport>
-          <MessageScrollerButton />
-        </MessageScroller>
-      </MessageScrollerProvider>
+                ) : (
+                  revbot.messages.map((message) => (
+                    <MessageScrollerItem
+                      className="w-full"
+                      key={message.id}
+                      messageId={message.id}
+                    >
+                      <article
+                        className={cn(
+                          "flex w-full py-1",
+                          message.role === "user"
+                            ? "justify-end"
+                            : "justify-start"
+                        )}
+                      >
+                        {message.role === "assistant" ? (
+                          <div className="w-full min-w-0">
+                            {(() => {
+                              const isActiveMessage =
+                                message.id === activeAssistantMessageId
+                              const messageToolCalls = isActiveMessage
+                                ? revbot.toolCalls
+                                : message.toolCalls
+                              const messageActivityStartedAt = isActiveMessage
+                                ? revbot.activityStartedAt
+                                : (message.activityStartedAt ?? null)
+                              const messageActivityEndedAt = isActiveMessage
+                                ? null
+                                : (message.activityEndedAt ?? null)
+                              const hasPersistedActivity =
+                                messageActivityStartedAt !== null &&
+                                messageActivityEndedAt !== null
+                              const showActivity =
+                                (isActiveMessage &&
+                                  (active ||
+                                    revbot.phase ||
+                                    revbot.toolCalls.length > 0 ||
+                                    revbot.activityStartedAt)) ||
+                                (messageToolCalls?.length ?? 0) > 0 ||
+                                hasPersistedActivity
+                              const hasToolCalls =
+                                (messageToolCalls?.length ?? 0) > 0
+                              const hasResponse =
+                                message.id === activeAssistantMessageId
+                                  ? Boolean(message.content) ||
+                                    revbot.phase === "writing"
+                                  : Boolean(message.content)
+
+                              return showActivity ? (
+                                <RevbotTurnActivity
+                                  active={isActiveMessage && active}
+                                  endedAt={messageActivityEndedAt}
+                                  phase={isActiveMessage ? revbot.phase : null}
+                                  showDivider={hasToolCalls && hasResponse}
+                                  startedAt={messageActivityStartedAt}
+                                  toolCalls={messageToolCalls ?? []}
+                                  variant={variant}
+                                />
+                              ) : null
+                            })()}
+                            {message.id === activeAssistantMessageId &&
+                            (message.content || revbot.phase === "writing") ? (
+                              <StreamingAssistantMessage
+                                content={message.content}
+                                messageId={message.id}
+                              />
+                            ) : message.id !== activeAssistantMessageId ? (
+                              <RevbotMarkdown components={markdownComponents}>
+                                {message.content}
+                              </RevbotMarkdown>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <p
+                            className={cn(
+                              "max-w-[min(85%,28rem)] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed whitespace-pre-wrap",
+                              isDark ? "bg-white/10" : "bg-muted"
+                            )}
+                          >
+                            {message.content}
+                          </p>
+                        )}
+                      </article>
+                    </MessageScrollerItem>
+                  ))
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton />
+          </MessageScroller>
+        </MessageScrollerProvider>
       </div>
 
       <div
@@ -670,7 +708,7 @@ export function RevbotViewContent({
           className={cn(
             "flex min-h-0 flex-col pr-3",
             isDark
-              ? "border-r border-white/10 surface-dialog"
+              ? "surface-dialog border-r border-white/10"
               : "border-r border-border"
           )}
         >

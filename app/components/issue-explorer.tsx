@@ -782,6 +782,7 @@ export const IssueExplorer = memo(function IssueExplorer({
         {drilledBucket && drilledIssueType ? (
           <UrlIssueTable
             checkedKeys={checkedUrlKeys}
+            crawlId={crawlId}
             error={urlError}
             getRowProps={urlDrag.getRowProps}
             isLoading={isLoadingUrls}
