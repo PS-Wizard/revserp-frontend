@@ -12,7 +12,8 @@ export class ApiError extends Error {
 
 export function buildApiUrl(path: string) {
   const apiBaseUrl =
-    import.meta.env.VITE_API_URL?.trim() || "http://localhost:8080"
+    import.meta.env.VITE_API_URL?.trim() ||
+    (import.meta.env.PROD ? "https://api.revserp.ai" : "http://localhost:8080")
   return `${apiBaseUrl}${path.startsWith("/") ? path : `/${path}`}`
 }
 

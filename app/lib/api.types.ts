@@ -15,6 +15,24 @@ export type MeResponse = {
   features: OrgFeatures
 }
 
+export type APIKeyResponse = {
+  id: string
+  name: string
+  token_prefix: string
+  created_at: string
+  last_used_at?: string | null
+  revoked_at?: string | null
+}
+
+export type APIKeysResponse = {
+  api_keys: APIKeyResponse[]
+}
+
+export type AgentSetupCodeResponse = {
+  code: string
+  expires_at: string
+}
+
 export type CreateOrganizationInviteResponse = {
   id: string
   organization_id: string

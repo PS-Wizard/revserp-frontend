@@ -10,4 +10,5 @@ export default [
   route("app", "routes/app.tsx"),
   route("app/internal/scoring", "routes/app/internal/scoring.tsx"),
   route("app/admin", "routes/app/admin.tsx"),
+  route("app/settings/integrations", "routes/app/settings/integrations.tsx"),
 ] satisfies RouteConfig

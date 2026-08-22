@@ -7,6 +7,7 @@ import {
   LogOutIcon,
   MoonIcon,
   SendIcon,
+  SettingsIcon,
   ShieldIcon,
   UsersIcon,
 } from "lucide-react"
@@ -153,7 +154,6 @@ export function ProfileMenu({
     })
   }
 
-
   const onDarkModeChange = (enabled: boolean) => {
     setIsDarkMode(enabled)
     document.documentElement.classList.toggle("dark", enabled)
@@ -237,7 +237,7 @@ export function ProfileMenu({
           <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger
-              className="relative z-10 focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground data-open:bg-transparent data-open:text-current data-popup-open:bg-transparent data-popup-open:text-current"
+              className="relative z-10 focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground data-popup-open:bg-transparent data-popup-open:text-current data-open:bg-transparent data-open:text-current"
               disabled={isSwitchingWorkspace}
               onMouseEnter={() => showProfilePill(2)}
               ref={(element) => {
@@ -306,15 +306,29 @@ export function ProfileMenu({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+            onClick={() => {
+              navigate("/app/settings/integrations")
+            }}
+            onMouseEnter={() => showProfilePill(4)}
+            ref={(element) => {
+              profileItemRefs.current[4] = element
+            }}
+            variant="default"
+          >
+            <SettingsIcon />
+            Integrations
+          </DropdownMenuItem>
           {isPlatformAdmin ? (
             <DropdownMenuItem
               className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
               onClick={() => {
                 navigate("/app/admin")
               }}
-              onMouseEnter={() => showProfilePill(4)}
+              onMouseEnter={() => showProfilePill(5)}
               ref={(element) => {
-                profileItemRefs.current[4] = element
+                profileItemRefs.current[5] = element
               }}
               variant="default"
             >
@@ -328,9 +342,9 @@ export function ProfileMenu({
           className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
           disabled={isLoggingOut}
           onClick={onLogout}
-          onMouseEnter={() => showProfilePill(5)}
+          onMouseEnter={() => showProfilePill(6)}
           ref={(element) => {
-            profileItemRefs.current[5] = element
+            profileItemRefs.current[6] = element
           }}
           variant="default"
         >
