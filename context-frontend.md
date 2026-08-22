@@ -47,7 +47,7 @@ WorkspaceShellPreview
 
 `docked` → `minimized` → `maximized` (Escape steps down).
 
-- **Docked:** bottom-right pill (`fixed bottom-6 right-6`). Streaming = `Loader2` spinner (no BorderBeam / ThinkingOrb / CrawlRunningGlimm).
+- **Docked:** bottom-right pill (`fixed bottom-6 right-6`). Streaming = `Loader2` spinner (no BorderBeam / ThinkingOrb).
 - **Minimized:** `27rem` panel; history hidden (`hideHistory={islandState !== "maximized"}`).
 - **Maximized:** `inset-3` overlay; history sidebar visible.
 
@@ -139,10 +139,6 @@ Used in: sidebar nav, issue tables, island conversation dropdown, project panel 
 - SEO = blue family, PageSpeed = teal/green, **AEO = muted brown-orange** (h 6–34, s ~42–50) — bright amber was tried and reverted
 - Dark `--chart-4`: `#fbbf24`
 
-## Crawl overlay
-
-- `crawl-running-glimm.tsx` — azure Glimm sweep, 3s interval; shown on main content when viewing a **running** crawl (`app/routes/app.tsx`). Not used on island docked state anymore.
-
 ## Feature flags
 
 - `features.ai_chat` gates island + shortcuts
@@ -156,7 +152,7 @@ Used in: sidebar nav, issue tables, island conversation dropdown, project panel 
 | `echarts` + EvilCharts | Pillar bucket history charts |
 | `apexcharts` | Summary/overview charts, vite prebundle |
 | `border-beam`, `thinking-orbs` | Still in package.json; **removed from island docked UI** |
-| `glimm` | Crawl-running overlay only |
+| `glimm` | Revbot composer sweep effect |
 | `motion/react` | Island morph, project panel backdrop |
 | `cmdk` | Project panel Command list |
 

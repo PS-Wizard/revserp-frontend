@@ -36,7 +36,6 @@ import { CompareView } from "~/components/compare/compare-view"
 import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
-import { CrawlRunningGlimm } from "~/components/crawl-running-glimm"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
@@ -842,7 +841,6 @@ export default function AppPage() {
                 {/* Dimmer covers the content region only (below the navbar), so the
                   navbar stays interactive while a crawl runs. */}
                 <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
-                <CrawlRunningGlimm />
                 {/* Card is fixed to the viewport center (~50vh) so it's visible without
                   scrolling regardless of page height. */}
                 <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
