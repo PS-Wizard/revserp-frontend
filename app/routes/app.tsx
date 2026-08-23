@@ -16,13 +16,14 @@ import {
 import { redirect } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { XIcon } from "lucide-react"
 
 import type { DashboardView } from "~/components/app-navbar/types"
 import type { AuditTab } from "~/components/app-navbar/types"
 import { revbotHashTarget } from "~/components/app-navbar/types"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
-import { SummaryView } from "~/components/summary/summary-view"
+import { IssueWorkspaceView } from "~/components/summary/issue-workspace-view"
 import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
 import { ThinkingOrb } from "thinking-orbs"
 import { IssueExplorer } from "~/components/issue-explorer"
@@ -37,6 +38,7 @@ import { SectionCards } from "~/components/section-cards"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
+import { cn } from "~/lib/utils"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
@@ -731,12 +733,25 @@ export default function AppPage() {
         {cancelDialog}
 
         {view === "revserp-audit" ? (
-          <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
+          <div
+            className={
+              auditTab === "summary"
+                ? "@container/main relative flex min-h-0 flex-1 flex-col"
+                : "@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6"
+            }
+          >
             <div
               className={
-                isViewingRunningCrawl
-                  ? "pointer-events-none blur-sm transition duration-200"
-                  : "transition duration-200"
+                auditTab === "summary"
+                  ? cn(
+                      "flex min-h-0 flex-1 flex-col",
+                      isViewingRunningCrawl
+                        ? "pointer-events-none blur-sm transition duration-200"
+                        : "transition duration-200"
+                    )
+                  : isViewingRunningCrawl
+                    ? "pointer-events-none blur-sm transition duration-200"
+                    : "transition duration-200"
               }
             >
               <AnimatePresence initial={false} mode="wait">
@@ -745,26 +760,43 @@ export default function AppPage() {
                   exit={{ opacity: 0 }}
                   initial={{ opacity: 0 }}
                   key={auditTab}
+                  className={
+                    auditTab === "summary"
+                      ? "flex min-h-0 flex-1 flex-col"
+                      : undefined
+                  }
                   transition={{
                     duration: shouldReduceMotion ? 0 : 0.15,
                     ease: [0.22, 1, 0.36, 1],
                   }}
                 >
-                  <Tabs value={auditTab} className="gap-6">
+                  <Tabs
+                    value={auditTab}
+                    className={
+                      auditTab === "summary"
+                        ? "flex min-h-0 flex-1 flex-col gap-0"
+                        : "gap-6"
+                    }
+                  >
                     <TabsContent
+                      className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
                       value="summary"
-                      className="flex flex-col gap-4 md:gap-6"
                     >
-                      <SummaryView
-                        userName={me.user.name}
-                        userEmail={me.user.email}
-                        activeProject={activeProject}
-                        latestCompletedCrawl={
-                          stableSortedCompletedCrawls[0] ?? null
+                      <button
+                        aria-label="Close summary and open overview"
+                        className="absolute top-1.5 right-3 z-30 rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                        onClick={() => setAuditTab("overview")}
+                        type="button"
+                      >
+                        <XIcon aria-hidden="true" className="size-4" />
+                      </button>
+                      <IssueWorkspaceView
+                        crawlId={
+                          stableCurrentCrawl?.status === "completed"
+                            ? stableCurrentCrawl.id
+                            : null
                         }
-                        crawls={stableSortedCompletedCrawls}
-                        crawlBreakdowns={stableCrawlBreakdowns}
-                        onNavigateToTab={setAuditTab}
+                        currentUserId={me.user.id}
                       />
                     </TabsContent>
 

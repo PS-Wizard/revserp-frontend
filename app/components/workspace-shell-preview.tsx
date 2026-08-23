@@ -1019,8 +1019,10 @@ export function WorkspaceShellPreview({
             <div
               className={
                 islandState === "maximized"
-                  ? "pointer-events-none relative z-0 min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
-                  : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
+                  ? "pointer-events-none relative z-0 flex min-h-0 flex-1 flex-col scrollbar-gutter-stable overflow-y-auto"
+                  : isSummaryTab
+                    ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                    : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
               }
             >
               <AnimatePresence initial={false} mode="wait">
@@ -1029,6 +1031,7 @@ export function WorkspaceShellPreview({
                   exit={{ opacity: 0 }}
                   initial={{ opacity: 0 }}
                   key={workspaceContentKey}
+                  className={isSummaryTab ? "flex min-h-0 flex-1 flex-col" : undefined}
                   transition={{
                     duration: shouldReduceMotion ? 0 : 0.15,
                     ease: [0.22, 1, 0.36, 1],
