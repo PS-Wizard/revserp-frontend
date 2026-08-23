@@ -5,7 +5,10 @@ import { CheckIcon, ChevronDownIcon, Loader2Icon } from "lucide-react"
 import { Badge } from "~/components/ui/badge"
 import { cn } from "~/lib/utils"
 
-import type { IssueWorkspaceIssue, IssueWorkspaceWorkItem } from "./issue-workspace.types"
+import type {
+  IssueWorkspaceIssue,
+  IssueWorkspaceWorkItem,
+} from "./issue-workspace.types"
 
 export type TaskState = "done" | "question" | "partial" | "open"
 
@@ -26,9 +29,7 @@ export function taskLabel(state: TaskState, interactive?: boolean) {
         ? "Awaiting verification — click to undo your contribution"
         : "Awaiting verification"
     case "open":
-      return interactive
-        ? "Open issue — click to mark as done"
-        : "Open issue"
+      return interactive ? "Open issue — click to mark as done" : "Open issue"
   }
 }
 
@@ -52,24 +53,21 @@ export function TaskMark({
       "border-muted-foreground/45 bg-transparent text-transparent",
     state === "done" &&
       "border-sky-500/70 bg-sky-500 text-white shadow-[inset_0_0_0_1px_rgb(14_165_233/0.35)]",
-    state === "question" &&
-      "border-amber-400 bg-amber-400 text-amber-950",
-    state === "partial" &&
-      "border-sky-500/70 bg-sky-500/25 text-sky-300",
+    state === "question" && "border-amber-400 bg-amber-400 text-amber-950",
+    state === "partial" && "border-sky-500/70 bg-sky-500/25 text-sky-300",
     isButton &&
       "cursor-pointer transition-opacity hover:opacity-85 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
   )
 
-  const content =
-    isPending ? (
-      <Loader2Icon aria-hidden="true" className="size-3 animate-spin" />
-    ) : state === "done" ? (
-      <CheckIcon aria-hidden="true" className="size-3" strokeWidth={3} />
-    ) : state === "question" ? (
-      <span aria-hidden="true">?</span>
-    ) : state === "partial" ? (
-      <span aria-hidden="true">/</span>
-    ) : null
+  const content = isPending ? (
+    <Loader2Icon aria-hidden="true" className="size-3 animate-spin" />
+  ) : state === "done" ? (
+    <CheckIcon aria-hidden="true" className="size-3" strokeWidth={3} />
+  ) : state === "question" ? (
+    <span aria-hidden="true">?</span>
+  ) : state === "partial" ? (
+    <span aria-hidden="true">/</span>
+  ) : null
 
   if (isButton) {
     return (
@@ -171,6 +169,33 @@ function ContributorBadges({
   )
 }
 
+function IssueDetails({ details }: { details: string }) {
+  return (
+    <>
+      {details.split(/(https?:\/\/[^\s,]+)/g).map((part, index) => {
+        if (!part.startsWith("http://") && !part.startsWith("https://")) {
+          return <span key={index}>{part}</span>
+        }
+        const trailing = part.match(/[.;)]+$/)?.[0] ?? ""
+        const href = trailing ? part.slice(0, -trailing.length) : part
+        return (
+          <span key={index}>
+            <a
+              className="break-all text-primary hover:underline"
+              href={href}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {href}
+            </a>
+            {trailing}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
 export function IssueTask({
   attemptId,
   contributors = [],
@@ -207,13 +232,7 @@ export function IssueTask({
         disabled={!canMarkDone && !canUndo}
         interactive={canMarkDone || canUndo}
         isPending={isMarkPending}
-        onClick={
-          canMarkDone
-            ? onMarkDone
-            : canUndo
-              ? onUndo
-              : undefined
-        }
+        onClick={canMarkDone ? onMarkDone : canUndo ? onUndo : undefined}
         state={state}
       />
       <div className="min-w-0 flex-1 space-y-1.5">
@@ -239,7 +258,7 @@ export function IssueTask({
               isMuted && "opacity-70"
             )}
           >
-            {issue.details}
+            <IssueDetails details={issue.details} />
           </p>
         ) : null}
         {note ? (
@@ -329,21 +348,21 @@ export function FoldSection({
 
   return (
     <details className="group/fold" open>
-      <summary className="flex list-none cursor-pointer items-center gap-2.5 rounded-md py-2.5 outline-none marker:content-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded-md py-2.5 outline-none marker:content-none focus-visible:ring-2 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
         <ChevronDownIcon
           aria-hidden="true"
-          className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open/fold:rotate-0 group-not-open/fold:-rotate-90 motion-reduce:transition-none"
+          className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 group-not-open/fold:-rotate-90 group-open/fold:rotate-0 motion-reduce:transition-none"
         />
         {level === 2 ? (
           <h2 className={headingClass}>{title}</h2>
         ) : (
           <h3 className={headingClass}>{title}</h3>
         )}
-        <span className="ml-auto rounded-md bg-muted/40 px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+        <span className="ml-auto rounded-md bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
           {isLoading ? "…" : count}
         </span>
       </summary>
-      <div className="pl-6 pt-1">
+      <div className="pt-1 pl-6">
         {isLoading ? (
           <p className="py-5 text-sm text-muted-foreground">Loading…</p>
         ) : count ? (

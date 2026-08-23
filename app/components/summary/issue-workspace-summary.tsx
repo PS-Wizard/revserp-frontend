@@ -14,7 +14,6 @@ import {
   WorkTask,
   issueKey,
   isWorkItem,
-  pagePath,
 } from "./issue-workspace-ui"
 import type {
   IssueWorkspaceChangesResponse,
@@ -25,15 +24,41 @@ import type {
 import { useIssueWorkspaceChanges } from "./use-issue-workspace-changes"
 import type { useIssueWorkMutations } from "./use-issue-work-mutations"
 
-function groupIssuesByUrl(issues: IssueWorkspaceIssue[]) {
-  const grouped = new Map<string, IssueWorkspaceIssue[]>()
-  for (const issue of issues) {
-    const list = grouped.get(issue.url) ?? []
-    list.push(issue)
-    grouped.set(issue.url, list)
+function groupByUrl<T extends { url: string }>(items: T[]) {
+  const grouped = new Map<string, T[]>()
+  for (const item of items) {
+    const list = grouped.get(item.url) ?? []
+    list.push(item)
+    grouped.set(item.url, list)
   }
   return [...grouped.entries()].sort(([left], [right]) =>
     left.localeCompare(right)
+  )
+}
+
+function PageGroup({
+  children,
+  onSelectUrl,
+  url,
+}: {
+  children: React.ReactNode
+  onSelectUrl: (url: string) => void
+  url: string
+}) {
+  return (
+    <li className="py-4 first:pt-2">
+      <button
+        className="mb-3 max-w-full text-left text-sm font-medium break-all text-foreground hover:underline"
+        onClick={() => onSelectUrl(url)}
+        title={`Open ${url} in the issue workspace`}
+        type="button"
+      >
+        {url}
+      </button>
+      <ul className="divide-y divide-border/50 border-l border-border/40 pl-4">
+        {children}
+      </ul>
+    </li>
   )
 }
 
@@ -88,9 +113,7 @@ function ChangesFoldSection({
   )
 }
 
-function useChangesItems(
-  query: UseQueryResult<IssueWorkspaceChangesResponse>
-) {
+function useChangesItems(query: UseQueryResult<IssueWorkspaceChangesResponse>) {
   return useMemo(() => {
     const items = query.data?.items ?? []
     const issues = items.filter(
@@ -138,10 +161,16 @@ export function IssueWorkspaceSummaryView({
   const awaiting = useChangesItems(awaitingQuery)
   const newly = useChangesItems(newQuery)
 
-  const fixedByUrl = useMemo(
-    () => groupIssuesByUrl(fixed.issues),
-    [fixed.issues]
+  const fixedByUrl = useMemo(() => groupByUrl(fixed.issues), [fixed.issues])
+  const noLongerByUrl = useMemo(
+    () => groupByUrl(noLonger.issues),
+    [noLonger.issues]
   )
+  const awaitingByUrl = useMemo(
+    () => groupByUrl(awaiting.workItems),
+    [awaiting.workItems]
+  )
+  const newByUrl = useMemo(() => groupByUrl(newly.issues), [newly.issues])
 
   const { markDone, undoContribution } = mutations
   const markingIssueId =
@@ -201,25 +230,16 @@ export function IssueWorkspaceSummaryView({
           title="Verified fixes"
         >
           {fixedByUrl.map(([url, issues]) => (
-            <li className="py-4 first:pt-2" key={url}>
-              <button
-                className="mb-3 text-left text-sm font-medium text-foreground hover:underline"
-                onClick={() => onSelectUrl(url)}
-                type="button"
-              >
-                {pagePath(url)}
-              </button>
-              <ul className="divide-y divide-border/50 border-l border-border/40 pl-4">
-                {issues.map((issue) => (
-                  <IssueTask
-                    currentUserId={currentUserId}
-                    issue={issue}
-                    key={issueKey(issue)}
-                    state="done"
-                  />
-                ))}
-              </ul>
-            </li>
+            <PageGroup key={url} onSelectUrl={onSelectUrl} url={url}>
+              {issues.map((issue) => (
+                <IssueTask
+                  currentUserId={currentUserId}
+                  issue={issue}
+                  key={issueKey(issue)}
+                  state="done"
+                />
+              ))}
+            </PageGroup>
           ))}
         </ChangesFoldSection>
 
@@ -231,14 +251,18 @@ export function IssueWorkspaceSummaryView({
           onRetry={() => void noLongerQuery.refetch()}
           title="No longer detected"
         >
-          {noLonger.issues.map((issue) => (
-            <IssueTask
-              currentUserId={currentUserId}
-              issue={issue}
-              key={issueKey(issue)}
-              note="The crawl confirmed that this issue disappeared, but no work was recorded, so no contributor credit was assigned."
-              state="question"
-            />
+          {noLongerByUrl.map(([url, issues]) => (
+            <PageGroup key={url} onSelectUrl={onSelectUrl} url={url}>
+              {issues.map((issue) => (
+                <IssueTask
+                  currentUserId={currentUserId}
+                  issue={issue}
+                  key={issueKey(issue)}
+                  note="The crawl confirmed that this issue disappeared, but no work was recorded, so no contributor credit was assigned."
+                  state="question"
+                />
+              ))}
+            </PageGroup>
           ))}
         </ChangesFoldSection>
 
@@ -250,14 +274,18 @@ export function IssueWorkspaceSummaryView({
           onRetry={() => void awaitingQuery.refetch()}
           title="Awaiting verification"
         >
-          {awaiting.workItems.map((work) => (
-            <WorkTask
-              currentUserId={currentUserId}
-              isMarkPending={undoingAttemptId === work.attempt_id}
-              key={work.attempt_id}
-              onUndo={() => undoContribution.mutate(work.attempt_id)}
-              work={work}
-            />
+          {awaitingByUrl.map(([url, workItems]) => (
+            <PageGroup key={url} onSelectUrl={onSelectUrl} url={url}>
+              {workItems.map((work) => (
+                <WorkTask
+                  currentUserId={currentUserId}
+                  isMarkPending={undoingAttemptId === work.attempt_id}
+                  key={work.attempt_id}
+                  onUndo={() => undoContribution.mutate(work.attempt_id)}
+                  work={work}
+                />
+              ))}
+            </PageGroup>
           ))}
         </ChangesFoldSection>
 
@@ -269,19 +297,23 @@ export function IssueWorkspaceSummaryView({
           onRetry={() => void newQuery.refetch()}
           title="New issues"
         >
-          {newly.issues.map((issue) => (
-            <IssueTask
-              currentUserId={currentUserId}
-              isMarkPending={markingIssueId === issue.current_issue_id}
-              issue={issue}
-              key={issueKey(issue)}
-              onMarkDone={
-                issue.current_issue_id
-                  ? () => markDone.mutate(issue.current_issue_id as string)
-                  : undefined
-              }
-              state="open"
-            />
+          {newByUrl.map(([url, issues]) => (
+            <PageGroup key={url} onSelectUrl={onSelectUrl} url={url}>
+              {issues.map((issue) => (
+                <IssueTask
+                  currentUserId={currentUserId}
+                  isMarkPending={markingIssueId === issue.current_issue_id}
+                  issue={issue}
+                  key={issueKey(issue)}
+                  onMarkDone={
+                    issue.current_issue_id
+                      ? () => markDone.mutate(issue.current_issue_id as string)
+                      : undefined
+                  }
+                  state="open"
+                />
+              ))}
+            </PageGroup>
           ))}
         </ChangesFoldSection>
       </section>
