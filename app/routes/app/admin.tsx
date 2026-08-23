@@ -1,5 +1,5 @@
 "use client"
-import { Link } from "react-router"
+import { Link, useLoaderData } from "react-router"
 import type { LoaderFunctionArgs } from "react-router"
 import { useEffect, useState, useCallback } from "react"
 import {
@@ -69,10 +69,14 @@ import {
 } from "~/components/ui/dialog"
 import { FeaturesTab } from "~/components/admin/features-tab"
 import { requirePlatformAdmin } from "~/lib/auth.server"
+import { useSessionRenewal } from "~/hooks/use-session-renewal"
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  await requirePlatformAdmin(request)
-  return null
+  const me = await requirePlatformAdmin(request)
+  return {
+    sessionExpiresAt: me.session_expires_at,
+    sessionRenewAfter: me.session_renew_after,
+  }
 }
 
 type AiConfig = {
@@ -974,6 +978,10 @@ function AccountsTab() {
 
 // --- Admin Page ---
 export default function AdminPage() {
+  const { sessionExpiresAt, sessionRenewAfter } = useLoaderData() as Awaited<
+    ReturnType<typeof loader>
+  >
+  useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
   const [tab, setTab] = useState("scoring")
 
   return (

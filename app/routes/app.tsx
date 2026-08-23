@@ -52,6 +52,7 @@ import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
+import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
 import { getPillarChartColor } from "~/lib/pillar-colors"
@@ -114,6 +115,8 @@ export async function loader({ request }: { request: Request }) {
     crawls,
     selected_crawl_id,
     breakdown,
+    session_expires_at: sessionExpiresAt,
+    session_renew_after: sessionRenewAfter,
   } = bootstrap
 
   const recentCrawls: CrawlResponse[] = crawls ?? []
@@ -150,6 +153,8 @@ export async function loader({ request }: { request: Request }) {
     projectCrawls,
     currentBreakdown,
     crawlBreakdowns,
+    sessionExpiresAt,
+    sessionRenewAfter,
   }
 }
 
@@ -161,6 +166,8 @@ type AppLoaderData = {
   projectCrawls: Record<string, CrawlResponse[]>
   currentBreakdown: ScoreBreakdownResponse | null
   crawlBreakdowns: CrawlBreakdown[]
+  sessionExpiresAt: string
+  sessionRenewAfter: string
 }
 
 const PILLAR_TABS: ReadonlyArray<{
@@ -190,10 +197,13 @@ export default function AppPage() {
     recentCrawls,
     currentBreakdown,
     crawlBreakdowns,
+    sessionExpiresAt,
+    sessionRenewAfter,
   } = useLoaderData() as AppLoaderData
   const revalidator = useRevalidator()
   const location = useLocation()
   const navigate = useNavigate()
+  useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<AuditTab>("overview")
   const shouldReduceMotion = useReducedMotion() ?? false

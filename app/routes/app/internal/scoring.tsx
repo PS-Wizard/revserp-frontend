@@ -6,9 +6,9 @@ import type { LoaderFunctionArgs } from "react-router"
 import { clientApiPut } from "~/lib/api"
 import { serverApiFetch } from "~/lib/api"
 import { requirePlatformAdmin } from "~/lib/auth.server"
+import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import type {
   ScoreBreakdownResponse,
-  ScoringConfig,
   ScoringConfigResponse,
 } from "~/lib/api.types"
 import { ScoringEditor } from "./scoring/editor"
@@ -44,11 +44,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function ScoringPage() {
-  const { config, defaultConfig, baselineBreakdown } = useLoaderData() as {
-    config: ScoringConfig
-    defaultConfig: ScoringConfig
-    baselineBreakdown: ScoreBreakdownResponse | null
-  }
+  const { me, config, defaultConfig, baselineBreakdown } =
+    useLoaderData() as Awaited<ReturnType<typeof loader>>
+  useSessionRenewal(me.session_expires_at, me.session_renew_after)
 
   const crawlId =
     typeof window !== "undefined"

@@ -33,6 +33,7 @@ import {
 } from "~/components/ui/empty"
 import { Separator } from "~/components/ui/separator"
 import { Skeleton } from "~/components/ui/skeleton"
+import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import {
   ApiError,
   buildApiUrl,
@@ -84,6 +85,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     activeProject,
     recentCrawls,
     projectCrawls,
+    sessionExpiresAt: bootstrap.session_expires_at,
+    sessionRenewAfter: bootstrap.session_renew_after,
   }
 }
 
@@ -100,9 +103,18 @@ const SETUP_STEPS = [
 ]
 
 export default function APIKeysPage() {
-  const { skillUrl, me, projects, activeProject, recentCrawls, projectCrawls } =
-    useLoaderData() as Awaited<ReturnType<typeof loader>>
+  const {
+    skillUrl,
+    me,
+    projects,
+    activeProject,
+    recentCrawls,
+    projectCrawls,
+    sessionExpiresAt,
+    sessionRenewAfter,
+  } = useLoaderData() as Awaited<ReturnType<typeof loader>>
   const navigate = useNavigate()
+  useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
   const [apiKeys, setAPIKeys] = useState<APIKeyResponse[]>([])
   const [loadError, setLoadError] = useState("")
   const [isLoading, setIsLoading] = useState(true)

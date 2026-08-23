@@ -13,6 +13,8 @@ export type MeResponse = {
   active_org_id: string
   /** Gating for the active workspace. See OrgFeatures. */
   features: OrgFeatures
+  session_expires_at?: string
+  session_renew_after?: string
 }
 
 export type APIKeyResponse = {
@@ -519,6 +521,8 @@ export type AppBootstrapResponse = {
   crawls: CrawlResponse[]
   selected_crawl_id?: string
   breakdown?: ScoreBreakdownResponse
+  session_expires_at: string
+  session_renew_after: string
 }
 
 export type CrawlPageHealthResponse = {
