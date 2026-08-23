@@ -28,6 +28,7 @@ import type {
   AITurnSubmissionResponse,
   ProjectResponse,
 } from "~/lib/api.types"
+import { normalizeToolCallStatus } from "./tool-call-status"
 
 const STORAGE_PREFIX = "revbot-turn:"
 const EFFORT_STORAGE_KEY = "revbot-reasoning-effort"
@@ -216,7 +217,7 @@ function mapToolCallResponse(call: AIToolCallResponse): RevbotToolCall {
       call.args && typeof call.args === "object" && !Array.isArray(call.args)
         ? call.args
         : {},
-    status: inferToolResultStatus(call.status, summary),
+    status: normalizeToolCallStatus(call.status),
     summary,
     seq: call.seq,
   }
@@ -671,10 +672,7 @@ export function useRevbot({
                 event === "tool_result" &&
                 isToolResultPayload(payload)
               ) {
-                const resultStatus = inferToolResultStatus(
-                  payload.status,
-                  payload.summary
-                )
+                const resultStatus = normalizeToolCallStatus(payload.status)
                 setState((current) => ({
                   ...current,
                   toolCalls: current.toolCalls.map((call) =>
@@ -1340,29 +1338,6 @@ function isToolResultPayload(
   )
 }
 
-function looksLikeToolError(summary: string | null) {
-  if (!summary) return false
-  const lower = summary.toLowerCase()
-  return (
-    lower.includes("error") ||
-    lower.startsWith("argument ") ||
-    lower.startsWith("unknown ") ||
-    lower.includes(" must ") ||
-    lower.includes("invalid ")
-  )
-}
-
-function inferToolResultStatus(
-  status: AIToolCallStatus | undefined,
-  summary: string | null
-): AIToolCallStatus {
-  if (status === "failed") return "failed"
-  if (status === "running") return "running"
-  if (status === "awaiting") return "awaiting"
-  if (looksLikeToolError(summary)) return "failed"
-  if (status === "completed") return "completed"
-  return "completed"
-}
 
 function isTextDeltaPayload(
   payload: unknown

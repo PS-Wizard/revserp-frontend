@@ -6,6 +6,8 @@ import { useEffect, useState } from "react"
 import type { AIStreamPhase } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
+import { resolveToolOutcome } from "./tool-call-status"
+import type { ToolOutcome } from "./tool-call-status"
 import type { RevbotToolCall } from "./use-revbot"
 
 const DRIVE_DELAYS = Array.from({ length: 9 }, (_, index) => {
@@ -14,7 +16,6 @@ const DRIVE_DELAYS = Array.from({ length: 9 }, (_, index) => {
   return (column + Math.abs(row - 1)) * 90
 })
 
-type ToolOutcome = "running" | "failed" | "partial" | "success"
 
 function formatDuration(ms: number) {
   const total = ms / 1000
@@ -123,32 +124,6 @@ function formatToolMeta(name: string, args: Record<string, unknown>) {
     .join(" · ")
 }
 
-function looksLikeToolError(summary: string) {
-  const lower = summary.toLowerCase()
-  return (
-    lower.includes("error") ||
-    lower.startsWith("argument ") ||
-    lower.startsWith("unknown ") ||
-    lower.includes(" must ") ||
-    lower.includes("invalid ")
-  )
-}
-
-function resolveToolOutcome(call: RevbotToolCall): ToolOutcome {
-  if (call.status === "running") return "running"
-  if (call.status === "failed") return "failed"
-
-  const summary = call.summary?.trim() ?? ""
-  if (!summary) return "partial"
-  if (looksLikeToolError(summary)) return "failed"
-
-  if (call.name === "read_issues") {
-    const match = summary.match(/^(\d+)\s+issues?\s+shown\b/i)
-    if (match && Number(match[1]) === 0) return "partial"
-  }
-
-  return "success"
-}
 
 function ToolOutcomeIcon({ outcome }: { outcome: ToolOutcome }) {
   if (outcome === "running") {
