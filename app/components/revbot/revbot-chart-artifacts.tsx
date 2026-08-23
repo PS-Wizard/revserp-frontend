@@ -299,7 +299,7 @@ function TrendChartSkeleton({
         {chart.note ? (
           <p
             className={cn(
-              "mt-1 text-xs",
+              "mt-1 text-center text-xs",
               isDark ? "text-white/50" : "text-muted-foreground"
             )}
           >
@@ -354,7 +354,7 @@ function RankingChartSkeleton({
         {chart.note ? (
           <p
             className={cn(
-              "mt-1 text-xs",
+              "mt-1 text-center text-xs",
               isDark ? "text-white/50" : "text-muted-foreground"
             )}
           >
