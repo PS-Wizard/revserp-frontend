@@ -754,7 +754,7 @@ export function RevbotViewContent({
                               </RevbotMarkdown>
                             ) : null}
                             </div>
-                            <div className="mx-auto w-4/5 min-w-0">
+                            <div className="w-full min-w-0">
                             <RevbotChartArtifacts
                               toolCalls={
                                 message.id === activeAssistantMessageId

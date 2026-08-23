@@ -86,7 +86,7 @@ function RevbotTrendRenderer({
   )
 
   return (
-    <figure className="mt-4 flex h-72 w-full min-w-0 flex-col">
+    <figure className="mx-auto mt-4 flex h-72 w-4/5 min-w-0 flex-col">
       <div className="min-h-0 flex-1">
         <EChartsAreaChart
           className="h-full w-full"
