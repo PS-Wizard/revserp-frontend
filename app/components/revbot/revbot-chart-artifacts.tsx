@@ -264,7 +264,7 @@ function TrendChartSkeleton({
 }) {
   const isDark = variant === "dark"
   return (
-    <figure className="mx-auto mt-4 flex h-72 w-full max-w-4xl min-w-0 flex-col px-4">
+    <figure className="mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4">
       <div
         aria-label="Loading trend chart"
         className="relative min-h-0 flex-1 overflow-hidden"
@@ -321,7 +321,7 @@ function RankingChartSkeleton({
   const isDark = variant === "dark"
   const heights = [54, 78, 46, 68, 38, 61, 84, 51, 72, 43, 64, 57]
   return (
-    <figure className="mx-auto mt-4 flex h-72 w-full max-w-4xl min-w-0 flex-col px-4">
+    <figure className="mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4">
       <div
         aria-label="Loading ranking chart"
         className="relative flex min-h-0 flex-1 items-end gap-3 overflow-hidden px-6 pt-6"
