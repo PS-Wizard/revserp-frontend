@@ -264,7 +264,7 @@ function TrendChartSkeleton({
 }) {
   const isDark = variant === "dark"
   return (
-    <figure className="mx-auto mt-4 flex h-72 w-4/5 min-w-0 flex-col">
+    <figure className="mx-auto mt-4 flex h-72 w-full max-w-3xl min-w-0 flex-col px-4">
       <div
         aria-label="Loading trend chart"
         className="relative min-h-0 flex-1 overflow-hidden"
