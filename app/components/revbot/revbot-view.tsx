@@ -51,6 +51,7 @@ import {
   filterConversations,
   RevbotConversationSearchInput,
 } from "./revbot-conversation-search"
+import { RevbotChartArtifacts } from "./revbot-chart-artifacts"
 import { RevbotComposer } from "./revbot-composer"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
@@ -752,6 +753,14 @@ export function RevbotViewContent({
                                 {message.content}
                               </RevbotMarkdown>
                             ) : null}
+                            <RevbotChartArtifacts
+                              toolCalls={
+                                message.id === activeAssistantMessageId
+                                  ? revbot.toolCalls
+                                  : (message.toolCalls ?? [])
+                              }
+                              variant={variant}
+                            />
                           </div>
                         ) : (
                           <p

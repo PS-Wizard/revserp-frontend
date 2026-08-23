@@ -27,6 +27,16 @@ export const tooltipVariantClass: Record<TooltipVariant, string> = {
   "frosted-glass": "bg-background/50 backdrop-blur-md",
 };
 
+export function escapeTooltipHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    if (character === "&") return "&amp;";
+    if (character === "<") return "&lt;";
+    if (character === ">") return "&gt;";
+    if (character === '"') return "&quot;";
+    return "&#39;";
+  });
+}
+
 // The standard series indicator swatch — a rounded square filled with the
 // series' solid var or multi-stop gradient (indicatorBackground). A chart drops
 // this into a tooltipRow's `indicatorHtml`.
@@ -51,8 +61,8 @@ export function tooltipRow({
   return `<div class="flex w-full flex-wrap items-center gap-2${dimmed}">
           ${indicatorHtml}
           <div class="flex flex-1 items-center justify-between gap-4 leading-none">
-            <span class="text-muted-foreground">${labelText}</span>
-            <span class="text-foreground font-mono font-medium tabular-nums">${valueText}</span>
+            <span class="text-muted-foreground">${escapeTooltipHtml(labelText)}</span>
+            <span class="text-foreground font-mono font-medium tabular-nums">${escapeTooltipHtml(valueText)}</span>
           </div>
         </div>`;
 }
@@ -71,7 +81,7 @@ export function tooltipShell({
   variant: TooltipVariant;
 }): string {
   return `<div class="grid min-w-32 items-start gap-1.5 border border-border/50 px-2.5 py-1.5 text-xs shadow-xl ${roundnessClass[roundness]} ${tooltipVariantClass[variant]}">
-      <div class="font-medium text-primary">${label}</div>
+      <div class="font-medium text-primary">${escapeTooltipHtml(label)}</div>
       <div class="grid gap-1.5">${body}</div>
     </div>`;
 }
