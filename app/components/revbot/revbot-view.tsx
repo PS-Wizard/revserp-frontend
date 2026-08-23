@@ -53,7 +53,7 @@ import {
 import { RevbotComposer } from "./revbot-composer"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
-import { useRevbot, type RevbotHandle } from "./use-revbot"
+import type { RevbotHandle } from "./use-revbot"
 
 /** Stick to bottom while content grows; stop when the user scrolls up. */
 function RevbotScrollFollow({ followKey }: { followKey: string }) {
@@ -256,76 +256,6 @@ function RevbotConversationHistoryList({
         )
       })}
     </div>
-  )
-}
-
-export function RevbotView({
-  activeProject,
-  allowedEfforts,
-  requestedConversationId,
-  onConversationChange,
-  compact = false,
-  defaultHistoryOpen = true,
-  hideCompactHeader = false,
-  hideHistory = false,
-  onActivityChange,
-  onEditorLink,
-  onInternalLink,
-  onTitleChange,
-  showMic = true,
-  variant = "default",
-}: {
-  activeProject: ProjectResponse | null
-  allowedEfforts: AIReasoningEffort[]
-  requestedConversationId: string | null
-  onConversationChange: (conversationId: string | null) => void
-  compact?: boolean
-  defaultHistoryOpen?: boolean
-  hideCompactHeader?: boolean
-  hideHistory?: boolean
-  onActivityChange?: (active: boolean) => void
-  onEditorLink?: (url: string) => void
-  onInternalLink?: (hash: string) => void
-  onTitleChange?: (title: string) => void
-  showMic?: boolean
-  variant?: "default" | "dark"
-}) {
-  if (!activeProject) {
-    return (
-      <section className="flex min-h-[calc(100svh-5rem)] items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <h1 className="text-lg font-semibold">Revbot</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Select a project to use Revbot.
-          </p>
-        </div>
-      </section>
-    )
-  }
-
-  const revbot = useRevbot({
-    activeProject,
-    allowedEfforts,
-    requestedConversationId,
-    onConversationChange,
-  })
-
-  return (
-    <RevbotViewContent
-      activeProject={activeProject}
-      allowedEfforts={allowedEfforts}
-      compact={compact}
-      defaultHistoryOpen={defaultHistoryOpen}
-      hideCompactHeader={hideCompactHeader}
-      hideHistory={hideHistory}
-      onActivityChange={onActivityChange}
-      onEditorLink={onEditorLink}
-      onInternalLink={onInternalLink}
-      onTitleChange={onTitleChange}
-      revbot={revbot}
-      showMic={showMic}
-      variant={variant}
-    />
   )
 }
 

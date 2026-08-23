@@ -8,7 +8,6 @@ export type DashboardView =
   | "revserp-audit"
   | "revserp-visibility"
   | "search-console"
-  | "revbot"
   | "compare"
 export type AuditTab =
   "summary" | "overview" | "seo" | "aeo" | "pagespeed" | "site-graph"

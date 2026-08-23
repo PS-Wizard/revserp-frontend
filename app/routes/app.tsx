@@ -75,12 +75,6 @@ const SiteGraphView = lazy(() =>
   }))
 )
 
-const RevbotView = lazy(() =>
-  import("~/components/revbot/revbot-view").then((module) => ({
-    default: module.RevbotView,
-  }))
-)
-
 export async function loader({ request }: { request: Request }) {
   const requestUrl = new URL(request.url)
   const requestedProjectId = requestUrl.searchParams.get("project")
@@ -184,7 +178,6 @@ const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
   "search-console": "Search Console",
-  revbot: "Revbot",
   compare: "Compare",
 }
 
@@ -921,37 +914,6 @@ export default function AppPage() {
             activeProject={activeProject}
             currentCrawl={stableCurrentCrawl}
           />
-        ) : view === "revbot" && me.features?.ai_chat ? (
-          <Suspense fallback={null}>
-            <RevbotView
-              activeProject={activeProject}
-              allowedEfforts={me.features.ai_allowed_reasoning_efforts}
-              onConversationChange={handleRevbotConversationChange}
-              onEditorLink={(url) => {
-                const params = new URLSearchParams(location.search)
-                params.set("editorUrl", url)
-                if (!params.has("crawl") && stableCurrentCrawl?.id) {
-                  params.set("crawl", stableCurrentCrawl.id)
-                }
-                void navigate({
-                  pathname: location.pathname,
-                  search: params.toString(),
-                  hash: location.hash,
-                })
-              }}
-              onInternalLink={(hash) =>
-                void navigate(
-                  {
-                    pathname: location.pathname,
-                    search: location.search,
-                    hash,
-                  },
-                  { replace: true }
-                )
-              }
-              requestedConversationId={revbotConversationId}
-            />
-          </Suspense>
         ) : view === "search-console" &&
           me.features?.gsc_connector !== false ? (
           <SearchConsoleView

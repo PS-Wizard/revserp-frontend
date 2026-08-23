@@ -394,8 +394,18 @@ export function useRevbot({
                 !response.conversations.some((next) => next.id === item.id)
             ),
           ],
+          // Overlay fresh statuses, but drop entries for conversations the
+          // server no longer lists (deleted elsewhere) unless they are the
+          // selected one — its status is SSE-driven, and a brand-new optimistic
+          // conversation may legitimately lag behind this list snapshot.
           conversationStatus: {
-            ...current.conversationStatus,
+            ...Object.fromEntries(
+              Object.entries(current.conversationStatus).filter(
+                ([id]) =>
+                  id === conversationIdRef.current ||
+                  response.conversations.some((next) => next.id === id)
+              )
+            ),
             ...statuses,
           },
         }))
@@ -1019,6 +1029,13 @@ export function useRevbot({
           conversations: current.conversations.filter(
             (conversation) => conversation.id !== conversationId
           ),
+          // Drop the deleted conversation's last-known turn status so a stale
+          // queued/running entry cannot keep the background poll alive.
+          conversationStatus: Object.fromEntries(
+            Object.entries(current.conversationStatus).filter(
+              ([id]) => id !== conversationId
+            )
+          ),
         }))
 
         if (isActive) newChat()
@@ -1227,16 +1244,34 @@ export function useRevbot({
     activeRequestRef.current = false
   }, [state.status])
 
-  // While any conversation has a turn in flight, poll the conversation list
-  // so per-conversation spinners clear once turns finish elsewhere.
-  const anyConversationActive = Object.values(state.conversationStatus).some(
-    (status) => status === "queued" || status === "running"
+  // While a background conversation (not the selected one — that one updates
+  // via SSE) has a turn in flight, poll the conversation list so its spinner
+  // clears once the turn finishes. Polling pauses while the tab is hidden;
+  // becoming visible again with an active background conversation triggers an
+  // immediate best-effort refresh so state catches up.
+  const anyBackgroundConversationActive = Object.entries(
+    state.conversationStatus
+  ).some(
+    ([conversationId, status]) =>
+      conversationId !== state.conversationId &&
+      (status === "queued" || status === "running")
   )
   useEffect(() => {
-    if (!anyConversationActive) return
-    const timer = window.setInterval(refreshConversations, 5000)
-    return () => window.clearInterval(timer)
-  }, [anyConversationActive, refreshConversations])
+    if (!anyBackgroundConversationActive) return
+    const tick = () => {
+      if (document.hidden) return
+      refreshConversations()
+    }
+    const timer = window.setInterval(tick, 5000)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) tick()
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [anyBackgroundConversationActive, refreshConversations])
 
   return {
     activityStartedAt: state.activityStartedAt,
