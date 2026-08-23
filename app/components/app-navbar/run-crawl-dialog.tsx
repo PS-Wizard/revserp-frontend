@@ -1,3 +1,4 @@
+import { RefreshCwIcon } from "lucide-react"
 import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
@@ -22,6 +23,7 @@ type RunCrawlDialogProps = {
   activeProject: ProjectResponse | null
   activeProjectId?: string | null
   fetchTimeoutSeconds: string
+  forceFullCrawl: boolean
   isCrawlRunning: boolean
   isOpen: boolean
   isStartingCrawl: boolean
@@ -31,6 +33,7 @@ type RunCrawlDialogProps = {
   jitterMs: string
   runCrawlError: string
   onFetchTimeoutSecondsChange: (value: string) => void
+  onForceFullCrawlChange: (value: boolean) => void
   onMaxDepthChange: (value: string) => void
   onMaxPagesChange: (value: string) => void
   onDelayMsChange: (value: string) => void
@@ -43,6 +46,7 @@ export function RunCrawlDialog({
   activeProject,
   activeProjectId,
   fetchTimeoutSeconds,
+  forceFullCrawl,
   isCrawlRunning,
   isOpen,
   isStartingCrawl,
@@ -52,6 +56,7 @@ export function RunCrawlDialog({
   jitterMs,
   runCrawlError,
   onFetchTimeoutSecondsChange,
+  onForceFullCrawlChange,
   onMaxDepthChange,
   onMaxPagesChange,
   onDelayMsChange,
@@ -146,6 +151,22 @@ export function RunCrawlDialog({
               />
               <FieldDescription>
                 Recommended defaults are already filled in.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <Button
+                aria-pressed={forceFullCrawl}
+                className="w-full"
+                onClick={() => onForceFullCrawlChange(!forceFullCrawl)}
+                type="button"
+                variant={forceFullCrawl ? "default" : "outline"}
+              >
+                <RefreshCwIcon data-icon="inline-start" />
+                Force full crawl
+              </Button>
+              <FieldDescription>
+                Refetch and process every page instead of reusing unchanged
+                pages.
               </FieldDescription>
             </Field>
           </FieldGroup>

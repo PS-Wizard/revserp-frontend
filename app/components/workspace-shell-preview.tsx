@@ -143,6 +143,7 @@ function createProjectReducer(
 
 type RunCrawlState = {
   isOpen: boolean
+  forceFullCrawl: boolean
   maxDepth: string
   maxPages: string
   delayMs: string
@@ -153,6 +154,7 @@ type RunCrawlState = {
 }
 type RunCrawlEvent =
   | { type: "OPEN" | "CLOSE" | "STARTING" | "STARTED" }
+  | { type: "FORCE_FULL_CRAWL"; value: boolean }
   | {
       type:
         | "MAX_DEPTH"
@@ -173,6 +175,8 @@ function runCrawlReducer(
       return { ...state, isOpen: true, error: "" }
     case "CLOSE":
       return { ...state, isOpen: false }
+    case "FORCE_FULL_CRAWL":
+      return { ...state, forceFullCrawl: event.value }
     case "MAX_DEPTH":
       return { ...state, maxDepth: event.value }
     case "MAX_PAGES":
@@ -188,7 +192,7 @@ function runCrawlReducer(
     case "STARTING":
       return { ...state, starting: true, error: "" }
     case "STARTED":
-      return { ...state, starting: false, isOpen: false }
+      return { ...state, starting: false, isOpen: false, forceFullCrawl: false }
   }
 }
 
@@ -201,6 +205,7 @@ const initialCreateProjectState: CreateProjectState = {
 }
 const initialRunCrawlState: RunCrawlState = {
   isOpen: false,
+  forceFullCrawl: false,
   maxDepth: "5",
   maxPages: "",
   delayMs: "",
@@ -560,6 +565,7 @@ export function WorkspaceShellPreview({
           config_snapshot: {
             max_depth: maxDepth,
             fetch_timeout_seconds: fetchTimeoutSeconds,
+            force_full_crawl: runCrawl.forceFullCrawl,
             ...(maxPages === undefined ? {} : { max_pages: maxPages }),
             ...(delayMs === undefined ? {} : { request_delay_ms: delayMs }),
             ...(jitterMs === undefined ? {} : { request_jitter_ms: jitterMs }),
@@ -1161,6 +1167,7 @@ export function WorkspaceShellPreview({
         activeProjectId={activeProjectId}
         delayMs={runCrawl.delayMs}
         fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
+        forceFullCrawl={runCrawl.forceFullCrawl}
         isCrawlRunning={isCrawlRunning}
         isOpen={runCrawl.isOpen}
         isStartingCrawl={runCrawl.starting}
@@ -1173,6 +1180,9 @@ export function WorkspaceShellPreview({
         }
         onFetchTimeoutSecondsChange={(value) =>
           runCrawlDispatch({ type: "FETCH_TIMEOUT", value })
+        }
+        onForceFullCrawlChange={(value) =>
+          runCrawlDispatch({ type: "FORCE_FULL_CRAWL", value })
         }
         onJitterMsChange={(value) =>
           runCrawlDispatch({ type: "JITTER_MS", value })
