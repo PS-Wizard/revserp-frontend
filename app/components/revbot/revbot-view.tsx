@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useReducedMotion } from "motion/react"
 
 import {
   BotIcon,
@@ -95,22 +96,214 @@ function StreamingAssistantMessage({
   content: string
   messageId: string
 }) {
+  const shouldReduceMotion = useReducedMotion() ?? false
+  const isReduced = shouldReduceMotion
+
+  const tokens = content.split(/(\s+)/)
+  const totalWords = (() => {
+    let c = 0
+    for (const t of tokens) if (t.length > 0 && !/^\s+$/.test(t)) c += 1
+    return c
+  })()
+  const totalWordsRef = useRef(totalWords)
+
+  const [displayedWords, setDisplayedWords] = useState(0)
+  const displayedRef = useRef(displayedWords)
+  useLayoutEffect(() => {
+    displayedRef.current = displayedWords
+  }, [displayedWords])
+
+  const rafRef = useRef<number | null>(null)
+  const pendingRef = useRef<{ start: number; from: number; total: number } | null>(null)
+  const prevContentRef = useRef(content)
+  const prevMessageIdRef = useRef(messageId)
+
+  const { scrollToEnd } = useMessageScroller()
+  const scrollable = useMessageScrollerScrollable()
+
+  // Follow displayed growth, respect user scroll-up
+  useLayoutEffect(() => {
+    if (isReduced) return
+    if (scrollable.end) return
+    scrollToEnd({ behavior: "auto" })
+  }, [displayedWords, isReduced, scrollable.end, scrollToEnd])
+
+  const cancelPending = () => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    pendingRef.current = null
+  }
+
+  const schedule = (from: number, total: number) => {
+    cancelPending()
+    if (from >= total) return
+    pendingRef.current = { start: performance.now(), from, total }
+    const TARGET = 425
+    const loop = (now: number) => {
+      rafRef.current = null
+      if (document.hidden) {
+        setDisplayedWords(totalWordsRef.current)
+        pendingRef.current = null
+        return
+      }
+      const pending = pendingRef.current
+      if (!pending) return
+      const curTotal = totalWordsRef.current
+      // stale pending (new chunk arrived and rescheduled)
+      if (curTotal !== pending.total) return
+      const elapsed = now - pending.start
+      if (elapsed >= TARGET) {
+        setDisplayedWords(pending.total)
+        pendingRef.current = null
+        return
+      }
+      const toReveal = pending.total - pending.from
+      const progress = elapsed / TARGET
+      const expected = pending.from + Math.floor(progress * toReveal)
+      if (expected > displayedRef.current) {
+        setDisplayedWords(expected)
+      }
+      if (expected < pending.total) {
+        rafRef.current = requestAnimationFrame(loop)
+      } else {
+        pendingRef.current = null
+      }
+    }
+    rafRef.current = requestAnimationFrame(loop)
+  }
+
+  // hidden tab catch-up
+  useEffect(() => {
+    const onVis = () => {
+      if (!document.hidden && displayedRef.current < totalWordsRef.current) {
+        cancelPending()
+        setDisplayedWords(totalWordsRef.current)
+      }
+    }
+    document.addEventListener("visibilitychange", onVis)
+    return () => document.removeEventListener("visibilitychange", onVis)
+  }, [])
+
+  useEffect(() => {
+    return () => cancelPending()
+  }, [])
+
+  useLayoutEffect(() => {
+    totalWordsRef.current = totalWords
+    const prevId = prevMessageIdRef.current
+    const prevContent = prevContentRef.current
+
+    // message switch
+    if (prevId !== messageId) {
+      prevMessageIdRef.current = messageId
+      prevContentRef.current = content
+      cancelPending()
+      if (isReduced || document.hidden) {
+        setDisplayedWords(totalWords)
+        return
+      }
+      if (totalWords === 0) {
+        setDisplayedWords(0)
+        return
+      }
+      const initial = 1
+      setDisplayedWords(initial)
+      if (initial < totalWords) schedule(initial, totalWords)
+      return
+    }
+
+    if (content === prevContent) {
+      if (isReduced) {
+        if (displayedRef.current !== totalWords) {
+          cancelPending()
+          setDisplayedWords(totalWords)
+        }
+        return
+      }
+      if (document.hidden) {
+        if (displayedRef.current !== totalWords) {
+          cancelPending()
+          setDisplayedWords(totalWords)
+        }
+        return
+      }
+      if (displayedRef.current < totalWords && pendingRef.current === null && totalWords > 0) {
+        // mount with backlog
+        if (displayedRef.current === 0) {
+          const nxt = 1
+          setDisplayedWords(nxt)
+          if (nxt < totalWords) schedule(nxt, totalWords)
+        } else {
+          schedule(displayedRef.current, totalWords)
+        }
+      }
+      return
+    }
+
+    const isAppend = content.startsWith(prevContent)
+    prevContentRef.current = content
+
+    if (isReduced || document.hidden) {
+      cancelPending()
+      setDisplayedWords(totalWords)
+      return
+    }
+
+    if (!isAppend) {
+      cancelPending()
+      setDisplayedWords(totalWords)
+      return
+    }
+
+    const curDisplayed = displayedRef.current
+    if (totalWords <= curDisplayed) {
+      // no new word count but chars may have extended last token; keep displayed as is
+      // ensure pending cleared if we are caught up
+      if (curDisplayed >= totalWords) cancelPending()
+      return
+    }
+    const nextDisplayed = Math.min(curDisplayed + 1, totalWords)
+    setDisplayedWords(nextDisplayed)
+    if (nextDisplayed < totalWords) {
+      schedule(nextDisplayed, totalWords)
+    } else {
+      cancelPending()
+    }
+  }, [content, isReduced, messageId, totalWords])
+
+  // compute visible slice
+  const getDisplayedTokenCount = () => {
+    if (displayedWords >= totalWords) return tokens.length
+    if (displayedWords <= 0) return 0
+    let seen = 0
+    for (let i = 0; i < tokens.length; i += 1) {
+      const t = tokens[i]!
+      if (t.length > 0 && !/^\s+$/.test(t)) {
+        seen += 1
+        if (seen === displayedWords) return i + 1
+      }
+    }
+    return tokens.length
+  }
+  const displayedTokenCount = isReduced ? tokens.length : getDisplayedTokenCount()
+  const visibleTokens = tokens.slice(0, displayedTokenCount)
+
   return (
     <div className="typeset typeset-docs w-full whitespace-pre-wrap">
-      {content
-        ? content.split(/(\s+)/).map((word, index) =>
-            /\s/.test(word) ? (
-              word
-            ) : (
-              <span
-                className="inline-block animate-[revbot-stream-word_180ms_ease-out_both] motion-reduce:animate-none"
-                key={`${messageId}-${index}`}
-              >
-                {word}
-              </span>
-            )
-          )
-        : null}
+      {visibleTokens.map((tok, index) => {
+        if (tok === "") return null
+        if (/^\s+$/.test(tok)) return tok
+        return (
+          <span
+            key={`${messageId}-${index}`}
+            className="inline-block animate-[revbot-stream-word_150ms_ease-out_both] motion-reduce:animate-none"
+          >
+            {tok}
+          </span>
+        )
+      })}
       <span
         aria-hidden="true"
         className="ml-0.5 inline-block h-[1.1em] w-px animate-pulse bg-current align-[-0.15em]"

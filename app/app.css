@@ -310,11 +310,13 @@
 @keyframes revbot-stream-word {
   from {
     opacity: 0;
-    filter: blur(4px);
+    filter: blur(2px);
+    transform: translateY(2px);
   }
   to {
     opacity: 1;
     filter: blur(0);
+    transform: translateY(0);
   }
 }
 
@@ -403,6 +405,9 @@
   .typeset .citation-link,
   .typeset .citation-link:hover {
     transition: none;
+  }
+  [class*="revbot-stream-word"] {
+    animation: none !important;
   }
 }
 
