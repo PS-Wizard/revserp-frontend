@@ -588,7 +588,7 @@ export function RevbotViewContent({
     historySearch
   )
   const isDark = variant === "dark"
-  const messageColumnClass = "mx-auto w-full max-w-3xl px-4"
+  const messageColumnClass = "mx-auto w-full max-w-4xl px-4"
 
   useEffect(() => {
     onTitleChange?.(conversationTitle)
@@ -833,7 +833,7 @@ export function RevbotViewContent({
                   ),
               isDark && "surface-dialog"
             )
-          : "mx-auto flex max-w-3xl flex-col gap-6 p-4 sm:p-6",
+          : "mx-auto flex max-w-4xl flex-col gap-6 p-4 sm:p-6",
         !compact && "h-[calc(100svh-5rem)]"
       )}
     >
