@@ -1883,16 +1883,25 @@ export function EChartsAreaChart<TData extends Record<string, unknown>>({
     const chart = echarts.init(mount, null, { renderer });
     echartsRef.current = chart;
 
-    const resizeObserver = new ResizeObserver(() => {
-      // Observers always fire once right after observe(). Repushing on that
-      // no-op fire would land one frame into the intro and stomp the line's
-      // reveal clip — only react when the renderer size actually changed.
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const applyResize = () => {
       if (mount.clientWidth === chart.getWidth() && mount.clientHeight === chart.getHeight()) {
         return;
       }
       chart.resize();
       // 2D gradient textures are baked at renderer size — rebuild them to fit.
       live.repush();
+    };
+    const resizeObserver = new ResizeObserver(() => {
+      // A resize push replaces the option and ends an active entrance. Let the
+      // one-second reveal finish, then resize once against the settled layout.
+      const delay = live.revealEndsAt - performance.now();
+      if (delay > 0) {
+        if (resizeTimer !== undefined) clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(applyResize, delay + 16);
+        return;
+      }
+      applyResize();
     });
     resizeObserver.observe(mount);
 
@@ -2127,6 +2136,7 @@ export function EChartsAreaChart<TData extends Record<string, unknown>>({
       zrHover.off("globalout", onZrHoverOut);
       zr.off("mousemove", onZrMove);
       zr.off("globalout", onZrOut);
+      if (resizeTimer !== undefined) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       themeObserver.disconnect();
       chart.dispose();

@@ -1,5 +1,7 @@
 "use client"
 
+import { memo, useCallback, useMemo } from "react"
+
 import { EChartsAreaChart } from "~/components/evilcharts/charts/echarts-area-chart"
 import type { ChartConfig } from "~/components/evilcharts/ui/echarts-chart"
 import { cn } from "~/lib/utils"
@@ -48,7 +50,7 @@ function formatY(value: number, unit: RevbotTrendChart["unit"]) {
   return formatNumber(value)
 }
 
-export default function RevbotTrendRenderer({
+function RevbotTrendRenderer({
   chart,
   isLoading,
   variant,
@@ -58,18 +60,29 @@ export default function RevbotTrendRenderer({
   variant: "default" | "dark"
 }) {
   const isDark = variant === "dark"
-  const formatLabel = (value: string) => formatX(value, chart.xKind)
-  const data = chart.x.map((value, index) => {
-    const row: Record<string, string | number | null> = { x: value }
-    for (const series of chart.series)
-      row[series.key] = series.values[index] ?? null
-    return row
-  })
-  const config: ChartConfig = Object.fromEntries(
-    chart.series.map((series, index) => [
-      series.key,
-      { label: series.label, colors: SERIES_COLORS[index]! },
-    ])
+  const formatLabel = useCallback(
+    (value: string) => formatX(value, chart.xKind),
+    [chart.xKind]
+  )
+  const data = useMemo(
+    () =>
+      chart.x.map((value, index) => {
+        const row: Record<string, string | number | null> = { x: value }
+        for (const series of chart.series)
+          row[series.key] = series.values[index] ?? null
+        return row
+      }),
+    [chart.series, chart.x]
+  )
+  const config = useMemo<ChartConfig>(
+    () =>
+      Object.fromEntries(
+        chart.series.map((series, index) => [
+          series.key,
+          { label: series.label, colors: SERIES_COLORS[index]! },
+        ])
+      ),
+    [chart.series]
   )
 
   return (
@@ -135,3 +148,5 @@ export default function RevbotTrendRenderer({
     </figure>
   )
 }
+
+export default memo(RevbotTrendRenderer)
