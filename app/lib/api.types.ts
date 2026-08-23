@@ -127,7 +127,8 @@ export type CrawlsResponse = {
 export type ActiveCrawlResponse = {
   id: string
   project_id: string
-  status: string
+  status: CrawlStatus
+  phase?: CrawlPhase | null
   urls_discovered: number
   urls_crawled: number
   created_at: string

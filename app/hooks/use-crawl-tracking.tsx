@@ -10,19 +10,32 @@ import type { ActiveCrawlsResponse, CrawlResponse } from "~/lib/api.types"
 
 const POLL_INTERVAL_MS = 3000
 
+// Compact status shape `applyCrawlStatus` needs. Both the org active-crawl
+// rows (`ActiveCrawlResponse`) and full `GET /crawls/:id` responses satisfy
+// it, so the compact response is used directly without casting.
+type CrawlStatusSnapshot = Pick<
+  CrawlResponse,
+  "status" | "phase" | "project_id" | "urls_discovered" | "urls_crawled"
+>
+
 /**
- * Tracks in-flight crawls by id and polls each one's authoritative status
- * from `GET /crawls/:id` until it reaches a terminal state (completed,
- * failed, or cancelled). Drives one sonner toast per tracked id.
+ * Tracks in-flight crawls by id and polls until each reaches a terminal state
+ * (completed, failed, or cancelled). Drives one sonner toast per tracked id.
+ *
+ * Each tick makes ONE org-wide `GET /organizations/:orgId/crawls/active`
+ * request that both discovers active crawls (e.g. started in another tab)
+ * and refreshes queued/running toasts/progress. Per-id `GET /crawls/:id`
+ * requests happen only when a previously tracked id disappears from a
+ * successful active list — the only signal it may have gone terminal — so we
+ * can OBSERVE the exact status instead of assuming.
  *
  * Ids are seeded two ways:
  *  - `trackCrawl(id)` — called immediately after this tab's own kickoff POST.
- *  - the org-wide `/crawls/active` endpoint, polled purely as a DISCOVERY
- *    source (e.g. for crawls started in another tab) while `enabled` is true.
+ *  - the org-wide `/crawls/active` endpoint while `enabled` is true.
  *
- * Unlike disappearance-based inference, tracked ids are only dropped once we
- * OBSERVE a terminal status, so simultaneous completions, fast crawls, and
- * failed/cancelled crawls are all reported correctly.
+ * Tracked ids are only dropped once we OBSERVE a terminal status, so
+ * simultaneous completions, fast crawls, and failed/cancelled crawls are all
+ * reported correctly.
  */
 export function useCrawlTracking({
   orgId,
@@ -78,8 +91,9 @@ export function useCrawlTracking({
 
   useEffect(() => {
     let cancelled = false
+    let tickInFlight = false
 
-    function applyCrawlStatus(id: string, crawl: CrawlResponse) {
+    function applyCrawlStatus(id: string, crawl: CrawlStatusSnapshot) {
       // Refetch loader-backed data (which the navbar reads) whenever the
       // authoritative status changes, so it never lags the live poll/toast.
       if (lastStatusRef.current.get(id) !== crawl.status) {
@@ -208,53 +222,79 @@ export function useCrawlTracking({
       }
     }
 
-    async function pollTrackedCrawls() {
-      const ids = Array.from(trackedIdsRef.current)
-      await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const crawl = await clientApiFetch<CrawlResponse>(`/crawls/${id}`)
-            if (cancelled) return
-            applyCrawlStatus(id, crawl)
-          } catch (error) {
-            console.error(`Failed to poll crawl ${id}:`, error)
-          }
-        })
-      )
-    }
-
-    async function pollDiscovery() {
+    async function tick() {
+      // One simple guard keeps the interval, visibility, and initial ticks
+      // from overlapping; also pauses all polling network work while hidden.
+      if (tickInFlight || document.hidden) return
+      // Poll while discovery is enabled or any crawl is still tracked — a
+      // locally started crawl must keep polling even during loader lag.
+      if (!enabledRef.current && trackedIdsRef.current.size === 0) return
+      tickInFlight = true
       try {
+        const idsBefore = Array.from(trackedIdsRef.current)
         const response = await clientApiFetch<ActiveCrawlsResponse>(
           `/organizations/${orgIdRef.current}/crawls/active`
-        )
-        if (cancelled) return
+        ).catch((error: unknown) => {
+          // A failed org request tells us nothing about tracked crawls:
+          // keep them tracked and skip per-id lookups until a later tick.
+          console.error("Failed to poll active crawls:", error)
+          return null
+        })
+        if (cancelled || !response) return
+
+        // One request drives discovery AND live toast/progress updates, so
+        // nothing still present in it needs a per-id fetch.
+        const activeIds = new Set<string>()
         for (const crawl of response.crawls) {
+          activeIds.add(crawl.id)
           trackedIdsRef.current.add(crawl.id)
+          applyCrawlStatus(crawl.id, crawl)
         }
-      } catch (error) {
-        console.error("Failed to poll active crawls:", error)
+
+        // Ids that vanished from a SUCCESSFUL active list may have gone
+        // terminal; observe the exact status once via the authoritative
+        // endpoint instead of assuming from disappearance.
+        await Promise.all(
+          idsBefore
+            .filter((id) => !activeIds.has(id))
+            .map(async (id) => {
+              try {
+                const crawl = await clientApiFetch<CrawlResponse>(
+                  `/crawls/${id}`
+                )
+                if (cancelled) return
+                applyCrawlStatus(id, crawl)
+              } catch (error) {
+                console.error(`Failed to poll crawl ${id}:`, error)
+              }
+            })
+        )
+      } finally {
+        tickInFlight = false
       }
     }
 
-    async function tick() {
-      if (enabledRef.current) {
-        await pollDiscovery()
-      }
-      await pollTrackedCrawls()
+    function onVisibilityChange() {
+      if (!document.hidden) void tick()
     }
 
     void tick()
     const interval = window.setInterval(() => {
       void tick()
     }, POLL_INTERVAL_MS)
+    document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
       cancelled = true
       window.clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
       for (const id of trackedIdsRef.current) {
         toast.dismiss(id)
       }
+      // Org switch: drop old-org ids so they are never fetched under the
+      // next org.
+      trackedIdsRef.current.clear()
+      lastStatusRef.current.clear()
     }
   }, [orgId]) // re-runs only on org switch; `enabled` is read live via a ref
 
