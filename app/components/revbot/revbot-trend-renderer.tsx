@@ -73,31 +73,14 @@ export default function RevbotTrendRenderer({
   )
 
   return (
-    <section
-      className={cn(
-        "mt-4 flex h-72 w-full min-w-0 flex-col border-t",
-        isDark ? "border-white/10" : "border-border"
-      )}
-    >
-      <h2 className={cn("mt-4 text-sm font-medium", isDark && "text-white/90")}>
-        {chart.title}
-      </h2>
-      {chart.note ? (
-        <p
-          className={cn(
-            "mt-1 text-xs",
-            isDark ? "text-white/50" : "text-muted-foreground"
-          )}
-        >
-          {chart.note}
-        </p>
-      ) : null}
-      <div className="mt-3 min-h-0 flex-1">
+    <figure className="mt-4 flex h-72 w-full min-w-0 flex-col">
+      <div className="min-h-0 flex-1">
         <EChartsAreaChart
           className="h-full w-full"
           config={config}
           curveType="bump"
           data={isLoading ? [] : data}
+          enableHoverHighlight
           isLoading={isLoading}
           stackType="default"
           xDataKey="x"
@@ -121,6 +104,7 @@ export default function RevbotTrendRenderer({
               key={series.key}
               dataKey={series.key}
               strokeVariant="solid"
+              strokeWidth={2}
               variant="hatched"
             >
               <EChartsAreaChart.ActiveDot />
@@ -128,6 +112,26 @@ export default function RevbotTrendRenderer({
           ))}
         </EChartsAreaChart>
       </div>
-    </section>
+      <figcaption className="mt-3 shrink-0">
+        <div
+          className={cn(
+            "text-center text-sm font-medium",
+            isDark && "text-white/90"
+          )}
+        >
+          {chart.title}
+        </div>
+        {chart.note ? (
+          <p
+            className={cn(
+              "mt-1 text-xs",
+              isDark ? "text-white/50" : "text-muted-foreground"
+            )}
+          >
+            {chart.note}
+          </p>
+        ) : null}
+      </figcaption>
+    </figure>
   )
 }

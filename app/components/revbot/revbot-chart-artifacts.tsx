@@ -151,29 +151,11 @@ function TrendChartSkeleton({
 }) {
   const isDark = variant === "dark"
   return (
-    <section
-      className={cn(
-        "mt-4 flex h-72 w-full min-w-0 flex-col border-t",
-        isDark ? "border-white/10" : "border-border"
-      )}
-    >
-      <h2 className={cn("mt-4 text-sm font-medium", isDark && "text-white/90")}>
-        {chart.title}
-      </h2>
-      {chart.note ? (
-        <p
-          className={cn(
-            "mt-1 text-xs",
-            isDark ? "text-white/50" : "text-muted-foreground"
-          )}
-        >
-          {chart.note}
-        </p>
-      ) : null}
+    <figure className="mt-4 flex h-72 w-full min-w-0 flex-col">
       <div
         aria-label="Loading trend chart"
         className={cn(
-          "mt-4 flex min-h-0 flex-1 items-end gap-2 overflow-hidden rounded-lg",
+          "flex min-h-0 flex-1 items-end gap-2 overflow-hidden rounded-lg",
           isDark ? "bg-white/[0.03]" : "bg-muted/35"
         )}
       >
@@ -188,7 +170,27 @@ function TrendChartSkeleton({
           />
         ))}
       </div>
-    </section>
+      <figcaption className="mt-3 shrink-0">
+        <div
+          className={cn(
+            "text-center text-sm font-medium",
+            isDark && "text-white/90"
+          )}
+        >
+          {chart.title}
+        </div>
+        {chart.note ? (
+          <p
+            className={cn(
+              "mt-1 text-xs",
+              isDark ? "text-white/50" : "text-muted-foreground"
+            )}
+          >
+            {chart.note}
+          </p>
+        ) : null}
+      </figcaption>
+    </figure>
   )
 }
 

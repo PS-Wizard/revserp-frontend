@@ -670,9 +670,8 @@ export function RevbotViewContent({
               <MessageScrollerContent
                 aria-busy={active}
                 className={cn(
-                  "gap-5 pt-1",
-                  revbot.messages.length > 0 ? "pb-24" : "min-h-full",
-                  messageColumnClass
+                  "w-full gap-5 pt-1",
+                  revbot.messages.length > 0 ? "pb-24" : "min-h-full"
                 )}
               >
                 {revbot.messages.length === 0 ? (
@@ -693,12 +692,13 @@ export function RevbotViewContent({
                         className={cn(
                           "flex w-full py-1",
                           message.role === "user"
-                            ? "justify-end"
+                            ? cn(messageColumnClass, "justify-end")
                             : "justify-start"
                         )}
                       >
                         {message.role === "assistant" ? (
                           <div className="w-full min-w-0">
+                            <div className={messageColumnClass}>
                             {(() => {
                               const isActiveMessage =
                                 message.id === activeAssistantMessageId
@@ -753,6 +753,8 @@ export function RevbotViewContent({
                                 {message.content}
                               </RevbotMarkdown>
                             ) : null}
+                            </div>
+                            <div className="mx-auto w-4/5 min-w-0">
                             <RevbotChartArtifacts
                               toolCalls={
                                 message.id === activeAssistantMessageId
@@ -761,6 +763,7 @@ export function RevbotViewContent({
                               }
                               variant={variant}
                             />
+                            </div>
                           </div>
                         ) : (
                           <p
