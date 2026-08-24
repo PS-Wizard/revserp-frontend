@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   FileSearchIcon,
+  ExternalLinkIcon,
   LayoutListIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
@@ -531,10 +532,27 @@ export function IssueWorkspaceView({
             </Empty>
           ) : detail ? (
             <article className="mx-auto w-full max-w-4xl px-6 py-10 sm:px-10 sm:py-12">
-              <header className="space-y-3">
-                <h1 className="font-heading text-[1.75rem] leading-tight font-semibold tracking-tight text-balance break-words text-foreground sm:text-[2rem]">
-                  {displayHeading}
-                </h1>
+              <header className="flex flex-col gap-3">
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
+                  <h1 className="min-w-0 flex-1 font-heading text-[1.75rem] leading-tight font-semibold tracking-tight text-balance break-words text-foreground sm:text-[2rem]">
+                    {displayHeading}
+                  </h1>
+                  <Button
+                    nativeButton={false}
+                    render={
+                      <a
+                        href={detail.page.url}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      />
+                    }
+                    size="sm"
+                    variant="outline"
+                  >
+                    Open page
+                    <ExternalLinkIcon data-icon="inline-end" />
+                  </Button>
+                </div>
                 {selectedPage?.title?.trim() ? (
                   <p
                     className="text-sm break-all text-muted-foreground"
