@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useMemo } from "react"
+import { memo, useCallback, useMemo, useRef } from "react"
 
 import {
   EChartsBarChart,
@@ -9,6 +9,8 @@ import {
 import { cn } from "~/lib/utils"
 
 import type { ChartUnit, RevbotRankingChart } from "./revbot-chart-artifacts"
+import { ArtifactExportMenu } from "./revbot-artifact-menu"
+import { rankingChartToCsv } from "./revbot-artifact-export"
 
 const SERIES_COLORS = [
   { light: ["#047857"], dark: ["#10b981"] },
@@ -48,6 +50,8 @@ function RevbotRankingRenderer({
   variant: "default" | "dark"
 }) {
   const isDark = variant === "dark"
+  const figureRef = useRef<HTMLElement>(null)
+  const getCsv = useCallback(() => rankingChartToCsv(chart), [chart])
   const formatCategory = useCallback(
     (value: string) => (value.length > 14 ? `${value.slice(0, 13)}…` : value),
     []
@@ -78,7 +82,17 @@ function RevbotRankingRenderer({
   )
 
   return (
-    <figure className="mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4">
+    <figure
+      ref={figureRef}
+      className="group/revbot-artifact relative mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4"
+    >
+      {!isLoading ? (
+        <ArtifactExportMenu
+          filename={chart.title}
+          getCsv={getCsv}
+          imageRef={figureRef}
+        />
+      ) : null}
       <div className="min-h-0 flex-1">
         <EChartsBarChart
           className="h-full w-full"

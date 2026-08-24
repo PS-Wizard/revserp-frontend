@@ -53,7 +53,9 @@ import {
 } from "./revbot-conversation-search"
 import { RevbotChartArtifacts } from "./revbot-chart-artifacts"
 import { RevbotComposer } from "./revbot-composer"
+import { RevbotExportableTable } from "./revbot-exportable-table"
 import { RevbotMarkdown } from "./revbot-markdown"
+import { RevbotMessageActions } from "./revbot-message-actions"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
 import type { RevbotHandle } from "./use-revbot"
 
@@ -549,6 +551,7 @@ export function RevbotViewContent({
         </a>
       )
     },
+    table: RevbotExportableTable,
   }
 
   useEffect(() => {
@@ -764,6 +767,15 @@ export function RevbotViewContent({
                               variant={variant}
                             />
                             </div>
+                            {message.id !== activeAssistantMessageId &&
+                            message.content ? (
+                              <div className={cn(messageColumnClass, "mt-2")}>
+                                <RevbotMessageActions
+                                  content={message.content}
+                                  variant={variant}
+                                />
+                              </div>
+                            ) : null}
                           </div>
                         ) : (
                           <p

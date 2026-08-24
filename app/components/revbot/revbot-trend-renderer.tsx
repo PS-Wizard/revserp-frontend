@@ -1,12 +1,14 @@
 "use client"
 
-import { memo, useCallback, useMemo } from "react"
+import { memo, useCallback, useMemo, useRef } from "react"
 
 import { EChartsAreaChart } from "~/components/evilcharts/charts/echarts-area-chart"
 import type { ChartConfig } from "~/components/evilcharts/ui/echarts-chart"
 import { cn } from "~/lib/utils"
 
 import type { RevbotTrendChart } from "./revbot-chart-artifacts"
+import { ArtifactExportMenu } from "./revbot-artifact-menu"
+import { trendChartToCsv } from "./revbot-artifact-export"
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -60,6 +62,8 @@ function RevbotTrendRenderer({
   variant: "default" | "dark"
 }) {
   const isDark = variant === "dark"
+  const figureRef = useRef<HTMLElement>(null)
+  const getCsv = useCallback(() => trendChartToCsv(chart), [chart])
   const formatLabel = useCallback(
     (value: string) => formatX(value, chart.xKind),
     [chart.xKind]
@@ -86,7 +90,17 @@ function RevbotTrendRenderer({
   )
 
   return (
-    <figure className="mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4">
+    <figure
+      ref={figureRef}
+      className="group/revbot-artifact relative mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4"
+    >
+      {!isLoading ? (
+        <ArtifactExportMenu
+          filename={chart.title}
+          getCsv={getCsv}
+          imageRef={figureRef}
+        />
+      ) : null}
       <div className="min-h-0 flex-1">
         <EChartsAreaChart
           className="h-full w-full"
