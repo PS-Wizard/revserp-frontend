@@ -1,17 +1,35 @@
 "use client"
 
-import { useState, type RefObject } from "react"
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from "react"
 import { CopyIcon, DownloadIcon, EllipsisIcon, ImageIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "~/components/ui/button"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuGroup,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "~/components/ui/context-menu"
 import {
   DropdownMenu,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { DropdownPillSurface } from "~/components/ui/hover-pill"
+import {
+  DropdownPillSurface,
+  HoverPill,
+  useHoverPill,
+} from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 
 import {
@@ -24,24 +42,35 @@ import {
   slugFilename,
 } from "./revbot-artifact-export"
 
-type ArtifactExportMenuProps = {
+type ArtifactExportOptions = {
   getCsv: () => string
   imageRef: RefObject<HTMLElement | null>
   filename: string
-  className?: string
   getSvg?: () => string
 }
 
-export function ArtifactExportMenu({
-  className,
+type ArtifactExportMenuProps = ArtifactExportOptions & {
+  className?: string
+}
+
+type ArtifactExportContextMenuProps = ArtifactExportOptions & {
+  children: ReactElement
+}
+
+type ArtifactAction = {
+  id: string
+  label: string
+  icon: ReactNode
+  onClick: () => Promise<void>
+}
+
+function useArtifactExportActions({
   filename,
   getCsv,
-  imageRef,
   getSvg,
-}: ArtifactExportMenuProps) {
-  const [open, setOpen] = useState(false)
-
-  async function handleCopyCsv() {
+  imageRef,
+}: ArtifactExportOptions): ArtifactAction[] {
+  const handleCopyCsv = useCallback(async () => {
     try {
       const csv = getCsv()
       await copyText(csv)
@@ -49,9 +78,9 @@ export function ArtifactExportMenu({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not copy CSV")
     }
-  }
+  }, [getCsv])
 
-  async function handleDownloadCsv() {
+  const handleDownloadCsv = useCallback(async () => {
     try {
       const csv = getCsv()
       const safe = slugFilename(filename)
@@ -62,9 +91,9 @@ export function ArtifactExportMenu({
         error instanceof Error ? error.message : "Could not download CSV"
       )
     }
-  }
+  }, [filename, getCsv])
 
-  async function handleCopyPng() {
+  const handleCopyPng = useCallback(async () => {
     try {
       const element = imageRef.current
       if (!element) throw new Error("Image is not ready")
@@ -76,9 +105,9 @@ export function ArtifactExportMenu({
         error instanceof Error ? error.message : "Could not copy image"
       )
     }
-  }
+  }, [imageRef])
 
-  async function handleDownloadPng() {
+  const handleDownloadPng = useCallback(async () => {
     try {
       const element = imageRef.current
       if (!element) throw new Error("Image is not ready")
@@ -91,9 +120,9 @@ export function ArtifactExportMenu({
         error instanceof Error ? error.message : "Could not download image"
       )
     }
-  }
+  }, [filename, imageRef])
 
-  async function handleDownloadSvg() {
+  const handleDownloadSvg = useCallback(async () => {
     try {
       if (!getSvg) throw new Error("SVG is not ready")
       const svg = getSvg()
@@ -105,7 +134,68 @@ export function ArtifactExportMenu({
         error instanceof Error ? error.message : "Could not download SVG"
       )
     }
-  }
+  }, [filename, getSvg])
+
+  return useMemo(() => {
+    const actions: ArtifactAction[] = [
+      {
+        id: "copy-csv",
+        label: "Copy as CSV",
+        icon: <CopyIcon aria-hidden="true" />,
+        onClick: handleCopyCsv,
+      },
+      {
+        id: "download-csv",
+        label: "Download CSV",
+        icon: <DownloadIcon aria-hidden="true" />,
+        onClick: handleDownloadCsv,
+      },
+      {
+        id: "copy-png",
+        label: "Copy as PNG",
+        icon: <ImageIcon aria-hidden="true" />,
+        onClick: handleCopyPng,
+      },
+      {
+        id: "download-png",
+        label: "Download PNG",
+        icon: <DownloadIcon aria-hidden="true" />,
+        onClick: handleDownloadPng,
+      },
+    ]
+    if (getSvg) {
+      actions.push({
+        id: "download-svg",
+        label: "Download SVG",
+        icon: <DownloadIcon aria-hidden="true" />,
+        onClick: handleDownloadSvg,
+      })
+    }
+    return actions
+  }, [
+    getSvg,
+    handleCopyCsv,
+    handleCopyPng,
+    handleDownloadCsv,
+    handleDownloadPng,
+    handleDownloadSvg,
+  ])
+}
+
+export function ArtifactExportMenu({
+  className,
+  filename,
+  getCsv,
+  getSvg,
+  imageRef,
+}: ArtifactExportMenuProps) {
+  const [open, setOpen] = useState(false)
+  const actions = useArtifactExportActions({
+    filename,
+    getCsv,
+    getSvg,
+    imageRef,
+  })
 
   return (
     <div
@@ -140,47 +230,61 @@ export function ArtifactExportMenu({
         >
           {(pill) => (
             <DropdownMenuGroup>
-              <DropdownMenuItem
-                {...pill.getItemProps(0)}
-                onClick={() => void handleCopyCsv()}
-              >
-                <CopyIcon aria-hidden="true" />
-                Copy as CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                {...pill.getItemProps(1)}
-                onClick={() => void handleDownloadCsv()}
-              >
-                <DownloadIcon aria-hidden="true" />
-                Download CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                {...pill.getItemProps(2)}
-                onClick={() => void handleCopyPng()}
-              >
-                <ImageIcon aria-hidden="true" />
-                Copy as PNG
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                {...pill.getItemProps(3)}
-                onClick={() => void handleDownloadPng()}
-              >
-                <DownloadIcon aria-hidden="true" />
-                Download PNG
-              </DropdownMenuItem>
-              {getSvg ? (
+              {actions.map((action, index) => (
                 <DropdownMenuItem
-                  {...pill.getItemProps(4)}
-                  onClick={() => void handleDownloadSvg()}
+                  key={action.id}
+                  {...pill.getItemProps(index)}
+                  onClick={() => void action.onClick()}
                 >
-                  <DownloadIcon aria-hidden="true" />
-                  Download SVG
+                  {action.icon}
+                  {action.label}
                 </DropdownMenuItem>
-              ) : null}
+              ))}
             </DropdownMenuGroup>
           )}
         </DropdownPillSurface>
       </DropdownMenu>
     </div>
+  )
+}
+
+export function ArtifactExportContextMenu({
+  children,
+  filename,
+  getCsv,
+  getSvg,
+  imageRef,
+}: ArtifactExportContextMenuProps) {
+  const actions = useArtifactExportActions({
+    filename,
+    getCsv,
+    getSvg,
+    imageRef,
+  })
+  const hover = useHoverPill()
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger className="select-auto" render={children} />
+      <ContextMenuContent
+        className="relative min-w-44"
+        positionerClassName="z-[120]"
+        onMouseLeave={hover.clearPill}
+      >
+        <HoverPill pill={hover.pill} />
+        <ContextMenuGroup>
+          {actions.map((action, index) => (
+            <ContextMenuItem
+              key={action.id}
+              {...hover.getItemProps(index)}
+              onClick={() => void action.onClick()}
+            >
+              {action.icon}
+              {action.label}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

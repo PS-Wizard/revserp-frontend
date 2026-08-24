@@ -9,7 +9,10 @@ import {
 import { cn } from "~/lib/utils"
 
 import type { ChartUnit, RevbotRankingChart } from "./revbot-chart-artifacts"
-import { ArtifactExportMenu } from "./revbot-artifact-menu"
+import {
+  ArtifactExportContextMenu,
+  ArtifactExportMenu,
+} from "./revbot-artifact-menu"
 import {
   rankingChartToCsv,
   serializeEChartsSvg,
@@ -90,70 +93,77 @@ function RevbotRankingRenderer({
   )
 
   return (
-    <figure
-      ref={figureRef}
-      className="group/revbot-artifact relative mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4"
+    <ArtifactExportContextMenu
+      filename={chart.title}
+      getCsv={getCsv}
+      getSvg={getSvg}
+      imageRef={figureRef}
     >
-      {!isLoading ? (
-        <ArtifactExportMenu
-          filename={chart.title}
-          getCsv={getCsv}
-          getSvg={getSvg}
-          imageRef={figureRef}
-        />
-      ) : null}
-      <div ref={chartRef} className="min-h-0 flex-1">
-        <EChartsBarChart
-          className="h-full w-full"
-          config={config}
-          data={isLoading ? [] : data}
-          isLoading={isLoading}
-          loadingBars={chart.categories.length}
-          renderer="svg"
-          xDataKey="category"
-        >
-          <EChartsBarChart.Grid />
-          <EChartsBarChart.XAxis
-            dataKey="category"
-            tickFormatter={formatCategory}
+      <figure
+        ref={figureRef}
+        className="group/revbot-artifact relative mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4"
+      >
+        {!isLoading ? (
+          <ArtifactExportMenu
+            filename={chart.title}
+            getCsv={getCsv}
+            getSvg={getSvg}
+            imageRef={figureRef}
           />
-          <EChartsBarChart.YAxis tickFormatter={formatAxisValue} />
-          <EChartsBarChart.Tooltip />
-          {chart.series.length > 1 ? (
-            <EChartsBarChart.Legend isClickable />
-          ) : null}
-          {chart.series.map((series) => (
-            <EChartsBarChart.Bar
-              dataKey={series.key}
-              enableHoverHighlight
-              isClickable
-              key={series.key}
-              variant="hatched"
+        ) : null}
+        <div ref={chartRef} className="min-h-0 flex-1">
+          <EChartsBarChart
+            className="h-full w-full"
+            config={config}
+            data={isLoading ? [] : data}
+            isLoading={isLoading}
+            loadingBars={chart.categories.length}
+            renderer="svg"
+            xDataKey="category"
+          >
+            <EChartsBarChart.Grid />
+            <EChartsBarChart.XAxis
+              dataKey="category"
+              tickFormatter={formatCategory}
             />
-          ))}
-        </EChartsBarChart>
-      </div>
-      <figcaption className="mt-3 shrink-0">
-        <div
-          className={cn(
-            "text-center text-sm font-medium",
-            isDark && "text-white/90"
-          )}
-        >
-          {chart.title}
+            <EChartsBarChart.YAxis tickFormatter={formatAxisValue} />
+            <EChartsBarChart.Tooltip />
+            {chart.series.length > 1 ? (
+              <EChartsBarChart.Legend isClickable />
+            ) : null}
+            {chart.series.map((series) => (
+              <EChartsBarChart.Bar
+                dataKey={series.key}
+                enableHoverHighlight
+                isClickable
+                key={series.key}
+                variant="hatched"
+              />
+            ))}
+          </EChartsBarChart>
         </div>
-        {chart.note ? (
-          <p
+        <figcaption className="mt-3 shrink-0">
+          <div
             className={cn(
-              "mt-1 text-center text-xs",
-              isDark ? "text-white/50" : "text-muted-foreground"
+              "text-center text-sm font-medium",
+              isDark && "text-white/90"
             )}
           >
-            {chart.note}
-          </p>
-        ) : null}
-      </figcaption>
-    </figure>
+            {chart.title}
+          </div>
+          {chart.note ? (
+            <p
+              className={cn(
+                "mt-1 text-center text-xs",
+                isDark ? "text-white/50" : "text-muted-foreground"
+              )}
+            >
+              {chart.note}
+            </p>
+          ) : null}
+        </figcaption>
+      </figure>
+    </ArtifactExportContextMenu>
   )
 }
 

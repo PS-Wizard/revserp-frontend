@@ -7,7 +7,10 @@ import type { ChartConfig } from "~/components/evilcharts/ui/echarts-chart"
 import { cn } from "~/lib/utils"
 
 import type { RevbotTrendChart } from "./revbot-chart-artifacts"
-import { ArtifactExportMenu } from "./revbot-artifact-menu"
+import {
+  ArtifactExportContextMenu,
+  ArtifactExportMenu,
+} from "./revbot-artifact-menu"
 import { serializeEChartsSvg, trendChartToCsv } from "./revbot-artifact-export"
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
@@ -95,78 +98,85 @@ function RevbotTrendRenderer({
   )
 
   return (
-    <figure
-      ref={figureRef}
-      className="group/revbot-artifact relative mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4"
+    <ArtifactExportContextMenu
+      filename={chart.title}
+      getCsv={getCsv}
+      getSvg={getSvg}
+      imageRef={figureRef}
     >
-      {!isLoading ? (
-        <ArtifactExportMenu
-          filename={chart.title}
-          getCsv={getCsv}
-          getSvg={getSvg}
-          imageRef={figureRef}
-        />
-      ) : null}
-      <div ref={chartRef} className="min-h-0 flex-1">
-        <EChartsAreaChart
-          className="h-full w-full"
-          config={config}
-          curveType="bump"
-          data={isLoading ? [] : data}
-          enableHoverHighlight
-          isLoading={isLoading}
-          renderer="svg"
-          stackType="default"
-          xDataKey="x"
-        >
-          <EChartsAreaChart.Grid />
-          <EChartsAreaChart.XAxis dataKey="x" tickFormatter={formatLabel} />
-          <EChartsAreaChart.YAxis
-            tickFormatter={(value) => formatY(value, chart.unit)}
+      <figure
+        ref={figureRef}
+        className="group/revbot-artifact relative mx-auto mt-4 flex h-72 w-full max-w-5xl min-w-0 flex-col px-4"
+      >
+        {!isLoading ? (
+          <ArtifactExportMenu
+            filename={chart.title}
+            getCsv={getCsv}
+            getSvg={getSvg}
+            imageRef={figureRef}
           />
-          <EChartsAreaChart.Tooltip />
-          {chart.series.length > 1 ? (
-            <EChartsAreaChart.Legend isClickable />
-          ) : null}
-          {chart.x.length >= 10 ? (
-            <EChartsAreaChart.Brush formatLabel={formatLabel} />
-          ) : null}
-          {chart.series.map((series) => (
-            <EChartsAreaChart.Area
-              enableBufferLine={series.projectedPoints ?? false}
-              isClickable
-              key={series.key}
-              dataKey={series.key}
-              strokeVariant="solid"
-              strokeWidth={2}
-              variant="hatched"
-            >
-              <EChartsAreaChart.ActiveDot />
-            </EChartsAreaChart.Area>
-          ))}
-        </EChartsAreaChart>
-      </div>
-      <figcaption className="mt-3 shrink-0">
-        <div
-          className={cn(
-            "text-center text-sm font-medium",
-            isDark && "text-white/90"
-          )}
-        >
-          {chart.title}
+        ) : null}
+        <div ref={chartRef} className="min-h-0 flex-1">
+          <EChartsAreaChart
+            className="h-full w-full"
+            config={config}
+            curveType="bump"
+            data={isLoading ? [] : data}
+            enableHoverHighlight
+            isLoading={isLoading}
+            renderer="svg"
+            stackType="default"
+            xDataKey="x"
+          >
+            <EChartsAreaChart.Grid />
+            <EChartsAreaChart.XAxis dataKey="x" tickFormatter={formatLabel} />
+            <EChartsAreaChart.YAxis
+              tickFormatter={(value) => formatY(value, chart.unit)}
+            />
+            <EChartsAreaChart.Tooltip />
+            {chart.series.length > 1 ? (
+              <EChartsAreaChart.Legend isClickable />
+            ) : null}
+            {chart.x.length >= 10 ? (
+              <EChartsAreaChart.Brush formatLabel={formatLabel} />
+            ) : null}
+            {chart.series.map((series) => (
+              <EChartsAreaChart.Area
+                enableBufferLine={series.projectedPoints ?? false}
+                isClickable
+                key={series.key}
+                dataKey={series.key}
+                strokeVariant="solid"
+                strokeWidth={2}
+                variant="hatched"
+              >
+                <EChartsAreaChart.ActiveDot />
+              </EChartsAreaChart.Area>
+            ))}
+          </EChartsAreaChart>
         </div>
-        {chart.note ? (
-          <p
+        <figcaption className="mt-3 shrink-0">
+          <div
             className={cn(
-              "mt-1 text-center text-xs",
-              isDark ? "text-white/50" : "text-muted-foreground"
+              "text-center text-sm font-medium",
+              isDark && "text-white/90"
             )}
           >
-            {chart.note}
-          </p>
-        ) : null}
-      </figcaption>
-    </figure>
+            {chart.title}
+          </div>
+          {chart.note ? (
+            <p
+              className={cn(
+                "mt-1 text-center text-xs",
+                isDark ? "text-white/50" : "text-muted-foreground"
+              )}
+            >
+              {chart.note}
+            </p>
+          ) : null}
+        </figcaption>
+      </figure>
+    </ArtifactExportContextMenu>
   )
 }
 
