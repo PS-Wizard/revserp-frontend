@@ -117,6 +117,7 @@ export function ArtifactExportMenu({
         <DropdownPillSurface
           align="end"
           className="min-w-44"
+          positionerClassName="z-[120]"
           side="bottom"
           sideOffset={6}
         >
