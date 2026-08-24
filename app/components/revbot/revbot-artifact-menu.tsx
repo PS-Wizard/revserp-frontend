@@ -20,6 +20,7 @@ import {
   copyText,
   downloadCsv,
   downloadPngBlob,
+  downloadSvg,
   slugFilename,
 } from "./revbot-artifact-export"
 
@@ -28,6 +29,7 @@ type ArtifactExportMenuProps = {
   imageRef: RefObject<HTMLElement | null>
   filename: string
   className?: string
+  getSvg?: () => string
 }
 
 export function ArtifactExportMenu({
@@ -35,6 +37,7 @@ export function ArtifactExportMenu({
   filename,
   getCsv,
   imageRef,
+  getSvg,
 }: ArtifactExportMenuProps) {
   const [open, setOpen] = useState(false)
 
@@ -86,6 +89,20 @@ export function ArtifactExportMenu({
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Could not download image"
+      )
+    }
+  }
+
+  async function handleDownloadSvg() {
+    try {
+      if (!getSvg) throw new Error("SVG is not ready")
+      const svg = getSvg()
+      const safe = slugFilename(filename)
+      downloadSvg(`${safe}.svg`, svg)
+      toast.success("SVG downloaded")
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not download SVG"
       )
     }
   }
@@ -151,6 +168,15 @@ export function ArtifactExportMenu({
                 <DownloadIcon aria-hidden="true" />
                 Download PNG
               </DropdownMenuItem>
+              {getSvg ? (
+                <DropdownMenuItem
+                  {...pill.getItemProps(4)}
+                  onClick={() => void handleDownloadSvg()}
+                >
+                  <DownloadIcon aria-hidden="true" />
+                  Download SVG
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           )}
         </DropdownPillSurface>

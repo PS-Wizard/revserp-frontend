@@ -8,7 +8,7 @@ import { cn } from "~/lib/utils"
 
 import type { RevbotTrendChart } from "./revbot-chart-artifacts"
 import { ArtifactExportMenu } from "./revbot-artifact-menu"
-import { trendChartToCsv } from "./revbot-artifact-export"
+import { serializeEChartsSvg, trendChartToCsv } from "./revbot-artifact-export"
 
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -63,7 +63,12 @@ function RevbotTrendRenderer({
 }) {
   const isDark = variant === "dark"
   const figureRef = useRef<HTMLElement>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
   const getCsv = useCallback(() => trendChartToCsv(chart), [chart])
+  const getSvg = useCallback(() => {
+    if (!chartRef.current) throw new Error("Chart is not ready")
+    return serializeEChartsSvg(chartRef.current)
+  }, [])
   const formatLabel = useCallback(
     (value: string) => formatX(value, chart.xKind),
     [chart.xKind]
@@ -98,10 +103,11 @@ function RevbotTrendRenderer({
         <ArtifactExportMenu
           filename={chart.title}
           getCsv={getCsv}
+          getSvg={getSvg}
           imageRef={figureRef}
         />
       ) : null}
-      <div className="min-h-0 flex-1">
+      <div ref={chartRef} className="min-h-0 flex-1">
         <EChartsAreaChart
           className="h-full w-full"
           config={config}
@@ -109,6 +115,7 @@ function RevbotTrendRenderer({
           data={isLoading ? [] : data}
           enableHoverHighlight
           isLoading={isLoading}
+          renderer="svg"
           stackType="default"
           xDataKey="x"
         >

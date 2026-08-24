@@ -10,7 +10,10 @@ import { cn } from "~/lib/utils"
 
 import type { ChartUnit, RevbotRankingChart } from "./revbot-chart-artifacts"
 import { ArtifactExportMenu } from "./revbot-artifact-menu"
-import { rankingChartToCsv } from "./revbot-artifact-export"
+import {
+  rankingChartToCsv,
+  serializeEChartsSvg,
+} from "./revbot-artifact-export"
 
 const SERIES_COLORS = [
   { light: ["#047857"], dark: ["#10b981"] },
@@ -51,7 +54,12 @@ function RevbotRankingRenderer({
 }) {
   const isDark = variant === "dark"
   const figureRef = useRef<HTMLElement>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
   const getCsv = useCallback(() => rankingChartToCsv(chart), [chart])
+  const getSvg = useCallback(() => {
+    if (!chartRef.current) throw new Error("Chart is not ready")
+    return serializeEChartsSvg(chartRef.current)
+  }, [])
   const formatCategory = useCallback(
     (value: string) => (value.length > 14 ? `${value.slice(0, 13)}…` : value),
     []
@@ -90,16 +98,18 @@ function RevbotRankingRenderer({
         <ArtifactExportMenu
           filename={chart.title}
           getCsv={getCsv}
+          getSvg={getSvg}
           imageRef={figureRef}
         />
       ) : null}
-      <div className="min-h-0 flex-1">
+      <div ref={chartRef} className="min-h-0 flex-1">
         <EChartsBarChart
           className="h-full w-full"
           config={config}
           data={isLoading ? [] : data}
           isLoading={isLoading}
           loadingBars={chart.categories.length}
+          renderer="svg"
           xDataKey="category"
         >
           <EChartsBarChart.Grid />

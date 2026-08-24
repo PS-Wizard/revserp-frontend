@@ -34,6 +34,23 @@ function firstGradientColor(backgroundImage: string): string | null {
   )
 }
 
+function resolveNearestBackgroundColor(element: HTMLElement): string | null {
+  let current: HTMLElement | null = element
+  while (current) {
+    const styles = getComputedStyle(current)
+    const candidate = styles.backgroundColor
+    if (candidate && !isTransparentBackground(candidate)) {
+      return candidate
+    }
+    const gradientColor = firstGradientColor(styles.backgroundImage)
+    if (gradientColor && !isTransparentBackground(gradientColor)) {
+      return gradientColor
+    }
+    current = current.parentElement
+  }
+  return null
+}
+
 function escapeCsvCell(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return ""
   if (typeof value === "number") {
@@ -170,31 +187,48 @@ export function downloadPngBlob(filename: string, blob: Blob): void {
   triggerDownload(blob, safe)
 }
 
+export function serializeEChartsSvg(container: HTMLElement): string {
+  const chartRoot =
+    (container.querySelector("[data-chart]") as HTMLElement | null) ??
+    (container.matches("[data-chart]") ? container : null)
+  if (!chartRoot) throw new Error("Chart container not found")
+  const svg = chartRoot.querySelector("svg")
+  if (!svg) throw new Error("Chart SVG not available")
+  const clone = svg.cloneNode(true) as SVGElement
+  if (!clone.getAttribute("xmlns"))
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg")
+  let backgroundColor = resolveNearestBackgroundColor(container)
+  if (!backgroundColor) {
+    backgroundColor = getComputedStyle(document.body).backgroundColor
+  }
+  if (backgroundColor && !isTransparentBackground(backgroundColor)) {
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect")
+    rect.setAttribute("x", "0")
+    rect.setAttribute("y", "0")
+    rect.setAttribute("width", "100%")
+    rect.setAttribute("height", "100%")
+    rect.setAttribute("fill", backgroundColor)
+    clone.insertBefore(rect, clone.firstChild)
+  }
+  return new XMLSerializer().serializeToString(clone)
+}
+
+export function downloadSvg(filename: string, svgSource: string): void {
+  const safe = filename.endsWith(".svg") ? filename : `${filename}.svg`
+  const blob = new Blob([svgSource], { type: "image/svg+xml;charset=utf-8" })
+  triggerDownload(blob, safe)
+}
+
 export async function captureElementPng(element: HTMLElement): Promise<Blob> {
   const { toBlob } = await import("html-to-image")
-  let backgroundColor: string | null = null
-  let current: HTMLElement | null = element
-  while (current) {
-    const styles = getComputedStyle(current)
-    const candidate = styles.backgroundColor
-    if (candidate && !isTransparentBackground(candidate)) {
-      backgroundColor = candidate
-      break
-    }
-    const gradientColor = firstGradientColor(styles.backgroundImage)
-    if (gradientColor && !isTransparentBackground(gradientColor)) {
-      backgroundColor = gradientColor
-      break
-    }
-    current = current.parentElement
-  }
+  let backgroundColor = resolveNearestBackgroundColor(element)
   if (!backgroundColor) {
     backgroundColor = getComputedStyle(document.body).backgroundColor
   }
   const blob = await toBlob(element, {
     pixelRatio: 2,
     cacheBust: true,
-    backgroundColor,
+    backgroundColor: backgroundColor ?? undefined,
     filter: (node: HTMLElement) =>
       !(
         node instanceof HTMLElement && node.hasAttribute("data-export-controls")
