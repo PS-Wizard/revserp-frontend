@@ -2,7 +2,15 @@
 
 import { memo, useCallback, useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { AlertCircleIcon, PlayIcon, RefreshCwIcon } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  Loader2,
+  PlayIcon,
+  RefreshCwIcon,
+  X,
+} from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "~/components/ui/button"
 import {
@@ -12,7 +20,6 @@ import {
   CardTitle,
   CardDescription,
 } from "~/components/ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { Separator } from "~/components/ui/separator"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
@@ -23,6 +30,7 @@ import type {
   CrawlResponse,
   ProjectResponse,
 } from "~/lib/api.types"
+import { cn } from "~/lib/utils"
 
 type Props = {
   activeProject: ProjectResponse | null
@@ -125,11 +133,11 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
   )[0]
 
   return (
-    <div className="grid gap-4 px-4 lg:grid-cols-4 lg:px-6">
+    <div className="grid min-w-0 gap-5 px-6 lg:grid-cols-4 lg:px-8">
       <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Visibility Rate</CardDescription>
-          <CardTitle className="text-3xl font-bold tabular-nums">
+          <CardTitle className="text-3xl font-semibold tracking-tight tabular-nums">
             {rate}%
           </CardTitle>
         </CardHeader>
@@ -143,7 +151,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
       <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Total Mentions</CardDescription>
-          <CardTitle className="text-3xl font-bold tabular-nums">
+          <CardTitle className="text-3xl font-semibold tracking-tight tabular-nums">
             {mentioned}
             <span className="text-lg font-normal text-muted-foreground">
               /{total}
@@ -160,7 +168,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
       <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Average Rank</CardDescription>
-          <CardTitle className="text-3xl font-bold tabular-nums">
+          <CardTitle className="text-3xl font-semibold tracking-tight tabular-nums">
             {avgRank !== null ? `#${avgRank}` : "—"}
           </CardTitle>
         </CardHeader>
@@ -174,7 +182,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
       <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Top Model</CardDescription>
-          <CardTitle className="truncate text-xl font-bold">
+          <CardTitle className="truncate text-xl font-semibold tracking-tight">
             {topModel ? formatModelName(topModel[0]) : "—"}
           </CardTitle>
         </CardHeader>
@@ -260,7 +268,133 @@ function ResponseBody({ run }: { run: AIAuditRunResponse }) {
   )
 }
 
-function ResponseTabs({
+function QuestionStatusIcon({
+  status,
+}: {
+  status: AIAuditRunResponse["status"] | "pending"
+}) {
+  if (status === "pending" || status === "running") {
+    return (
+      <Loader2
+        aria-hidden="true"
+        className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+        strokeWidth={2.25}
+      />
+    )
+  }
+  if (status === "failed") {
+    return (
+      <X
+        aria-hidden="true"
+        className="size-3.5 shrink-0 text-destructive"
+        strokeWidth={2.5}
+      />
+    )
+  }
+  return (
+    <Check
+      aria-hidden="true"
+      className="size-3.5 shrink-0 text-emerald-500"
+      strokeWidth={2.5}
+    />
+  )
+}
+
+function QuestionRow({
+  order,
+  question,
+  run,
+  isLast,
+}: {
+  order: number
+  question?: string
+  run?: AIAuditRunResponse
+  isLast: boolean
+}) {
+  const status = run?.status ?? "pending"
+  const expandable = status === "success" || status === "failed"
+  const [open, setOpen] = useState(status === "failed")
+
+  useEffect(() => {
+    if (status === "failed") {
+      setOpen(true)
+      return
+    }
+    if (status === "success") setOpen(false)
+  }, [status])
+
+  const label = question?.trim() || `Question ${order}`
+
+  return (
+    <div className={cn("w-full", !isLast && "border-b border-border/40")}>
+      <button
+        aria-expanded={open}
+        className={cn(
+          "flex min-h-14 w-full items-center gap-3 rounded-md px-3 py-4 text-left transition-colors duration-100",
+          expandable && "hover:bg-muted/50",
+          !expandable && "cursor-default"
+        )}
+        disabled={!expandable}
+        onClick={() => {
+          if (!expandable) return
+          setOpen((current) => !current)
+        }}
+        type="button"
+      >
+        <QuestionStatusIcon status={status} />
+        <span className="min-w-0 flex-1 truncate text-[13px] leading-snug font-medium text-foreground/90">
+          <span className="mr-1.5 text-muted-foreground">{order}.</span>
+          {label}
+        </span>
+        {status === "failed" ? (
+          <span className="shrink-0 text-xs font-medium text-destructive">
+            Failed
+          </span>
+        ) : status === "pending" || status === "running" ? (
+          <span className="shrink-0 text-xs font-medium text-muted-foreground">
+            Running
+          </span>
+        ) : run ? (
+          <RankPill mentioned={run.mentioned_target} rank={run.target_rank} />
+        ) : null}
+        {expandable ? (
+          <ChevronDown
+            aria-hidden="true"
+            className={cn(
+              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-300",
+              open && "rotate-180"
+            )}
+            strokeWidth={2.2}
+          />
+        ) : (
+          <span aria-hidden="true" className="size-3.5 shrink-0" />
+        )}
+      </button>
+
+      {expandable ? (
+        <div
+          className="grid transition-[grid-template-rows,opacity] duration-300 motion-reduce:transition-none"
+          style={{
+            gridTemplateRows: open ? "1fr" : "0fr",
+            opacity: open ? 1 : 0,
+            transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)",
+          }}
+        >
+          <div className="overflow-hidden">
+            <div className="flex flex-col gap-3 px-3 pb-5 pl-10">
+              <p className="text-[13px] leading-relaxed text-muted-foreground">
+                {label}
+              </p>
+              {run ? <ResponseBody run={run} /> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function ModelResponseCards({
   audit,
   isRunning,
 }: {
@@ -295,8 +429,8 @@ function ResponseTabs({
   if (models.length === 0) {
     if (!isRunning) return null
     return (
-      <div className="px-4 lg:px-6">
-        <Card className="border-border/50">
+      <div className="h-[38rem] px-6 lg:h-[40rem] lg:px-8">
+        <Card className="flex h-full items-center border-border/50">
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
             <RefreshCwIcon className="size-4 animate-spin" />
             Waiting for the first responses…
@@ -307,86 +441,49 @@ function ResponseTabs({
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 px-4 lg:px-6">
-      <Tabs defaultValue={models[0]} className="gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold">Model Responses</h3>
-            <p className="text-xs text-muted-foreground">
-              What each model actually answered. Your brand is highlighted where
-              it ranked.
-            </p>
-          </div>
-          <TabsList>
-            {models.map((model) => {
-              const count = mentionCount(model)
-              return (
-                <TabsTrigger key={model} value={model}>
-                  {formatModelName(model)}
-                  <span
-                    className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
-                      count > 0
-                        ? "bg-emerald-500/15 text-emerald-500"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {count}/{orders.length}
-                  </span>
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-        </div>
-
-        {models.map((model) => (
-          <TabsContent key={model} value={model}>
-            <Card className="overflow-hidden border-border/50 py-0">
-              <ScrollArea className="h-[520px]">
-                <div className="flex flex-col divide-y divide-border/50">
-                  {orders.map((order) => {
-                    const run = runMap.get(`${order}:${model}`)
-                    const question = questionByOrder.get(order)
-                    return (
-                      <div
-                        key={order}
-                        className="flex flex-col gap-3 px-5 py-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <h4 className="min-w-0 break-words text-sm leading-snug font-medium text-foreground">
-                            <span className="mr-1.5 text-muted-foreground">
-                              {order}.
-                            </span>
-                            {question}
-                          </h4>
-                          {run && (
-                            <RankPill
-                              mentioned={run.mentioned_target}
-                              rank={run.target_rank}
-                            />
-                          )}
-                        </div>
-                        {!run ? (
-                          <div className="space-y-1.5 pl-1">
-                            {[...Array(4)].map((_, i) => (
-                              <div
-                                key={i}
-                                className="h-3 animate-pulse rounded bg-muted"
-                                style={{ width: `${60 + (i % 3) * 12}%` }}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <ResponseBody run={run} />
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </ScrollArea>
-            </Card>
-          </TabsContent>
-        ))}
-      </Tabs>
+    <div className="grid min-w-0 gap-5 px-6 max-lg:auto-rows-[38rem] lg:h-[40rem] lg:grid-cols-4 lg:grid-rows-1 lg:px-8">
+      {models.map((model) => {
+        const count = mentionCount(model)
+        return (
+          <Card
+            key={model}
+            className="flex h-full min-h-0 flex-col gap-0 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 py-0"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-5 pb-4">
+              <h3
+                className="truncate font-heading text-base font-semibold tracking-tight"
+                title={formatModelName(model)}
+              >
+                {formatModelName(model)}
+              </h3>
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+                  count > 0
+                    ? "bg-emerald-500/15 text-emerald-500"
+                    : "bg-muted text-muted-foreground"
+                )}
+              >
+                {count}/{orders.length}
+              </span>
+            </div>
+            <hr className="mx-5 shrink-0 border-0 border-t border-border/60" />
+            <ScrollArea className="min-h-0 flex-1 overflow-hidden">
+              <div className="flex flex-col px-3 py-4">
+                {orders.map((order, index) => (
+                  <QuestionRow
+                    key={order}
+                    order={order}
+                    question={questionByOrder.get(order)}
+                    run={runMap.get(`${order}:${model}`)}
+                    isLast={index === orders.length - 1}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          </Card>
+        )
+      })}
     </div>
   )
 }
@@ -426,11 +523,13 @@ function VisibilityGrid({
   const cols = models.length > 0 ? models : skeletonModels
 
   return (
-    <div className="flex min-w-0 flex-col gap-3 px-4 lg:px-6">
+    <div className="flex min-w-0 flex-col gap-3 px-6 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">Visibility Matrix</h3>
-          <p className="text-xs text-muted-foreground">
+        <div className="space-y-1">
+          <h3 className="font-heading text-base font-semibold tracking-tight">
+            Visibility matrix
+          </h3>
+          <p className="text-sm text-muted-foreground">
             Your brand&apos;s rank per question across every model.
           </p>
         </div>
@@ -438,20 +537,26 @@ function VisibilityGrid({
       </div>
 
       <Card className="min-w-0 gap-0 overflow-hidden border-border/50 py-0">
-        <div className="min-w-0 overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+        <div className="w-full min-w-0 overflow-x-auto">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-[44%]" />
+              {cols.map((model) => (
+                <col key={model} />
+              ))}
+            </colgroup>
             <thead>
               <tr className="border-b border-border/50 bg-muted/40 backdrop-blur">
-                <th className="w-[44%] px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   Question
                 </th>
                 {cols.map((model) => (
                   <th
                     key={model}
-                    className="min-w-[110px] px-3 py-3 text-center text-xs font-semibold text-muted-foreground"
+                    className="px-3 py-3 text-center text-xs font-semibold text-muted-foreground"
                     title={model}
                   >
-                    <span className="mx-auto block max-w-[130px] truncate">
+                    <span className="mx-auto block truncate">
                       {formatModelName(model)}
                     </span>
                   </th>
@@ -473,13 +578,13 @@ function VisibilityGrid({
                         <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
                       ) : (
                         <span
-                          className="flex gap-2 text-sm text-foreground/90"
+                          className="flex min-w-0 gap-2 text-sm text-foreground/90"
                           title={question}
                         >
                           <span className="shrink-0 text-xs font-medium text-muted-foreground">
                             {order}.
                           </span>
-                          <span className="line-clamp-2">{question}</span>
+                          <span className="min-w-0 line-clamp-2">{question}</span>
                         </span>
                       )}
                     </td>
@@ -539,7 +644,7 @@ function RunningBanner({
   const pct =
     totalEstimate > 0 ? Math.round((completedCount / totalEstimate) * 100) : 0
   return (
-    <div className="mx-4 flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-4 py-3 lg:mx-6">
+    <div className="mx-6 flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-5 py-4 lg:mx-8">
       <RefreshCwIcon className="size-4 shrink-0 animate-spin text-muted-foreground" />
       <div className="flex-1">
         <div className="mb-1.5 flex items-center justify-between text-sm">
@@ -571,7 +676,6 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   const projectId = activeProject?.id
   const crawlId = currentCrawl?.id
   const [isTriggeringRun, setIsTriggeringRun] = useState(false)
-  const [triggerError, setTriggerError] = useState<string | null>(null)
   const [activeAuditId, setActiveAuditId] = useState<string | null>(null)
 
   // Clear the pinned audit id when the selected crawl changes, so the
@@ -613,7 +717,6 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   const handleRunTest = useCallback(async () => {
     if (!projectId || !crawlId) return
     setIsTriggeringRun(true)
-    setTriggerError(null)
 
     try {
       const created = await clientApiPost<AIAuditResponse>(
@@ -628,7 +731,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
           queryKey: auditListQueryKey(projectId),
         })
       } else if (err instanceof ApiError && err.status === 400) {
-        setTriggerError(
+        toast.error(
           typeof err.details === "object" &&
             err.details !== null &&
             "error" in err.details
@@ -636,7 +739,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
             : "Could not start visibility test. Make sure AI questions have been generated first."
         )
       } else {
-        setTriggerError("Something went wrong. Please try again.")
+        toast.error("Something went wrong. Please try again.")
       }
     } finally {
       setIsTriggeringRun(false)
@@ -667,38 +770,33 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
     Math.max(1, Array.from(new Set(runs.map((r) => r.model_name))).length)
 
   return (
-    <div className="@container/main flex min-w-0 flex-1 flex-col gap-8 py-8">
+    <div className="@container/main flex min-w-0 max-w-full flex-1 flex-col gap-10 overflow-x-hidden py-10">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 px-4 lg:px-6">
-        <div>
-          <h2 className="text-lg font-semibold">LLM Visibility</h2>
-          <p className="text-sm text-muted-foreground">
+      <div className="flex items-start justify-between gap-6 px-6 lg:px-8">
+        <div className="space-y-2">
+          <h2 className="font-heading text-[1.75rem] leading-tight font-semibold tracking-tight text-foreground sm:text-[2rem]">
+            LLM Visibility
+          </h2>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {displayAudit?.completed_at
               ? `Last run ${new Date(displayAudit.completed_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
               : "Test how your brand appears across AI models"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {triggerError && (
-            <div className="flex items-center gap-1.5 text-sm text-destructive">
-              <AlertCircleIcon className="size-4 shrink-0" />
-              <span className="max-w-xs">{triggerError}</span>
-            </div>
+        <Button
+          onClick={handleRunTest}
+          disabled={!canRun}
+          size="sm"
+          variant={hasResults ? "outline" : "default"}
+          className="mt-1 shrink-0"
+        >
+          {isTriggeringRun ? (
+            <RefreshCwIcon className="size-4 animate-spin" />
+          ) : (
+            <PlayIcon className="size-4" />
           )}
-          <Button
-            onClick={handleRunTest}
-            disabled={!canRun}
-            size="sm"
-            variant={hasResults ? "outline" : "default"}
-          >
-            {isTriggeringRun ? (
-              <RefreshCwIcon className="size-4 animate-spin" />
-            ) : (
-              <PlayIcon className="size-4" />
-            )}
-            {hasResults ? "Re-run Test" : "Run Visibility Test"}
-          </Button>
-        </div>
+          {hasResults ? "Re-run Test" : "Run Visibility Test"}
+        </Button>
       </div>
 
       {/* Running progress banner */}
@@ -712,33 +810,30 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
       {/* Summary stats */}
       {successRuns.length > 0 && <SummaryCards runs={successRuns} />}
 
-      {successRuns.length > 0 && hasResults && (
-        <Separator className="mx-4 w-auto lg:mx-6" />
-      )}
-
-      {/* Per-model responses */}
+      {/* Per-model response cards */}
       {hasResults && (
-        <ResponseTabs audit={displayAudit!} isRunning={isRunning} />
+        <ModelResponseCards audit={displayAudit!} isRunning={isRunning} />
       )}
-
-      {hasResults && <Separator className="mx-4 w-auto lg:mx-6" />}
 
       {/* Results matrix */}
       {hasResults && (
-        <VisibilityGrid audit={displayAudit!} isRunning={isRunning} />
+        <div className="flex min-w-0 flex-col gap-10 pb-6">
+          <Separator className="mx-6 w-auto lg:mx-8" />
+          <VisibilityGrid audit={displayAudit!} isRunning={isRunning} />
+        </div>
       )}
 
       {/* Empty state */}
       {!hasResults && !isLoadingList && (
-        <div className="flex flex-1 items-center justify-center px-4">
+        <div className="flex flex-1 items-center justify-center px-6">
           <Card className="w-full max-w-md border-dashed border-border/50">
-            <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+            <CardContent className="flex flex-col items-center gap-4 py-14 text-center">
               <div className="flex size-12 items-center justify-center rounded-full bg-muted">
                 <PlayIcon className="size-5 text-muted-foreground" />
               </div>
               <div>
                 <p className="font-medium">No visibility data yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                   Run a visibility test to see how your brand appears across AI
                   models for your generated questions.
                 </p>
