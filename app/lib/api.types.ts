@@ -194,11 +194,19 @@ export type ScoreBreakdownIssueURLResponse = {
   severity: string
   message: string
   details: string
+  issue_id: string
+  work?: {
+    attempt_id: string
+    status: string
+    locked: boolean
+    contributed_by_me: boolean
+  }
 }
 
 export type ScoreBreakdownIssueURLsResponse = {
   urls: ScoreBreakdownIssueURLResponse[]
   pagination: PaginationResponse
+  work_actions_enabled: boolean
 }
 
 export type ProjectGSCSiteResponse = {

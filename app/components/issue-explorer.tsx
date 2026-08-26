@@ -10,7 +10,12 @@ import {
   useRef,
   useState,
 } from "react"
-import { DownloadIcon } from "lucide-react"
+import {
+  CheckCheckIcon,
+  DownloadIcon,
+  FilterIcon,
+  Loader2Icon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { TablePagination } from "~/components/issue-explorer/scope-controls"
@@ -25,10 +30,12 @@ import type {
   MergedIssueUrlRow,
   PillarScope,
 } from "~/components/issue-explorer/types"
+import { useIssueWorkActions } from "~/components/issue-explorer/use-issue-work"
 import {
   areStringArraysEqual,
   BucketUrlPager,
   urlRowKey,
+  type WorkStatusFilter,
 } from "~/components/issue-explorer/utils"
 import { useDragSelection } from "~/components/issue-explorer/use-drag-selection"
 import { formatBucketLabel } from "~/lib/utils"
@@ -41,13 +48,28 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb"
-import { buildApiUrl } from "~/lib/api"
+import { buildApiUrl, clientApiPost } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
+import type { IssueWorkStateResponse } from "~/components/summary/issue-workspace.types"
+
 import {
   downloadBlob,
   getExportFilename,
   readExportError,
 } from "~/components/app-navbar/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
 
 // --- Selection reducer ---
 
@@ -249,6 +271,9 @@ export const IssueExplorer = memo(function IssueExplorer({
   } = state
 
   const pagerRef = useRef<BucketUrlPager | null>(null)
+  const [workStatus, setWorkStatus] = useState<WorkStatusFilter>("all")
+  const [workRefreshToken, setWorkRefreshToken] = useState(0)
+  const [bulkPending, setBulkPending] = useState(false)
   const [urlState, setUrlState] = useState<{
     key: string
     pageRows: MergedIssueUrlRow[]
@@ -256,6 +281,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     total: number
     loading: boolean
     error: string
+    workActionsEnabled: boolean
   }>({
     key: "",
     pageRows: [],
@@ -263,6 +289,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     total: 0,
     loading: false,
     error: "",
+    workActionsEnabled: true,
   })
 
   const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
@@ -295,7 +322,17 @@ export const IssueExplorer = memo(function IssueExplorer({
   const pillarRows = useMemo<PillarScope[]>(
     () =>
       [...selectedPillars]
-        .sort((left, right) => right.total_penalty - left.total_penalty)
+        .sort((left, right) => {
+          const leftZero = left.issue_row_count === 0 ? 1 : 0
+          const rightZero = right.issue_row_count === 0 ? 1 : 0
+          if (leftZero !== rightZero) return leftZero - rightZero
+          if (right.total_penalty !== left.total_penalty)
+            return right.total_penalty - left.total_penalty
+          return (
+            left.label.localeCompare(right.label) ||
+            left.id.localeCompare(right.id)
+          )
+        })
         .map((pillar) => ({
           key: pillar.id,
           pillarLabel: pillar.label,
@@ -318,9 +355,17 @@ export const IssueExplorer = memo(function IssueExplorer({
 
   const bucketRows = useMemo(
     () =>
-      [...bucketScopes].sort(
-        (left, right) => right.bucket.total_penalty - left.bucket.total_penalty
-      ),
+      [...bucketScopes].sort((left, right) => {
+        const leftZero = left.bucket.issue_row_count === 0 ? 1 : 0
+        const rightZero = right.bucket.issue_row_count === 0 ? 1 : 0
+        if (leftZero !== rightZero) return leftZero - rightZero
+        if (right.bucket.total_penalty !== left.bucket.total_penalty)
+          return right.bucket.total_penalty - left.bucket.total_penalty
+        return (
+          left.bucket.label.localeCompare(right.bucket.label) ||
+          left.bucket.id.localeCompare(right.bucket.id)
+        )
+      }),
     [bucketScopes]
   )
 
@@ -342,9 +387,17 @@ export const IssueExplorer = memo(function IssueExplorer({
   const issueTypeRows = useMemo(
     () =>
       drilledBucket
-        ? [...drilledBucket.bucket.issues].sort(
-            (left, right) => right.affected_url_count - left.affected_url_count
-          )
+        ? [...drilledBucket.bucket.issues].sort((left, right) => {
+            const leftZero = left.issue_row_count === 0 ? 1 : 0
+            const rightZero = right.issue_row_count === 0 ? 1 : 0
+            if (leftZero !== rightZero) return leftZero - rightZero
+            if (right.affected_url_count !== left.affected_url_count)
+              return right.affected_url_count - left.affected_url_count
+            return (
+              left.label.localeCompare(right.label) ||
+              left.id.localeCompare(right.id)
+            )
+          })
         : [],
     [drilledBucket]
   )
@@ -367,6 +420,8 @@ export const IssueExplorer = memo(function IssueExplorer({
   useEffect(() => {
     dispatch({ type: "RESET" })
     pagerRef.current = null
+    setWorkStatus("all")
+    setWorkRefreshToken(0)
     setUrlState({
       key: "",
       pageRows: [],
@@ -374,8 +429,15 @@ export const IssueExplorer = memo(function IssueExplorer({
       total: 0,
       loading: false,
       error: "",
+      workActionsEnabled: true,
     })
   }, [crawlId])
+
+  const refreshUrls = useCallback(() => {
+    setWorkRefreshToken((v) => v + 1)
+  }, [])
+
+  const { markDone, undo, isPending } = useIssueWorkActions(refreshUrls)
 
   // --- Apply an external pillar, bucket, or issue type focus. ---
   const lastFocusTokenRef = useRef<number | null>(null)
@@ -389,27 +451,29 @@ export const IssueExplorer = memo(function IssueExplorer({
     if (!pillar) return
     lastFocusTokenRef.current = focusRequest.token
     autoSelectRef.current = focusRequest.autoSelect ?? null
+    if (pillar.issue_row_count === 0) return
     dispatch({ type: "DRILL_PILLAR", payload: pillarId })
     if (!focusRequest.bucketId) return
     const bucket = pillar.buckets.find((b) => b.id === focusRequest.bucketId)
     if (!bucket) return
+    if (bucket.issue_row_count === 0) return
     dispatch({ type: "DRILL_BUCKET", payload: `${pillarId}::${bucket.id}` })
-    if (
-      focusRequest.issueTypeId &&
-      bucket.issues.some((issue) => issue.id === focusRequest.issueTypeId)
-    ) {
-      dispatch({
-        type: "DRILL_ISSUE_TYPE",
-        payload: focusRequest.issueTypeId,
-      })
-    }
+    if (!focusRequest.issueTypeId) return
+    const issue = bucket.issues.find(
+      (issue) => issue.id === focusRequest.issueTypeId
+    )
+    if (!issue || issue.issue_row_count === 0) return
+    dispatch({
+      type: "DRILL_ISSUE_TYPE",
+      payload: focusRequest.issueTypeId,
+    })
   }, [focusRequest, effectivePillarId, selectedPillars])
 
   // --- Create a fresh lazy pager whenever the drilled issue type changes (the
   // issue type is part of the key so it recreates the pager) ---
   const urlCacheKey =
     drilledBucket && drilledIssueTypeId
-      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}`
+      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}::${workRefreshToken}`
       : ""
   useEffect(() => {
     if (!effectiveDrilledBucket || !crawlId) {
@@ -421,7 +485,8 @@ export const IssueExplorer = memo(function IssueExplorer({
     pagerRef.current = new BucketUrlPager(
       crawlId,
       effectiveDrilledBucket,
-      controller.signal
+      controller.signal,
+      workStatus
     )
     setUrlState({
       key: urlCacheKey,
@@ -430,10 +495,11 @@ export const IssueExplorer = memo(function IssueExplorer({
       total: 0,
       loading: false,
       error: "",
+      workActionsEnabled: true,
     })
 
     return () => controller.abort()
-  }, [crawlId, effectiveDrilledBucket, urlCacheKey])
+  }, [crawlId, effectiveDrilledBucket, urlCacheKey, workStatus])
 
   // --- Fetch only the page currently being displayed from the pager ---
   useEffect(() => {
@@ -446,7 +512,7 @@ export const IssueExplorer = memo(function IssueExplorer({
 
     pager
       .getPage(urlPageIndex, urlPageSize)
-      .then(async ({ rows, total }) => {
+      .then(async ({ rows, total, workActionsEnabled }) => {
         if (pagerRef.current !== pager) return
         setUrlState({
           key: urlCacheKey,
@@ -455,6 +521,7 @@ export const IssueExplorer = memo(function IssueExplorer({
           total,
           loading: false,
           error: "",
+          workActionsEnabled,
         })
 
         // Treemap clicks request an auto-selection of the first N rows. Only
@@ -492,12 +559,31 @@ export const IssueExplorer = memo(function IssueExplorer({
       })
   }, [crawlId, effectiveDrilledBucket, urlCacheKey, urlPageIndex, urlPageSize])
 
+  const handleWorkStatusChange = useCallback((value: WorkStatusFilter) => {
+    setWorkStatus(value)
+    dispatch({ type: "SET_URL_PAGE_INDEX", payload: 0 })
+  }, [])
+
   const isCurrentUrlState = urlState.key === urlCacheKey
   const displayedUrls = isCurrentUrlState ? urlState.pageRows : []
   const loadedUrls = isCurrentUrlState ? urlState.loadedRows : []
   const totalUrlRows = isCurrentUrlState ? urlState.total : 0
   const isLoadingUrls = isCurrentUrlState && urlState.loading
   const urlError = isCurrentUrlState ? urlState.error : ""
+  const workActionsEnabled = isCurrentUrlState
+    ? urlState.workActionsEnabled
+    : true
+
+  const bulkActionableCount = useMemo(() => {
+    if (!displayedUrls.length || !checkedUrlKeys.length) return 0
+    const checkedSet = new Set(checkedUrlKeys)
+    return displayedUrls.filter(
+      (row) =>
+        checkedSet.has(urlRowKey(row)) &&
+        (!row.work || row.work.status === "still_open") &&
+        row.issue_id
+    ).length
+  }, [displayedUrls, checkedUrlKeys])
 
   const paginatedPillarRows = useMemo(() => {
     const start = pillarPageIndex * pillarPageSize
@@ -514,9 +600,11 @@ export const IssueExplorer = memo(function IssueExplorer({
     return issueTypeRows.slice(start, start + issueTypePageSize)
   }, [issueTypeRows, issueTypePageIndex, issueTypePageSize])
 
-  // --- Selection toggles ---
+  // --- Selection toggles (guard zero-issue rows) ---
   const onTogglePillar = useCallback(
     (key: string) => {
+      const row = pillarRows.find((r) => r.key === key)
+      if (!row || row.pillar.issue_row_count === 0) return
       dispatch({
         type: "SET_CHECKED_PILLARS",
         payload: checkedPillarIds.includes(key)
@@ -524,14 +612,18 @@ export const IssueExplorer = memo(function IssueExplorer({
           : [...checkedPillarIds, key],
       })
     },
-    [checkedPillarIds]
+    [checkedPillarIds, pillarRows]
   )
 
   const onToggleAllPillars = useCallback(
     (checked: boolean) => {
       dispatch({
         type: "SET_CHECKED_PILLARS",
-        payload: checked ? pillarRows.map((row) => row.key) : [],
+        payload: checked
+          ? pillarRows
+              .filter((row) => row.pillar.issue_row_count !== 0)
+              .map((row) => row.key)
+          : [],
       })
     },
     [pillarRows]
@@ -539,6 +631,8 @@ export const IssueExplorer = memo(function IssueExplorer({
 
   const onToggleBucket = useCallback(
     (key: string) => {
+      const row = bucketRows.find((r) => r.key === key)
+      if (!row || row.bucket.issue_row_count === 0) return
       dispatch({
         type: "SET_CHECKED_BUCKETS",
         payload: checkedBucketKeys.includes(key)
@@ -546,14 +640,18 @@ export const IssueExplorer = memo(function IssueExplorer({
           : [...checkedBucketKeys, key],
       })
     },
-    [checkedBucketKeys]
+    [bucketRows, checkedBucketKeys]
   )
 
   const onToggleAllBuckets = useCallback(
     (checked: boolean) => {
       dispatch({
         type: "SET_CHECKED_BUCKETS",
-        payload: checked ? bucketRows.map((row) => row.key) : [],
+        payload: checked
+          ? bucketRows
+              .filter((row) => row.bucket.issue_row_count !== 0)
+              .map((row) => row.key)
+          : [],
       })
     },
     [bucketRows]
@@ -561,6 +659,8 @@ export const IssueExplorer = memo(function IssueExplorer({
 
   const onToggleIssueType = useCallback(
     (key: string) => {
+      const row = issueTypeRows.find((r) => r.id === key)
+      if (!row || row.issue_row_count === 0) return
       dispatch({
         type: "SET_CHECKED_ISSUE_TYPES",
         payload: checkedIssueTypeKeys.includes(key)
@@ -568,14 +668,18 @@ export const IssueExplorer = memo(function IssueExplorer({
           : [...checkedIssueTypeKeys, key],
       })
     },
-    [checkedIssueTypeKeys]
+    [checkedIssueTypeKeys, issueTypeRows]
   )
 
   const onToggleAllIssueTypes = useCallback(
     (checked: boolean) => {
       dispatch({
         type: "SET_CHECKED_ISSUE_TYPES",
-        payload: checked ? issueTypeRows.map((row) => row.id) : [],
+        payload: checked
+          ? issueTypeRows
+              .filter((row) => row.issue_row_count !== 0)
+              .map((row) => row.id)
+          : [],
       })
     },
     [issueTypeRows]
@@ -603,6 +707,33 @@ export const IssueExplorer = memo(function IssueExplorer({
       })
     },
     [displayedUrls]
+  )
+
+  const handleDrillPillar = useCallback(
+    (key: string) => {
+      const row = pillarRows.find((r) => r.key === key)
+      if (!row || row.pillar.issue_row_count === 0) return
+      dispatch({ type: "DRILL_PILLAR", payload: key })
+    },
+    [pillarRows]
+  )
+
+  const handleDrillBucket = useCallback(
+    (key: string) => {
+      const row = bucketRows.find((r) => r.key === key)
+      if (!row || row.bucket.issue_row_count === 0) return
+      dispatch({ type: "DRILL_BUCKET", payload: key })
+    },
+    [bucketRows]
+  )
+
+  const handleDrillIssueType = useCallback(
+    (key: string) => {
+      const row = issueTypeRows.find((r) => r.id === key)
+      if (!row || row.issue_row_count === 0) return
+      dispatch({ type: "DRILL_ISSUE_TYPE", payload: key })
+    },
+    [issueTypeRows]
   )
 
   const pillarDrag = useDragSelection(
@@ -636,6 +767,46 @@ export const IssueExplorer = memo(function IssueExplorer({
       []
     )
   )
+
+  const onBulkMarkDone = useCallback(async () => {
+    if (!workActionsEnabled) {
+      toast.error("Select the latest completed crawl to update work.")
+      return
+    }
+    const checkedSet = new Set(checkedUrlKeys)
+    const actionable = displayedUrls.filter(
+      (row) =>
+        checkedSet.has(urlRowKey(row)) &&
+        (!row.work || row.work.status === "still_open") &&
+        row.issue_id
+    )
+    if (!actionable.length) {
+      toast.info("No actionable rows selected.")
+      return
+    }
+    setBulkPending(true)
+    let success = 0
+    let failed = 0
+    for (const row of actionable) {
+      try {
+        await clientApiPost<IssueWorkStateResponse>(
+          `/crawl-issues/${row.issue_id}/work-done`,
+          {}
+        )
+        success += 1
+      } catch {
+        failed += 1
+      }
+    }
+    setBulkPending(false)
+    if (success)
+      toast.success(
+        `Marked ${success} issue${success === 1 ? "" : "s"} as done`
+      )
+    if (failed) toast.error(`${failed} could not be marked`)
+    dispatch({ type: "SET_CHECKED_URLS", payload: [] })
+    refreshUrls()
+  }, [checkedUrlKeys, displayedUrls, refreshUrls, workActionsEnabled])
 
   const onExport = useCallback(async () => {
     if (!crawlId) return
@@ -675,7 +846,9 @@ export const IssueExplorer = memo(function IssueExplorer({
     try {
       const response = await fetch(
         buildApiUrl(`/crawls/${crawlId}/score-breakdown/export.xlsx?${params}`),
-        { credentials: "include" }
+        {
+          credentials: "include",
+        }
       )
       if (!response.ok) {
         throw new Error(await readExportError(response))
@@ -758,10 +931,15 @@ export const IssueExplorer = memo(function IssueExplorer({
                 <Fragment key={crumb.label}>
                   <BreadcrumbItem>
                     {isLast || !crumb.onClick ? (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      <BreadcrumbPage
+                        className="max-w-[20rem] truncate"
+                        title={crumb.label}
+                      >
+                        {crumb.label}
+                      </BreadcrumbPage>
                     ) : (
                       <BreadcrumbLink
-                        className="cursor-pointer"
+                        className="max-w-[20rem] cursor-pointer truncate"
                         render={
                           <button onClick={crumb.onClick} type="button" />
                         }
@@ -776,6 +954,82 @@ export const IssueExplorer = memo(function IssueExplorer({
             })}
           </BreadcrumbList>
         </Breadcrumb>
+        {drilledBucket && drilledIssueType ? (
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button size="sm" variant="outline">
+                    <FilterIcon data-icon="inline-start" />
+                    {workStatus === "all"
+                      ? "All issues"
+                      : workStatus === "needs_action"
+                        ? "Needs action"
+                        : "Marked done"}
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuGroup>
+                  <DropdownMenuRadioGroup
+                    value={workStatus}
+                    onValueChange={(v) =>
+                      handleWorkStatusChange(v as WorkStatusFilter)
+                    }
+                  >
+                    <DropdownMenuRadioItem value="all">
+                      All issues
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="needs_action">
+                      Needs action
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="marked_done">
+                      Marked done
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {workActionsEnabled ? (
+              <Button
+                disabled={bulkPending || bulkActionableCount === 0}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onBulkMarkDone()
+                }}
+                size="sm"
+                variant="outline"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {bulkPending ? (
+                  <Loader2Icon
+                    data-icon="inline-start"
+                    className="animate-spin"
+                  />
+                ) : (
+                  <CheckCheckIcon data-icon="inline-start" />
+                )}
+                Mark work done
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex">
+                      <Button disabled size="sm" variant="outline">
+                        <CheckCheckIcon data-icon="inline-start" />
+                        Mark work done
+                      </Button>
+                    </span>
+                  }
+                />
+                <TooltipContent>
+                  Select the latest completed crawl to update work.
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div>
@@ -790,14 +1044,16 @@ export const IssueExplorer = memo(function IssueExplorer({
             onToggleRow={onToggleUrl}
             rows={displayedUrls}
             totalRows={totalUrlRows}
+            workActionsEnabled={workActionsEnabled}
+            onMarkDone={markDone}
+            onUndo={undo}
+            isPending={isPending}
           />
         ) : drilledBucket ? (
           <IssueTypeTable
             checkedKeys={checkedIssueTypeKeys}
             getRowProps={issueTypeDrag.getRowProps}
-            onDrill={(key) =>
-              dispatch({ type: "DRILL_ISSUE_TYPE", payload: key })
-            }
+            onDrill={handleDrillIssueType}
             onToggleAll={onToggleAllIssueTypes}
             onToggleRow={onToggleIssueType}
             rows={paginatedIssueTypeRows}
@@ -807,7 +1063,7 @@ export const IssueExplorer = memo(function IssueExplorer({
           <BucketTable
             checkedKeys={checkedBucketKeys}
             getRowProps={bucketDrag.getRowProps}
-            onDrill={(key) => dispatch({ type: "DRILL_BUCKET", payload: key })}
+            onDrill={handleDrillBucket}
             onToggleAll={onToggleAllBuckets}
             onToggleRow={onToggleBucket}
             rows={paginatedBucketRows}
@@ -817,7 +1073,7 @@ export const IssueExplorer = memo(function IssueExplorer({
           <PillarTable
             checkedKeys={checkedPillarIds}
             getRowProps={pillarDrag.getRowProps}
-            onDrill={(key) => dispatch({ type: "DRILL_PILLAR", payload: key })}
+            onDrill={handleDrillPillar}
             onToggleAll={onToggleAllPillars}
             onToggleRow={onTogglePillar}
             rows={paginatedPillarRows}
@@ -833,7 +1089,7 @@ export const IssueExplorer = memo(function IssueExplorer({
           size="sm"
           variant="outline"
         >
-          <DownloadIcon className="size-4" />
+          <DownloadIcon data-icon="inline-start" />
           Export XLSX
         </Button>
         <TablePagination

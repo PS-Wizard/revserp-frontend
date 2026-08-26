@@ -3,6 +3,8 @@ import type { ScoreBreakdownIssueURLsResponse } from "~/lib/api.types"
 
 import type { BucketScope, MergedIssueUrlRow } from "./types"
 
+export type WorkStatusFilter = "all" | "needs_action" | "marked_done"
+
 /** Stable selection key for a URL row (a URL may appear under multiple issue types). */
 export function urlRowKey(row: MergedIssueUrlRow) {
   return `${row.issueTypeId}::${row.url}`
@@ -30,15 +32,26 @@ async function fetchIssueTypeUrlsPage(
   issueTypeLabel: string,
   limit: number,
   offset: number,
+  workStatus: WorkStatusFilter,
   signal?: AbortSignal
-): Promise<{ rows: MergedIssueUrlRow[]; total: number }> {
+): Promise<{
+  rows: MergedIssueUrlRow[]
+  total: number
+  workActionsEnabled: boolean
+}> {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  if (workStatus !== "all") params.set("work_status", workStatus)
   const response = await clientApiFetch<ScoreBreakdownIssueURLsResponse>(
-    `/crawls/${crawlId}/score-breakdown/${bucketScope.pillarId}/${bucketScope.bucketId}/${issueTypeId}/urls?limit=${limit}&offset=${offset}`,
+    `/crawls/${crawlId}/score-breakdown/${bucketScope.pillarId}/${bucketScope.bucketId}/${issueTypeId}/urls?${params.toString()}`,
     { signal }
   )
 
   return {
     total: response.pagination.total,
+    workActionsEnabled: response.work_actions_enabled ?? true,
     rows: response.urls.map((row) => ({
       ...row,
       source: issueTypeLabel,
@@ -70,11 +83,13 @@ type IssueTypeCursor = {
 export class BucketUrlPager {
   private cursors: IssueTypeCursor[]
   private merged: MergedIssueUrlRow[] = []
+  private workActionsEnabled: boolean | null = null
 
   constructor(
     private crawlId: string,
     private bucketScope: BucketScope,
-    private signal?: AbortSignal
+    private signal?: AbortSignal,
+    private workStatus: WorkStatusFilter = "all"
   ) {
     this.cursors = bucketScope.bucket.issues.map((issueType) => ({
       issueTypeId: issueType.id,
@@ -91,19 +106,26 @@ export class BucketUrlPager {
     return this.merged
   }
 
+  get workEnabled(): boolean {
+    return this.workActionsEnabled ?? true
+  }
+
   private async fillCursor(cursor: IssueTypeCursor, limit: number) {
-    const { rows, total } = await fetchIssueTypeUrlsPage(
+    const { rows, total, workActionsEnabled } = await fetchIssueTypeUrlsPage(
       this.crawlId,
       this.bucketScope,
       cursor.issueTypeId,
       cursor.issueTypeLabel,
       limit,
       cursor.offset,
+      this.workStatus,
       this.signal
     )
     cursor.total = total
     cursor.offset += rows.length
     cursor.buffer = rows
+    if (this.workActionsEnabled === null)
+      this.workActionsEnabled = workActionsEnabled
     if (!rows.length || cursor.offset >= total) cursor.exhausted = true
   }
 
@@ -134,7 +156,11 @@ export class BucketUrlPager {
   async getPage(
     pageIndex: number,
     pageSize: number
-  ): Promise<{ rows: MergedIssueUrlRow[]; total: number }> {
+  ): Promise<{
+    rows: MergedIssueUrlRow[]
+    total: number
+    workActionsEnabled: boolean
+  }> {
     const requiredCount = (pageIndex + 1) * pageSize
     await this.mergeUntil(() => this.merged.length >= requiredCount, pageSize)
 
@@ -148,13 +174,16 @@ export class BucketUrlPager {
         pageIndex * pageSize + pageSize
       ),
       total,
+      workActionsEnabled: this.workEnabled,
     }
   }
 
   /** Fetches and merges every remaining URL (used for explicit "select all"). */
-  async loadAll(
-    chunkSize = 100
-  ): Promise<{ rows: MergedIssueUrlRow[]; total: number }> {
+  async loadAll(chunkSize = 100): Promise<{
+    rows: MergedIssueUrlRow[]
+    total: number
+    workActionsEnabled: boolean
+  }> {
     await this.mergeUntil(
       () =>
         this.cursors.every(
@@ -166,6 +195,6 @@ export class BucketUrlPager {
       (sum, cursor) => sum + (cursor.total ?? 0),
       0
     )
-    return { rows: this.merged, total }
+    return { rows: this.merged, total, workActionsEnabled: this.workEnabled }
   }
 }
