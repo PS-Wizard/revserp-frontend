@@ -245,11 +245,11 @@ export function IssueWorkspaceSummaryView({
 
         <ChangesFoldSection
           count={noLonger.total}
-          emptyLabel="No unclaimed issue disappearances."
+          emptyLabel="No unlogged fixes in this crawl."
           isError={noLongerQuery.isError}
           isLoading={noLongerQuery.isLoading}
           onRetry={() => void noLongerQuery.refetch()}
-          title="No longer detected"
+          title="Unlogged fixes"
         >
           {noLongerByUrl.map(([url, issues]) => (
             <PageGroup key={url} onSelectUrl={onSelectUrl} url={url}>

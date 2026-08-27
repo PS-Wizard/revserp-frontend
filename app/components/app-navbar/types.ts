@@ -5,12 +5,8 @@ import type {
 } from "~/lib/api.types"
 
 export type DashboardView =
-  | "revserp-audit"
-  | "revserp-visibility"
-  | "search-console"
-  | "compare"
-export type AuditTab =
-  "summary" | "overview" | "seo" | "aeo" | "pagespeed" | "site-graph"
+  "revserp-audit" | "revserp-visibility" | "search-console" | "compare"
+export type AuditTab = "overview" | "seo" | "aeo" | "pagespeed" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
 
 /**
@@ -24,6 +20,7 @@ export function revbotHashTarget(
   { view: "revserp-audit"; tab: AuditTab } | { view: "search-console" } | null {
   switch (hash.replace(/-tab$/, "")) {
     case "summary":
+      return { view: "revserp-audit", tab: "overview" }
     case "overview":
     case "seo":
     case "aeo":

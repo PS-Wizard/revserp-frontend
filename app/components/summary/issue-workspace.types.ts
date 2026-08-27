@@ -86,6 +86,13 @@ export type IssueWorkspaceChangeStatus =
   | "awaiting_verification"
   | "new"
 
+export type IssueWorkspaceBrowseTarget =
+  | { kind: "summary" }
+  | { kind: "verified-fixes" }
+  | { kind: "awaiting-verification" }
+  | { kind: "unclaimed-fixes" }
+  | { kind: "url"; url: string }
+
 export interface IssueWorkspaceChangesResponse {
   items: Array<IssueWorkspaceIssue | IssueWorkspaceWorkItem>
   pagination: {

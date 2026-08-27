@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 import { clientApiFetch } from "~/lib/api"
 
 import type {
+  IssueWorkspaceBrowseTarget,
   IssueWorkspacePageDetail,
   IssueWorkspacePageSearchResponse,
   IssueWorkspaceSummary,
@@ -23,15 +24,39 @@ export function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced
 }
 
+export function getBrowseTargetLabel(target: IssueWorkspaceBrowseTarget) {
+  switch (target.kind) {
+    case "summary":
+      return "Summary"
+    case "verified-fixes":
+      return "Verified Fixes"
+    case "awaiting-verification":
+      return "Awaiting Verification"
+    case "unclaimed-fixes":
+      return "Unlogged Fixes"
+    case "url":
+      return target.url
+  }
+}
+
 export function useIssueWorkspace(crawlId: string | null) {
   const [searchInput, setSearchInput] = useState("")
-  const [selectedUrl, setSelectedUrl] = useState<string | null>(null)
+  const [browseTarget, setBrowseTarget] = useState<IssueWorkspaceBrowseTarget>({
+    kind: "verified-fixes",
+  })
   const debouncedSearch = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS)
 
   useEffect(() => {
-    setSelectedUrl(null)
+    setBrowseTarget({ kind: "verified-fixes" })
     setSearchInput("")
   }, [crawlId])
+
+  const selectedUrl = browseTarget.kind === "url" ? browseTarget.url : null
+  const isSummarySelected = browseTarget.kind === "summary"
+  const isChangesSectionSelected =
+    browseTarget.kind === "verified-fixes" ||
+    browseTarget.kind === "awaiting-verification" ||
+    browseTarget.kind === "unclaimed-fixes"
 
   const summaryQuery = useQuery({
     enabled: Boolean(crawlId),
@@ -59,8 +84,7 @@ export function useIssueWorkspace(crawlId: string | null) {
       )
     },
     getNextPageParam: (lastPage) => {
-      const nextOffset =
-        lastPage.pagination.offset + lastPage.pagination.count
+      const nextOffset = lastPage.pagination.offset + lastPage.pagination.count
       return nextOffset < lastPage.pagination.total ? nextOffset : undefined
     },
   })
@@ -82,18 +106,21 @@ export function useIssueWorkspace(crawlId: string | null) {
       ),
   })
 
-  const isSummarySelected = selectedUrl === null
+  const selectUrl = (url: string) => setBrowseTarget({ kind: "url", url })
 
   return {
+    browseTarget,
     debouncedSearch,
     flatPages,
+    isChangesSectionSelected,
     isSummarySelected,
     pageDetailQuery,
     pagesQuery,
     searchInput,
     selectedUrl,
-    summaryQuery,
+    setBrowseTarget,
     setSearchInput,
-    setSelectedUrl,
+    selectUrl,
+    summaryQuery,
   }
 }

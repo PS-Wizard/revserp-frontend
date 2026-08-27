@@ -16,29 +16,24 @@ import {
 import { redirect } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { XIcon } from "lucide-react"
 
 import type { DashboardView } from "~/components/app-navbar/types"
 import type { AuditTab } from "~/components/app-navbar/types"
 import { revbotHashTarget } from "~/components/app-navbar/types"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
-import { IssueWorkspaceView } from "~/components/summary/issue-workspace-view"
-import { SummaryScoreHistoryChart } from "~/components/summary-score-history-chart"
+import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspace-floating-panel"
+import { OverviewScoreHistoryChart } from "~/components/overview-score-history-chart"
+import { OverviewWorkFixesCards } from "~/components/overview-work-fixes-cards"
 import { ThinkingOrb } from "thinking-orbs"
-import { IssueExplorer } from "~/components/issue-explorer"
-import { IssueTreemap } from "~/components/issue-treemap"
 import {
   PillarAuditView,
   type CrawlBreakdown,
   type CrawlBreakdownScores,
 } from "~/components/pillar-audit-view"
 import { CompareView } from "~/components/compare/compare-view"
-import { SectionCards } from "~/components/section-cards"
-import { ScoreRadialChart } from "~/components/score-radial-chart"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
-import { cn } from "~/lib/utils"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
@@ -48,17 +43,13 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsContent } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
-import { getPillarChartColor } from "~/lib/pillar-colors"
 import type {
-  AIAuditListResponse,
-  AIAuditResponse,
   AppBootstrapResponse,
   CrawlResponse,
   MeResponse,
@@ -488,122 +479,6 @@ export default function AppPage() {
       (crawl) => crawl.id === previousCrawl?.id
     ) ?? previousCrawl
 
-  const { data: visibilityAuditsList } = useQuery({
-    queryKey: activeProject?.id
-      ? ["ai-audits-list", activeProject.id]
-      : ["ai-audits-list-disabled"],
-    queryFn: () =>
-      clientApiFetch<AIAuditListResponse>(
-        `/projects/${activeProject!.id}/ai-audits?limit=50&offset=0`
-      ),
-    enabled: Boolean(activeProject?.id),
-  })
-
-  const visibilityAuditId = visibilityAuditsList?.ai_audits.find(
-    (a) => a.crawl_id === stableCurrentCrawl?.id
-  )?.id
-
-  const { data: visibilityAudit } = useQuery({
-    queryKey: visibilityAuditId
-      ? ["ai-audit", visibilityAuditId]
-      : ["ai-audit-disabled"],
-    queryFn: () =>
-      clientApiFetch<AIAuditResponse>(`/ai-audits/${visibilityAuditId!}`),
-    enabled: Boolean(visibilityAuditId),
-  })
-
-  const visibilitySuccessRuns = (visibilityAudit?.runs ?? []).filter(
-    (r) => r.status === "success"
-  )
-  const hasVisibility = visibilitySuccessRuns.length > 0
-  const currentVisibilityRate = hasVisibility
-    ? Math.round(
-        (visibilitySuccessRuns.filter((r) => r.mentioned_target).length /
-          visibilitySuccessRuns.length) *
-          100
-      )
-    : undefined
-
-  // Render the backend-computed overall score (honors org-configurable
-  // overall_weights and the backend min-score clamp) rather than a
-  // client-side blend, so the dashboard matches crawl history/exports.
-  const currentOverall = stableCurrentCrawl?.overall_score ?? null
-  const previousOverall = stablePreviousCrawl?.overall_score ?? null
-
-  const currentBlendWeights = useMemo(
-    () =>
-      getNormalizedBlendWeights({
-        seo: stableCurrentCrawl?.seo_score,
-        aeo: stableCurrentCrawl?.aeo_score,
-        pagespeed: stableCurrentCrawl?.pagespeed_score,
-        visibility: currentVisibilityRate,
-      }),
-    [
-      stableCurrentCrawl?.seo_score,
-      stableCurrentCrawl?.aeo_score,
-      stableCurrentCrawl?.pagespeed_score,
-      currentVisibilityRate,
-    ]
-  )
-
-  const scoreSegments = useMemo(
-    () => [
-      // First entry renders as the innermost ring in recharts RadialBarChart.
-      ...(hasVisibility
-        ? [
-            {
-              key: "visibility",
-              label: "Visibility",
-              value: currentVisibilityRate,
-              color: "hsl(265, 60%, 62%)",
-              contribution: computeContribution(
-                currentBlendWeights.visibility,
-                currentVisibilityRate
-              ),
-            },
-          ]
-        : []),
-      {
-        key: "seo",
-        label: "SEO",
-        value: stableCurrentCrawl?.seo_score,
-        color: getPillarChartColor("seo", 0),
-        contribution: computeContribution(
-          currentBlendWeights.seo,
-          stableCurrentCrawl?.seo_score
-        ),
-      },
-      {
-        key: "aeo",
-        label: "AEO",
-        value: stableCurrentCrawl?.aeo_score,
-        color: getPillarChartColor("aeo", 0),
-        contribution: computeContribution(
-          currentBlendWeights.aeo,
-          stableCurrentCrawl?.aeo_score
-        ),
-      },
-      {
-        key: "pagespeed",
-        label: "PageSpeed",
-        value: stableCurrentCrawl?.pagespeed_score,
-        color: getPillarChartColor("pagespeed", 0),
-        contribution: computeContribution(
-          currentBlendWeights.pagespeed,
-          stableCurrentCrawl?.pagespeed_score
-        ),
-      },
-    ],
-    [
-      stableCurrentCrawl?.seo_score,
-      stableCurrentCrawl?.aeo_score,
-      stableCurrentCrawl?.pagespeed_score,
-      hasVisibility,
-      currentVisibilityRate,
-      currentBlendWeights,
-    ]
-  )
-
   const coverRef = useRef<HTMLDivElement>(null)
   const overallRef = useRef<HTMLDivElement>(null)
   const seoRef = useRef<HTMLDivElement>(null)
@@ -639,30 +514,6 @@ export default function AppPage() {
   const handleExportAudit = useCallback(() => {
     void exportPdfRef.current()
   }, [])
-
-  const issuesRef = useRef<HTMLDivElement>(null)
-  const issueFocusTokenRef = useRef(0)
-  const [issueFocus, setIssueFocus] = useState<{
-    pillarId?: string
-    bucketId?: string
-    issueTypeId?: string
-    token: number
-  } | null>(null)
-  const handleTreemapSelect = useCallback(
-    (selection: {
-      pillarId: string
-      bucketId?: string
-      issueTypeId?: string
-    }) => {
-      issueFocusTokenRef.current += 1
-      setIssueFocus({
-        ...selection,
-        token: issueFocusTokenRef.current,
-      })
-      issuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    },
-    []
-  )
 
   // A comparison needs a scored crawl on both sides. The near side follows the
   // current selection, so switching project or crawl invalidates it.
@@ -709,301 +560,191 @@ export default function AppPage() {
 
   return (
     <FeaturesProvider features={me.features}>
-      <WorkspaceShellPreview
-        activeProjectId={activeProject?.id}
-        auditTab={auditTab}
-        compareLabel={compareSides ? `vs ${compareSides.b.projectName}` : null}
-        crawlStatusLabel={crawlStatusLabel}
-        currentCrawl={currentCrawl}
-        isCrawlRunning={isCrawlRunning}
-        isExportingAudit={isExporting}
-        isPlatformAdmin={me.is_platform_admin}
-        onAuditTabChange={setAuditTab}
-        onCompareCrawl={handleCompareCrawl}
-        onCrawlStart={handleCrawlStart}
-        onExportAudit={handleExportAudit}
-        onRevbotConversationChange={handleRevbotConversationChange}
-        onViewChange={setView}
-        organizationId={me.active_org_id}
-        organizations={me.organizations}
-        projectCrawls={projectCrawls}
-        projects={projects}
-        revbotConversationId={revbotConversationId}
-        userEmail={me.user.email}
-        userName={me.user.name}
-        view={view}
+      <IssueWorkspacePanelProvider
+        crawlId={
+          stableCurrentCrawl?.status === "completed"
+            ? stableCurrentCrawl.id
+            : null
+        }
+        currentUserId={me.user.id}
       >
-        {cancelDialog}
+        <WorkspaceShellPreview
+          activeProjectId={activeProject?.id}
+          auditTab={auditTab}
+          compareLabel={
+            compareSides ? `vs ${compareSides.b.projectName}` : null
+          }
+          crawlStatusLabel={crawlStatusLabel}
+          currentCrawl={currentCrawl}
+          isCrawlRunning={isCrawlRunning}
+          isExportingAudit={isExporting}
+          isPlatformAdmin={me.is_platform_admin}
+          onAuditTabChange={setAuditTab}
+          onCompareCrawl={handleCompareCrawl}
+          onCrawlStart={handleCrawlStart}
+          onExportAudit={handleExportAudit}
+          onRevbotConversationChange={handleRevbotConversationChange}
+          onViewChange={setView}
+          organizationId={me.active_org_id}
+          organizations={me.organizations}
+          projectCrawls={projectCrawls}
+          projects={projects}
+          revbotConversationId={revbotConversationId}
+          userEmail={me.user.email}
+          userName={me.user.name}
+          view={view}
+        >
+          {cancelDialog}
 
-        {view === "revserp-audit" ? (
-          <div
-            className={
-              auditTab === "summary"
-                ? "@container/main relative flex min-h-0 flex-1 flex-col"
-                : "@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6"
-            }
-          >
-            <div
-              className={
-                auditTab === "summary"
-                  ? cn(
-                      "flex min-h-0 flex-1 flex-col",
-                      isViewingRunningCrawl
-                        ? "pointer-events-none blur-sm transition duration-200"
-                        : "transition duration-200"
-                    )
-                  : isViewingRunningCrawl
+          {view === "revserp-audit" ? (
+            <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
+              <div
+                className={
+                  isViewingRunningCrawl
                     ? "pointer-events-none blur-sm transition duration-200"
                     : "transition duration-200"
-              }
-            >
-              <AnimatePresence initial={false} mode="wait">
-                <motion.div
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  initial={{ opacity: 0 }}
-                  key={auditTab}
-                  className={
-                    auditTab === "summary"
-                      ? "flex min-h-0 flex-1 flex-col"
-                      : undefined
-                  }
-                  transition={{
-                    duration: shouldReduceMotion ? 0 : 0.15,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                >
-                  <Tabs
-                    value={auditTab}
-                    className={
-                      auditTab === "summary"
-                        ? "flex min-h-0 flex-1 flex-col gap-0"
-                        : "gap-6"
-                    }
+                }
+              >
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    initial={{ opacity: 0 }}
+                    key={auditTab}
+                    transition={{
+                      duration: shouldReduceMotion ? 0 : 0.15,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
                   >
-                    <TabsContent
-                      className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
-                      value="summary"
-                    >
-                      <button
-                        aria-label="Close summary and open overview"
-                        className="absolute top-1.5 right-3 z-30 rounded-md p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                        onClick={() => setAuditTab("overview")}
-                        type="button"
+                    <Tabs value={auditTab} className="gap-6">
+                      <TabsContent
+                        value="overview"
+                        className="flex flex-col gap-4 md:gap-6"
                       >
-                        <XIcon aria-hidden="true" className="size-4" />
-                      </button>
-                      <IssueWorkspaceView
-                        crawlId={
-                          stableCurrentCrawl?.status === "completed"
-                            ? stableCurrentCrawl.id
-                            : null
-                        }
-                        currentUserId={me.user.id}
-                      />
-                    </TabsContent>
-
-                    <TabsContent
-                      value="overview"
-                      className="flex flex-col gap-4 md:gap-6"
-                    >
-                      <div className="grid items-stretch gap-4 px-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6">
-                        <ScoreRadialChart
-                          centerLabel="Overall"
-                          centerValue={currentOverall}
-                          description="Current crawl pillar scores"
-                          segments={scoreSegments}
-                          title="Overall Score"
-                        />
-                        <SummaryScoreHistoryChart
-                          activeProjectName={activeProject?.name}
+                        <OverviewScoreHistoryChart
                           crawls={stableSortedCompletedCrawls}
                         />
-                      </div>
-                      <SectionCards
-                        crawls={stableSortedCompletedCrawls}
-                        currentCrawl={stableCurrentCrawl}
-                        previousCrawl={stablePreviousCrawl}
-                        overallValue={currentOverall}
-                        overallPreviousValue={previousOverall}
-                      />
-                      <div className="px-4 lg:px-6">
-                        <Card className="bg-gradient-to-br from-card via-card to-muted/30">
-                          <IssueTreemap
-                            breakdown={stableCurrentBreakdown}
-                            onSelect={handleTreemapSelect}
-                          />
-                          <Separator />
-                          <div className="scroll-mt-4" ref={issuesRef}>
-                            <IssueExplorer
-                              breakdown={stableCurrentBreakdown}
-                              focusRequest={issueFocus}
-                            />
-                          </div>
-                        </Card>
-                      </div>
-                    </TabsContent>
-
-                    {PILLAR_TABS.map(({ tab, pillarId, title }) => (
-                      <TabsContent key={tab} value={tab}>
-                        <PillarAuditView
-                          activeProjectName={activeProject?.name}
-                          crawlBreakdowns={stableCrawlBreakdowns}
-                          currentCrawlId={stableCurrentCrawl?.id}
-                          currentBreakdown={stableCurrentBreakdown}
-                          pillarId={pillarId}
-                          title={title}
+                        <OverviewWorkFixesCards
+                          crawlId={
+                            stableCurrentCrawl?.status === "completed"
+                              ? stableCurrentCrawl.id
+                              : null
+                          }
+                          currentUserId={me.user.id}
                         />
                       </TabsContent>
-                    ))}
 
-                    <TabsContent value="site-graph">
-                      {auditTab === "site-graph" ? (
-                        <Suspense fallback={null}>
-                          <SiteGraphView
+                      {PILLAR_TABS.map(({ tab, pillarId, title }) => (
+                        <TabsContent key={tab} value={tab}>
+                          <PillarAuditView
+                            activeProjectName={activeProject?.name}
+                            crawlBreakdowns={stableCrawlBreakdowns}
                             currentCrawlId={stableCurrentCrawl?.id}
+                            currentBreakdown={stableCurrentBreakdown}
+                            pillarId={pillarId}
+                            title={title}
                           />
-                        </Suspense>
-                      ) : null}
-                    </TabsContent>
-                  </Tabs>
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                        </TabsContent>
+                      ))}
 
-            {isViewingRunningCrawl ? (
-              <>
-                {/* Dimmer covers the content region only (below the navbar), so the
+                      <TabsContent value="site-graph">
+                        {auditTab === "site-graph" ? (
+                          <Suspense fallback={null}>
+                            <SiteGraphView
+                              currentCrawlId={stableCurrentCrawl?.id}
+                            />
+                          </Suspense>
+                        ) : null}
+                      </TabsContent>
+                    </Tabs>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
+
+              {isViewingRunningCrawl ? (
+                <>
+                  {/* Dimmer covers the content region only (below the navbar), so the
                   navbar stays interactive while a crawl runs. */}
-                <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
-                {/* Card is fixed to the viewport center (~50vh) so it's visible without
+                  <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
+                  {/* Card is fixed to the viewport center (~50vh) so it's visible without
                   scrolling regardless of page height. */}
-                <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
-                  <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                    <ThinkingOrb
-                      aria-hidden="true"
-                      className="shrink-0"
-                      size={64}
-                      state="working"
-                    />
-                    <div className="flex flex-col gap-1">
-                      <h2 className="text-lg font-medium">
-                        {crawlStatusLabel === "queued"
-                          ? "Queued"
-                          : "Crawl in progress"}
-                      </h2>
-                      <p className="text-sm text-muted-foreground">
-                        {activeProject?.name || "This project"} is currently{" "}
-                        {crawlStatusLabel}. Scores will refresh automatically
-                        when the crawl finishes.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : null}
-          </div>
-        ) : view === "compare" && compareSides ? (
-          <CompareView
-            a={compareSides.a}
-            b={compareSides.b}
-            onExit={handleExitCompare}
-          />
-        ) : view === "revserp-visibility" ? (
-          <RevserpVisibilityView
-            activeProject={activeProject}
-            currentCrawl={stableCurrentCrawl}
-          />
-        ) : view === "search-console" &&
-          me.features?.gsc_connector !== false ? (
-          <SearchConsoleView
-            activeProject={activeProject}
-            completedCrawls={stableSortedCompletedCrawls}
-            isOrganizationOwner={isOrganizationOwner}
-          />
-        ) : (
-          <div className="p-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{viewLabels[view]}</CardTitle>
-                <CardDescription>
-                  Placeholder app view for the protected dashboard shell.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-                <p>Current section: {viewLabels[view]}</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-        {showPrintSections && (
-          <PdfPrintSections
-            coverRef={coverRef}
-            overallRef={overallRef}
-            seoRef={seoRef}
-            aeoRef={aeoRef}
-            pagespeedRef={pagespeedRef}
-            crawlBreakdowns={stableCrawlBreakdowns}
-            recentCrawls={stableSortedCompletedCrawls}
-            currentCrawl={stableCurrentCrawl}
-            previousCrawl={stablePreviousCrawl}
-            currentBreakdown={stableCurrentBreakdown}
-            activeProjectName={activeProject?.name}
-          />
-        )}
-      </WorkspaceShellPreview>
+                  <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
+                    <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+                      <ThinkingOrb
+                        aria-hidden="true"
+                        className="shrink-0"
+                        size={64}
+                        state="working"
+                      />
+                      <div className="flex flex-col gap-1">
+                        <h2 className="text-lg font-medium">
+                          {crawlStatusLabel === "queued"
+                            ? "Queued"
+                            : "Crawl in progress"}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                          {activeProject?.name || "This project"} is currently{" "}
+                          {crawlStatusLabel}. Scores will refresh automatically
+                          when the crawl finishes.
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              ) : null}
+            </div>
+          ) : view === "compare" && compareSides ? (
+            <CompareView
+              a={compareSides.a}
+              b={compareSides.b}
+              onExit={handleExitCompare}
+            />
+          ) : view === "revserp-visibility" ? (
+            <RevserpVisibilityView
+              activeProject={activeProject}
+              currentCrawl={stableCurrentCrawl}
+            />
+          ) : view === "search-console" &&
+            me.features?.gsc_connector !== false ? (
+            <SearchConsoleView
+              activeProject={activeProject}
+              completedCrawls={stableSortedCompletedCrawls}
+              isOrganizationOwner={isOrganizationOwner}
+            />
+          ) : (
+            <div className="p-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{viewLabels[view]}</CardTitle>
+                  <CardDescription>
+                    Placeholder app view for the protected dashboard shell.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+                  <p>Current section: {viewLabels[view]}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          {showPrintSections && (
+            <PdfPrintSections
+              coverRef={coverRef}
+              overallRef={overallRef}
+              seoRef={seoRef}
+              aeoRef={aeoRef}
+              pagespeedRef={pagespeedRef}
+              crawlBreakdowns={stableCrawlBreakdowns}
+              recentCrawls={stableSortedCompletedCrawls}
+              currentCrawl={stableCurrentCrawl}
+              previousCrawl={stablePreviousCrawl}
+              currentBreakdown={stableCurrentBreakdown}
+              activeProjectName={activeProject?.name}
+            />
+          )}
+        </WorkspaceShellPreview>
+      </IssueWorkspacePanelProvider>
     </FeaturesProvider>
   )
-}
-
-const OVERALL_BLEND_WEIGHTS = {
-  seo: 0.55,
-  aeo: 0.2,
-  pagespeed: 0.15,
-  visibility: 0.1,
-}
-
-type BlendScores = {
-  seo?: number | null
-  aeo?: number | null
-  pagespeed?: number | null
-  visibility?: number | null
-}
-
-function getNormalizedBlendWeights(scores: BlendScores) {
-  const weights: Record<keyof BlendScores, number> = {
-    seo: 0,
-    aeo: 0,
-    pagespeed: 0,
-    visibility: 0,
-  }
-  let weightSum = 0
-  for (const key of Object.keys(OVERALL_BLEND_WEIGHTS) as Array<
-    keyof BlendScores
-  >) {
-    const score = scores[key]
-    if (typeof score === "number" && Number.isFinite(score)) {
-      weightSum += OVERALL_BLEND_WEIGHTS[key]
-    }
-  }
-  if (weightSum === 0) return weights
-  for (const key of Object.keys(OVERALL_BLEND_WEIGHTS) as Array<
-    keyof BlendScores
-  >) {
-    const score = scores[key]
-    if (typeof score === "number" && Number.isFinite(score)) {
-      weights[key] = OVERALL_BLEND_WEIGHTS[key] / weightSum
-    }
-  }
-  return weights
-}
-
-function computeContribution(
-  normalizedWeight: number,
-  score?: number | null
-): number | null {
-  if (typeof score !== "number" || !Number.isFinite(score)) return null
-  return Math.round(normalizedWeight * score)
 }
 
 function getCrawlTimestamp(crawl: CrawlResponse) {

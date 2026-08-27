@@ -17,33 +17,40 @@ interface MutationContext {
   optimisticAttemptId?: string
 }
 
+/** Invalidate list/summary caches shared by Overview cards and workspace sections. */
+export function invalidateIssueWorkspaceForCrawl(
+  queryClient: QueryClient,
+  crawlId: string
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: ["issue-workspace-summary", crawlId],
+      exact: true,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ["issue-workspace-changes", crawlId],
+    }),
+    queryClient.invalidateQueries({
+      queryKey: ["issue-workspace-pages", crawlId],
+    }),
+  ])
+}
+
 function refreshChangedWorkspace(
   queryClient: QueryClient,
   context: MutationContext | undefined
 ) {
   if (!context?.crawlId) return
 
-  const refreshes = [
-    queryClient.invalidateQueries({
-      queryKey: ["issue-workspace-summary", context.crawlId],
-      exact: true,
-    }),
-  ]
-  if (context.detailKey) {
-    refreshes.push(
-      queryClient.invalidateQueries({
-        queryKey: context.detailKey,
-        exact: true,
-      })
-    )
-  } else {
-    refreshes.push(
-      queryClient.invalidateQueries({
-        queryKey: ["issue-workspace-changes", context.crawlId],
-      })
-    )
-  }
-  void Promise.all(refreshes)
+  void Promise.all([
+    invalidateIssueWorkspaceForCrawl(queryClient, context.crawlId),
+    context.detailKey
+      ? queryClient.invalidateQueries({
+          queryKey: context.detailKey,
+          exact: true,
+        })
+      : Promise.resolve(),
+  ])
 }
 
 function contributorsFromResponse(response: IssueWorkStateResponse) {

@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
-  FileSearchIcon,
+  CircleHelpIcon,
+  ClockIcon,
   ExternalLinkIcon,
-  LayoutListIcon,
+  FileSearchIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   SearchIcon,
+  SquareCheckIcon,
+  XIcon,
 } from "lucide-react"
 
 import { Button } from "~/components/ui/button"
@@ -29,8 +32,9 @@ import {
 } from "~/components/ui/tooltip"
 import { cn } from "~/lib/utils"
 
-import { IssueWorkspaceSummaryView } from "./issue-workspace-summary"
+import { IssueWorkspaceChangesSectionView } from "./issue-workspace-changes-section-view"
 import type {
+  IssueWorkspaceBrowseTarget,
   IssueWorkspaceIssue,
   IssueWorkspacePageSearchResultPage,
   IssueWorkspaceWorkItem,
@@ -45,13 +49,76 @@ import {
   pageTitleFromUrl,
 } from "./issue-workspace-ui"
 import { useIssueWorkMutations } from "./use-issue-work-mutations"
-import { useIssueWorkspace } from "./use-issue-workspace"
+import { getBrowseTargetLabel, useIssueWorkspace } from "./use-issue-workspace"
 
 const PILLARS = [
   ["seo", "SEO"],
   ["aeo", "AEO"],
   ["pagespeed", "PageSpeed"],
 ] as const
+
+const CHANGES_SECTION_NAV: Array<{
+  target: Exclude<
+    IssueWorkspaceBrowseTarget,
+    { kind: "summary" } | { kind: "url" }
+  >
+  icon: typeof SquareCheckIcon
+}> = [
+  {
+    target: { kind: "verified-fixes" },
+    icon: SquareCheckIcon,
+  },
+  {
+    target: { kind: "awaiting-verification" },
+    icon: ClockIcon,
+  },
+  {
+    target: { kind: "unclaimed-fixes" },
+    icon: CircleHelpIcon,
+  },
+]
+
+function BrowseNavButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: typeof SquareCheckIcon
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition-colors",
+        active
+          ? "border-border/60 bg-background text-foreground shadow-xs"
+          : "border-transparent text-foreground/80 hover:bg-background/50"
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      <Icon
+        aria-hidden="true"
+        className={cn(
+          "size-4 shrink-0",
+          active ? "text-foreground" : "text-muted-foreground"
+        )}
+      />
+      <span
+        className={cn(
+          "text-[13px] leading-5",
+          active ? "font-semibold" : "font-medium"
+        )}
+      >
+        {label}
+      </span>
+    </button>
+  )
+}
 
 function sidebarPrimaryLine(page: IssueWorkspacePageSearchResultPage) {
   if (page.title?.trim()) return page.title.trim()
@@ -165,24 +232,30 @@ function taskStateForIssue(work?: IssueWorkspaceWorkItem) {
 export function IssueWorkspaceView({
   crawlId,
   currentUserId,
+  onClose,
+  requestedBrowseTarget,
 }: {
   crawlId: string | null
   currentUserId: string
+  onClose?: () => void
+  requestedBrowseTarget?: IssueWorkspaceBrowseTarget | null
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
   const workspace = useIssueWorkspace(crawlId)
   const {
+    browseTarget,
     flatPages,
-    isSummarySelected,
+    isChangesSectionSelected,
     pageDetailQuery,
     pagesQuery,
     searchInput,
     selectedUrl,
+    setBrowseTarget,
     setSearchInput,
-    setSelectedUrl,
+    selectUrl,
     summaryQuery,
   } = workspace
   const mutations = useIssueWorkMutations({
@@ -190,6 +263,12 @@ export function IssueWorkspaceView({
     currentUserId,
     selectedUrl,
   })
+
+  useEffect(() => {
+    if (requestedBrowseTarget) {
+      setBrowseTarget(requestedBrowseTarget)
+    }
+  }, [requestedBrowseTarget, setBrowseTarget])
 
   useEffect(() => {
     const sentinel = loadMoreRef.current
@@ -276,7 +355,54 @@ export function IssueWorkspaceView({
     window.requestAnimationFrame(() => searchRef.current?.focus())
   }
 
-  const selectSummary = () => setSelectedUrl(null)
+  const headerTitle =
+    browseTarget.kind === "url"
+      ? pagePath(browseTarget.url)
+      : getBrowseTargetLabel(browseTarget)
+
+  const renderChangesSection = () => {
+    if (!crawlId) return null
+
+    const commonProps = {
+      crawlId,
+      currentUserId,
+      isActive: true,
+      mutations,
+      onSelectUrl: selectUrl,
+    }
+
+    switch (browseTarget.kind) {
+      case "verified-fixes":
+        return (
+          <IssueWorkspaceChangesSectionView
+            {...commonProps}
+            description="Contributor-verified fixes confirmed by this crawl."
+            status="fixed"
+            title="Verified Fixes"
+          />
+        )
+      case "awaiting-verification":
+        return (
+          <IssueWorkspaceChangesSectionView
+            {...commonProps}
+            description="Recorded work waiting for the next crawl to confirm the fix."
+            status="awaiting_verification"
+            title="Awaiting Verification"
+          />
+        )
+      case "unclaimed-fixes":
+        return (
+          <IssueWorkspaceChangesSectionView
+            {...commonProps}
+            description="Issues that disappeared without any recorded work, so no contributor credit was assigned."
+            status="no_longer_detected"
+            title="Unlogged Fixes"
+          />
+        )
+      default:
+        return null
+    }
+  }
 
   if (!crawlId) {
     return (
@@ -333,21 +459,26 @@ export function IssueWorkspaceView({
         </div>
         <button
           className="flex max-w-full min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-foreground/90 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:hover:bg-transparent"
-          onClick={isSummarySelected ? selectSummary : focusSearch}
-          title={
-            isSummarySelected ? "Crawl summary" : (selectedUrl ?? "Search URLs")
-          }
+          onClick={browseTarget.kind === "url" ? focusSearch : undefined}
+          title={headerTitle}
           type="button"
         >
-          <span className="truncate">
-            {isSummarySelected
-              ? "Summary"
-              : selectedUrl
-                ? pagePath(selectedUrl)
-                : "Issue workspace"}
-          </span>
+          <span className="truncate">{headerTitle}</span>
         </button>
-        <div />
+        <div className="flex items-center justify-end">
+          {onClose ? (
+            <Button
+              aria-label="Close issue workspace"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={onClose}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <XIcon aria-hidden="true" className="size-4" />
+            </Button>
+          ) : null}
+        </div>
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -373,35 +504,20 @@ export function IssueWorkspaceView({
               ) : null}
             </div>
 
-            <button
-              aria-current={isSummarySelected ? "page" : undefined}
-              className={cn(
-                "mb-2 flex w-full items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition-colors",
-                isSummarySelected
-                  ? "border-border/60 bg-background text-foreground shadow-xs"
-                  : "border-transparent text-foreground/80 hover:bg-background/50"
-              )}
-              onClick={selectSummary}
-              type="button"
-            >
-              <LayoutListIcon
-                aria-hidden="true"
-                className={cn(
-                  "size-4 shrink-0",
-                  isSummarySelected
-                    ? "text-foreground"
-                    : "text-muted-foreground"
-                )}
-              />
-              <span
-                className={cn(
-                  "text-[13px] leading-5",
-                  isSummarySelected ? "font-semibold" : "font-medium"
-                )}
-              >
-                Summary
-              </span>
-            </button>
+            <div className="mb-3 flex flex-col gap-1">
+              {CHANGES_SECTION_NAV.map(({ target, icon }) => {
+                const active = browseTarget.kind === target.kind
+                return (
+                  <BrowseNavButton
+                    active={active}
+                    icon={icon}
+                    key={target.kind}
+                    label={getBrowseTargetLabel(target)}
+                    onClick={() => setBrowseTarget(target)}
+                  />
+                )
+              })}
+            </div>
 
             <div className="shrink-0 px-0.5 pb-3">
               <div className="relative">
@@ -449,7 +565,7 @@ export function IssueWorkspaceView({
               ) : flatPages.length ? (
                 <>
                   <UrlList
-                    onSelect={setSelectedUrl}
+                    onSelect={selectUrl}
                     pages={flatPages}
                     selectedUrl={selectedUrl}
                   />
@@ -473,40 +589,8 @@ export function IssueWorkspaceView({
         </aside>
 
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain">
-          {isSummarySelected ? (
-            summaryQuery.data ? (
-              <IssueWorkspaceSummaryView
-                crawlId={crawlId}
-                currentUserId={currentUserId}
-                isActive
-                mutations={mutations}
-                onSelectUrl={setSelectedUrl}
-                summary={summaryQuery.data}
-                summaryQuery={summaryQuery}
-              />
-            ) : summaryQuery.isError ? (
-              <Empty className="min-h-[28rem] border-0">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <FileSearchIcon />
-                  </EmptyMedia>
-                  <EmptyTitle>Could not load summary</EmptyTitle>
-                  <EmptyDescription>
-                    The workspace summary request failed.
-                  </EmptyDescription>
-                </EmptyHeader>
-                <Button
-                  onClick={() => void summaryQuery.refetch()}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  Retry
-                </Button>
-              </Empty>
-            ) : (
-              <DocumentSkeleton />
-            )
+          {isChangesSectionSelected ? (
+            renderChangesSection()
           ) : pageDetailQuery.isLoading ? (
             <DocumentSkeleton />
           ) : pageDetailQuery.isError ? (
@@ -607,8 +691,8 @@ export function IssueWorkspaceView({
                 </FoldSection>
                 <FoldSection
                   count={noLongerDetected.length}
-                  emptyLabel="No unclaimed issue disappearances on this URL."
-                  title="No longer detected"
+                  emptyLabel="No unlogged fixes on this URL."
+                  title="Unlogged fixes"
                 >
                   {noLongerDetected.map((issue) => (
                     <IssueTask

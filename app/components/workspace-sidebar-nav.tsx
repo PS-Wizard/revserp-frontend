@@ -11,7 +11,6 @@ import {
   SearchCheckIcon,
   SearchIcon,
   SparklesIcon,
-  SummaryIcon,
 } from "lucide-react"
 
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
@@ -139,18 +138,6 @@ export function WorkspaceSidebarNav({
         )}
         <SidebarMenu className="relative" onMouseLeave={clearPill}>
           <HoverPill className="inset-x-1 rounded-md" pill={pill} />
-          <NavItem
-            label="Summary"
-            icon={SummaryIcon}
-            active={view === "revserp-audit" && auditTab === "summary"}
-            collapsed={isSidebarCollapsed}
-            onClick={() => onSelectWorkspace("revserp-audit", "summary")}
-            itemRef={setItemRef("summary")}
-            onMouseEnter={() => showPill("summary")}
-          />
-          <SidebarMenuItem className="my-3">
-            <Separator />
-          </SidebarMenuItem>
           {auditSections.map(([label, tab, Icon]) => (
             <NavItem
               key={tab}

@@ -204,6 +204,7 @@ export function IssueTask({
   issue,
   note,
   onMarkDone,
+  onOpenUrl,
   onUndo,
   state,
 }: {
@@ -214,6 +215,7 @@ export function IssueTask({
   issue: IssueWorkspaceIssue
   note?: string
   onMarkDone?: () => void
+  onOpenUrl?: () => void
   onUndo?: () => void
   state: TaskState
 }) {
@@ -226,6 +228,19 @@ export function IssueTask({
     Boolean(attemptId) &&
     contributors.includes(currentUserId)
 
+  const openContent = (event: React.MouseEvent | React.KeyboardEvent) => {
+    if (!onOpenUrl) return
+    if ("key" in event && event.key !== "Enter" && event.key !== " ") return
+    if (
+      "target" in event &&
+      (event.target as HTMLElement).closest("a, button")
+    ) {
+      return
+    }
+    event.preventDefault()
+    onOpenUrl()
+  }
+
   return (
     <li className="flex items-start gap-3.5 py-4 first:pt-2">
       <TaskMark
@@ -235,7 +250,18 @@ export function IssueTask({
         onClick={canMarkDone ? onMarkDone : canUndo ? onUndo : undefined}
         state={state}
       />
-      <div className="min-w-0 flex-1 space-y-1.5">
+      <div
+        className={cn(
+          "min-w-0 flex-1 space-y-1.5",
+          onOpenUrl &&
+            "-mx-1 cursor-pointer rounded-md px-1 transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+        )}
+        onClick={onOpenUrl ? openContent : undefined}
+        onKeyDown={onOpenUrl ? openContent : undefined}
+        role={onOpenUrl ? "button" : undefined}
+        tabIndex={onOpenUrl ? 0 : undefined}
+        title={onOpenUrl ? "Open this URL in the issue workspace" : undefined}
+      >
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <p
             className={cn(
@@ -246,7 +272,9 @@ export function IssueTask({
           >
             {issue.message}
           </p>
-          <SeverityBadge severity={issue.severity} />
+          {issue.severity !== "pending" ? (
+            <SeverityBadge severity={issue.severity} />
+          ) : null}
           {issue.change_type === "new" ? (
             <StatBadge tone="blue">New</StatBadge>
           ) : null}
@@ -288,6 +316,7 @@ export function WorkTask({
   currentUserId,
   isMarkPending,
   issue,
+  onOpenUrl,
   onUndo,
   work,
 }: {
@@ -295,6 +324,7 @@ export function WorkTask({
   currentUserId: string
   isMarkPending?: boolean
   issue?: IssueWorkspaceIssue
+  onOpenUrl?: () => void
   onUndo?: () => void
   work: IssueWorkspaceWorkItem
 }) {
@@ -320,6 +350,7 @@ export function WorkTask({
           ? "The last crawl did not provide enough evidence. This will be checked again."
           : "Work is recorded and will be checked by the next crawl."
       }
+      onOpenUrl={onOpenUrl}
       onUndo={onUndo}
       state={work.status === "not_verified" ? "question" : "partial"}
     />
