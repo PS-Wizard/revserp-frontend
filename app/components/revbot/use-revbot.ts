@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import {
@@ -28,6 +29,7 @@ import type {
   AITurnSubmissionResponse,
   ProjectResponse,
 } from "~/lib/api.types"
+import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 import { normalizeToolCallStatus } from "./tool-call-status"
 
 const STORAGE_PREFIX = "revbot-turn:"
@@ -310,6 +312,7 @@ export function useRevbot({
   requestedConversationId: string | null
   onConversationChange: (conversationId: string | null) => void
 }) {
+  const queryClient = useQueryClient()
   const [effort, setEffortState] = useState<AIReasoningEffort>(() =>
     resolveEffort(allowedEfforts)
   )
@@ -685,6 +688,15 @@ export function useRevbot({
                       : call
                   ),
                 }))
+                if (
+                  payload.name === "update_business_profile" &&
+                  resultStatus === "completed"
+                ) {
+                  const projectId = projectIdRef.current
+                  if (projectId) {
+                    void invalidateBusinessProfile(queryClient, projectId)
+                  }
+                }
               } else if (
                 event === "text_delta" &&
                 isTextDeltaPayload(payload)
@@ -747,7 +759,7 @@ export function useRevbot({
         })
       }
     },
-    [refreshTerminalTurn, stopObserver, updateStatus]
+    [queryClient, refreshTerminalTurn, stopObserver, updateStatus]
   )
 
   useEffect(() => {
@@ -1337,7 +1349,6 @@ function isToolResultPayload(
       record.status === "awaiting")
   )
 }
-
 
 function isTextDeltaPayload(
   payload: unknown

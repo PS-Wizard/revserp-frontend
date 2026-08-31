@@ -6,7 +6,21 @@ import { toast } from "sonner"
 import { clientApiDelete, clientApiPost } from "~/lib/api"
 import type { IssueWorkStateResponse } from "~/components/summary/issue-workspace.types"
 
-export function useIssueWorkActions(onSuccess: () => void) {
+export type IssueWorkMutationResult =
+  | {
+      action: "mark"
+      issueId: string
+      response: IssueWorkStateResponse
+    }
+  | {
+      action: "undo"
+      attemptId: string
+      response: IssueWorkStateResponse
+    }
+
+export function useIssueWorkActions(
+  onSuccess: (result: IssueWorkMutationResult) => void
+) {
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set())
 
   const markPending = useCallback((key: string) => {
@@ -26,12 +40,12 @@ export function useIssueWorkActions(onSuccess: () => void) {
       const key = `mark:${issueId}`
       markPending(key)
       try {
-        await clientApiPost<IssueWorkStateResponse>(
+        const response = await clientApiPost<IssueWorkStateResponse>(
           `/crawl-issues/${issueId}/work-done`,
           {}
         )
         toast.success("Marked as done")
-        onSuccess()
+        onSuccess({ action: "mark", issueId, response })
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Could not mark as done"
@@ -48,11 +62,11 @@ export function useIssueWorkActions(onSuccess: () => void) {
       const key = `undo:${attemptId}`
       markPending(key)
       try {
-        await clientApiDelete<IssueWorkStateResponse>(
+        const response = await clientApiDelete<IssueWorkStateResponse>(
           `/issue-work-attempts/${attemptId}/contributors/me`
         )
         toast.success("Undone")
-        onSuccess()
+        onSuccess({ action: "undo", attemptId, response })
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not undo")
       } finally {

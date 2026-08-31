@@ -1,13 +1,86 @@
 import { clientApiFetch } from "~/lib/api"
 import type { ScoreBreakdownIssueURLsResponse } from "~/lib/api.types"
+import type { IssueWorkStateResponse } from "~/components/summary/issue-workspace.types"
 
 import type { BucketScope, MergedIssueUrlRow } from "./types"
 
 export type WorkStatusFilter = "all" | "needs_action" | "marked_done"
 
+type UrlRowWork = NonNullable<MergedIssueUrlRow["work"]>
+
+export function workFromMarkResponse(
+  response: IssueWorkStateResponse
+): UrlRowWork {
+  return {
+    attempt_id: response.attempt_id,
+    status: response.status,
+    locked: response.locked,
+    contributed_by_me: true,
+  }
+}
+
+export function workFromUndoResponse(
+  response: IssueWorkStateResponse
+): UrlRowWork | undefined {
+  if (!response.contributors.length) return undefined
+  return {
+    attempt_id: response.attempt_id,
+    status: response.status,
+    locked: response.locked,
+    contributed_by_me: false,
+  }
+}
+
+export function matchesWorkStatusFilter(
+  work: MergedIssueUrlRow["work"],
+  filter: WorkStatusFilter
+): boolean {
+  if (filter === "all") return true
+  const status = work?.status
+  if (filter === "marked_done") {
+    return status === "awaiting_verification" || status === "not_verified"
+  }
+  return (
+    !status || (status !== "awaiting_verification" && status !== "not_verified")
+  )
+}
+
+function applyWorkToRow(
+  row: MergedIssueUrlRow,
+  issueId: string,
+  work: MergedIssueUrlRow["work"]
+): MergedIssueUrlRow {
+  if (row.issue_id !== issueId) return row
+  return { ...row, work }
+}
+
 /** Stable selection key for a URL row (a URL may appear under multiple issue types). */
 export function urlRowKey(row: MergedIssueUrlRow) {
   return `${row.issueTypeId}::${row.url}`
+}
+
+export function urlFromRowKey(key: string) {
+  const separatorIndex = key.indexOf("::")
+  return separatorIndex === -1 ? key : key.slice(separatorIndex + 2)
+}
+
+export const MAX_RECOMMEND_FIXES_URLS = 10
+
+export function buildRecommendFixesPrompt({
+  pillarLabel,
+  bucketLabel,
+  issueTypeLabel,
+  urls,
+}: {
+  pillarLabel: string
+  bucketLabel: string
+  issueTypeLabel: string
+  urls: string[]
+}) {
+  const scope = `${pillarLabel} -> ${bucketLabel} -> ${issueTypeLabel}`
+  const urlPhrase = urls.length === 1 ? "this url" : "these urls"
+  const list = urls.map((url) => `- ${url}`).join("\n")
+  return `Help me fix ${scope} issues for ${urlPhrase}:\n${list}`
 }
 
 export function areStringArraysEqual(left: string[], right: string[]) {
@@ -196,5 +269,22 @@ export class BucketUrlPager {
       0
     )
     return { rows: this.merged, total, workActionsEnabled: this.workEnabled }
+  }
+
+  /** Keep pager cache aligned after a work mutation without resetting pagination. */
+  patchWorkForIssue(
+    issueId: string,
+    work: MergedIssueUrlRow["work"],
+    filter: WorkStatusFilter
+  ) {
+    const updateRows = (rows: MergedIssueUrlRow[]) =>
+      rows
+        .map((row) => applyWorkToRow(row, issueId, work))
+        .filter((row) => matchesWorkStatusFilter(row.work, filter))
+
+    this.merged = updateRows(this.merged)
+    for (const cursor of this.cursors) {
+      cursor.buffer = updateRows(cursor.buffer)
+    }
   }
 }

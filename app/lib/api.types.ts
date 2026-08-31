@@ -67,6 +67,7 @@ export type ProjectBusinessProfileResponse = {
   primary_location?: string
   business_description?: string
   seed_prompts: string[]
+  target_keywords: string[]
   created_at: string
   updated_at: string
 }

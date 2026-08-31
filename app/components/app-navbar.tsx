@@ -49,6 +49,7 @@ export type AppNavbarDialogsProps = {
     primaryCategory: string
     primaryLocation: string
     businessDescription: string
+    targetKeywords: string
     seedPrompts: string[]
     businessProfileError: string
     isLoadingBusinessProfile: boolean
@@ -68,6 +69,7 @@ export type AppNavbarDialogsProps = {
     setPrimaryCategory: (v: string) => void
     setPrimaryLocation: (v: string) => void
     setBusinessDescription: (v: string) => void
+    setTargetKeywords: (v: string) => void
   }
   createProject: CreateProjectState
   createProjectDispatch: React.Dispatch<CreateProjectEvent>
@@ -93,6 +95,7 @@ export function AppNavbarDialogs({
     primaryCategory,
     primaryLocation,
     businessDescription,
+    targetKeywords,
     seedPrompts,
     businessProfileError,
     isLoadingBusinessProfile,
@@ -110,6 +113,7 @@ export function AppNavbarDialogs({
     setPrimaryCategory,
     setPrimaryLocation,
     setBusinessDescription,
+    setTargetKeywords,
   } = businessProfile
 
   return (
@@ -129,6 +133,7 @@ export function AppNavbarDialogs({
         primaryCategory={primaryCategory}
         primaryLocation={primaryLocation}
         seedPrompts={seedPrompts}
+        targetKeywords={targetKeywords}
         websiteUrl={websiteUrl}
         onBrandNameChange={setBrandName}
         onBusinessDescriptionChange={setBusinessDescription}
@@ -137,6 +142,7 @@ export function AppNavbarDialogs({
         onPrimaryLocationChange={setPrimaryLocation}
         onSeedPromptChange={updateSeedPrompt}
         onSubmit={handleSaveBusinessProfile}
+        onTargetKeywordsChange={setTargetKeywords}
         onWebsiteUrlChange={setWebsiteUrl}
       />
 

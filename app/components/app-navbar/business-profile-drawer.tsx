@@ -16,7 +16,10 @@ import {
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
-import type { ProjectAIQuestionsResponse, ProjectResponse } from "~/lib/api.types"
+import type {
+  ProjectAIQuestionsResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 
 type BusinessProfileDrawerProps = {
   aiQuestions: ProjectAIQuestionsResponse | null
@@ -33,6 +36,7 @@ type BusinessProfileDrawerProps = {
   primaryCategory: string
   primaryLocation: string
   seedPrompts: string[]
+  targetKeywords: string
   websiteUrl: string
   onBrandNameChange: (value: string) => void
   onBusinessDescriptionChange: (value: string) => void
@@ -41,6 +45,7 @@ type BusinessProfileDrawerProps = {
   onPrimaryLocationChange: (value: string) => void
   onSeedPromptChange: (index: number, value: string) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onTargetKeywordsChange: (value: string) => void
   onWebsiteUrlChange: (value: string) => void
 }
 
@@ -59,6 +64,7 @@ export function BusinessProfileDrawer({
   primaryCategory,
   primaryLocation,
   seedPrompts,
+  targetKeywords,
   websiteUrl,
   onBrandNameChange,
   onBusinessDescriptionChange,
@@ -67,6 +73,7 @@ export function BusinessProfileDrawer({
   onPrimaryLocationChange,
   onSeedPromptChange,
   onSubmit,
+  onTargetKeywordsChange,
   onWebsiteUrlChange,
 }: BusinessProfileDrawerProps) {
   const fieldsDisabled =
@@ -113,12 +120,14 @@ export function BusinessProfileDrawer({
                   primaryCategory={primaryCategory}
                   primaryLocation={primaryLocation}
                   seedPrompts={seedPrompts}
+                  targetKeywords={targetKeywords}
                   websiteUrl={websiteUrl}
                   onBrandNameChange={onBrandNameChange}
                   onBusinessDescriptionChange={onBusinessDescriptionChange}
                   onPrimaryCategoryChange={onPrimaryCategoryChange}
                   onPrimaryLocationChange={onPrimaryLocationChange}
                   onSeedPromptChange={onSeedPromptChange}
+                  onTargetKeywordsChange={onTargetKeywordsChange}
                   onWebsiteUrlChange={onWebsiteUrlChange}
                 />
 
@@ -248,12 +257,14 @@ type BusinessProfileFieldsProps = {
   primaryCategory: string
   primaryLocation: string
   seedPrompts: string[]
+  targetKeywords: string
   websiteUrl: string
   onBrandNameChange: (value: string) => void
   onBusinessDescriptionChange: (value: string) => void
   onPrimaryCategoryChange: (value: string) => void
   onPrimaryLocationChange: (value: string) => void
   onSeedPromptChange: (index: number, value: string) => void
+  onTargetKeywordsChange: (value: string) => void
   onWebsiteUrlChange: (value: string) => void
 }
 
@@ -265,12 +276,14 @@ function BusinessProfileFields({
   primaryCategory,
   primaryLocation,
   seedPrompts,
+  targetKeywords,
   websiteUrl,
   onBrandNameChange,
   onBusinessDescriptionChange,
   onPrimaryCategoryChange,
   onPrimaryLocationChange,
   onSeedPromptChange,
+  onTargetKeywordsChange,
   onWebsiteUrlChange,
 }: BusinessProfileFieldsProps) {
   return (
@@ -336,6 +349,24 @@ function BusinessProfileFields({
           onChange={(event) => onBusinessDescriptionChange(event.target.value)}
           placeholder="Describe the business, audience, products, services, and positioning..."
           value={businessDescription}
+        />
+      </Field>
+
+      <Field>
+        <FieldLabel htmlFor="business-target-keywords">
+          Target keywords
+        </FieldLabel>
+        <FieldDescription>
+          Separate keywords with commas or new lines.
+        </FieldDescription>
+        <Textarea
+          className="min-h-24 resize-none"
+          disabled={disabled}
+          id="business-target-keywords"
+          key={targetKeywords}
+          onChange={(event) => onTargetKeywordsChange(event.target.value)}
+          placeholder={"seo audit\nsite crawler\nai visibility\ntechnical seo"}
+          defaultValue={targetKeywords}
         />
       </Field>
 

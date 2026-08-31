@@ -82,6 +82,7 @@ import {
   islandTransition,
 } from "~/components/dynamic-island-poc"
 import { focusRevbotPrompt } from "~/components/revbot/revbot-composer"
+import { RevbotStartPromptContext } from "~/components/revbot/revbot-start-prompt-context"
 import { RevbotViewContent } from "~/components/revbot/revbot-view"
 import { useRevbot } from "~/components/revbot/use-revbot"
 import { getCrawlTimestamp } from "~/lib/crawl"
@@ -393,6 +394,15 @@ export function WorkspaceShellPreview({
     onConversationChange: onRevbotConversationChange,
     requestedConversationId: revbotConversationId,
   })
+  const { newChat: startNewRevbotChat, send: sendRevbotMessage } = islandRevbot
+  const startRevbotPrompt = useCallback(
+    (content: string) => {
+      startNewRevbotChat()
+      setIslandState("minimized")
+      void sendRevbotMessage(content)
+    },
+    [sendRevbotMessage, startNewRevbotChat]
+  )
   const projectActions = useProjectActions({
     projects,
     activeProjectId,
@@ -1025,9 +1035,13 @@ export function WorkspaceShellPreview({
                     ease: [0.22, 1, 0.36, 1],
                   }}
                 >
-                  <ProjectPanelOpenContext.Provider value={openProjectPanel}>
-                    {children}
-                  </ProjectPanelOpenContext.Provider>
+                  <RevbotStartPromptContext.Provider
+                    value={features.ai_chat ? startRevbotPrompt : null}
+                  >
+                    <ProjectPanelOpenContext.Provider value={openProjectPanel}>
+                      {children}
+                    </ProjectPanelOpenContext.Provider>
+                  </RevbotStartPromptContext.Provider>
                 </motion.div>
               </AnimatePresence>
             </div>

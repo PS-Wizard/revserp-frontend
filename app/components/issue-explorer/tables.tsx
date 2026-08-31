@@ -1,5 +1,6 @@
 import { ThinkingOrb } from "thinking-orbs"
 import { useSearchParams } from "react-router"
+import { Linkify } from "~/components/linkify"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Checkbox } from "~/components/ui/checkbox"
@@ -885,45 +886,4 @@ function EmptyMessage({ message }: { message: string }) {
 
 function SeverityBadge({ severity }: { severity: string }) {
   return <Badge variant="outline">{severity || "Unknown"}</Badge>
-}
-
-// Splits text on http(s) URLs and renders the URLs as new-tab links.
-// Commas terminate matches because duplicate-content details contain
-// comma-separated URL lists.
-const URL_SPLIT_PATTERN = /(https?:\/\/[^\s,]+)/g
-
-function Linkify({
-  text,
-  tone = "primary",
-}: {
-  text: string
-  tone?: "primary" | "inherit"
-}) {
-  if (!text) return null
-  return (
-    <>
-      {text.split(URL_SPLIT_PATTERN).map((part, index) =>
-        /^https?:\/\//.test(part) ? (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(event) => event.stopPropagation()}
-            onPointerDown={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-            className={
-              tone === "inherit"
-                ? "break-all text-inherit underline decoration-current/40 underline-offset-2 hover:decoration-current"
-                : "break-all text-primary hover:underline"
-            }
-          >
-            {part}
-          </a>
-        ) : (
-          part
-        )
-      )}
-    </>
-  )
 }

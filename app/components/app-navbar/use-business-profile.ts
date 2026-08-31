@@ -1,5 +1,6 @@
 "use client"
 
+import { useQueryClient } from "@tanstack/react-query"
 import { useRef, useState } from "react"
 import type { FormEvent } from "react"
 
@@ -10,8 +11,27 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 import { clientApiFetch, clientApiPut } from "~/lib/api"
+import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 
 const EMPTY_SEED_PROMPTS = ["", "", "", "", ""]
+
+function formatTargetKeywords(keywords?: string[]) {
+  return keywords?.join("\n") ?? ""
+}
+
+function parseTargetKeywords(value: string): string[] {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const part of value.split(/[\n,]+/)) {
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    const lower = trimmed.toLowerCase()
+    if (seen.has(lower)) continue
+    seen.add(lower)
+    result.push(trimmed)
+  }
+  return result
+}
 
 type ProfileSnapshot = {
   brandName: string
@@ -20,9 +40,11 @@ type ProfileSnapshot = {
   primaryLocation: string
   businessDescription: string
   seedPrompts: string[]
+  targetKeywords: string
 }
 
 export function useBusinessProfile() {
+  const queryClient = useQueryClient()
   const [businessProfileProject, setBusinessProfileProject] =
     useState<ProjectResponse | null>(null)
   const [businessProfileStatus, setBusinessProfileStatus] =
@@ -35,6 +57,10 @@ export function useBusinessProfile() {
   const [primaryCategory, setPrimaryCategory] = useState("")
   const [primaryLocation, setPrimaryLocation] = useState("")
   const [businessDescription, setBusinessDescription] = useState("")
+  const [targetKeywords, setLoadedTargetKeywords] = useState("")
+  const targetKeywordsDraftRef = useRef("")
+  const [hasTargetKeywordsChanges, setHasTargetKeywordsChanges] =
+    useState(false)
   const [seedPrompts, setSeedPrompts] = useState(EMPTY_SEED_PROMPTS)
   const [businessProfileError, setBusinessProfileError] = useState("")
   const [isLoadingBusinessProfile, setIsLoadingBusinessProfile] =
@@ -57,6 +83,7 @@ export function useBusinessProfile() {
     primaryCategory !== savedSnapshot.primaryCategory ||
     primaryLocation !== savedSnapshot.primaryLocation ||
     businessDescription !== savedSnapshot.businessDescription ||
+    hasTargetKeywordsChanges ||
     seedPrompts.some((p, i) => p !== savedSnapshot.seedPrompts[i])
 
   function applyBusinessProfile(
@@ -73,6 +100,7 @@ export function useBusinessProfile() {
         { length: 5 },
         (_, index) => profile?.seed_prompts?.[index] ?? ""
       ),
+      targetKeywords: formatTargetKeywords(profile?.target_keywords),
     }
     setSavedSnapshot(snapshot)
     setBrandName(snapshot.brandName)
@@ -80,6 +108,9 @@ export function useBusinessProfile() {
     setPrimaryCategory(snapshot.primaryCategory)
     setPrimaryLocation(snapshot.primaryLocation)
     setBusinessDescription(snapshot.businessDescription)
+    setLoadedTargetKeywords(snapshot.targetKeywords)
+    targetKeywordsDraftRef.current = snapshot.targetKeywords
+    setHasTargetKeywordsChanges(false)
     setSeedPrompts(snapshot.seedPrompts)
   }
 
@@ -147,6 +178,7 @@ export function useBusinessProfile() {
     setBusinessProfileStatus(null)
     setBusinessProfileError("")
     setSavedSnapshot(null)
+    setHasTargetKeywordsChanges(false)
     setAIQuestions(null)
     setIsRegeneratingAIQuestions(false)
   }
@@ -157,6 +189,11 @@ export function useBusinessProfile() {
         promptIndex === index ? value : prompt
       )
     )
+  }
+
+  function updateTargetKeywords(value: string) {
+    targetKeywordsDraftRef.current = value
+    setHasTargetKeywordsChanges(value !== savedSnapshot?.targetKeywords)
   }
 
   async function handleSaveBusinessProfile(event: FormEvent<HTMLFormElement>) {
@@ -181,6 +218,7 @@ export function useBusinessProfile() {
           primary_category: primaryCategory,
           primary_location: primaryLocation,
           business_description: businessDescription,
+          target_keywords: parseTargetKeywords(targetKeywordsDraftRef.current),
           seed_prompts: seedPrompts.flatMap((prompt) => {
             const trimmedPrompt = prompt.trim()
             return trimmedPrompt ? [trimmedPrompt] : []
@@ -194,6 +232,7 @@ export function useBusinessProfile() {
         business_profile: profile,
       })
       applyBusinessProfile(profile, businessProfileProject)
+      void invalidateBusinessProfile(queryClient, businessProfileProject.id)
       closeBusinessProfileDrawer()
       pollAIQuestions(businessProfileProject.id)
     } catch (error) {
@@ -214,6 +253,7 @@ export function useBusinessProfile() {
     primaryCategory,
     primaryLocation,
     businessDescription,
+    targetKeywords,
     seedPrompts,
     businessProfileError,
     isLoadingBusinessProfile,
@@ -232,6 +272,7 @@ export function useBusinessProfile() {
     setPrimaryCategory,
     setPrimaryLocation,
     setBusinessDescription,
+    setTargetKeywords: updateTargetKeywords,
     setSeedPrompts,
   }
 }

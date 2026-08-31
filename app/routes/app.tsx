@@ -25,6 +25,7 @@ import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspace-floating-panel"
 import { OverviewScoreHistoryChart } from "~/components/overview-score-history-chart"
 import { OverviewWorkFixesCards } from "~/components/overview-work-fixes-cards"
+import { OverviewSecondaryCards } from "~/components/overview-secondary-cards"
 import { ThinkingOrb } from "thinking-orbs"
 import {
   PillarAuditView,
@@ -631,6 +632,9 @@ export default function AppPage() {
                               : null
                           }
                           currentUserId={me.user.id}
+                        />
+                        <OverviewSecondaryCards
+                          projectId={activeProject?.id ?? null}
                         />
                       </TabsContent>
 

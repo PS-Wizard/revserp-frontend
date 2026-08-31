@@ -30,13 +30,23 @@ import type {
   MergedIssueUrlRow,
   PillarScope,
 } from "~/components/issue-explorer/types"
-import { useIssueWorkActions } from "~/components/issue-explorer/use-issue-work"
+import {
+  useIssueWorkActions,
+  type IssueWorkMutationResult,
+} from "~/components/issue-explorer/use-issue-work"
 import {
   areStringArraysEqual,
+  buildRecommendFixesPrompt,
   BucketUrlPager,
+  matchesWorkStatusFilter,
+  MAX_RECOMMEND_FIXES_URLS,
+  urlFromRowKey,
   urlRowKey,
+  workFromMarkResponse,
+  workFromUndoResponse,
   type WorkStatusFilter,
 } from "~/components/issue-explorer/utils"
+import { useRevbotStartPrompt } from "~/components/revbot/revbot-start-prompt-context"
 import { useDragSelection } from "~/components/issue-explorer/use-drag-selection"
 import { formatBucketLabel } from "~/lib/utils"
 import { Button } from "~/components/ui/button"
@@ -50,6 +60,7 @@ import {
 } from "~/components/ui/breadcrumb"
 import { buildApiUrl, clientApiPost } from "~/lib/api"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
+import { useFeatures } from "~/lib/features"
 import type { IssueWorkStateResponse } from "~/components/summary/issue-workspace.types"
 
 import {
@@ -270,9 +281,10 @@ export const IssueExplorer = memo(function IssueExplorer({
     urlPageSize,
   } = state
 
+  const features = useFeatures()
+  const startPrompt = useRevbotStartPrompt()
   const pagerRef = useRef<BucketUrlPager | null>(null)
   const [workStatus, setWorkStatus] = useState<WorkStatusFilter>("all")
-  const [workRefreshToken, setWorkRefreshToken] = useState(0)
   const [bulkPending, setBulkPending] = useState(false)
   const [urlState, setUrlState] = useState<{
     key: string
@@ -421,7 +433,6 @@ export const IssueExplorer = memo(function IssueExplorer({
     dispatch({ type: "RESET" })
     pagerRef.current = null
     setWorkStatus("all")
-    setWorkRefreshToken(0)
     setUrlState({
       key: "",
       pageRows: [],
@@ -432,12 +443,6 @@ export const IssueExplorer = memo(function IssueExplorer({
       workActionsEnabled: true,
     })
   }, [crawlId])
-
-  const refreshUrls = useCallback(() => {
-    setWorkRefreshToken((v) => v + 1)
-  }, [])
-
-  const { markDone, undo, isPending } = useIssueWorkActions(refreshUrls)
 
   // --- Apply an external pillar, bucket, or issue type focus. ---
   const lastFocusTokenRef = useRef<number | null>(null)
@@ -473,8 +478,57 @@ export const IssueExplorer = memo(function IssueExplorer({
   // issue type is part of the key so it recreates the pager) ---
   const urlCacheKey =
     drilledBucket && drilledIssueTypeId
-      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}::${workRefreshToken}`
+      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}`
       : ""
+
+  const applyWorkMutation = useCallback(
+    (result: IssueWorkMutationResult) => {
+      setUrlState((prev) => {
+        if (prev.key !== urlCacheKey) return prev
+
+        let issueId: string
+        let work: MergedIssueUrlRow["work"]
+
+        if (result.action === "mark") {
+          issueId = result.issueId
+          work = workFromMarkResponse(result.response)
+        } else {
+          const row =
+            prev.loadedRows.find(
+              (candidate) => candidate.work?.attempt_id === result.attemptId
+            ) ??
+            prev.pageRows.find(
+              (candidate) => candidate.work?.attempt_id === result.attemptId
+            )
+          if (!row) return prev
+          issueId = row.issue_id
+          work = workFromUndoResponse(result.response)
+        }
+
+        pagerRef.current?.patchWorkForIssue(issueId, work, workStatus)
+
+        const withUpdatedWork = (rows: MergedIssueUrlRow[]) =>
+          rows
+            .map((row) => (row.issue_id === issueId ? { ...row, work } : row))
+            .filter((row) => matchesWorkStatusFilter(row.work, workStatus))
+
+        const pageRowsBefore = prev.pageRows
+        const pageRows = withUpdatedWork(prev.pageRows)
+        const loadedRows = withUpdatedWork(prev.loadedRows)
+        const removedFromPage = pageRowsBefore.length - pageRows.length
+
+        return {
+          ...prev,
+          pageRows,
+          loadedRows,
+          total: Math.max(0, prev.total - removedFromPage),
+        }
+      })
+    },
+    [urlCacheKey, workStatus]
+  )
+
+  const { markDone, undo, isPending } = useIssueWorkActions(applyWorkMutation)
   useEffect(() => {
     if (!effectiveDrilledBucket || !crawlId) {
       pagerRef.current = null
@@ -584,6 +638,48 @@ export const IssueExplorer = memo(function IssueExplorer({
         row.issue_id
     ).length
   }, [displayedUrls, checkedUrlKeys])
+
+  const selectedUrlCount = checkedUrlKeys.length
+  const recommendFixesOverLimit =
+    selectedUrlCount > MAX_RECOMMEND_FIXES_URLS
+  const canRecommendFixes = Boolean(
+    features.ai_chat &&
+      startPrompt &&
+      effectivePillar &&
+      drilledBucket &&
+      drilledIssueType &&
+      selectedUrlCount > 0 &&
+      !recommendFixesOverLimit
+  )
+
+  const onRecommendFixes = useCallback(() => {
+    if (
+      !startPrompt ||
+      !effectivePillar ||
+      !drilledBucket ||
+      !drilledIssueType ||
+      !canRecommendFixes
+    ) {
+      return
+    }
+
+    const urls = checkedUrlKeys.map(urlFromRowKey)
+    startPrompt(
+      buildRecommendFixesPrompt({
+        pillarLabel: effectivePillar.label,
+        bucketLabel: drilledBucket.bucketLabel,
+        issueTypeLabel: drilledIssueType.label,
+        urls,
+      })
+    )
+  }, [
+    canRecommendFixes,
+    checkedUrlKeys,
+    drilledBucket,
+    drilledIssueType,
+    effectivePillar,
+    startPrompt,
+  ])
 
   const paginatedPillarRows = useMemo(() => {
     const start = pillarPageIndex * pillarPageSize
@@ -789,10 +885,15 @@ export const IssueExplorer = memo(function IssueExplorer({
     let failed = 0
     for (const row of actionable) {
       try {
-        await clientApiPost<IssueWorkStateResponse>(
+        const response = await clientApiPost<IssueWorkStateResponse>(
           `/crawl-issues/${row.issue_id}/work-done`,
           {}
         )
+        applyWorkMutation({
+          action: "mark",
+          issueId: row.issue_id,
+          response,
+        })
         success += 1
       } catch {
         failed += 1
@@ -805,8 +906,7 @@ export const IssueExplorer = memo(function IssueExplorer({
       )
     if (failed) toast.error(`${failed} could not be marked`)
     dispatch({ type: "SET_CHECKED_URLS", payload: [] })
-    refreshUrls()
-  }, [checkedUrlKeys, displayedUrls, refreshUrls, workActionsEnabled])
+  }, [applyWorkMutation, checkedUrlKeys, displayedUrls, workActionsEnabled])
 
   const onExport = useCallback(async () => {
     if (!crawlId) return
@@ -1028,6 +1128,48 @@ export const IssueExplorer = memo(function IssueExplorer({
                 </TooltipContent>
               </Tooltip>
             )}
+            {features.ai_chat ? (
+              recommendFixesOverLimit ? (
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <span className="inline-flex">
+                        <Button
+                          className="border-border !bg-white !text-black hover:!bg-white/90 hover:!text-black dark:border-border dark:!bg-white dark:!text-black dark:hover:!bg-white/90 dark:hover:!text-black"
+                          disabled
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Recommend Fixes ({selectedUrlCount})
+                        </Button>
+                      </span>
+                    }
+                  />
+                  <TooltipContent>
+                    You can select a max of {MAX_RECOMMEND_FIXES_URLS} URLs to
+                    recommend fixes.
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <Button
+                  className="border-border !bg-white !text-black hover:!bg-white/90 hover:!text-black dark:border-border dark:!bg-white dark:!text-black dark:hover:!bg-white/90 dark:hover:!text-black"
+                  disabled={!canRecommendFixes}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRecommendFixes()
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {selectedUrlCount > 0
+                    ? `Recommend Fixes (${selectedUrlCount})`
+                    : "Recommend Fixes"}
+                </Button>
+              )
+            ) : null}
           </div>
         ) : null}
       </div>
