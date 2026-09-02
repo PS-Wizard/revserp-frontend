@@ -23,9 +23,12 @@ import { revbotHashTarget } from "~/components/app-navbar/types"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspace-floating-panel"
+import { OverviewPillarScoresSection } from "~/components/overview-pillar-scores-section"
 import { OverviewScoreHistoryChart } from "~/components/overview-score-history-chart"
 import { OverviewWorkFixesCards } from "~/components/overview-work-fixes-cards"
 import { OverviewSecondaryCards } from "~/components/overview-secondary-cards"
+import { PageHealthView } from "~/components/page-audit/page-health-view"
+import { usePageAudit } from "~/components/page-audit/page-audit-context"
 import { ThinkingOrb } from "thinking-orbs"
 import {
   PillarAuditView,
@@ -171,6 +174,109 @@ const viewLabels: Record<DashboardView, string> = {
   "revserp-visibility": "Revserp Visibility",
   "search-console": "Search Console",
   compare: "Compare",
+}
+
+function RevserpAuditPanel({
+  activeProjectId,
+  auditTab,
+  crawlBreakdowns,
+  completedCrawlId,
+  currentBreakdown,
+  currentUserId,
+  isViewingRunningCrawl,
+  shouldReduceMotion,
+  sortedCompletedCrawls,
+}: {
+  activeProjectId: string | null | undefined
+  auditTab: AuditTab
+  crawlBreakdowns: CrawlBreakdown[]
+  completedCrawlId: string | null
+  currentBreakdown: ScoreBreakdownResponse | null
+  currentUserId: string
+  isViewingRunningCrawl: boolean
+  shouldReduceMotion: boolean | null
+  sortedCompletedCrawls: CrawlResponse[]
+}) {
+  const pageAudit = usePageAudit()
+  const selectedPage = pageAudit?.selectedPage ?? null
+
+  const contentKey = selectedPage
+    ? `page-${selectedPage.id}`
+    : auditTab
+
+  const mainContent =
+    selectedPage && completedCrawlId ? (
+      <PageHealthView
+        breakdown={currentBreakdown}
+        crawlId={completedCrawlId}
+        page={selectedPage}
+      />
+    ) : (
+      <Tabs value={auditTab} className="gap-6">
+        <TabsContent
+          value="overview"
+          className="flex flex-col gap-4 md:gap-6"
+        >
+          <OverviewPillarScoresSection
+            crawlBreakdowns={crawlBreakdowns}
+            currentCrawlId={completedCrawlId ?? undefined}
+          />
+          <OverviewScoreHistoryChart crawls={sortedCompletedCrawls} />
+          <OverviewSecondaryCards projectId={activeProjectId ?? null} />
+          <OverviewWorkFixesCards
+            crawlId={completedCrawlId}
+            currentUserId={currentUserId}
+          />
+        </TabsContent>
+
+        {PILLAR_TABS.map(({ tab, pillarId, title }) => (
+          <TabsContent key={tab} value={tab}>
+            <PillarAuditView
+              crawlBreakdowns={crawlBreakdowns}
+              currentBreakdown={currentBreakdown}
+              currentCrawlId={completedCrawlId ?? undefined}
+              pillarId={pillarId}
+              title={title}
+            />
+          </TabsContent>
+        ))}
+
+        <TabsContent value="site-graph">
+          {auditTab === "site-graph" ? (
+            <Suspense fallback={null}>
+              <SiteGraphView currentCrawlId={completedCrawlId ?? undefined} />
+            </Suspense>
+          ) : null}
+        </TabsContent>
+      </Tabs>
+    )
+
+  return (
+    <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
+      <div
+        className={
+          isViewingRunningCrawl
+            ? "pointer-events-none blur-sm transition duration-200"
+            : "transition duration-200"
+        }
+      >
+        <AnimatePresence initial={false} mode="wait">
+          <motion.div
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            key={contentKey}
+            transition={{
+              duration: shouldReduceMotion ? 0 : 0.15,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            {mainContent}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  )
 }
 
 export default function AppPage() {
@@ -598,72 +704,22 @@ export default function AppPage() {
           {cancelDialog}
 
           {view === "revserp-audit" ? (
-            <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
-              <div
-                className={
-                  isViewingRunningCrawl
-                    ? "pointer-events-none blur-sm transition duration-200"
-                    : "transition duration-200"
+            <div className="relative">
+              <RevserpAuditPanel
+                activeProjectId={activeProject?.id}
+                auditTab={auditTab}
+                crawlBreakdowns={stableCrawlBreakdowns}
+                completedCrawlId={
+                  stableCurrentCrawl?.status === "completed"
+                    ? stableCurrentCrawl.id
+                    : null
                 }
-              >
-                <AnimatePresence initial={false} mode="wait">
-                  <motion.div
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    initial={{ opacity: 0 }}
-                    key={auditTab}
-                    transition={{
-                      duration: shouldReduceMotion ? 0 : 0.15,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
-                  >
-                    <Tabs value={auditTab} className="gap-6">
-                      <TabsContent
-                        value="overview"
-                        className="flex flex-col gap-4 md:gap-6"
-                      >
-                        <OverviewScoreHistoryChart
-                          crawls={stableSortedCompletedCrawls}
-                        />
-                        <OverviewWorkFixesCards
-                          crawlId={
-                            stableCurrentCrawl?.status === "completed"
-                              ? stableCurrentCrawl.id
-                              : null
-                          }
-                          currentUserId={me.user.id}
-                        />
-                        <OverviewSecondaryCards
-                          projectId={activeProject?.id ?? null}
-                        />
-                      </TabsContent>
-
-                      {PILLAR_TABS.map(({ tab, pillarId, title }) => (
-                        <TabsContent key={tab} value={tab}>
-                          <PillarAuditView
-                            activeProjectName={activeProject?.name}
-                            crawlBreakdowns={stableCrawlBreakdowns}
-                            currentCrawlId={stableCurrentCrawl?.id}
-                            currentBreakdown={stableCurrentBreakdown}
-                            pillarId={pillarId}
-                            title={title}
-                          />
-                        </TabsContent>
-                      ))}
-
-                      <TabsContent value="site-graph">
-                        {auditTab === "site-graph" ? (
-                          <Suspense fallback={null}>
-                            <SiteGraphView
-                              currentCrawlId={stableCurrentCrawl?.id}
-                            />
-                          </Suspense>
-                        ) : null}
-                      </TabsContent>
-                    </Tabs>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
+                currentBreakdown={stableCurrentBreakdown}
+                currentUserId={me.user.id}
+                isViewingRunningCrawl={isViewingRunningCrawl}
+                shouldReduceMotion={shouldReduceMotion}
+                sortedCompletedCrawls={stableSortedCompletedCrawls}
+              />
 
               {isViewingRunningCrawl ? (
                 <>

@@ -83,6 +83,10 @@ export function buildRecommendFixesPrompt({
   return `Help me fix ${scope} issues for ${urlPhrase}:\n${list}`
 }
 
+function responseBatchEnd(rows: MergedIssueUrlRow[]) {
+  return rows.length ? rows[rows.length - 1]?.url : null
+}
+
 export function areStringArraysEqual(left: string[], right: string[]) {
   if (left.length !== right.length) {
     return false
@@ -97,7 +101,6 @@ export function areStringArraysEqual(left: string[], right: string[]) {
   return true
 }
 
-/** Fetches one page of affected URLs for a single issue type, tagged with its issue type. */
 async function fetchIssueTypeUrlsPage(
   crawlId: string,
   bucketScope: BucketScope,
@@ -122,19 +125,21 @@ async function fetchIssueTypeUrlsPage(
     { signal }
   )
 
+  const rows = response.urls.map((row) => ({
+    ...row,
+    source: issueTypeLabel,
+    pillarId: bucketScope.pillarId,
+    pillarLabel: bucketScope.pillarLabel,
+    bucketId: bucketScope.bucketId,
+    bucketLabel: bucketScope.bucketLabel,
+    issueTypeId,
+    issueTypeLabel,
+  }))
+
   return {
     total: response.pagination.total,
     workActionsEnabled: response.work_actions_enabled ?? true,
-    rows: response.urls.map((row) => ({
-      ...row,
-      source: issueTypeLabel,
-      pillarId: bucketScope.pillarId,
-      pillarLabel: bucketScope.pillarLabel,
-      bucketId: bucketScope.bucketId,
-      bucketLabel: bucketScope.bucketLabel,
-      issueTypeId,
-      issueTypeLabel,
-    })),
+    rows,
   }
 }
 
@@ -162,7 +167,8 @@ export class BucketUrlPager {
     private crawlId: string,
     private bucketScope: BucketScope,
     private signal?: AbortSignal,
-    private workStatus: WorkStatusFilter = "all"
+    private workStatus: WorkStatusFilter = "all",
+    private scopedUrl?: string
   ) {
     this.cursors = bucketScope.bucket.issues.map((issueType) => ({
       issueTypeId: issueType.id,
@@ -194,11 +200,42 @@ export class BucketUrlPager {
       this.workStatus,
       this.signal
     )
+    if (this.workActionsEnabled === null) {
+      this.workActionsEnabled = workActionsEnabled
+    }
+
+    if (this.scopedUrl) {
+      const match = rows.find((row) => row.url === this.scopedUrl)
+      if (match) {
+        cursor.total = 1
+        cursor.buffer = [match]
+        cursor.exhausted = true
+        return
+      }
+
+      const batchEnd = responseBatchEnd(rows)
+      if (!rows.length || cursor.offset + rows.length >= total) {
+        cursor.total = 0
+        cursor.buffer = []
+        cursor.exhausted = true
+        return
+      }
+      if (batchEnd && batchEnd > this.scopedUrl) {
+        cursor.total = 0
+        cursor.buffer = []
+        cursor.exhausted = true
+        return
+      }
+
+      cursor.total = 0
+      cursor.offset += rows.length
+      cursor.buffer = []
+      return
+    }
+
     cursor.total = total
     cursor.offset += rows.length
     cursor.buffer = rows
-    if (this.workActionsEnabled === null)
-      this.workActionsEnabled = workActionsEnabled
     if (!rows.length || cursor.offset >= total) cursor.exhausted = true
   }
 
@@ -216,7 +253,7 @@ export class BucketUrlPager {
       )
 
       const candidates = this.cursors.filter((cursor) => cursor.buffer.length)
-      if (!candidates.length) break
+      if (!candidates.length) continue
 
       const next = candidates.reduce((min, cursor) =>
         cursor.buffer[0].url.localeCompare(min.buffer[0].url) < 0 ? cursor : min

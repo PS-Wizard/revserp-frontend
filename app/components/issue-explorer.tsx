@@ -250,6 +250,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   breakdown,
   focusRequest,
   initialPillarId,
+  scopedUrl,
 }: {
   breakdown: ScoreBreakdownResponse | null
   focusRequest?: {
@@ -260,6 +261,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     token: number
   } | null
   initialPillarId?: string
+  scopedUrl?: string
 }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const {
@@ -282,7 +284,8 @@ export const IssueExplorer = memo(function IssueExplorer({
   } = state
 
   const features = useFeatures()
-  const startPrompt = useRevbotStartPrompt()
+  const revbotPrompt = useRevbotStartPrompt()
+  const startPrompt = revbotPrompt?.startPrompt
   const pagerRef = useRef<BucketUrlPager | null>(null)
   const [workStatus, setWorkStatus] = useState<WorkStatusFilter>("all")
   const [bulkPending, setBulkPending] = useState(false)
@@ -478,7 +481,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   // issue type is part of the key so it recreates the pager) ---
   const urlCacheKey =
     drilledBucket && drilledIssueTypeId
-      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}`
+      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}::${scopedUrl ?? ""}`
       : ""
 
   const applyWorkMutation = useCallback(
@@ -540,7 +543,8 @@ export const IssueExplorer = memo(function IssueExplorer({
       crawlId,
       effectiveDrilledBucket,
       controller.signal,
-      workStatus
+      workStatus,
+      scopedUrl
     )
     setUrlState({
       key: urlCacheKey,
@@ -553,7 +557,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     })
 
     return () => controller.abort()
-  }, [crawlId, effectiveDrilledBucket, urlCacheKey, workStatus])
+  }, [crawlId, effectiveDrilledBucket, scopedUrl, urlCacheKey, workStatus])
 
   // --- Fetch only the page currently being displayed from the pager ---
   useEffect(() => {

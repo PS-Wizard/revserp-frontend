@@ -64,6 +64,7 @@ type NavItemProps = {
   icon: typeof GaugeIcon
   active: boolean
   collapsed: boolean
+  disabled?: boolean
   onClick: () => void
   itemRef: (element: HTMLElement | null) => void
   onMouseEnter: () => void
@@ -74,6 +75,7 @@ function NavItem({
   icon: Icon,
   active,
   collapsed,
+  disabled = false,
   onClick,
   itemRef,
   onMouseEnter,
@@ -84,12 +86,13 @@ function NavItem({
         <SidebarMenuButton
           className={
             collapsed
-              ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"}`
-              : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"}`
+              ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"} ${disabled ? "pointer-events-none opacity-40" : ""}`
+              : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"} ${disabled ? "pointer-events-none opacity-40" : ""}`
           }
+          disabled={disabled}
           isActive={active}
-          onClick={onClick}
-          onMouseEnter={onMouseEnter}
+          onClick={disabled ? undefined : onClick}
+          onMouseEnter={disabled ? undefined : onMouseEnter}
           title={collapsed ? label : undefined}
           type="button"
         >
@@ -113,6 +116,7 @@ function NavItem({
 
 type WorkspaceSidebarNavProps = {
   auditTab: AuditTab
+  auditNavDisabled?: boolean
   gscConnector: boolean
   isSidebarCollapsed: boolean
   onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
@@ -121,6 +125,7 @@ type WorkspaceSidebarNavProps = {
 
 export function WorkspaceSidebarNav({
   auditTab,
+  auditNavDisabled = false,
   gscConnector,
   isSidebarCollapsed,
   onSelectWorkspace,
@@ -145,6 +150,7 @@ export function WorkspaceSidebarNav({
               icon={Icon}
               active={view === "revserp-audit" && auditTab === tab}
               collapsed={isSidebarCollapsed}
+              disabled={auditNavDisabled}
               onClick={() => onSelectWorkspace("revserp-audit", tab)}
               itemRef={setItemRef(tab)}
               onMouseEnter={() => showPill(tab)}

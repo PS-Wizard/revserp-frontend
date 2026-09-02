@@ -60,15 +60,25 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
   const legendMinHeight = chartData.length > 0 ? chartData.length * 28 : 0
 
   return (
-    <Card className="flex flex-col bg-gradient-to-br from-card via-card to-muted/30">
+    <Card className="flex h-full flex-col bg-gradient-to-br from-card via-card to-muted/30">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-1 flex-col gap-4">
         {chartData.length === 0 ? (
-          <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
-            No score data yet.
+          <div className="relative mx-auto flex h-[250px] w-[250px] shrink-0 items-center justify-center">
+            {typeof centerValue === "number" && Number.isFinite(centerValue) ? (
+              <div className="flex size-20 items-center justify-center rounded-full border border-border/50 bg-background/70 text-center shadow-sm backdrop-blur-sm">
+                <span className="font-mono text-2xl leading-none font-semibold tabular-nums">
+                  {Math.round(centerValue)}%
+                </span>
+              </div>
+            ) : (
+              <span className="text-sm text-muted-foreground">
+                No score data yet.
+              </span>
+            )}
           </div>
         ) : (
           <>
@@ -144,7 +154,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
               ) : null}
             </div>
             <div
-              className="grid shrink-0 gap-2 text-sm"
+              className="mt-auto grid shrink-0 gap-2 text-sm"
               style={{ minHeight: legendMinHeight }}
             >
               {chartData.map((segment) => (

@@ -82,9 +82,17 @@ import {
   islandTransition,
 } from "~/components/dynamic-island-poc"
 import { focusRevbotPrompt } from "~/components/revbot/revbot-composer"
-import { RevbotStartPromptContext } from "~/components/revbot/revbot-start-prompt-context"
+import {
+  RevbotStartPromptContext,
+  type RevbotStartPromptOptions,
+} from "~/components/revbot/revbot-start-prompt-context"
 import { RevbotViewContent } from "~/components/revbot/revbot-view"
 import { useRevbot } from "~/components/revbot/use-revbot"
+import {
+  PageAuditContext,
+  type SelectedAuditPage,
+} from "~/components/page-audit/page-audit-context"
+import { PageSearchBar } from "~/components/page-audit/page-search-bar"
 import { getCrawlTimestamp } from "~/lib/crawl"
 import { clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
@@ -260,6 +268,8 @@ export function WorkspaceShellPreview({
   const [islandConversationTitle, setIslandConversationTitle] =
     useState("New chat")
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false)
+  const [selectedAuditPage, setSelectedAuditPage] =
+    useState<SelectedAuditPage | null>(null)
   // Stable opener handed to in-shell views (summary greeting) through context.
   const openProjectPanel = useCallback(() => setIsProjectPanelOpen(true), [])
   const [createProject, createProjectDispatch] = useReducer(
@@ -277,6 +287,18 @@ export function WorkspaceShellPreview({
   const workspaceContentKey = view
   const islandMorphTransition = islandTransition(shouldReduceMotion)
   const pendingIslandPromptFocusRef = useRef(false)
+
+  useEffect(() => {
+    setSelectedAuditPage(null)
+  }, [activeProjectId, currentCrawl?.id])
+
+  const pageAuditValue = useMemo(
+    () => ({
+      selectedPage: selectedAuditPage,
+      setSelectedPage: setSelectedAuditPage,
+    }),
+    [selectedAuditPage]
+  )
 
   function focusIslandRevbotPrompt() {
     requestAnimationFrame(() => {
@@ -396,12 +418,23 @@ export function WorkspaceShellPreview({
   })
   const { newChat: startNewRevbotChat, send: sendRevbotMessage } = islandRevbot
   const startRevbotPrompt = useCallback(
-    (content: string) => {
+    (content: string, options?: RevbotStartPromptOptions) => {
       startNewRevbotChat()
-      setIslandState("minimized")
+      if (!options?.keepDocked) {
+        setIslandState("minimized")
+      }
       void sendRevbotMessage(content)
     },
     [sendRevbotMessage, startNewRevbotChat]
+  )
+  const isRevbotTurnActive =
+    islandRevbot.status === "queued" || islandRevbot.status === "running"
+  const revbotStartPromptValue = useMemo(
+    () => ({
+      startPrompt: startRevbotPrompt,
+      isActive: isRevbotTurnActive,
+    }),
+    [isRevbotTurnActive, startRevbotPrompt]
   )
   const projectActions = useProjectActions({
     projects,
@@ -708,6 +741,7 @@ export function WorkspaceShellPreview({
               </SidebarContent>
               <WorkspaceSidebarNav
                 auditTab={auditTab}
+                auditNavDisabled={Boolean(selectedAuditPage)}
                 gscConnector={features.gsc_connector}
                 isSidebarCollapsed={isSidebarCollapsed}
                 onSelectWorkspace={selectWorkspace}
@@ -738,7 +772,7 @@ export function WorkspaceShellPreview({
             </SidebarFooter>
           </Sidebar>
           <section className="relative ml-16 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <header className="relative z-30 flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4 md:px-6">
+            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] items-center gap-3 border-b border-border px-4 md:px-6">
               <h1 className="flex min-w-0 items-center gap-1.5 text-sm">
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -878,7 +912,24 @@ export function WorkspaceShellPreview({
                   </DropdownPillSurface>
                 </DropdownMenu>
               </h1>
-              <div className="flex shrink-0 items-center justify-end gap-2">
+              {view === "revserp-audit" ? (
+                <PageSearchBar
+                  crawlId={
+                    currentCrawl?.status === "completed"
+                      ? currentCrawl.id
+                      : null
+                  }
+                  disabled={
+                    !currentCrawl || currentCrawl.status !== "completed"
+                  }
+                  onClearPage={() => setSelectedAuditPage(null)}
+                  onSelectPage={setSelectedAuditPage}
+                  selectedPage={selectedAuditPage}
+                />
+              ) : (
+                <div aria-hidden="true" />
+              )}
+              <div className="flex items-center justify-end gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -1036,11 +1087,13 @@ export function WorkspaceShellPreview({
                   }}
                 >
                   <RevbotStartPromptContext.Provider
-                    value={features.ai_chat ? startRevbotPrompt : null}
+                    value={features.ai_chat ? revbotStartPromptValue : null}
                   >
-                    <ProjectPanelOpenContext.Provider value={openProjectPanel}>
-                      {children}
-                    </ProjectPanelOpenContext.Provider>
+                    <PageAuditContext.Provider value={pageAuditValue}>
+                      <ProjectPanelOpenContext.Provider value={openProjectPanel}>
+                        {children}
+                      </ProjectPanelOpenContext.Provider>
+                    </PageAuditContext.Provider>
                   </RevbotStartPromptContext.Provider>
                 </motion.div>
               </AnimatePresence>
@@ -1050,7 +1103,7 @@ export function WorkspaceShellPreview({
             <LayoutGroup id="ai-island-group">
               {islandState === "docked" ? (
                 <DynamicIslandDockedChrome
-                  active={isIslandThinking}
+                  active={isIslandThinking || isRevbotTurnActive}
                   onOpen={openIsland}
                   transition={islandMorphTransition}
                 />

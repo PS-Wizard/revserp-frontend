@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { TagsIcon } from "lucide-react"
+import { Loader2, TagsIcon } from "lucide-react"
 
 import { OverviewKeywordCloud } from "~/components/overview-keyword-cloud"
 import { useRevbotStartPrompt } from "~/components/revbot/revbot-start-prompt-context"
@@ -30,9 +30,11 @@ Base recommendations on actual search/crawl evidence rather than guessing keywor
 
 function KeywordsEmptyState({
   canGenerate,
+  isGenerating,
   onGenerate,
 }: {
   canGenerate: boolean
+  isGenerating: boolean
   onGenerate: () => void
 }) {
   return (
@@ -48,8 +50,24 @@ function KeywordsEmptyState({
         Search Console and crawl data.
       </p>
       {canGenerate ? (
-        <Button className="mt-5" onClick={onGenerate} size="sm" type="button">
-          Find keywords
+        <Button
+          className="mt-5"
+          disabled={isGenerating}
+          onClick={onGenerate}
+          size="sm"
+          type="button"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2
+                aria-hidden="true"
+                className="size-4 animate-spin motion-reduce:animate-none"
+              />
+              Generating…
+            </>
+          ) : (
+            "Find keywords"
+          )}
         </Button>
       ) : null}
     </div>
@@ -62,7 +80,8 @@ export function OverviewTargetKeywordsCard({
   projectId: string | null
 }) {
   const features = useFeatures()
-  const startPrompt = useRevbotStartPrompt()
+  const revbotPrompt = useRevbotStartPrompt()
+  const startPrompt = revbotPrompt?.startPrompt
   const [watching, setWatching] = useState(false)
 
   const query = useQuery({
@@ -91,11 +110,12 @@ export function OverviewTargetKeywordsCard({
   }, [watching])
 
   const canGenerate = Boolean(features.ai_chat && startPrompt && projectId)
+  const isGenerating = watching && keywords.length === 0
 
   const openKeywordChat = () => {
     if (!startPrompt) return
     setWatching(true)
-    startPrompt(KEYWORD_PROMPT)
+    startPrompt(KEYWORD_PROMPT, { keepDocked: true })
   }
 
   const body = !projectId ? (
@@ -122,6 +142,7 @@ export function OverviewTargetKeywordsCard({
   ) : keywords.length === 0 ? (
     <KeywordsEmptyState
       canGenerate={canGenerate}
+      isGenerating={isGenerating}
       onGenerate={openKeywordChat}
     />
   ) : (

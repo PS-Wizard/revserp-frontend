@@ -542,6 +542,26 @@ export type CrawlPageHealthResponse = {
   total_pages: number
 }
 
+export type CrawlPageSearchResultPage = {
+  id: string
+  url: string
+  title?: string | null
+}
+
+export type CrawlPageSearchResponse = {
+  crawl_id: string
+  query: string
+  pages: CrawlPageSearchResultPage[]
+  pagination: PaginationResponse
+}
+
+export type CrawlPageHealthDetailResponse = {
+  crawl_id: string
+  page_id: string
+  url: string
+  health_score: number
+}
+
 export type AIConversationResponse = {
   id: string
   project_id: string
