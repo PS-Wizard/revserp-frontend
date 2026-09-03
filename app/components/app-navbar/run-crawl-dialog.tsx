@@ -1,4 +1,4 @@
-import { RefreshCwIcon } from "lucide-react"
+import { RefreshCwIcon, ShieldCheckIcon } from "lucide-react"
 import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
@@ -24,6 +24,7 @@ type RunCrawlDialogProps = {
   activeProjectId?: string | null
   fetchTimeoutSeconds: string
   forceFullCrawl: boolean
+  honourRobotsTxt: boolean
   isCrawlRunning: boolean
   isOpen: boolean
   isStartingCrawl: boolean
@@ -34,6 +35,7 @@ type RunCrawlDialogProps = {
   runCrawlError: string
   onFetchTimeoutSecondsChange: (value: string) => void
   onForceFullCrawlChange: (value: boolean) => void
+  onHonourRobotsTxtChange: (value: boolean) => void
   onMaxDepthChange: (value: string) => void
   onMaxPagesChange: (value: string) => void
   onDelayMsChange: (value: string) => void
@@ -47,6 +49,7 @@ export function RunCrawlDialog({
   activeProjectId,
   fetchTimeoutSeconds,
   forceFullCrawl,
+  honourRobotsTxt,
   isCrawlRunning,
   isOpen,
   isStartingCrawl,
@@ -57,6 +60,7 @@ export function RunCrawlDialog({
   runCrawlError,
   onFetchTimeoutSecondsChange,
   onForceFullCrawlChange,
+  onHonourRobotsTxtChange,
   onMaxDepthChange,
   onMaxPagesChange,
   onDelayMsChange,
@@ -167,6 +171,21 @@ export function RunCrawlDialog({
               <FieldDescription>
                 Refetch and process every page instead of reusing unchanged
                 pages.
+              </FieldDescription>
+            </Field>
+            <Field>
+              <Button
+                aria-pressed={honourRobotsTxt}
+                className="w-full"
+                onClick={() => onHonourRobotsTxtChange(!honourRobotsTxt)}
+                type="button"
+                variant={honourRobotsTxt ? "default" : "outline"}
+              >
+                <ShieldCheckIcon data-icon="inline-start" />
+                Honour robots.txt
+              </Button>
+              <FieldDescription>
+                Skip pages disallowed by the site's robots.txt.
               </FieldDescription>
             </Field>
           </FieldGroup>

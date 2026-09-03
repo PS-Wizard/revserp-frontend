@@ -53,6 +53,7 @@ const FEATURE_COLUMNS = [
 
 type FeatureKey = (typeof FEATURE_COLUMNS)[number]["key"]
 const MAX_AI_MONTHLY_MESSAGE_LIMIT = 1_000_000
+const MAX_AI_VISIBILITY_AUDIT_LIMIT = 1_000_000
 const MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER = 1
 const MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER = 20
 const REASONING_EFFORT_ORDER = [
@@ -102,6 +103,10 @@ function hasInvalidAISettings(workspace: AdminWorkspaceFeatures) {
     !Number.isInteger(workspace.ai_monthly_message_limit) ||
     workspace.ai_monthly_message_limit < 0 ||
     workspace.ai_monthly_message_limit > MAX_AI_MONTHLY_MESSAGE_LIMIT ||
+    !Number.isInteger(workspace.ai_visibility_audit_monthly_limit) ||
+    workspace.ai_visibility_audit_monthly_limit < 0 ||
+    workspace.ai_visibility_audit_monthly_limit >
+      MAX_AI_VISIBILITY_AUDIT_LIMIT ||
     !Number.isInteger(workspace.ai_concurrent_turn_limit_per_user) ||
     workspace.ai_concurrent_turn_limit_per_user <
       MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER ||
@@ -235,6 +240,8 @@ export function FeaturesTab() {
           edited.ai_use_internal_prompt !== workspace.ai_use_internal_prompt ||
           edited.ai_monthly_message_limit !==
             workspace.ai_monthly_message_limit ||
+          edited.ai_visibility_audit_monthly_limit !==
+            workspace.ai_visibility_audit_monthly_limit ||
           edited.ai_concurrent_turn_limit_per_user !==
             workspace.ai_concurrent_turn_limit_per_user ||
           !sameStringArrays(
@@ -281,6 +288,8 @@ export function FeaturesTab() {
           ai_chat: row.ai_chat,
           ai_use_internal_prompt: row.ai_use_internal_prompt,
           ai_monthly_message_limit: row.ai_monthly_message_limit,
+          ai_visibility_audit_monthly_limit:
+            row.ai_visibility_audit_monthly_limit,
           ai_concurrent_turn_limit_per_user:
             row.ai_concurrent_turn_limit_per_user,
           ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
@@ -331,6 +340,12 @@ export function FeaturesTab() {
     (!Number.isInteger(open.ai_monthly_message_limit) ||
       open.ai_monthly_message_limit < 0 ||
       open.ai_monthly_message_limit > MAX_AI_MONTHLY_MESSAGE_LIMIT)
+  const visibilityAuditLimitInvalid =
+    open !== null &&
+    (!Number.isInteger(open.ai_visibility_audit_monthly_limit) ||
+      open.ai_visibility_audit_monthly_limit < 0 ||
+      open.ai_visibility_audit_monthly_limit >
+        MAX_AI_VISIBILITY_AUDIT_LIMIT)
   const concurrentTurnLimitInvalid =
     open !== null &&
     (!Number.isInteger(open.ai_concurrent_turn_limit_per_user) ||
@@ -525,6 +540,37 @@ export function FeaturesTab() {
                       {monthlyLimitInvalid
                         ? "Enter an integer from 0 to 1,000,000."
                         : "Maximum AI chat messages allowed per month."}
+                    </FieldDescription>
+                  </Field>
+                  <Field data-invalid={visibilityAuditLimitInvalid}>
+                    <FieldLabel htmlFor="ai-visibility-audit-monthly-limit">
+                      Visibility audits / month
+                    </FieldLabel>
+                    <Input
+                      id="ai-visibility-audit-monthly-limit"
+                      type="number"
+                      min={0}
+                      max={MAX_AI_VISIBILITY_AUDIT_LIMIT}
+                      step={1}
+                      value={
+                        Number.isNaN(open.ai_visibility_audit_monthly_limit)
+                          ? ""
+                          : open.ai_visibility_audit_monthly_limit
+                      }
+                      aria-invalid={visibilityAuditLimitInvalid}
+                      onChange={(event) =>
+                        updateRow(openWorkspace, {
+                          ai_visibility_audit_monthly_limit:
+                            event.target.value === ""
+                              ? Number.NaN
+                              : Number(event.target.value),
+                        })
+                      }
+                    />
+                    <FieldDescription>
+                      {visibilityAuditLimitInvalid
+                        ? "Enter an integer from 0 to 1,000,000."
+                        : "Maximum AI visibility audits allowed per month."}
                     </FieldDescription>
                   </Field>
                   <Field data-invalid={concurrentTurnLimitInvalid}>

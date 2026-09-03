@@ -399,6 +399,7 @@ export type OrgFeatures = {
 export type AdminWorkspaceFeatures = OrgFeatures & {
   org_id: string
   org_name: string
+  ai_visibility_audit_monthly_limit: number
   disabled_ai_tools: string[]
   updated_at?: string
 }

@@ -738,6 +738,20 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
             ? String((err.details as { error: string }).error)
             : "Could not start visibility test. Make sure AI questions have been generated first."
         )
+      } else if (err instanceof ApiError && err.status === 429) {
+        const now = new Date()
+        const resetsAt = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+        )
+        const resetsLabel = resetsAt.toLocaleDateString(undefined, {
+          day: "numeric",
+          month: "long",
+          timeZone: "UTC",
+          year: "numeric",
+        })
+        toast.error(
+          `This workspace has no visibility tests left this month. The quota resets on ${resetsLabel}.`
+        )
       } else {
         toast.error("Something went wrong. Please try again.")
       }
