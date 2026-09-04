@@ -12,15 +12,16 @@ const CHANGES_PAGE_SIZE = 500
 export function useIssueWorkspaceChanges(
   crawlId: string | null,
   status: IssueWorkspaceChangeStatus,
-  enabled: boolean
+  enabled: boolean,
+  limit: number = CHANGES_PAGE_SIZE
 ) {
   return useQuery({
     enabled: Boolean(crawlId) && enabled,
-    queryKey: ["issue-workspace-changes", crawlId, status],
+    queryKey: ["issue-workspace-changes", crawlId, status, limit],
     queryFn: ({ signal }) => {
       const qs = new URLSearchParams({
         status,
-        limit: String(CHANGES_PAGE_SIZE),
+        limit: String(limit),
         offset: "0",
       })
       return clientApiFetch<IssueWorkspaceChangesResponse>(

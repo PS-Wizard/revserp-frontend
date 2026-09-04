@@ -28,6 +28,8 @@ import {
   type WorkFixesEmptyVariant,
 } from "~/components/summary/work-fixes-empty-state"
 
+const OVERVIEW_PREVIEW_LIMIT = 15
+
 function useChangesItems(query: UseQueryResult<IssueWorkspaceChangesResponse>) {
   return useMemo(() => {
     const items = query.data?.items ?? []
@@ -134,13 +136,20 @@ export function OverviewWorkFixesCards({
   const unloggedQuery = useIssueWorkspaceChanges(
     crawlId,
     "no_longer_detected",
-    enabled
+    enabled,
+    OVERVIEW_PREVIEW_LIMIT
   )
-  const fixedQuery = useIssueWorkspaceChanges(crawlId, "fixed", enabled)
+  const fixedQuery = useIssueWorkspaceChanges(
+    crawlId,
+    "fixed",
+    enabled,
+    OVERVIEW_PREVIEW_LIMIT
+  )
   const awaitingQuery = useIssueWorkspaceChanges(
     crawlId,
     "awaiting_verification",
-    enabled
+    enabled,
+    OVERVIEW_PREVIEW_LIMIT
   )
 
   const { undoContribution } = useIssueWorkMutations({
