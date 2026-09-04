@@ -43,6 +43,7 @@ import { Card, CardContent } from "~/components/ui/card"
 import { Textarea } from "~/components/ui/textarea"
 import { Checkbox } from "~/components/ui/checkbox"
 import {
+  ApiError,
   clientApiFetch,
   clientApiPost,
   clientApiPut,
@@ -584,8 +585,8 @@ function AccountsTab() {
       await clientApiPost(`/admin/users/${userId}/${path}`, {})
       toast.success(successMsg)
       loadUsers()
-    } catch {
-      toast.error("Action failed")
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Action failed")
     }
   }
 
@@ -711,8 +712,10 @@ function AccountsTab() {
       try {
         await clientApiDelete(`/admin/users/${disableTarget.user.id}`)
         toast.success("User disabled")
-      } catch {
-        toast.error("Failed to disable user")
+      } catch (error) {
+        toast.error(
+          error instanceof ApiError ? error.message : "Failed to disable user"
+        )
       }
     }
     setDisableTarget(null)

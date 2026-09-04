@@ -25,7 +25,7 @@ import {
 } from "~/components/ui/drawer"
 import { Input } from "~/components/ui/input"
 import { Separator } from "~/components/ui/separator"
-import { clientApiFetch, clientApiPut } from "~/lib/api"
+import { ApiError, clientApiFetch, clientApiPut } from "~/lib/api"
 import type {
   AdminFeaturesResponse,
   AdminWorkspaceFeatures,
@@ -309,8 +309,12 @@ export function FeaturesTab() {
       toast.success(
         `Saved ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`
       )
-    } catch {
-      toast.error("Failed to save feature settings")
+    } catch (error) {
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Failed to save feature settings"
+      )
     } finally {
       setSaving(false)
     }

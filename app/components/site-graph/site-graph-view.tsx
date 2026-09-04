@@ -280,9 +280,18 @@ export const SiteGraphView = memo(function SiteGraphView({
         </div>
       ) : graphQuery.isError ? (
         <div className="flex h-full items-center justify-center">
-          <p className="text-sm text-muted-foreground">
-            Failed to load the site graph. Try refreshing the page.
-          </p>
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              Failed to load the site graph. Try refreshing the page.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void graphQuery.refetch()}
+            >
+              Retry
+            </Button>
+          </div>
         </div>
       ) : !currentCrawlId ? (
         <div className="flex h-full items-center justify-center">
