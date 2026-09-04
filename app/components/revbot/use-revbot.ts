@@ -746,6 +746,33 @@ export function useRevbot({
         ) {
           return
         }
+        // The SSE stream closed without a terminal event (e.g. dropped
+        // connection). Fetch the turn once before reconnecting: if the server
+        // already reached a terminal state, apply it instead of reopening a
+        // finished stream.
+        try {
+          const turn = await clientApiFetch<AITurnResponse>(`/ai/turns/${turnId}`)
+          if (
+            generation !== generationRef.current ||
+            controller.signal.aborted ||
+            !mountedRef.current
+          ) {
+            return
+          }
+          if (isTurnTerminal(turn.status)) {
+            applyTurn(turn, false)
+            return
+          }
+        } catch {
+          if (
+            generation !== generationRef.current ||
+            controller.signal.aborted ||
+            !mountedRef.current
+          ) {
+            return
+          }
+          // Fall through to reconnect when the refresh is unavailable.
+        }
         await new Promise<void>((resolve) => {
           const timer = window.setTimeout(resolve, RECONNECT_DELAY_MS)
           controller.signal.addEventListener(
@@ -759,7 +786,7 @@ export function useRevbot({
         })
       }
     },
-    [queryClient, refreshTerminalTurn, stopObserver, updateStatus]
+    [applyTurn, queryClient, refreshTerminalTurn, stopObserver, updateStatus]
   )
 
   useEffect(() => {
