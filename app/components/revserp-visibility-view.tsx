@@ -37,8 +37,10 @@ type Props = {
   currentCrawl: CrawlResponse | null
 }
 
-function auditListQueryKey(projectId: string) {
-  return ["ai-audits-list", projectId] as const
+function auditListQueryKey(projectId: string, crawlId?: string) {
+  return crawlId
+    ? (["ai-audits-list", projectId, crawlId] as const)
+    : (["ai-audits-list", projectId] as const)
 }
 
 function auditDetailQueryKey(auditId: string) {
@@ -634,15 +636,7 @@ function MatrixLegend() {
   )
 }
 
-function RunningBanner({
-  completedCount,
-  totalEstimate,
-}: {
-  completedCount: number
-  totalEstimate: number
-}) {
-  const pct =
-    totalEstimate > 0 ? Math.round((completedCount / totalEstimate) * 100) : 0
+function RunningBanner({ completedCount }: { completedCount: number }) {
   return (
     <div className="mx-6 flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-5 py-4 lg:mx-8">
       <RefreshCwIcon className="size-4 shrink-0 animate-spin text-muted-foreground" />
@@ -652,17 +646,12 @@ function RunningBanner({
             Running visibility checks…
           </span>
           <span className="font-medium text-muted-foreground tabular-nums">
-            {completedCount} / {totalEstimate || "?"} completed
+            {completedCount} completed
           </span>
         </div>
-        {totalEstimate > 0 && (
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        )}
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
+        </div>
       </div>
     </div>
   )
@@ -686,16 +675,18 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   }, [crawlId])
 
   const { data: listData, isLoading: isLoadingList } = useQuery({
-    queryKey: projectId
-      ? auditListQueryKey(projectId)
-      : ["ai-audits-list-disabled"],
+    queryKey:
+      projectId && crawlId
+        ? auditListQueryKey(projectId, crawlId)
+        : ["ai-audits-list-disabled"],
     queryFn: () =>
       clientApiFetch<AIAuditListResponse>(
-        `/projects/${projectId!}/ai-audits?limit=50&offset=0`
+        `/projects/${projectId!}/ai-audits?limit=1&offset=0&crawl_id=${crawlId!}`
       ),
-    enabled: Boolean(projectId),
+    enabled: Boolean(projectId && crawlId),
     select: (data) =>
-      data.ai_audits.find((a) => a.crawl_id === crawlId) ?? null,
+      data.ai_audits.find((a) => a.crawl_id === crawlId) ??
+      (data.ai_audits[0] ?? null),
   })
 
   const resolvedAuditId = activeAuditId ?? listData?.id ?? null
@@ -724,11 +715,13 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
         { crawl_id: crawlId }
       )
       setActiveAuditId(created.id)
-      queryClient.invalidateQueries({ queryKey: auditListQueryKey(projectId) })
+      queryClient.invalidateQueries({
+        queryKey: auditListQueryKey(projectId, crawlId),
+      })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         queryClient.invalidateQueries({
-          queryKey: auditListQueryKey(projectId),
+          queryKey: auditListQueryKey(projectId, crawlId),
         })
       } else if (err instanceof ApiError && err.status === 400) {
         toast.error(
@@ -779,9 +772,9 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   const hasResults = (runs.length > 0 || isRunning) && Boolean(displayAudit)
   const canRun = !isRunning && !isTriggeringRun
   const successRuns = runs.filter((r) => r.status === "success")
-  const totalExpected =
-    Array.from(new Set(runs.map((r) => r.display_order))).length *
-    Math.max(1, Array.from(new Set(runs.map((r) => r.model_name))).length)
+  const completedCount = runs.filter(
+    (r) => r.status === "success" || r.status === "failed"
+  ).length
 
   return (
     <div className="@container/main flex min-w-0 max-w-full flex-1 flex-col gap-10 overflow-x-hidden py-10">
@@ -815,10 +808,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
 
       {/* Running progress banner */}
       {isRunning && (
-        <RunningBanner
-          completedCount={runs.length}
-          totalEstimate={totalExpected}
-        />
+        <RunningBanner completedCount={completedCount} />
       )}
 
       {/* Summary stats */}
