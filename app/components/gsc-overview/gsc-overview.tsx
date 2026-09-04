@@ -287,21 +287,27 @@ export function GSCOverview({
     enabled: Boolean(overviewResponse),
   })
 
-  const queryRows = toTableRows(
-    searchConsoleQueries.rows,
-    (row) => row.query ?? ""
+  const queryRows = useMemo(
+    () => toTableRows(searchConsoleQueries.rows, (row) => row.query ?? ""),
+    [searchConsoleQueries.rows]
   )
-  const pageRows = toTableRows(
-    selectedWindowOverview?.top_pages ?? [],
-    (row) => row.page ?? ""
+  const topPages = selectedWindowOverview?.top_pages ?? []
+  const countryBreakdown = selectedWindowOverview?.country_breakdown ?? []
+  const deviceBreakdown = selectedWindowOverview?.device_breakdown ?? []
+  const pageRows = useMemo(
+    () => toTableRows(topPages, (row) => row.page ?? ""),
+    [topPages]
   )
-  const countryRows = toTableRows(
-    selectedWindowOverview?.country_breakdown ?? [],
-    (row) => formatCountryLabel(row.country ?? "", countryDisplayNames)
+  const countryRows = useMemo(
+    () =>
+      toTableRows(countryBreakdown, (row) =>
+        formatCountryLabel(row.country ?? "", countryDisplayNames)
+      ),
+    [countryBreakdown, countryDisplayNames]
   )
-  const deviceRows = toTableRows(
-    selectedWindowOverview?.device_breakdown ?? [],
-    (row) => capitalize(row.device ?? "")
+  const deviceRows = useMemo(
+    () => toTableRows(deviceBreakdown, (row) => capitalize(row.device ?? "")),
+    [deviceBreakdown]
   )
   const activeTableSourceRows =
     state.activeDimensionTab === "queries"
@@ -315,11 +321,15 @@ export function GSCOverview({
   // run filterTableRows. Sorting stays local on both paths: it reorders the rows
   // currently loaded, exactly as before.
   const isQueriesTab = state.activeDimensionTab === "queries"
-  const activeTableRows = sortTableRows(
-    isQueriesTab
-      ? activeTableSourceRows
-      : filterTableRows(activeTableSourceRows, state.tableSearch),
-    state.tableSort
+  const activeTableRows = useMemo(
+    () =>
+      sortTableRows(
+        isQueriesTab
+          ? activeTableSourceRows
+          : filterTableRows(activeTableSourceRows, state.tableSearch),
+        state.tableSort
+      ),
+    [activeTableSourceRows, isQueriesTab, state.tableSearch, state.tableSort]
   )
   const chartSeries = useMemo(
     () =>

@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useState } from "react"
+import { memo, useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { GSCOverview } from "~/components/gsc-overview/gsc-overview"
@@ -116,6 +116,21 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   const [selectedGSCSiteURL, setSelectedGSCSiteURL] = useState(
     gscStatus?.selected_site?.site_url ?? ""
   )
+
+  // Sync the dropdown after the async status loads and when the project
+  // changes. Keep a valid current selection so typing/selection is not clobbered.
+  useEffect(() => {
+    const next = gscStatus?.selected_site?.site_url ?? ""
+    setSelectedGSCSiteURL((prev) => {
+      if (prev === next) return prev
+      if (
+        prev &&
+        gscStatus?.available_sites.some((site) => site.site_url === prev)
+      )
+        return prev
+      return next
+    })
+  }, [projectId, gscStatus])
   const [isStartingGSCConnect, setIsStartingGSCConnect] = useState(false)
   const [gscConnectErrorMessage, setGscConnectErrorMessage] = useState("")
   const [isSavingGSCProjectSelection, setIsSavingGSCProjectSelection] =
@@ -217,6 +232,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   if (gscStatus?.has_google_connection && gscStatus.connected) {
     return (
       <GSCOverview
+        key={activeProject.id}
         activeProjectID={activeProject.id}
         completedCrawls={completedCrawls}
         isOrganizationOwner={isOrganizationOwner}
