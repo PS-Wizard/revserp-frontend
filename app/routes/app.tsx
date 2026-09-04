@@ -767,6 +767,7 @@ export default function AppPage() {
           ) : view === "search-console" &&
             me.features?.gsc_connector !== false ? (
             <SearchConsoleView
+              key={activeProject?.id}
               activeProject={activeProject}
               completedCrawls={stableSortedCompletedCrawls}
               isOrganizationOwner={isOrganizationOwner}

@@ -117,8 +117,9 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     gscStatus?.selected_site?.site_url ?? ""
   )
 
-  // Sync the dropdown after the async status loads and when the project
-  // changes. Keep a valid current selection so typing/selection is not clobbered.
+  // Sync the dropdown when the async status arrives. The parent remounts this
+  // view per project, so no cross-project reset is needed here; keep a valid
+  // current selection so a status refetch does not clobber the dropdown.
   useEffect(() => {
     const next = gscStatus?.selected_site?.site_url ?? ""
     setSelectedGSCSiteURL((prev) => {
@@ -130,7 +131,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         return prev
       return next
     })
-  }, [projectId, gscStatus])
+  }, [gscStatus])
   const [isStartingGSCConnect, setIsStartingGSCConnect] = useState(false)
   const [gscConnectErrorMessage, setGscConnectErrorMessage] = useState("")
   const [isSavingGSCProjectSelection, setIsSavingGSCProjectSelection] =
@@ -232,7 +233,6 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   if (gscStatus?.has_google_connection && gscStatus.connected) {
     return (
       <GSCOverview
-        key={activeProject.id}
         activeProjectID={activeProject.id}
         completedCrawls={completedCrawls}
         isOrganizationOwner={isOrganizationOwner}
