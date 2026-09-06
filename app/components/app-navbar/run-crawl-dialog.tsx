@@ -70,9 +70,9 @@ export function RunCrawlDialog({
 }: RunCrawlDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
-      <DialogContent className="sm:max-w-md">
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-          <DialogHeader>
+      <DialogContent className="flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+        <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit}>
+          <DialogHeader className="shrink-0 px-6 pt-6 pr-12">
             <DialogTitle>Run Crawl</DialogTitle>
             <DialogDescription>
               Queue a new crawl for{" "}
@@ -80,8 +80,9 @@ export function RunCrawlDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <FieldGroup>
-            <Field>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+            <FieldGroup>
+              <Field>
               <FieldLabel htmlFor="max-depth">Max depth</FieldLabel>
               <Input
                 id="max-depth"
@@ -188,11 +189,12 @@ export function RunCrawlDialog({
                 Skip pages disallowed by the site's robots.txt.
               </FieldDescription>
             </Field>
-          </FieldGroup>
+            </FieldGroup>
 
-          <FieldError>{runCrawlError}</FieldError>
+            <FieldError className="mt-4">{runCrawlError}</FieldError>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
             <Button
               onClick={() => onOpenChange(false)}
               type="button"

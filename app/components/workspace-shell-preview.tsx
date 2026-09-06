@@ -1147,6 +1147,7 @@ export function WorkspaceShellPreview({
                       onInternalLink={handleRevbotInternalLink}
                       onTitleChange={setIslandConversationTitle}
                       revbot={islandRevbot}
+                      showMessageAvatar={islandState === "maximized"}
                       showMic={false}
                       variant="dark"
                     />

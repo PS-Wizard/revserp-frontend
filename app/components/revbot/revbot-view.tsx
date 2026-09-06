@@ -51,6 +51,7 @@ import {
   filterConversations,
   RevbotConversationSearchInput,
 } from "./revbot-conversation-search"
+import { RevbotEmptyAvatar, RevbotMessageAvatar } from "./revbot-avatar"
 import { RevbotChartArtifacts } from "./revbot-chart-artifacts"
 import { RevbotComposer } from "./revbot-composer"
 import { RevbotExportableTable } from "./revbot-exportable-table"
@@ -326,20 +327,13 @@ function RevbotEmptyState({
     <div className="flex flex-col items-center px-6 py-10 text-center">
       <div
         className={cn(
-          "mb-4 flex size-14 items-center justify-center rounded-2xl border shadow-sm",
+          "mb-4 flex size-16 items-center justify-center rounded-2xl border shadow-sm",
           isDark
             ? "border-white/10 bg-white/[0.04] shadow-black/20"
             : "border-border bg-muted/40"
         )}
       >
-        <BotIcon
-          aria-hidden="true"
-          className={cn(
-            "size-7",
-            isDark ? "text-white/75" : "text-muted-foreground"
-          )}
-          strokeWidth={1.5}
-        />
+        <RevbotEmptyAvatar />
       </div>
       <p
         className={cn(
@@ -467,6 +461,7 @@ export function RevbotViewContent({
   onEditorLink,
   onInternalLink,
   onTitleChange,
+  showMessageAvatar = false,
   showMic,
   variant,
 }: {
@@ -481,6 +476,7 @@ export function RevbotViewContent({
   onEditorLink?: (url: string) => void
   onInternalLink?: (hash: string) => void
   onTitleChange?: (title: string) => void
+  showMessageAvatar?: boolean
   showMic: boolean
   variant: "default" | "dark"
 }) {
@@ -700,83 +696,100 @@ export function RevbotViewContent({
                         )}
                       >
                         {message.role === "assistant" ? (
-                          <div className="w-full min-w-0">
-                            <div className={messageColumnClass}>
-                            {(() => {
-                              const isActiveMessage =
-                                message.id === activeAssistantMessageId
-                              const messageToolCalls = isActiveMessage
-                                ? revbot.toolCalls
-                                : message.toolCalls
-                              const messageActivityStartedAt = isActiveMessage
-                                ? revbot.activityStartedAt
-                                : (message.activityStartedAt ?? null)
-                              const messageActivityEndedAt = isActiveMessage
-                                ? null
-                                : (message.activityEndedAt ?? null)
-                              const hasPersistedActivity =
-                                messageActivityStartedAt !== null &&
-                                messageActivityEndedAt !== null
-                              const showActivity =
-                                (isActiveMessage &&
-                                  (active ||
-                                    revbot.phase ||
-                                    revbot.toolCalls.length > 0 ||
-                                    revbot.activityStartedAt)) ||
-                                (messageToolCalls?.length ?? 0) > 0 ||
-                                hasPersistedActivity
-                              const hasToolCalls =
-                                (messageToolCalls?.length ?? 0) > 0
-                              const hasResponse =
-                                message.id === activeAssistantMessageId
-                                  ? Boolean(message.content) ||
-                                    revbot.phase === "writing"
-                                  : Boolean(message.content)
+                          (() => {
+                            const isActiveMessage =
+                              message.id === activeAssistantMessageId
+                            const messageToolCalls = isActiveMessage
+                              ? revbot.toolCalls
+                              : message.toolCalls
+                            const messageActivityStartedAt = isActiveMessage
+                              ? revbot.activityStartedAt
+                              : (message.activityStartedAt ?? null)
+                            const messageActivityEndedAt = isActiveMessage
+                              ? null
+                              : (message.activityEndedAt ?? null)
+                            const hasPersistedActivity =
+                              messageActivityStartedAt !== null &&
+                              messageActivityEndedAt !== null
+                            const showActivity =
+                              (isActiveMessage &&
+                                (active ||
+                                  revbot.phase ||
+                                  revbot.toolCalls.length > 0 ||
+                                  revbot.activityStartedAt)) ||
+                              (messageToolCalls?.length ?? 0) > 0 ||
+                              hasPersistedActivity
+                            const hasToolCalls =
+                              (messageToolCalls?.length ?? 0) > 0
+                            const hasResponse =
+                              message.id === activeAssistantMessageId
+                                ? Boolean(message.content) ||
+                                  revbot.phase === "writing"
+                                : Boolean(message.content)
 
-                              return showActivity ? (
-                                <RevbotTurnActivity
-                                  active={isActiveMessage && active}
-                                  endedAt={messageActivityEndedAt}
-                                  phase={isActiveMessage ? revbot.phase : null}
-                                  showDivider={hasToolCalls && hasResponse}
-                                  startedAt={messageActivityStartedAt}
-                                  toolCalls={messageToolCalls ?? []}
-                                  variant={variant}
-                                />
-                              ) : null
-                            })()}
-                            {message.id === activeAssistantMessageId &&
-                            (message.content || revbot.phase === "writing") ? (
-                              <StreamingAssistantMessage
-                                content={message.content}
-                                messageId={message.id}
-                              />
-                            ) : message.id !== activeAssistantMessageId ? (
-                              <RevbotMarkdown components={markdownComponents}>
-                                {message.content}
-                              </RevbotMarkdown>
-                            ) : null}
-                            </div>
-                            <div className="w-full min-w-0">
-                            <RevbotChartArtifacts
-                              toolCalls={
-                                message.id === activeAssistantMessageId
-                                  ? revbot.toolCalls
-                                  : (message.toolCalls ?? [])
-                              }
-                              variant={variant}
-                            />
-                            </div>
-                            {message.id !== activeAssistantMessageId &&
-                            message.content ? (
-                              <div className={cn(messageColumnClass, "mt-2")}>
-                                <RevbotMessageActions
-                                  content={message.content}
-                                  variant={variant}
-                                />
+                            return (
+                              <div
+                                className={cn(
+                                  messageColumnClass,
+                                  showMessageAvatar &&
+                                    "grid grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-x-3"
+                                )}
+                              >
+                                {showMessageAvatar ? (
+                                  <RevbotMessageAvatar
+                                    active={isActiveMessage && active}
+                                    className="sticky top-3 self-start"
+                                  />
+                                ) : null}
+                                <div className="min-w-0">
+                                  {showActivity ? (
+                                    <RevbotTurnActivity
+                                      active={isActiveMessage && active}
+                                      endedAt={messageActivityEndedAt}
+                                      phase={
+                                        isActiveMessage ? revbot.phase : null
+                                      }
+                                      showDivider={hasToolCalls && hasResponse}
+                                      startedAt={messageActivityStartedAt}
+                                      toolCalls={messageToolCalls ?? []}
+                                      variant={variant}
+                                    />
+                                  ) : null}
+                                  {message.id === activeAssistantMessageId &&
+                                  (message.content ||
+                                    revbot.phase === "writing") ? (
+                                    <StreamingAssistantMessage
+                                      content={message.content}
+                                      messageId={message.id}
+                                    />
+                                  ) : message.id !== activeAssistantMessageId ? (
+                                    <RevbotMarkdown
+                                      components={markdownComponents}
+                                    >
+                                      {message.content}
+                                    </RevbotMarkdown>
+                                  ) : null}
+                                  <RevbotChartArtifacts
+                                    toolCalls={
+                                      message.id === activeAssistantMessageId
+                                        ? revbot.toolCalls
+                                        : (message.toolCalls ?? [])
+                                    }
+                                    variant={variant}
+                                  />
+                                  {message.id !== activeAssistantMessageId &&
+                                  message.content ? (
+                                    <div className="mt-2">
+                                      <RevbotMessageActions
+                                        content={message.content}
+                                        variant={variant}
+                                      />
+                                    </div>
+                                  ) : null}
+                                </div>
                               </div>
-                            ) : null}
-                          </div>
+                            )
+                          })()
                         ) : (
                           <p
                             className={cn(

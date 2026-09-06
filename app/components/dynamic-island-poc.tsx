@@ -1,12 +1,10 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 
 import {
   CheckIcon,
   ChevronDownIcon,
-  CommandIcon,
-  Loader2,
   Maximize2Icon,
   Minimize2Icon,
   MinusIcon,
@@ -14,6 +12,7 @@ import {
   TrashIcon,
   XIcon,
 } from "lucide-react"
+import { RevbotDockedAvatar } from "~/components/revbot/revbot-avatar"
 import { motion, type Transition } from "motion/react"
 
 import type { AIConversationResponse } from "~/lib/api.types"
@@ -27,15 +26,18 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { DropdownPillSurface } from "~/components/ui/hover-pill"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
 import { cn } from "~/lib/utils"
 
 export type IslandState = "docked" | "minimized" | "maximized"
 
 const ISLAND_LAYOUT_ID = "ai-island"
 
-const islandSurfaceClass = "surface-dialog border border-border text-foreground"
-
-export const islandDockedSizeClass = "h-12 w-[12.75rem]"
+export const islandDockedSizeClass = "size-[4.5rem]"
 
 /** Traditional chatbot anchor — bottom-right of the viewport. */
 const islandAnchorClass = "fixed bottom-6 right-6 z-[100]"
@@ -54,7 +56,7 @@ const islandPanelHeaderClass = "border-b border-border surface-dialog"
 
 const islandPanelBodyClass = "surface-dialog"
 
-const DOCKED_RADIUS = 8
+const DOCKED_RADIUS = 36
 const PANEL_RADIUS = 12
 
 /** Spring morph — matches the main-branch AI dock. */
@@ -70,30 +72,6 @@ type DockedChromeProps = {
   transition: Transition
 }
 
-function IslandExpandShortcut() {
-  const [modKey, setModKey] = useState<"cmd" | "ctrl">("ctrl")
-
-  useEffect(() => {
-    const isApple = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
-    setModKey(isApple ? "cmd" : "ctrl")
-  }, [])
-
-  return (
-    <span
-      aria-hidden="true"
-      className="flex shrink-0 items-center gap-0.5 rounded-md border border-white/12 bg-white/[0.06] px-1 py-0.5 text-[9px] font-medium leading-none text-white/55"
-    >
-      {modKey === "cmd" ? (
-        <CommandIcon className="size-3 shrink-0 opacity-90" />
-      ) : (
-        <span>Ctrl</span>
-      )}
-      <span className="text-white/35">+</span>
-      <span>K</span>
-    </span>
-  )
-}
-
 /** Docked pill — one layoutId element, morphs into the panel. */
 export function DynamicIslandDockedChrome({
   active = false,
@@ -101,35 +79,29 @@ export function DynamicIslandDockedChrome({
   transition,
 }: DockedChromeProps) {
   const dockedButton = (
-    <motion.button
-      aria-label="Open AI chat (Command or Control + K)"
-      className={cn(
-        "pointer-events-auto overflow-hidden rounded-lg",
-        islandSurfaceClass,
-        islandDockedSizeClass
-      )}
-      layout
-      layoutId={ISLAND_LAYOUT_ID}
-      onClick={onOpen}
-      style={{ borderRadius: DOCKED_RADIUS, willChange: "transform" }}
-      transition={transition}
-      type="button"
-    >
-      <span className="flex size-full items-center justify-between gap-2 px-3">
-        <span className="flex min-w-0 items-center gap-2">
-          {active ? (
-            <Loader2
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
-            />
-          ) : null}
-          <span className="truncate text-base leading-none font-semibold text-foreground">
-            Revbot
-          </span>
-        </span>
-        <IslandExpandShortcut />
-      </span>
-    </motion.button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <motion.button
+            aria-label="Chat with Revbot (Command or Control + K)"
+            className={cn(
+              "revbot-docked-launcher pointer-events-auto flex items-center justify-center overflow-hidden rounded-full border border-border surface-dialog",
+              islandDockedSizeClass
+            )}
+            data-active={active ? "true" : undefined}
+            layout
+            layoutId={ISLAND_LAYOUT_ID}
+            onClick={onOpen}
+            style={{ borderRadius: DOCKED_RADIUS, willChange: "transform" }}
+            transition={transition}
+            type="button"
+          >
+            <RevbotDockedAvatar active={active} />
+          </motion.button>
+        }
+      />
+      <TooltipContent side="left">Chat with Revbot</TooltipContent>
+    </Tooltip>
   )
 
   return (
@@ -178,7 +150,7 @@ export function DynamicIslandPanel({
   const [historySearch, setHistorySearch] = useState("")
   const [panelShadow, setPanelShadow] = useState(false)
   const isMaximized = panelState === "maximized"
-  const borderRadius = isMaximized ? PANEL_RADIUS : DOCKED_RADIUS
+  const borderRadius = PANEL_RADIUS
   const shortTitle = title.split(/\s+/).slice(0, 3).join(" ")
   const displayTitle = shortTitle === title ? title : `${shortTitle}…`
   const filteredConversations = filterConversations(
