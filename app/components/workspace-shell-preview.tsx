@@ -25,6 +25,7 @@ import {
   NetworkIcon,
   PanelLeftIcon,
   PlayIcon,
+  PlusIcon,
   SearchCheckIcon,
   SearchIcon,
   SparklesIcon,
@@ -43,6 +44,7 @@ import { Button } from "~/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { DropdownPillSurface } from "~/components/ui/hover-pill"
@@ -741,8 +743,39 @@ export function WorkspaceShellPreview({
                         )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <SidebarMenuButton
+                              className={
+                                isSidebarCollapsed
+                                  ? "mx-auto mt-1 !size-10 justify-center rounded-md text-muted-foreground hover:text-foreground"
+                                  : "mt-1 !h-auto gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                              }
+                              onClick={() =>
+                                createProjectDispatch({ type: "OPEN" })
+                              }
+                              type="button"
+                            >
+                              <PlusIcon
+                                aria-hidden="true"
+                                className="size-4 shrink-0"
+                              />
+                              {isSidebarCollapsed ? null : "New Project"}
+                            </SidebarMenuButton>
+                          }
+                        />
+                        {isSidebarCollapsed ? (
+                          <TooltipContent side="right">
+                            New project
+                          </TooltipContent>
+                        ) : null}
+                      </Tooltip>
+                    </SidebarMenuItem>
                   </SidebarMenu>
                 </SidebarGroup>
+                <Separator className="my-3" />
               </SidebarContent>
               <WorkspaceSidebarNav
                 auditTab={auditTab}
@@ -795,34 +828,51 @@ export function WorkspaceShellPreview({
                   </DropdownMenuTrigger>
                   <DropdownPillSurface
                     align="start"
-                    className="w-56"
+                    className="max-h-80 w-56 overflow-y-auto overscroll-contain"
                     side="bottom"
                   >
-                    {(pill) =>
-                      projects.length ? (
-                        projects.map((project, index) => (
+                    {(pill) => (
+                      <>
+                        <div className="sticky top-0 z-10 bg-popover">
                           <DropdownMenuItem
-                            key={project.id}
-                            {...pill.getItemProps(index)}
-                            onClick={() => selectProject(project.id)}
+                            {...pill.getItemProps(0)}
+                            onClick={() =>
+                              createProjectDispatch({ type: "OPEN" })
+                            }
                           >
-                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                              <span className="truncate">{project.name}</span>
-                              <span className="truncate text-xs text-muted-foreground">
-                                {project.base_url}
-                              </span>
-                            </span>
-                            {project.id === activeProjectId ? (
-                              <CheckIcon className="ml-auto size-4 shrink-0" />
-                            ) : null}
+                            <PlusIcon aria-hidden="true" className="size-4" />
+                            New Project
                           </DropdownMenuItem>
-                        ))
-                      ) : (
-                        <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                          No projects yet
-                        </DropdownMenuItem>
-                      )
-                    }
+                          <DropdownMenuSeparator className="my-0" />
+                        </div>
+                        {projects.length ? (
+                          projects.map((project, index) => (
+                            <DropdownMenuItem
+                              key={project.id}
+                              {...pill.getItemProps(index + 1)}
+                              onClick={() => selectProject(project.id)}
+                            >
+                              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                <span className="truncate">{project.name}</span>
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {project.base_url}
+                                </span>
+                              </span>
+                              {project.id === activeProjectId ? (
+                                <CheckIcon className="ml-auto size-4 shrink-0" />
+                              ) : null}
+                            </DropdownMenuItem>
+                          ))
+                        ) : (
+                          <DropdownMenuItem
+                            {...pill.getItemProps(1)}
+                            disabled
+                          >
+                            No projects yet
+                          </DropdownMenuItem>
+                        )}
+                      </>
+                    )}
                   </DropdownPillSurface>
                 </DropdownMenu>
                 <CircleIcon

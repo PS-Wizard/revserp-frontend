@@ -21,7 +21,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "~/components/ui/sidebar"
-import { Separator } from "~/components/ui/separator"
 import {
   Tooltip,
   TooltipContent,
@@ -135,7 +134,7 @@ export function WorkspaceSidebarNav({
 
   return (
     <nav aria-label="Workspace sections">
-      <SidebarGroup className="mt-6 p-0">
+      <SidebarGroup className="p-0">
         {isSidebarCollapsed ? null : (
           <SidebarGroupLabel className="h-auto px-2 pb-1 text-[0.7rem] font-medium tracking-widest text-muted-foreground uppercase">
             Audit
@@ -156,9 +155,6 @@ export function WorkspaceSidebarNav({
               onMouseEnter={() => showPill(tab)}
             />
           ))}
-          <SidebarMenuItem className="my-3">
-            <Separator />
-          </SidebarMenuItem>
           <NavItem
             label="Visibility test"
             icon={EyeIcon}
