@@ -72,8 +72,8 @@ export function LandingHeroBackground() {
         </>
       ) : null}
 
-      <div className="absolute inset-0 bg-gradient-to-b from-[#030f14]/20 via-transparent to-[#030f14]/90" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_15%,transparent_0%,#030f14_70%)]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#030f14]/20 via-transparent to-[#050505]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_15%,transparent_0%,#050505_72%)]" />
     </div>
   )
 }

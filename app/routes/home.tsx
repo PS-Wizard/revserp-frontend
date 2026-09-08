@@ -98,12 +98,13 @@ function Header() {
         <RevserpLogoLink />
 
         <nav className="flex items-center gap-6 text-sm">
-          <a
-            href="#features"
+          <Link
+            to="/terms"
+            prefetch="intent"
             className="hidden text-white/55 transition-colors hover:text-white/90 sm:inline"
           >
-            Features
-          </a>
+            Terms Of Service
+          </Link>
           <Link
             to="/login"
             prefetch="intent"
@@ -158,6 +159,11 @@ function Hero() {
           </div>
         </div>
       </div>
+
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-40 bg-gradient-to-b from-transparent via-[#050505]/60 to-[#050505]"
+      />
     </section>
   )
 }
@@ -166,7 +172,7 @@ function Features() {
   return (
     <section
       id="features"
-      className="border-t border-white/[0.06] bg-[#050505] px-6 py-24 md:px-10 md:py-32"
+      className="relative bg-[#050505] px-6 py-24 md:px-10 md:py-32"
     >
       <div className="mx-auto max-w-6xl">
         <Reveal>
@@ -258,6 +264,13 @@ function Footer() {
               className="text-white/45 transition-colors hover:text-white/80"
             >
               Sign up
+            </Link>
+            <Link
+              to="/terms"
+              prefetch="intent"
+              className="text-white/45 transition-colors hover:text-white/80"
+            >
+              Terms Of Service
             </Link>
           </div>
           <p className="text-xs text-white/28">© {year} Revserp</p>
