@@ -244,7 +244,7 @@ export function AuthForm({
           )}
           <FieldDescription className="text-center">
             {isLogin
-              ? "Don&apos;t have an account?"
+              ? "Don't have an account?"
               : "Already have an account?"}{" "}
             <Link
               className="underline underline-offset-4"
