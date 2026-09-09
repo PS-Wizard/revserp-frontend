@@ -726,6 +726,23 @@ export function RevbotViewContent({
                                 ? Boolean(message.content) ||
                                   revbot.phase === "writing"
                                 : Boolean(message.content)
+                            const messageIndex = revbot.messages.findIndex(
+                              (entry) => entry.id === message.id
+                            )
+                            const precedingUserMessage =
+                              messageIndex > 0
+                                ? revbot.messages[messageIndex - 1]
+                                : null
+                            const canRetry =
+                              precedingUserMessage?.role === "user" &&
+                              Boolean(precedingUserMessage.content.trim())
+                            const turnFinished =
+                              !isActiveMessage ||
+                              revbot.status === "completed" ||
+                              revbot.status === "failed" ||
+                              revbot.status === "stopped"
+                            const showMessageActions =
+                              turnFinished && (Boolean(message.content) || canRetry)
 
                             return (
                               <div
@@ -777,11 +794,16 @@ export function RevbotViewContent({
                                     }
                                     variant={variant}
                                   />
-                                  {message.id !== activeAssistantMessageId &&
-                                  message.content ? (
+                                  {showMessageActions ? (
                                     <div className="mt-2">
                                       <RevbotMessageActions
                                         content={message.content}
+                                        onRetry={
+                                          canRetry
+                                            ? () => revbot.retry(message.id)
+                                            : undefined
+                                        }
+                                        retryDisabled={active || revbot.loading}
                                         variant={variant}
                                       />
                                     </div>

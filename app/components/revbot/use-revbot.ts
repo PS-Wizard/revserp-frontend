@@ -35,6 +35,19 @@ import { normalizeToolCallStatus } from "./tool-call-status"
 const STORAGE_PREFIX = "revbot-turn:"
 const EFFORT_STORAGE_KEY = "revbot-reasoning-effort"
 const RECONNECT_DELAY_MS = 700
+const AUTO_RETRY_MAX_ATTEMPTS = 3
+const AUTO_RETRY_DELAY_MS = 800
+
+const RETRYABLE_ERROR_CODES = new Set([
+  "worker_interrupted",
+  "provider_timeout",
+  "provider_unavailable",
+])
+
+type SendOptions = {
+  /** Reuse the preceding user bubble and drop the failed assistant message. */
+  retryAfterAssistantMessageId?: string
+}
 
 type StoredConversation = { conversationId: string; turnId?: string }
 export type RevbotToolCall = {
@@ -105,6 +118,28 @@ function clearStoredConversation(projectId: string) {
 
 function isTurnTerminal(status: RevbotStatus) {
   return status === "completed" || status === "stopped" || status === "failed"
+}
+
+function assistantMessageForTurn(turn: AITurnResponse) {
+  return [...turn.messages].reverse().find((message) => message.role === "assistant")
+}
+
+function isRetryableCutoff(turn: AITurnResponse) {
+  if (turn.status === "completed") return false
+  if (turn.status === "stopped" && turn.error_code === "cancelled") return false
+  if (turn.cancel_requested && turn.status === "stopped") return false
+
+  const assistant = assistantMessageForTurn(turn)
+  if (assistant?.status === "complete") return false
+
+  if (turn.status === "failed") {
+    if (turn.error_code && RETRYABLE_ERROR_CODES.has(turn.error_code)) {
+      return true
+    }
+    return assistant?.status === "partial" || assistant?.status === "failed"
+  }
+
+  return turn.status === "stopped" && assistant?.status === "partial"
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -354,14 +389,32 @@ export function useRevbot({
   const seenEventIdsRef = useRef<Set<number>>(new Set())
   const assistantTextRef = useRef("")
   const assistantMessageIdRef = useRef<string | null>(null)
+  const messagesRef = useRef<LocalMessage[]>([])
+  const autoRetryAttemptsRef = useRef(new Map<string, number>())
+  const autoRetryTimerRef = useRef<number | null>(null)
+  const userStopRequestedRef = useRef(false)
+  const maybeAutoRetryTurnRef = useRef<
+    (turn: AITurnResponse, generation: number) => void
+  >(() => {})
   const onConversationChangeRef = useRef(onConversationChange)
   const conversationCacheRef = useRef(
     new Map<string, AIConversationDetailResponse>()
   )
 
+  const clearAutoRetryTimer = useCallback(() => {
+    if (autoRetryTimerRef.current !== null) {
+      window.clearTimeout(autoRetryTimerRef.current)
+      autoRetryTimerRef.current = null
+    }
+  }, [])
+
   useEffect(() => {
     onConversationChangeRef.current = onConversationChange
   }, [onConversationChange])
+
+  useEffect(() => {
+    messagesRef.current = state.messages
+  }, [state.messages])
 
   const notifyConversationChange = useCallback(
     (conversationId: string | null) => {
@@ -424,6 +477,16 @@ export function useRevbot({
       statusRef.current = status
       const terminal = isTurnTerminal(status)
       if (terminal) activeRequestRef.current = false
+      if (status === "completed") {
+        const assistantMessageId = assistantMessageIdRef.current
+        const messages = messagesRef.current
+        const assistantIndex = messages.findIndex(
+          (message) => message.id === assistantMessageId
+        )
+        if (assistantIndex > 0) {
+          autoRetryAttemptsRef.current.delete(messages[assistantIndex - 1].id)
+        }
+      }
       const conversationId = conversationIdRef.current
       if (mountedRef.current) {
         setState((current) => {
@@ -597,6 +660,7 @@ export function useRevbot({
         const turn = await clientApiFetch<AITurnResponse>(`/ai/turns/${turnId}`)
         if (generation !== generationRef.current || !mountedRef.current) return
         applyTurn(turn, false)
+        maybeAutoRetryTurnRef.current(turn, generation)
       } catch {
         // Keep the streamed text if the final refresh is unavailable.
       }
@@ -761,6 +825,7 @@ export function useRevbot({
           }
           if (isTurnTerminal(turn.status)) {
             applyTurn(turn, false)
+            maybeAutoRetryTurnRef.current(turn, generation)
             return
           }
         } catch {
@@ -794,9 +859,10 @@ export function useRevbot({
     return () => {
       mountedRef.current = false
       generationRef.current += 1
+      clearAutoRetryTimer()
       stopObserver()
     }
-  }, [stopObserver])
+  }, [clearAutoRetryTimer, stopObserver])
 
   useEffect(() => {
     setEffort((current) =>
@@ -809,6 +875,9 @@ export function useRevbot({
     generationRef.current += 1
     const generation = generationRef.current
     projectGenerationRef.current += 1
+    clearAutoRetryTimer()
+    autoRetryAttemptsRef.current.clear()
+    userStopRequestedRef.current = false
     stopObserver()
     projectIdRef.current = projectId
     conversationIdRef.current = null
@@ -1094,7 +1163,7 @@ export function useRevbot({
   }, [newChat, requestedConversationId, selectConversation])
 
   const send = useCallback(
-    async (content: string) => {
+    async (content: string, options?: SendOptions) => {
       const projectId = projectIdRef.current
       const trimmed = content.trim()
       if (
@@ -1107,22 +1176,34 @@ export function useRevbot({
 
       const generation = generationRef.current + 1
       generationRef.current = generation
+      clearAutoRetryTimer()
+      userStopRequestedRef.current = false
       stopObserver()
+      const retryAssistantId = options?.retryAfterAssistantMessageId
       const optimisticUser = userMessage(trimmed)
       const optimisticAssistant = assistantMessage()
       assistantMessageIdRef.current = optimisticAssistant.id
       assistantTextRef.current = ""
       activeRequestRef.current = true
-      setState((current) => ({
-        ...current,
-        messages: [...current.messages, optimisticUser, optimisticAssistant],
-        status: "idle",
-        phase: null,
-        toolCalls: [],
-        activityStartedAt: Date.now(),
-        stopping: false,
-        loading: true,
-      }))
+      setState((current) => {
+        const withoutFailedAssistant = retryAssistantId
+          ? current.messages.filter((message) => message.id !== retryAssistantId)
+          : current.messages
+        const nextMessages = retryAssistantId
+          ? [...withoutFailedAssistant, optimisticAssistant]
+          : [...withoutFailedAssistant, optimisticUser, optimisticAssistant]
+
+        return {
+          ...current,
+          messages: nextMessages,
+          status: "idle",
+          phase: null,
+          toolCalls: [],
+          activityStartedAt: Date.now(),
+          stopping: false,
+          loading: true,
+        }
+      })
 
       try {
         let conversationId = conversationIdRef.current
@@ -1183,7 +1264,7 @@ export function useRevbot({
         setState((current) => ({
           ...current,
           messages: current.messages.map((message) => {
-            if (message.id === optimisticUser.id) {
+            if (!retryAssistantId && message.id === optimisticUser.id) {
               return { ...message, id: turn.user_message_id, local: false }
             }
             if (message.id === optimisticAssistant.id) {
@@ -1223,7 +1304,7 @@ export function useRevbot({
           ...current,
           messages: current.messages.filter(
             (message) =>
-              message.id !== optimisticUser.id &&
+              (retryAssistantId || message.id !== optimisticUser.id) &&
               message.id !== optimisticAssistant.id
           ),
           status: "idle",
@@ -1231,7 +1312,101 @@ export function useRevbot({
         }))
       }
     },
-    [allowedEfforts, effort, notifyConversationChange, observe, stopObserver]
+    [
+      allowedEfforts,
+      clearAutoRetryTimer,
+      effort,
+      notifyConversationChange,
+      observe,
+      stopObserver,
+    ]
+  )
+
+  const maybeAutoRetryTurn = useCallback(
+    (turn: AITurnResponse, generation: number) => {
+      if (
+        generation !== generationRef.current ||
+        !mountedRef.current ||
+        userStopRequestedRef.current ||
+        !isRetryableCutoff(turn)
+      ) {
+        return
+      }
+
+      const assistant = assistantMessageForTurn(turn)
+      if (!assistant) return
+
+      const messages = messagesRef.current
+      const assistantIndex = messages.findIndex(
+        (message) => message.id === assistant.id
+      )
+      if (assistantIndex <= 0) return
+
+      const userMessageEntry = messages[assistantIndex - 1]
+      if (userMessageEntry.role !== "user") return
+
+      const content = userMessageEntry.content.trim()
+      if (!content) return
+
+      const attempt = autoRetryAttemptsRef.current.get(userMessageEntry.id) ?? 0
+      if (attempt >= AUTO_RETRY_MAX_ATTEMPTS) {
+        reportRevbotError(
+          "Unable to complete this response after several tries."
+        )
+        return
+      }
+
+      autoRetryAttemptsRef.current.set(userMessageEntry.id, attempt + 1)
+      clearAutoRetryTimer()
+      autoRetryTimerRef.current = window.setTimeout(() => {
+        autoRetryTimerRef.current = null
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          userStopRequestedRef.current
+        ) {
+          return
+        }
+        toast.message(
+          `Retrying response (${attempt + 1}/${AUTO_RETRY_MAX_ATTEMPTS})…`,
+          { id: REVBOT_TOAST_ID }
+        )
+        void send(content, { retryAfterAssistantMessageId: assistant.id })
+      }, AUTO_RETRY_DELAY_MS)
+    },
+    [clearAutoRetryTimer, send]
+  )
+
+  useEffect(() => {
+    maybeAutoRetryTurnRef.current = maybeAutoRetryTurn
+  }, [maybeAutoRetryTurn])
+
+  const retry = useCallback(
+    (assistantMessageId: string) => {
+      if (
+        activeRequestRef.current ||
+        statusRef.current === "queued" ||
+        statusRef.current === "running"
+      ) {
+        reportRevbotError("Wait for the current response to finish.")
+        return
+      }
+
+      const messages = messagesRef.current
+      const assistantIndex = messages.findIndex(
+        (message) => message.id === assistantMessageId
+      )
+      if (assistantIndex <= 0) return
+
+      const userMessage = messages[assistantIndex - 1]
+      if (userMessage.role !== "user") return
+
+      const content = userMessage.content.trim()
+      if (!content) return
+
+      void send(content, { retryAfterAssistantMessageId: assistantMessageId })
+    },
+    [send]
   )
 
   const stop = useCallback(async () => {
@@ -1243,6 +1418,8 @@ export function useRevbot({
       (statusRef.current !== "queued" && statusRef.current !== "running")
     )
       return
+    userStopRequestedRef.current = true
+    clearAutoRetryTimer()
     setState((current) => ({ ...current, stopping: true }))
     try {
       const turn = await clientApiPost<AITurnResponse>(
@@ -1274,7 +1451,7 @@ export function useRevbot({
         stopping: false,
       }))
     }
-  }, [applyTurn, stopObserver])
+  }, [applyTurn, clearAutoRetryTimer, stopObserver])
 
   useEffect(() => {
     if (!isTurnTerminal(statusRef.current)) return
@@ -1324,6 +1501,7 @@ export function useRevbot({
     messages: state.messages,
     newChat,
     phase: state.phase,
+    retry,
     selectConversation,
     send,
     setEffort,
