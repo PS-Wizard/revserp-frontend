@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ClipboardEvent,
   type KeyboardEvent,
 } from "react"
 
@@ -17,12 +18,33 @@ import {
   type ShaderController,
 } from "glimm"
 
-import { ArrowUpIcon, MicIcon, PlusIcon, SquareIcon } from "lucide-react"
+import { ArrowUpIcon, MicIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react"
 
 import { Button } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
-import type { AIReasoningEffort } from "~/lib/api.types"
+import type { AIReasoningEffort, AITurnImage } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
+
+import { compressRevbotImage } from "./compress-revbot-image"
+
+const MAX_IMAGES = 4
+const ACCEPTED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+])
+
+type ComposerAttachment = {
+  file: File
+  id: string
+  previewUrl: string
+}
+
+function isAcceptedImageFile(file: File) {
+  return ACCEPTED_IMAGE_TYPES.has(file.type)
+}
 
 type AutocompleteMode = "source" | "command"
 
@@ -143,7 +165,7 @@ type RevbotComposerProps = {
   disabled: boolean
   effort: AIReasoningEffort
   onEffortChange: (effort: AIReasoningEffort) => void
-  onSend: (content: string) => void
+  onSend: (content: string, images?: AITurnImage[]) => void
   onStop: () => void
   showMic?: boolean
   stopping: boolean
@@ -188,9 +210,14 @@ export function RevbotComposer({
   const sweepRef = useRef<ReturnType<typeof playSweep> | null>(null)
   const recognitionRef = useRef<DictationRecognition | null>(null)
   const promptRef = useRef(prompt)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachmentsRef = useRef<ComposerAttachment[]>([])
+  const sendingRef = useRef(false)
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [speechRecognitionAvailable, setSpeechRecognitionAvailable] =
     useState(false)
   const [listening, setListening] = useState(false)
+  const [sending, setSending] = useState(false)
 
   const autocompleteOptions =
     autocomplete?.mode === "source" ? sourceOptions : commandOptions
@@ -205,7 +232,10 @@ export function RevbotComposer({
     : undefined
   const effortIndex = allowedEfforts.indexOf(effort)
   const isDark = variant === "dark"
-  const canSend = !disabled && prompt.trim().length > 0
+  const canSend =
+    !disabled &&
+    !sending &&
+    (prompt.trim().length > 0 || attachments.length > 0)
   const showEffort = allowedEfforts.length > 1
   const actionColCount = (showMic ? 2 : 1) + (showEffort ? 1 : 0)
   const sendColClass = showEffort
@@ -227,6 +257,18 @@ export function RevbotComposer({
   useEffect(() => {
     promptRef.current = prompt
   }, [prompt])
+
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  }, [attachments])
+
+  useEffect(() => {
+    return () => {
+      for (const attachment of attachmentsRef.current) {
+        URL.revokeObjectURL(attachment.previewUrl)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     setActiveOptionIndex(0)
@@ -321,13 +363,79 @@ export function RevbotComposer({
     setAutocomplete(getAutocomplete(value, caret))
   }
 
-  function handleSend() {
+  function addImageFiles(files: File[]) {
+    setAttachments((current) => {
+      const remaining = MAX_IMAGES - current.length
+      if (remaining <= 0) return current
+      const next = files
+        .filter(isAcceptedImageFile)
+        .slice(0, remaining)
+        .map((file) => ({
+          file,
+          id: crypto.randomUUID(),
+          previewUrl: URL.createObjectURL(file),
+        }))
+      return next.length ? [...current, ...next] : current
+    })
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => {
+      const removed = current.find((attachment) => attachment.id === id)
+      if (removed) URL.revokeObjectURL(removed.previewUrl)
+      return current.filter((attachment) => attachment.id !== id)
+    })
+  }
+
+  function clearAttachments() {
+    for (const attachment of attachmentsRef.current) {
+      URL.revokeObjectURL(attachment.previewUrl)
+    }
+    attachmentsRef.current = []
+    setAttachments([])
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const clipboard = event.clipboardData
+    if (!clipboard) return
+
+    const files: File[] = []
+    for (const item of Array.from(clipboard.items)) {
+      if (!item.type.startsWith("image/")) continue
+      const file = item.getAsFile()
+      if (file) files.push(file)
+    }
+    if (!files.length) return
+
+    event.preventDefault()
+    addImageFiles(files)
+  }
+
+  async function handleSend() {
     const content = prompt.trim()
-    if (!content || disabled) return
-    onSend(content)
-    setPrompt("")
-    setAutocomplete(null)
-    promptRef.current = ""
+    const files = attachments.map((attachment) => attachment.file)
+    if (disabled || sendingRef.current || (!content && files.length === 0)) {
+      return
+    }
+
+    sendingRef.current = true
+    setSending(true)
+    try {
+      const images: AITurnImage[] = []
+      for (const file of files) {
+        const compressed = await compressRevbotImage(file)
+        if (compressed) images.push(compressed)
+      }
+      if (!content && images.length === 0) return
+      onSend(content, images.length ? images : undefined)
+      setPrompt("")
+      setAutocomplete(null)
+      promptRef.current = ""
+      clearAttachments()
+    } finally {
+      sendingRef.current = false
+      setSending(false)
+    }
   }
 
   function selectAutocomplete(option: ComposerOption) {
@@ -630,6 +738,45 @@ export function RevbotComposer({
         >
           {prompt}
         </span>
+        {attachments.length ? (
+          <div className="relative z-10 flex flex-wrap gap-1.5 px-1 pt-0.5">
+            {attachments.map((attachment) => (
+              <div className="relative" key={attachment.id}>
+                <img
+                  alt=""
+                  className="size-11 rounded-md object-cover"
+                  src={attachment.previewUrl}
+                />
+                <button
+                  aria-label="Remove image"
+                  className={cn(
+                    "absolute top-0.5 right-0.5 flex size-4 items-center justify-center rounded-full text-white",
+                    isDark
+                      ? "bg-white/30 hover:bg-white/50"
+                      : "bg-black/60 hover:bg-black/80"
+                  )}
+                  onClick={() => removeAttachment(attachment.id)}
+                  type="button"
+                >
+                  <XIcon aria-hidden="true" className="size-2.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <input
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          aria-hidden="true"
+          className="hidden"
+          multiple
+          onChange={(event) => {
+            addImageFiles(Array.from(event.target.files ?? []))
+            event.target.value = ""
+          }}
+          ref={fileInputRef}
+          tabIndex={-1}
+          type="file"
+        />
         <div
           className={cn(
             "relative z-10 grid items-end gap-x-1 gap-y-1.5",
@@ -652,9 +799,7 @@ export function RevbotComposer({
           ref={controlsRef}
         >
           <Button
-            aria-controls="revbot-autocomplete"
-            aria-expanded={autocomplete?.mode === "source"}
-            aria-label="Choose audit source"
+            aria-label="Attach images"
             className={cn(
               "size-7 justify-self-start rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
               isDark && "hover:bg-white/10",
@@ -663,13 +808,8 @@ export function RevbotComposer({
             disabled={disabled}
             onClick={() => {
               setEffortOpen(false)
-              if (autocomplete?.mode === "source") {
-                setAutocomplete(null)
-                return
-              }
-              const caret = textareaRef.current?.selectionStart ?? prompt.length
-              setAutocomplete({ mode: "source", query: "", start: caret })
-              requestAnimationFrame(() => textareaRef.current?.focus())
+              setAutocomplete(null)
+              fileInputRef.current?.click()
             }}
             size="icon-sm"
             type="button"
@@ -696,6 +836,7 @@ export function RevbotComposer({
               updatePrompt(event.target.value, event.target.selectionStart)
             }
             onKeyDown={handlePromptKeyDown}
+            onPaste={handlePaste}
             placeholder={listening ? "Listening…" : "Ask Revbot anything…"}
             ref={textareaRef}
             rows={1}

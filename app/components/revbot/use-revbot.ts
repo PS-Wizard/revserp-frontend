@@ -24,6 +24,7 @@ import type {
   AIStreamToolResultPayload,
   AIToolCallResponse,
   AIToolCallStatus,
+  AITurnImage,
   AITurnMessageResponse,
   AITurnResponse,
   AITurnSubmissionResponse,
@@ -45,8 +46,11 @@ const RETRYABLE_ERROR_CODES = new Set([
 ])
 
 type SendOptions = {
+  images?: AITurnImage[]
   /** Reuse the preceding user bubble and drop the failed assistant message. */
   retryAfterAssistantMessageId?: string
+  /** Keep the auto-retry counter; a fresh send resets it. */
+  autoRetry?: boolean
 }
 
 type StoredConversation = { conversationId: string; turnId?: string }
@@ -219,7 +223,7 @@ function resolveEffort(allowedEfforts: AIReasoningEffort[]) {
   return defaultEffort(allowedEfforts)
 }
 
-function userMessage(content: string): LocalMessage {
+function userMessage(content: string, images?: AITurnImage[]): LocalMessage {
   const now = new Date().toISOString()
   return {
     id: `local-user-${crypto.randomUUID()}`,
@@ -229,7 +233,15 @@ function userMessage(content: string): LocalMessage {
     created_at: now,
     updated_at: now,
     local: true,
+    ...(images?.length ? { images } : {}),
   }
+}
+
+function hasUserTurnContent(message: {
+  content: string
+  images?: AITurnImage[]
+}) {
+  return Boolean(message.content.trim()) || Boolean(message.images?.length)
 }
 
 function assistantMessage(): LocalMessage {
@@ -390,12 +402,12 @@ export function useRevbot({
   const assistantTextRef = useRef("")
   const assistantMessageIdRef = useRef<string | null>(null)
   const messagesRef = useRef<LocalMessage[]>([])
-  const autoRetryAttemptsRef = useRef(new Map<string, number>())
+  const autoRetryAttemptsRef = useRef(0)
   const autoRetryTimerRef = useRef<number | null>(null)
   const userStopRequestedRef = useRef(false)
   const maybeAutoRetryTurnRef = useRef<
-    (turn: AITurnResponse, generation: number) => void
-  >(() => {})
+    (turn: AITurnResponse, generation: number) => boolean
+  >(() => false)
   const onConversationChangeRef = useRef(onConversationChange)
   const conversationCacheRef = useRef(
     new Map<string, AIConversationDetailResponse>()
@@ -477,16 +489,7 @@ export function useRevbot({
       statusRef.current = status
       const terminal = isTurnTerminal(status)
       if (terminal) activeRequestRef.current = false
-      if (status === "completed") {
-        const assistantMessageId = assistantMessageIdRef.current
-        const messages = messagesRef.current
-        const assistantIndex = messages.findIndex(
-          (message) => message.id === assistantMessageId
-        )
-        if (assistantIndex > 0) {
-          autoRetryAttemptsRef.current.delete(messages[assistantIndex - 1].id)
-        }
-      }
+      if (status === "completed") autoRetryAttemptsRef.current = 0
       const conversationId = conversationIdRef.current
       if (mountedRef.current) {
         setState((current) => {
@@ -607,9 +610,6 @@ export function useRevbot({
       assistantTextRef.current = replay ? "" : (assistant?.content ?? "")
       const toolCalls = replay ? [] : mapToolCallResponses(turn.tool_calls)
       const turnActivity = turnActivityTimestamps(turn)
-      if (turn.status === "failed") {
-        reportRevbotError(turnErrorMessage(turn.error_code))
-      }
 
       setState((current) => {
         const existingClientAssistant = assistant?.id
@@ -784,7 +784,6 @@ export function useRevbot({
                 void refreshTerminalTurn(turnId, generation)
               } else if (event === "failed" && isTerminalPayload(payload)) {
                 updateStatus("failed")
-                reportRevbotError(turnErrorMessage(payload.error_code))
                 setState((current) => ({
                   ...current,
                   stopping: false,
@@ -876,7 +875,7 @@ export function useRevbot({
     const generation = generationRef.current
     projectGenerationRef.current += 1
     clearAutoRetryTimer()
-    autoRetryAttemptsRef.current.clear()
+    autoRetryAttemptsRef.current = 0
     userStopRequestedRef.current = false
     stopObserver()
     projectIdRef.current = projectId
@@ -1166,9 +1165,11 @@ export function useRevbot({
     async (content: string, options?: SendOptions) => {
       const projectId = projectIdRef.current
       const trimmed = content.trim()
+      const images = options?.images
+      const hasImages = Boolean(images?.length)
       if (
         !projectId ||
-        !trimmed ||
+        (!trimmed && !hasImages) ||
         activeRequestRef.current ||
         !allowedEfforts.includes(effort)
       )
@@ -1180,7 +1181,8 @@ export function useRevbot({
       userStopRequestedRef.current = false
       stopObserver()
       const retryAssistantId = options?.retryAfterAssistantMessageId
-      const optimisticUser = userMessage(trimmed)
+      if (!options?.autoRetry) autoRetryAttemptsRef.current = 0
+      const optimisticUser = userMessage(trimmed, images)
       const optimisticAssistant = assistantMessage()
       assistantMessageIdRef.current = optimisticAssistant.id
       assistantTextRef.current = ""
@@ -1244,6 +1246,7 @@ export function useRevbot({
           `/ai/conversations/${conversationId}/turns`,
           {
             content: trimmed,
+            images: hasImages ? images : undefined,
             reasoning_effort: effort,
             client_request_id: crypto.randomUUID(),
           }
@@ -1277,7 +1280,9 @@ export function useRevbot({
             conversation.title === "New conversation"
               ? {
                   ...conversation,
-                  title: trimmed.replace(/\s+/g, " ").slice(0, 120),
+                  title: trimmed
+                    ? trimmed.replace(/\s+/g, " ").slice(0, 120)
+                    : "Sent an image",
                 }
               : conversation
           ),
@@ -1324,39 +1329,58 @@ export function useRevbot({
 
   const maybeAutoRetryTurn = useCallback(
     (turn: AITurnResponse, generation: number) => {
+      const reportFailure = () => {
+        reportRevbotError(turnErrorMessage(turn.error_code))
+      }
+
       if (
         generation !== generationRef.current ||
         !mountedRef.current ||
-        userStopRequestedRef.current ||
-        !isRetryableCutoff(turn)
+        userStopRequestedRef.current
       ) {
-        return
+        return false
+      }
+
+      if (!isRetryableCutoff(turn)) {
+        if (turn.status === "failed") reportFailure()
+        return false
       }
 
       const assistant = assistantMessageForTurn(turn)
-      if (!assistant) return
+      if (!assistant) {
+        reportFailure()
+        return false
+      }
 
       const messages = messagesRef.current
       const assistantIndex = messages.findIndex(
         (message) => message.id === assistant.id
       )
-      if (assistantIndex <= 0) return
-
-      const userMessageEntry = messages[assistantIndex - 1]
-      if (userMessageEntry.role !== "user") return
-
-      const content = userMessageEntry.content.trim()
-      if (!content) return
-
-      const attempt = autoRetryAttemptsRef.current.get(userMessageEntry.id) ?? 0
-      if (attempt >= AUTO_RETRY_MAX_ATTEMPTS) {
-        reportRevbotError(
-          "Unable to complete this response after several tries."
-        )
-        return
+      if (assistantIndex <= 0) {
+        reportFailure()
+        return false
       }
 
-      autoRetryAttemptsRef.current.set(userMessageEntry.id, attempt + 1)
+      const userMessageEntry = messages[assistantIndex - 1]
+      if (
+        userMessageEntry.role !== "user" ||
+        !hasUserTurnContent(userMessageEntry)
+      ) {
+        reportFailure()
+        return false
+      }
+
+      const attempt = autoRetryAttemptsRef.current
+      if (attempt >= AUTO_RETRY_MAX_ATTEMPTS) {
+        reportFailure()
+        return false
+      }
+
+      autoRetryAttemptsRef.current = attempt + 1
+      toast.message(
+        `Retrying response (${attempt + 1}/${AUTO_RETRY_MAX_ATTEMPTS})…`,
+        { id: REVBOT_TOAST_ID }
+      )
       clearAutoRetryTimer()
       autoRetryTimerRef.current = window.setTimeout(() => {
         autoRetryTimerRef.current = null
@@ -1367,12 +1391,13 @@ export function useRevbot({
         ) {
           return
         }
-        toast.message(
-          `Retrying response (${attempt + 1}/${AUTO_RETRY_MAX_ATTEMPTS})…`,
-          { id: REVBOT_TOAST_ID }
-        )
-        void send(content, { retryAfterAssistantMessageId: assistant.id })
+        void send(userMessageEntry.content, {
+          images: userMessageEntry.images,
+          retryAfterAssistantMessageId: assistant.id,
+          autoRetry: true,
+        })
       }, AUTO_RETRY_DELAY_MS)
+      return true
     },
     [clearAutoRetryTimer, send]
   )
@@ -1400,11 +1425,12 @@ export function useRevbot({
 
       const userMessage = messages[assistantIndex - 1]
       if (userMessage.role !== "user") return
+      if (!hasUserTurnContent(userMessage)) return
 
-      const content = userMessage.content.trim()
-      if (!content) return
-
-      void send(content, { retryAfterAssistantMessageId: assistantMessageId })
+      void send(userMessage.content, {
+        images: userMessage.images,
+        retryAfterAssistantMessageId: assistantMessageId,
+      })
     },
     [send]
   )

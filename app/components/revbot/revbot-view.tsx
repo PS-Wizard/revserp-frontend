@@ -735,7 +735,8 @@ export function RevbotViewContent({
                                 : null
                             const canRetry =
                               precedingUserMessage?.role === "user" &&
-                              Boolean(precedingUserMessage.content.trim())
+                              (Boolean(precedingUserMessage.content.trim()) ||
+                                Boolean(precedingUserMessage.images?.length))
                             const turnFinished =
                               !isActiveMessage ||
                               revbot.status === "completed" ||
@@ -813,14 +814,40 @@ export function RevbotViewContent({
                             )
                           })()
                         ) : (
-                          <p
+                          <div
                             className={cn(
-                              "max-w-[min(85%,28rem)] rounded-2xl px-3.5 py-2 text-[15px] leading-relaxed whitespace-pre-wrap",
+                              "flex max-w-[min(85%,28rem)] flex-col gap-2 rounded-2xl px-3.5 py-2",
                               isDark ? "bg-white/10" : "bg-muted"
                             )}
                           >
-                            {message.content}
-                          </p>
+                            {message.images?.length ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {message.images.map((image, index) => {
+                                  const src = `data:${image.media_type};base64,${image.data}`
+                                  return (
+                                    <a
+                                      className="block size-12 overflow-hidden rounded-lg"
+                                      href={src}
+                                      key={`${message.id}-image-${index}`}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                    >
+                                      <img
+                                        alt=""
+                                        className="size-full object-cover"
+                                        src={src}
+                                      />
+                                    </a>
+                                  )
+                                })}
+                              </div>
+                            ) : null}
+                            {message.content ? (
+                              <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                                {message.content}
+                              </p>
+                            ) : null}
+                          </div>
                         )}
                       </article>
                     </MessageScrollerItem>
@@ -853,7 +880,7 @@ export function RevbotViewContent({
           disabled={revbot.loading || active || revbot.stopping}
           effort={revbot.effort}
           onEffortChange={revbot.setEffort}
-          onSend={(content) => void revbot.send(content)}
+          onSend={(content, images) => void revbot.send(content, { images })}
           onStop={() => void revbot.stop()}
           showMic={showMic}
           stopping={revbot.stopping}

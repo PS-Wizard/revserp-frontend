@@ -597,11 +597,17 @@ export type AIConversationDetailResponse = AIConversationResponse & {
   messages: AITurnMessageResponse[]
 }
 
+export type AITurnImage = {
+  media_type: "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+  data: string
+}
+
 export type AITurnMessageResponse = {
   id: string
   role: "user" | "assistant"
   status: "pending" | "complete" | "partial" | "failed"
   content: string
+  images?: AITurnImage[]
   created_at: string
   updated_at: string
   tool_calls?: AIToolCallResponse[]
