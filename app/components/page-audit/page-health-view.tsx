@@ -15,12 +15,18 @@ import { Separator } from "~/components/ui/separator"
 import { Skeleton } from "~/components/ui/skeleton"
 import {
   buildPageScopedBreakdown,
-  computePageOverallScore,
-  computePagePillarScores,
+  countPageIssuesByPillar,
 } from "~/lib/build-page-breakdown"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import type { ScoreBreakdownResponse } from "~/lib/api.types"
+import { ApiError } from "~/lib/api"
 import { formatBucketLabel } from "~/lib/utils"
+
+const PILLAR_LABELS: Record<string, string> = {
+  seo: "SEO",
+  aeo: "AEO",
+  pagespeed: "PageSpeed",
+}
 
 export const PageHealthView = memo(function PageHealthView({
   crawlId,
@@ -50,44 +56,59 @@ export const PageHealthView = memo(function PageHealthView({
     [breakdown, pageIssues]
   )
 
-  const pillarScores = useMemo(
-    () => (breakdown ? computePagePillarScores(breakdown, pageIssues) : []),
-    [breakdown, pageIssues]
+  const pillarIssueCounts = useMemo(
+    () => countPageIssuesByPillar(pageIssues),
+    [pageIssues]
   )
 
-  const computedOverallScore = useMemo(
-    () =>
-      breakdown ? computePageOverallScore(breakdown, pageIssues) : undefined,
-    [breakdown, pageIssues]
-  )
-
+  const healthData = healthQuery.data ?? null
   const overallCenterScore =
-    healthQuery.data?.health_score ?? computedOverallScore
+    healthData !== null ? healthData.health_score : undefined
 
-  const overallSegments = useMemo(
-    () =>
-      pillarScores.map((pillar) => ({
+  const overallSegments = useMemo(() => {
+    if (!healthData?.pillars.length) return []
+
+    return healthData.pillars.map((pillar) => {
+      const pillarMeta = breakdown?.pillars.find((entry) => entry.id === pillar.id)
+      return {
         key: pillar.id,
-        label: pillar.label,
+        label: pillarMeta?.label ?? PILLAR_LABELS[pillar.id] ?? pillar.id,
         value: pillar.score,
         color: getPillarChartColor(pillar.id, 0),
-      })),
-    [pillarScores]
-  )
+      }
+    })
+  }, [breakdown, healthData])
 
-  const pillarRadials = useMemo(
-    () =>
-      pillarScores.map((pillar) => ({
-        ...pillar,
-        segments: pillar.buckets.map((bucket, index) => ({
-          key: bucket.id,
-          label: formatBucketLabel(bucket.id, bucket.label),
-          value: bucket.score,
-          color: getPillarChartColor(pillar.id, index),
-        })),
-      })),
-    [pillarScores]
-  )
+  const pillarRadials = useMemo(() => {
+    if (!healthData?.pillars.length) return []
+
+    return healthData.pillars.map((pillar) => {
+      const pillarMeta = breakdown?.pillars.find((entry) => entry.id === pillar.id)
+      const label = pillarMeta?.label ?? PILLAR_LABELS[pillar.id] ?? pillar.id
+      const issueCount = pillarIssueCounts[pillar.id] ?? 0
+
+      return {
+        id: pillar.id,
+        label,
+        score: pillar.score,
+        issueCount,
+        segments: pillar.buckets.map((bucket, index) => {
+          const bucketMeta = pillarMeta?.buckets.find(
+            (entry) => entry.id === bucket.id
+          )
+          return {
+            key: bucket.id,
+            label: formatBucketLabel(
+              bucket.id,
+              bucketMeta?.label ?? bucket.id
+            ),
+            value: bucket.score,
+            color: getPillarChartColor(pillar.id, index),
+          }
+        }),
+      }
+    })
+  }, [breakdown, healthData, pillarIssueCounts])
 
   const handleFocusBucket = useCallback(
     (
@@ -112,12 +133,18 @@ export const PageHealthView = memo(function PageHealthView({
     []
   )
 
-  const isLoading = healthQuery.isLoading || issuesQuery.isLoading
+  const isScoresLoading = healthQuery.isLoading
+  const healthErrorMessage =
+    healthQuery.error instanceof ApiError
+      ? healthQuery.error.message
+      : healthQuery.error instanceof Error
+        ? healthQuery.error.message
+        : "Unable to load page health scores."
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <div className="px-4 lg:px-6">
-        {isLoading ? (
+        {isScoresLoading ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
             <Skeleton className="h-[420px] rounded-xl" />
             <div className="grid auto-rows-fr grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-3">
@@ -126,6 +153,10 @@ export const PageHealthView = memo(function PageHealthView({
               <Skeleton className="h-[420px] rounded-xl" />
             </div>
           </div>
+        ) : healthQuery.isError ? (
+          <Card className="bg-gradient-to-br from-card via-card to-muted/30 p-6">
+            <p className="text-sm text-destructive">{healthErrorMessage}</p>
+          </Card>
         ) : (
           <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
             <ScoreRadialChart

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query"
 
-import { clientApiFetch } from "~/lib/api"
+import { ApiError, clientApiFetch } from "~/lib/api"
 import type {
   CrawlPageHealthDetailResponse,
   CrawlPageSearchResponse,
@@ -60,11 +60,19 @@ export function usePageHealthDetail(
   return useQuery({
     enabled: Boolean(crawlId && pageId),
     queryKey: ["crawl-page-health", crawlId, pageId],
-    queryFn: ({ signal }) =>
-      clientApiFetch<CrawlPageHealthDetailResponse>(
-        `/crawls/${crawlId}/pages/${pageId}/health`,
-        { signal }
-      ),
+    queryFn: async ({ signal }) => {
+      try {
+        return await clientApiFetch<CrawlPageHealthDetailResponse>(
+          `/crawls/${crawlId}/pages/${pageId}/health`,
+          { signal }
+        )
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          return null
+        }
+        throw error
+      }
+    },
     retry: false,
     staleTime: 60_000,
   })

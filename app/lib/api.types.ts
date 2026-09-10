@@ -556,11 +556,23 @@ export type CrawlPageSearchResponse = {
   pagination: PaginationResponse
 }
 
+export type CrawlPageHealthPillarBucketResponse = {
+  id: string
+  score: number
+}
+
+export type CrawlPageHealthPillarResponse = {
+  id: string
+  score: number
+  buckets: CrawlPageHealthPillarBucketResponse[]
+}
+
 export type CrawlPageHealthDetailResponse = {
   crawl_id: string
   page_id: string
   url: string
   health_score: number
+  pillars: CrawlPageHealthPillarResponse[]
 }
 
 export type AIConversationResponse = {
