@@ -105,8 +105,16 @@ export type ProjectKeywordsResponse = {
 
 export type ProjectAIQuestionsResponse = {
   questions: string[]
+  location_questions: string[]
   generation_model: string
   generated_at: string
+}
+
+export type ProjectAIQuestionsStatusResponse = {
+  status: "none" | "pending" | "running" | "completed" | "failed"
+  error?: string
+  requested_at?: string
+  completed_at?: string | null
 }
 
 export type ProjectsResponse = {
@@ -884,4 +892,85 @@ export type CompetitorGapContent = {
   median_word_count: number | null
   pages_with_h1: number
   pages_with_meta: number
+}
+
+export type MapsVisibilityListing = {
+  resolved: boolean
+  cid?: string
+  place_id?: string
+  title?: string
+  website?: string
+  address?: string
+}
+
+export type MapsVisibilityItem = {
+  position: number
+  title: string
+  address: string
+  category: string
+  types: string[]
+  rating: number
+  ratingCount: number
+  website: string
+  phone_number: string
+  latitude: number
+  longitude: number
+  cid: string
+  placeId: string
+  fid: string
+  opening_hours: Record<string, string>
+  thumbnail_url: string
+  matched: boolean
+}
+
+export type MapsVisibilityResponse = {
+  id: string
+  status: "queued" | "running" | "completed" | "failed"
+  question: string
+  ll: string
+  zoom: number | null
+  our_rank: number | null
+  our_match_basis: string
+  credits_used: number | null
+  error: string | null
+  listing: MapsVisibilityListing
+  items: MapsVisibilityItem[]
+  created_at: string
+  completed_at: string | null
+  test_available_after: string | null
+}
+
+export type MapsReviewUser = {
+  name: string
+  thumbnail: string
+  link: string
+  reviews: number
+  photos: number
+}
+
+export type MapsReviewMedia = {
+  type: string
+  imageUrl: string
+}
+
+export type MapsReview = {
+  rating: number
+  date: string
+  isoDate: string
+  snippet: string
+  likes: number
+  link: string
+  id: string
+  user: MapsReviewUser
+  media?: MapsReviewMedia[]
+}
+
+export type MapsReviewsResponse = {
+  place_id: string
+  cid: string
+  cached: boolean
+  credits_used: number
+  fetched_at: string
+  refetch_available_after: string | null
+  reviews: MapsReview[]
 }

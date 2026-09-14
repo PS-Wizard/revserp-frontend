@@ -8,12 +8,7 @@ import { HealthRidge } from "~/components/compare/charts"
 import { PAINT_A, PAINT_B } from "~/components/compare/helpers"
 import { IssueBucketPies } from "~/components/competitors/issue-bucket-pies"
 import { Button } from "~/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import {
   Empty,
   EmptyDescription,
@@ -187,9 +182,6 @@ export const CompetitorInsightsView = memo(function CompetitorInsightsView({
         { cache: "no-store" }
       ),
   })
-
-  const themLabel = competitorName.trim() || "Competitor"
-  const youLabel = projectName.trim() || "You"
 
   if (query.isError) {
     return (

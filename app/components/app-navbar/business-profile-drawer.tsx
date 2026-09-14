@@ -20,6 +20,10 @@ import type {
   ProjectAIQuestionsResponse,
   ProjectResponse,
 } from "~/lib/api.types"
+import { cn } from "~/lib/utils"
+
+const selectableQuestionClass =
+  "select-text [user-select:text] [touch-action:auto]"
 
 type BusinessProfileDrawerProps = {
   aiQuestions: ProjectAIQuestionsResponse | null
@@ -44,6 +48,7 @@ type BusinessProfileDrawerProps = {
   onPrimaryCategoryChange: (value: string) => void
   onPrimaryLocationChange: (value: string) => void
   onSeedPromptChange: (index: number, value: string) => void
+  onRegenerateAIQuestions: () => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onTargetKeywordsChange: (value: string) => void
   onWebsiteUrlChange: (value: string) => void
@@ -71,6 +76,7 @@ export function BusinessProfileDrawer({
   onClose,
   onPrimaryCategoryChange,
   onPrimaryLocationChange,
+  onRegenerateAIQuestions,
   onSeedPromptChange,
   onSubmit,
   onTargetKeywordsChange,
@@ -146,7 +152,22 @@ export function BusinessProfileDrawer({
             ) : null}
           </div>
 
-          <DrawerFooter className="mx-auto w-full max-w-5xl flex-row justify-end border-t border-border/50">
+          <DrawerFooter className="mx-auto w-full max-w-5xl flex-row items-center border-t border-border/50">
+            <Button
+              className="mr-auto"
+              disabled={
+                !canManageBusinessProfile ||
+                isLoadingBusinessProfile ||
+                isSavingBusinessProfile ||
+                isRegeneratingAIQuestions
+              }
+              onClick={onRegenerateAIQuestions}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {isRegeneratingAIQuestions ? "Regenerating…" : "Regenerate questions"}
+            </Button>
             <Button onClick={onClose} type="button" variant="outline">
               Close
             </Button>
@@ -174,6 +195,29 @@ export function BusinessProfileDrawer({
         </form>
       </DrawerContent>
     </Drawer>
+  )
+}
+
+function MapsQuestionSection({ locationQuestion }: { locationQuestion: string }) {
+  return (
+    <div
+      className={cn("mt-6 border-t border-border/50 pt-5", selectableQuestionClass)}
+      data-vaul-no-drag
+    >
+      <p className="text-sm font-medium">Maps question</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Used for the Google Maps visibility test, not LLM audits.
+      </p>
+      {locationQuestion ? (
+        <p className="mt-3 cursor-text rounded-lg bg-muted/50 px-3 py-2.5 text-sm leading-relaxed">
+          {locationQuestion}
+        </p>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          No maps question yet — regenerate to create one.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -225,19 +269,25 @@ function AIGeneratedQuestions({
           </p>
         </div>
       ) : (
-        <ol className="space-y-2">
-          {aiQuestions.questions.map((question, index) => (
-            <li
-              className="flex gap-3 rounded-lg bg-muted/50 px-3 py-2.5"
-              key={index}
-            >
-              <span className="mt-px shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-                {index + 1}.
-              </span>
-              <span className="text-sm leading-relaxed">{question}</span>
-            </li>
-          ))}
-        </ol>
+        <div className={selectableQuestionClass} data-vaul-no-drag>
+          <ol className="space-y-2">
+            {aiQuestions.questions.map((question, index) => (
+              <li
+                className="flex cursor-text gap-3 rounded-lg bg-muted/50 px-3 py-2.5"
+                key={index}
+              >
+                <span className="mt-px shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                  {index + 1}.
+                </span>
+                <span className="text-sm leading-relaxed">{question}</span>
+              </li>
+            ))}
+          </ol>
+
+          <MapsQuestionSection
+            locationQuestion={aiQuestions.location_questions?.[0] ?? ""}
+          />
+        </div>
       )}
 
       {aiQuestions && !isRegenerating ? (

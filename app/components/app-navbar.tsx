@@ -64,6 +64,7 @@ export type AppNavbarDialogsProps = {
     handleSaveBusinessProfile: (
       event: FormEvent<HTMLFormElement>
     ) => Promise<void>
+    regenerateAIQuestions: () => Promise<void>
     setBrandName: (v: string) => void
     setWebsiteUrl: (v: string) => void
     setPrimaryCategory: (v: string) => void
@@ -108,6 +109,7 @@ export function AppNavbarDialogs({
     closeBusinessProfileDrawer,
     updateSeedPrompt,
     handleSaveBusinessProfile,
+    regenerateAIQuestions,
     setBrandName,
     setWebsiteUrl,
     setPrimaryCategory,
@@ -140,6 +142,7 @@ export function AppNavbarDialogs({
         onClose={closeBusinessProfileDrawer}
         onPrimaryCategoryChange={setPrimaryCategory}
         onPrimaryLocationChange={setPrimaryLocation}
+        onRegenerateAIQuestions={() => void regenerateAIQuestions()}
         onSeedPromptChange={updateSeedPrompt}
         onSubmit={handleSaveBusinessProfile}
         onTargetKeywordsChange={setTargetKeywords}

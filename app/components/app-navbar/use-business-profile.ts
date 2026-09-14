@@ -6,14 +6,24 @@ import type { FormEvent } from "react"
 
 import type {
   ProjectAIQuestionsResponse,
+  ProjectAIQuestionsStatusResponse,
   ProjectBusinessProfileResponse,
   ProjectBusinessProfileStatusResponse,
   ProjectResponse,
 } from "~/lib/api.types"
-import { clientApiFetch, clientApiPut } from "~/lib/api"
+import { ApiError, clientApiFetch, clientApiPut } from "~/lib/api"
+import { toast } from "sonner"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 
 const EMPTY_SEED_PROMPTS = ["", "", "", "", ""]
+const REGENERATE_TOAST_CLASS = "w-fit"
+const GENERATION_POLL_MS = 2000
+const GENERATION_POLL_MAX_ATTEMPTS = 90
+
+function isGenerationJobAfter(requestedAt: string | undefined, requestedAfterMs: number) {
+  if (!requestedAt) return false
+  return new Date(requestedAt).getTime() >= requestedAfterMs - 1000
+}
 
 function formatTargetKeywords(keywords?: string[]) {
   return keywords?.join("\n") ?? ""
@@ -127,18 +137,84 @@ export function useBusinessProfile() {
     }
   }
 
-  async function pollAIQuestions(projectId: string) {
-    setIsRegeneratingAIQuestions(true)
-    const maxAttempts = 10
-    const intervalMs = 3000
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, intervalMs))
-      if (activeProjectIdRef.current !== projectId) return
-      const found = await fetchAIQuestions(projectId)
-      if (activeProjectIdRef.current !== projectId) return
-      if (found) break
+  async function pollAIQuestionsGeneration(
+    projectId: string,
+    {
+      requestedAfterMs,
+      toastId,
+    }: {
+      requestedAfterMs: number
+      toastId?: string | number
     }
-    setIsRegeneratingAIQuestions(false)
+  ) {
+    setIsRegeneratingAIQuestions(true)
+
+    try {
+      for (let attempt = 0; attempt < GENERATION_POLL_MAX_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, GENERATION_POLL_MS))
+        if (activeProjectIdRef.current !== projectId) {
+          if (toastId !== undefined) toast.dismiss(toastId)
+          return
+        }
+
+        const generation = await clientApiFetch<ProjectAIQuestionsStatusResponse>(
+          `/projects/${projectId}/ai-questions/status`
+        )
+        if (activeProjectIdRef.current !== projectId) {
+          if (toastId !== undefined) toast.dismiss(toastId)
+          return
+        }
+
+        if (
+          generation.status === "none" ||
+          generation.status === "pending" ||
+          generation.status === "running"
+        ) {
+          continue
+        }
+
+        if (generation.status === "completed") {
+          if (!isGenerationJobAfter(generation.requested_at, requestedAfterMs)) {
+            continue
+          }
+          await fetchAIQuestions(projectId)
+          if (toastId !== undefined) {
+            toast.success("Questions regenerated", {
+              className: REGENERATE_TOAST_CLASS,
+              id: toastId,
+            })
+          }
+          return
+        }
+
+        if (generation.status === "failed") {
+          if (!isGenerationJobAfter(generation.requested_at, requestedAfterMs)) {
+            continue
+          }
+          await fetchAIQuestions(projectId)
+          if (toastId !== undefined) {
+            toast.error(
+              generation.error?.trim() ||
+                "Question generation failed — try again.",
+              {
+                className: REGENERATE_TOAST_CLASS,
+                id: toastId,
+              }
+            )
+          }
+          return
+        }
+      }
+
+      if (toastId !== undefined) {
+        toast.error("Question generation timed out — try again.", {
+          className: REGENERATE_TOAST_CLASS,
+          id: toastId,
+        })
+      }
+    } finally {
+      setIsRegeneratingAIQuestions(false)
+    }
   }
 
   async function openBusinessProfileDrawer(project: ProjectResponse) {
@@ -196,6 +272,46 @@ export function useBusinessProfile() {
     setHasTargetKeywordsChanges(value !== savedSnapshot?.targetKeywords)
   }
 
+  async function regenerateAIQuestions() {
+    if (
+      !businessProfileProject ||
+      !businessProfileStatus?.can_manage_profile ||
+      isRegeneratingAIQuestions
+    ) {
+      return
+    }
+
+    if (!businessProfileStatus.has_profile) {
+      toast.error("Save a business profile before regenerating questions.")
+      return
+    }
+
+    const requestedAfterMs = Date.now()
+    const toastId = toast.loading("Regenerating questions…", {
+      className: REGENERATE_TOAST_CLASS,
+      duration: Infinity,
+    })
+
+    try {
+      await clientApiFetch<{ status: string }>(
+        `/projects/${businessProfileProject.id}/ai-questions/regenerate`,
+        { method: "POST" }
+      )
+      setAIQuestions(null)
+      void pollAIQuestionsGeneration(businessProfileProject.id, {
+        requestedAfterMs,
+        toastId,
+      })
+    } catch (error) {
+      toast.dismiss(toastId)
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Could not regenerate questions."
+      )
+    }
+  }
+
   async function handleSaveBusinessProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (
@@ -234,7 +350,9 @@ export function useBusinessProfile() {
       applyBusinessProfile(profile, businessProfileProject)
       void invalidateBusinessProfile(queryClient, businessProfileProject.id)
       closeBusinessProfileDrawer()
-      pollAIQuestions(businessProfileProject.id)
+      void pollAIQuestionsGeneration(businessProfileProject.id, {
+        requestedAfterMs: Date.now(),
+      })
     } catch (error) {
       setBusinessProfileError(
         error instanceof Error
@@ -265,6 +383,7 @@ export function useBusinessProfile() {
     hasUnsavedChanges,
     openBusinessProfileDrawer,
     closeBusinessProfileDrawer,
+    regenerateAIQuestions,
     updateSeedPrompt,
     handleSaveBusinessProfile,
     setBrandName,

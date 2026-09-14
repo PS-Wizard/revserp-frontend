@@ -2,24 +2,22 @@
 
 import { useMemo, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { MapPinIcon, TagsIcon, TriangleAlertIcon } from "lucide-react"
+import { ExternalLinkIcon, TagsIcon, TriangleAlertIcon } from "lucide-react"
 
+import {
+  EChartsPieChart,
+  type ChartConfig,
+} from "~/components/evilcharts/charts/echarts-pie-chart"
 import { ApiError, clientApiFetch } from "~/lib/api"
 import type {
   KeywordCoverageField,
   KeywordCoverageState,
   ProjectKeywordsResponse,
 } from "~/lib/api.types"
+import { cn } from "~/lib/utils"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card"
+import { Card } from "~/components/ui/card"
 import {
   Empty,
   EmptyDescription,
@@ -27,36 +25,24 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty"
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/components/ui/progress"
 import { Skeleton } from "~/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table"
 
 type Props = {
   projectId: string | null
 }
 
 type KeywordCoverageSeed = ProjectKeywordsResponse["seeds"][number]
-type KeywordCoverageMatch = KeywordCoverageSeed["matches"][number]
 
 type FilterState =
   "all" | "likely_targeted" | "no_landing_page" | "cannibalized"
 
-const FIELD_LABELS: Record<KeywordCoverageField, string> = {
-  title: "Title",
-  h1: "H1",
-  url: "URL",
+const START_ANGLE = 210
+
+const STATE_ORDER: Record<KeywordCoverageState, number> = {
+  cannibalized: 0,
+  no_landing_page: 1,
+  likely_targeted: 2,
 }
 
 const STATE_BADGES: Record<
@@ -64,15 +50,48 @@ const STATE_BADGES: Record<
   { label: string; variant: "secondary" | "destructive" | "outline" }
 > = {
   likely_targeted: { label: "Targeted", variant: "secondary" },
-  no_landing_page: { label: "No page", variant: "outline" },
+  no_landing_page: { label: "No landing page", variant: "outline" },
   cannibalized: { label: "Cannibalized", variant: "destructive" },
 }
 
-const STATE_ORDER: Record<KeywordCoverageState, number> = {
-  cannibalized: 0,
-  no_landing_page: 1,
-  likely_targeted: 2,
+const FIELD_LABELS: Record<KeywordCoverageField, string> = {
+  title: "Title",
+  h1: "H1",
+  url: "URL",
 }
+
+const SLICE_META: Array<{
+  id: KeywordCoverageState
+  label: string
+  shortLabel: string
+  color: string
+  bar: string
+}> = [
+  {
+    id: "likely_targeted",
+    label: "Targeted",
+    shortLabel: "Targeted",
+    color: "#34d399",
+    bar: "bg-emerald-500 dark:bg-emerald-400",
+  },
+  {
+    id: "no_landing_page",
+    label: "No landing page",
+    shortLabel: "Gaps",
+    color: "#fbbf24",
+    bar: "bg-amber-500 dark:bg-amber-400",
+  },
+  {
+    id: "cannibalized",
+    label: "Cannibalized",
+    shortLabel: "Cannibalized",
+    color: "#fb7185",
+    bar: "bg-rose-500 dark:bg-rose-400",
+  },
+]
+
+const cardClass =
+  "flex h-full min-h-0 flex-col gap-0 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 py-0"
 
 function keywordsQueryKey(projectId: string) {
   return ["project-keywords", projectId] as const
@@ -85,8 +104,6 @@ export function keywordsQueryOptions(projectId: string) {
       clientApiFetch<ProjectKeywordsResponse>(
         `/projects/${projectId}/keywords`
       ),
-    // The matrix is recomputed server-side on every request; never serve a
-    // cached copy client-side.
     staleTime: 0,
     gcTime: 30_000,
     retry: false,
@@ -124,133 +141,257 @@ function matchLabel(url: string) {
   }
 }
 
-function TabCount({ value }: { value: number }) {
-  if (value <= 0) return null
-  return <span className="text-muted-foreground tabular-nums">{value}</span>
-}
-
 function StateBadge({ state }: { state: KeywordCoverageState }) {
   const badge = STATE_BADGES[state]
   return <Badge variant={badge.variant}>{badge.label}</Badge>
 }
 
-function Evidence({ matches }: { matches: KeywordCoverageMatch[] }) {
-  if (matches.length === 0) {
-    return <span className="text-muted-foreground">—</span>
+function KeywordRow({
+  seed,
+  isLast,
+}: {
+  seed: KeywordCoverageSeed
+  isLast: boolean
+}) {
+  return (
+    <div className={cn("py-4", !isLast && "border-b border-border/40")}>
+      <div className="flex items-start justify-between gap-4">
+        <p className="min-w-0 text-sm leading-snug font-medium">
+          {seed.keyword}
+        </p>
+        <StateBadge state={seed.state} />
+      </div>
+
+      {seed.matches.length === 0 ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          No matching pages on this crawl.
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {seed.matches.map((match, index) => (
+            <li key={`${match.url}-${match.field}-${index}`}>
+              <a
+                className="group inline-flex max-w-full items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+                href={match.url}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <Badge className="shrink-0" variant="outline">
+                  {FIELD_LABELS[match.field]}
+                </Badge>
+                <span className="min-w-0 truncate">
+                  {matchLabel(match.url)}
+                </span>
+                <ExternalLinkIcon
+                  aria-hidden="true"
+                  className="size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function CoverageTabs({
+  counts,
+  filter,
+  onFilter,
+  total,
+}: {
+  counts: Record<KeywordCoverageState, number>
+  filter: FilterState
+  onFilter: (next: FilterState) => void
+  total: number
+}) {
+  return (
+    <Tabs
+      onValueChange={(value) => onFilter(value as FilterState)}
+      value={filter}
+    >
+      <TabsList className="h-auto w-full justify-start gap-1 rounded-lg bg-muted/50 p-1">
+        <TabsTrigger className="px-3 py-1.5 text-sm" value="all">
+          All
+          <span className="text-muted-foreground tabular-nums">{total}</span>
+        </TabsTrigger>
+        {SLICE_META.map((slice) => (
+          <TabsTrigger
+            className="gap-1.5 px-3 py-1.5 text-sm"
+            key={slice.id}
+            value={slice.id}
+          >
+            <span
+              className="size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: slice.color }}
+            />
+            {slice.shortLabel}
+            <span className="text-muted-foreground tabular-nums">
+              {counts[slice.id]}
+            </span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  )
+}
+
+function CoverageChart({
+  counts,
+  filter,
+  onFilter,
+  total,
+}: {
+  counts: Record<KeywordCoverageState, number>
+  filter: FilterState
+  onFilter: (next: FilterState) => void
+  total: number
+}) {
+  const selectedId = filter === "all" ? null : filter
+
+  const slices = useMemo(
+    () =>
+      SLICE_META.map((entry) => ({
+        ...entry,
+        value: counts[entry.id],
+      })),
+    [counts]
+  )
+
+  const chartConfig = useMemo(() => {
+    const config: ChartConfig = {}
+    for (const slice of slices) {
+      config[slice.id] = {
+        label: slice.label,
+        colors: { light: [slice.color], dark: [slice.color] },
+      }
+    }
+    return config
+  }, [slices])
+
+  const pieData = useMemo(
+    () => slices.filter((slice) => slice.value > 0),
+    [slices]
+  )
+
+  const active = slices.find((slice) => slice.id === selectedId) ?? null
+  const selectedOnChart =
+    selectedId && pieData.some((slice) => slice.id === selectedId)
+      ? selectedId
+      : null
+  const centerValue = active ? active.value : total
+
+  const ticks = useMemo(() => {
+    let from = 0
+    return pieData.map((slice) => {
+      from += slice.value
+      return { ...slice, from }
+    })
+  }, [pieData])
+
+  const pickState = (id: KeywordCoverageState) => {
+    onFilter(filter === id ? "all" : id)
   }
 
-  const visible = matches.slice(0, 2)
+  if (pieData.length === 0) {
+    return <p className="text-sm text-muted-foreground">No keywords yet.</p>
+  }
 
   return (
-    <div className="flex flex-col gap-1">
-      {visible.map((match, index) => (
-        <div
-          className="flex items-center gap-1.5"
-          key={`${match.url}-${index}`}
+    <div className="flex w-full max-w-xs flex-col items-center">
+      <div className="relative aspect-square w-full">
+        <EChartsPieChart
+          className="h-full w-full"
+          config={chartConfig}
+          data={pieData}
+          dataKey="value"
+          nameKey="id"
+          onSelectionChange={(selection) => {
+            const id = selection?.dataKey as KeywordCoverageState | undefined
+            onFilter(id ?? "all")
+          }}
+          selectedSector={selectedOnChart}
         >
-          <Badge variant="outline">{FIELD_LABELS[match.field]}</Badge>
-          <a
-            className="max-w-[22rem] truncate text-sm text-muted-foreground hover:text-foreground"
-            href={match.url}
-            onClick={(event) => event.stopPropagation()}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            {matchLabel(match.url)}
-          </a>
-        </div>
-      ))}
-      {matches.length > 2 ? (
-        <span className="text-xs text-muted-foreground">
-          +{matches.length - 2} more
-        </span>
-      ) : null}
-    </div>
-  )
-}
-
-function StateMixBar({
-  counts,
-  total,
-}: {
-  counts: Record<KeywordCoverageState, number>
-  total: number
-}) {
-  if (total === 0) return null
-
-  const parts: Array<{ key: KeywordCoverageState; className: string }> = [
-    { key: "likely_targeted", className: "bg-primary" },
-    { key: "no_landing_page", className: "bg-muted-foreground/30" },
-    { key: "cannibalized", className: "bg-destructive/40" },
-  ]
-
-  return (
-    <div className="flex h-1 overflow-hidden bg-muted">
-      {parts.map((part) => {
-        const width = (counts[part.key] / total) * 100
-        if (width <= 0) return null
-        return (
-          <div
-            className={part.className}
-            key={part.key}
-            style={{ width: `${width}%` }}
+          <EChartsPieChart.Pie
+            cornerRadius={10}
+            endAngle={START_ANGLE}
+            innerRadius="74%"
+            isClickable
+            outerRadius="94%"
+            paddingAngle={6}
+            startAngle={-30}
           />
-        )
-      })}
+          <EChartsPieChart.Tooltip />
+        </EChartsPieChart>
+
+        <svg
+          aria-hidden
+          className="pointer-events-none absolute inset-0 text-muted-foreground/50"
+          viewBox="0 0 100 100"
+        >
+          <path
+            d="M 23.15 65.5 A 31 31 0 1 1 76.85 65.5"
+            fill="none"
+            stroke="currentColor"
+            strokeDasharray="0.1 5"
+            strokeLinecap="round"
+            strokeWidth="1"
+          />
+        </svg>
+
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="font-mono text-3xl font-semibold tabular-nums">
+            {centerValue.toLocaleString()}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-2 w-full">
+        <div className="flex text-sm text-muted-foreground">
+          {ticks.map((tick) => (
+            <button
+              className="min-w-0 text-left transition-colors hover:text-foreground"
+              key={tick.id}
+              onClick={() => pickState(tick.id)}
+              style={{ flexGrow: tick.value, flexBasis: 0 }}
+              type="button"
+            >
+              {tick.from.toLocaleString()}
+            </button>
+          ))}
+          <span>{total.toLocaleString()}</span>
+        </div>
+        <div className="mt-1.5 flex gap-1">
+          {ticks.map((tick) => (
+            <button
+              className="flex h-3 min-w-0 cursor-pointer items-center p-0"
+              key={tick.id}
+              onClick={() => pickState(tick.id)}
+              style={{ flexGrow: tick.value, flexBasis: 0 }}
+              type="button"
+              title={tick.label}
+            >
+              <span className={cn("h-1.5 w-full rounded-full", tick.bar)} />
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
-  )
-}
-
-function TargetedCard({
-  counts,
-  total,
-}: {
-  counts: Record<KeywordCoverageState, number>
-  total: number
-}) {
-  const percent = total === 0 ? 0 : (counts.likely_targeted / total) * 100
-
-  return (
-    <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
-      <CardHeader>
-        <CardDescription>Targeted</CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-          {counts.likely_targeted}
-        </CardTitle>
-      </CardHeader>
-      <CardFooter>
-        <Progress className="w-full" value={percent}>
-          <ProgressLabel>Coverage</ProgressLabel>
-          <ProgressValue />
-        </Progress>
-      </CardFooter>
-    </Card>
-  )
-}
-
-function CountCard({ label, count }: { label: string; count: number }) {
-  return (
-    <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-          {count}
-        </CardTitle>
-      </CardHeader>
-    </Card>
   )
 }
 
 function LoadingSkeleton() {
   return (
-    <div className="flex flex-col gap-4 md:gap-6">
-      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-3">
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
-        <Skeleton className="h-32 rounded-xl" />
+    <Card className={cn(cardClass, "h-[36rem] lg:grid lg:grid-cols-3")}>
+      <Skeleton className="h-full rounded-none" />
+      <div className="flex flex-col gap-3 border-t border-border/40 p-5 lg:col-span-2 lg:border-t-0 lg:border-l">
+        <Skeleton className="h-9 w-full max-w-lg rounded-lg" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
       </div>
-      <Skeleton className="h-80 rounded-xl" />
-    </div>
+    </Card>
   )
 }
 
@@ -266,14 +407,16 @@ function CoverageEmpty({
   action?: ReactNode
 }) {
   return (
-    <Empty className="min-h-64 border-0">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">{icon}</EmptyMedia>
-        <EmptyTitle>{title}</EmptyTitle>
-        <EmptyDescription>{description}</EmptyDescription>
-      </EmptyHeader>
-      {action}
-    </Empty>
+    <Card className={cardClass}>
+      <Empty className="min-h-64 border-0">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">{icon}</EmptyMedia>
+          <EmptyTitle>{title}</EmptyTitle>
+          <EmptyDescription>{description}</EmptyDescription>
+        </EmptyHeader>
+        {action}
+      </Empty>
+    </Card>
   )
 }
 
@@ -298,152 +441,104 @@ export function KeywordsCoverage({ projectId }: Props) {
 
   if (!projectId) {
     return (
-      <div className="px-4 lg:px-6">
-        <CoverageEmpty
-          description="Select a project to see keyword coverage."
-          icon={<TagsIcon aria-hidden="true" />}
-          title="No project selected"
-        />
-      </div>
+      <CoverageEmpty
+        description="Select a project to see keyword coverage."
+        icon={<TagsIcon aria-hidden="true" />}
+        title="No project selected"
+      />
     )
   }
 
   if (query.isLoading && !query.data) {
-    return (
-      <div className="px-4 lg:px-6">
-        <LoadingSkeleton />
-      </div>
-    )
+    return <LoadingSkeleton />
   }
 
   if (query.isError) {
     const isMissing =
       query.error instanceof ApiError && query.error.status === 404
     return (
-      <div className="px-4 lg:px-6">
-        <CoverageEmpty
-          action={
-            <Button
-              onClick={() => void query.refetch()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              Try again
-            </Button>
-          }
-          description={
-            query.error instanceof ApiError && !isMissing
-              ? query.error.message
-              : "The coverage matrix is not ready for this project yet."
-          }
-          icon={<TriangleAlertIcon aria-hidden="true" />}
-          title={
-            isMissing
-              ? "Coverage not available yet"
-              : "Could not load keyword coverage"
-          }
-        />
-      </div>
+      <CoverageEmpty
+        action={
+          <Button
+            onClick={() => void query.refetch()}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Try again
+          </Button>
+        }
+        description={
+          query.error instanceof ApiError && !isMissing
+            ? query.error.message
+            : "The coverage matrix is not ready for this project yet."
+        }
+        icon={<TriangleAlertIcon aria-hidden="true" />}
+        title={
+          isMissing
+            ? "Coverage not available yet"
+            : "Could not load keyword coverage"
+        }
+      />
     )
   }
 
   if (seeds.length === 0) {
     return (
-      <div className="px-4 lg:px-6">
-        <CoverageEmpty
-          description="Add phrases in Target keywords below, or let Revbot pull them from Search Console."
-          icon={<TagsIcon aria-hidden="true" />}
-          title="No target keywords"
-        />
-      </div>
+      <CoverageEmpty
+        description="Add phrases in Target keywords, or let Revbot pull them from Search Console."
+        icon={<TagsIcon aria-hidden="true" />}
+        title="No target keywords"
+      />
     )
   }
 
   return (
-    <div className="flex flex-col gap-4 px-4 md:gap-6 lg:px-6">
-      <div className="grid grid-cols-1 gap-4 @xl/main:grid-cols-3">
-        <TargetedCard counts={counts} total={seeds.length} />
-        <CountCard count={counts.no_landing_page} label="No landing page" />
-        <CountCard count={counts.cannibalized} label="Cannibalized" />
+    <Card className={cn(cardClass, "h-[36rem]")}>
+      <div className="grid min-h-0 flex-1 lg:grid-cols-3">
+        <div className="flex min-h-0 flex-col border-border/40 lg:border-r">
+          <div className="shrink-0 px-5 pt-5 pb-3">
+            <h3 className="font-heading text-base font-semibold tracking-tight">
+              Keyword coverage
+            </h3>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center px-5 pb-5">
+            <CoverageChart
+              counts={counts}
+              filter={filter}
+              onFilter={setFilter}
+              total={seeds.length}
+            />
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-col overflow-hidden lg:col-span-2">
+          <div className="shrink-0 border-b border-border/40 px-5 py-4">
+            <CoverageTabs
+              counts={counts}
+              filter={filter}
+              onFilter={setFilter}
+              total={seeds.length}
+            />
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5">
+            {filtered.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                No keywords in this tab.
+              </p>
+            ) : (
+              filtered.map((seed, index) => (
+                <KeywordRow
+                  isLast={index === filtered.length - 1}
+                  key={`${seed.keyword}-${seed.geo ? "geo" : "kw"}`}
+                  seed={seed}
+                />
+              ))
+            )}
+          </div>
+        </div>
       </div>
-
-      <Card className="gap-0 overflow-hidden bg-gradient-to-br from-card via-card to-muted/30 py-0">
-        <CardHeader className="border-b">
-          <Tabs
-            onValueChange={(value) => setFilter(value as FilterState)}
-            value={filter}
-          >
-            <TabsList>
-              <TabsTrigger value="all">
-                All
-                <TabCount value={seeds.length} />
-              </TabsTrigger>
-              <TabsTrigger value="likely_targeted">
-                Targeted
-                <TabCount value={counts.likely_targeted} />
-              </TabsTrigger>
-              <TabsTrigger value="no_landing_page">
-                Gaps
-                <TabCount value={counts.no_landing_page} />
-              </TabsTrigger>
-              <TabsTrigger value="cannibalized">
-                Cannibalized
-                <TabCount value={counts.cannibalized} />
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </CardHeader>
-        <StateMixBar counts={counts} total={seeds.length} />
-        <CardContent className="px-0">
-          {filtered.length === 0 ? (
-            <p className="px-6 py-12 text-center text-sm text-muted-foreground">
-              No keywords in this filter.
-            </p>
-          ) : (
-            <Table className="[&_td]:px-4 [&_th]:px-4">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Keyword</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Pages</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((seed) => (
-                  <TableRow key={`${seed.keyword}-${seed.geo ? "geo" : "kw"}`}>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <span className="max-w-56 truncate font-medium">
-                          {seed.keyword}
-                        </span>
-                        {seed.geo ? (
-                          <Badge variant="outline">
-                            <MapPinIcon data-icon="inline-start" />
-                            Location
-                          </Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <StateBadge state={seed.state} />
-                    </TableCell>
-                    <TableCell className="whitespace-normal">
-                      <Evidence matches={seed.matches} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {query.data?.crawl_id ? null : (
-        <p className="text-xs text-muted-foreground">
-          No completed crawl yet. Coverage will fill in after the next crawl.
-        </p>
-      )}
-    </div>
+    </Card>
   )
 }
