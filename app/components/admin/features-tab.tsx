@@ -54,6 +54,7 @@ const FEATURE_COLUMNS = [
 type FeatureKey = (typeof FEATURE_COLUMNS)[number]["key"]
 const MAX_AI_MONTHLY_MESSAGE_LIMIT = 1_000_000
 const MAX_AI_VISIBILITY_AUDIT_LIMIT = 1_000_000
+const MAX_COMPETITORS_LIMIT = 100
 const MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER = 1
 const MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER = 20
 const REASONING_EFFORT_ORDER = [
@@ -107,6 +108,9 @@ function hasInvalidAISettings(workspace: AdminWorkspaceFeatures) {
     workspace.ai_visibility_audit_monthly_limit < 0 ||
     workspace.ai_visibility_audit_monthly_limit >
       MAX_AI_VISIBILITY_AUDIT_LIMIT ||
+    !Number.isInteger(workspace.max_competitors) ||
+    workspace.max_competitors < 0 ||
+    workspace.max_competitors > MAX_COMPETITORS_LIMIT ||
     !Number.isInteger(workspace.ai_concurrent_turn_limit_per_user) ||
     workspace.ai_concurrent_turn_limit_per_user <
       MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER ||
@@ -242,6 +246,7 @@ export function FeaturesTab() {
             workspace.ai_monthly_message_limit ||
           edited.ai_visibility_audit_monthly_limit !==
             workspace.ai_visibility_audit_monthly_limit ||
+          edited.max_competitors !== workspace.max_competitors ||
           edited.ai_concurrent_turn_limit_per_user !==
             workspace.ai_concurrent_turn_limit_per_user ||
           !sameStringArrays(
@@ -290,6 +295,7 @@ export function FeaturesTab() {
           ai_monthly_message_limit: row.ai_monthly_message_limit,
           ai_visibility_audit_monthly_limit:
             row.ai_visibility_audit_monthly_limit,
+          max_competitors: row.max_competitors,
           ai_concurrent_turn_limit_per_user:
             row.ai_concurrent_turn_limit_per_user,
           ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
@@ -334,10 +340,12 @@ export function FeaturesTab() {
   )
   const open = openWorkspace ? rowFor(openWorkspace) : null
 
-  const restrictionChips = (row: AdminWorkspaceFeatures) =>
-    FEATURE_COLUMNS.filter((column) => !row[column.key]).map(
+  const restrictionChips = (row: AdminWorkspaceFeatures) => [
+    ...FEATURE_COLUMNS.filter((column) => !row[column.key]).map(
       (column) => `${column.label} off`
-    )
+    ),
+    ...(row.max_competitors === 0 ? ["Competitors off"] : []),
+  ]
 
   const monthlyLimitInvalid =
     open !== null &&
@@ -350,6 +358,11 @@ export function FeaturesTab() {
       open.ai_visibility_audit_monthly_limit < 0 ||
       open.ai_visibility_audit_monthly_limit >
         MAX_AI_VISIBILITY_AUDIT_LIMIT)
+  const maxCompetitorsInvalid =
+    open !== null &&
+    (!Number.isInteger(open.max_competitors) ||
+      open.max_competitors < 0 ||
+      open.max_competitors > MAX_COMPETITORS_LIMIT)
   const concurrentTurnLimitInvalid =
     open !== null &&
     (!Number.isInteger(open.ai_concurrent_turn_limit_per_user) ||
@@ -575,6 +588,37 @@ export function FeaturesTab() {
                       {visibilityAuditLimitInvalid
                         ? "Enter an integer from 0 to 1,000,000."
                         : "Maximum AI visibility audits allowed per month."}
+                    </FieldDescription>
+                  </Field>
+                  <Field data-invalid={maxCompetitorsInvalid}>
+                    <FieldLabel htmlFor="max-competitors">
+                      Max competitors per project
+                    </FieldLabel>
+                    <Input
+                      id="max-competitors"
+                      type="number"
+                      min={0}
+                      max={MAX_COMPETITORS_LIMIT}
+                      step={1}
+                      value={
+                        Number.isNaN(open.max_competitors)
+                          ? ""
+                          : open.max_competitors
+                      }
+                      aria-invalid={maxCompetitorsInvalid}
+                      onChange={(event) =>
+                        updateRow(openWorkspace, {
+                          max_competitors:
+                            event.target.value === ""
+                              ? Number.NaN
+                              : Number(event.target.value),
+                        })
+                      }
+                    />
+                    <FieldDescription>
+                      {maxCompetitorsInvalid
+                        ? "Enter an integer from 0 to 100."
+                        : "Org cap applied to every project in the workspace. 0 disables the Competitors tab."}
                     </FieldDescription>
                   </Field>
                   <Field data-invalid={concurrentTurnLimitInvalid}>

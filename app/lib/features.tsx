@@ -18,6 +18,7 @@ const ALL_ENABLED: OrgFeatures = {
   ai_monthly_message_limit: 50,
   ai_concurrent_turn_limit_per_user: 2,
   ai_allowed_reasoning_efforts: ["none", "low", "high", "max"],
+  max_competitors: 3,
 }
 
 const FeaturesContext = createContext<OrgFeatures>(ALL_ENABLED)

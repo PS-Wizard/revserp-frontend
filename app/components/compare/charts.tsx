@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import {
   Bar,
   BarChart,
@@ -17,6 +18,15 @@ import {
 import { cn } from "~/lib/utils"
 
 import { ChartContainer, type ChartConfig } from "~/components/ui/chart"
+import {
+  EChartsAreaChart,
+  type ChartConfig as EChartsChartConfig,
+} from "~/components/evilcharts/charts/echarts-area-chart"
+import {
+  tooltipIndicatorHtml,
+  tooltipRow,
+  tooltipShell,
+} from "~/components/evilcharts/ui/echarts-tooltip"
 
 export type SidePaint = { color: string; soft: string; dim: string }
 
@@ -318,40 +328,9 @@ export function SpreadBars({
 
 /* ------------------------------------------------------------------ ridge */
 
-// Plot geometry, in viewBox units. The SVG stretches to the container with
-// preserveAspectRatio="none" and a fixed pixel height, so the curves fill the
-// width without the box growing tall. Strokes use non-scaling-stroke so the
-// stretch never thickens them, and every label is HTML — text inside a scaled
-// viewBox renders at whatever size the scale factor happens to be, which is
-// exactly how it ended up twice the size of the rest of the page.
-const RW = 1000
-const RH = 300
-const RMID = RH / 2
-const RAMP = RH * 0.45
-// Gridlines land on round percentages instead of quarters of whatever the peak
-// happens to be, so the axis reads 5/10/15 rather than 11/22/34.
-const Y_STEP = 5
-const Y_LABEL_EVERY = 10
+const HEALTH_CHART_HEIGHT = 340
+const HEALTH_Y_STEP = 10
 
-/** Symmetric cubic through the points — smooth without overshoot. */
-function area(values: number[], dir: 1 | -1, max: number) {
-  const n = values.length
-  const x = (i: number) => (i / (n - 1)) * RW
-  const y = (i: number) => RMID - dir * (values[i] / max) * RAMP
-  let d = `M 0 ${RMID} L 0 ${y(0)}`
-  for (let i = 0; i < n - 1; i++) {
-    const mx = (x(i) + x(i + 1)) / 2
-    d += ` C ${mx} ${y(i)} ${mx} ${y(i + 1)} ${x(i + 1)} ${y(i + 1)}`
-  }
-  return `${d} L ${RW} ${RMID} Z`
-}
-
-/**
- * Mirrored distribution of pages by issue count. Each side is scaled to its own
- * page total, which is what makes sites of different size comparable. Stays
- * hand-rolled SVG because the layered gradient falloff is the whole look and
- * Recharts cannot express it without more fighting than it is worth.
- */
 export function HealthRidge({
   values,
   paintA,
@@ -366,142 +345,183 @@ export function HealthRidge({
   paintA: SidePaint
   paintB: SidePaint
 }) {
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const { a, b } = values
-  const peak = Math.max(...a, ...b) || 0.01
-  // Round the top of the scale up to a whole step so the last gridline is the
-  // plot edge rather than floating just short of it.
-  const topPct = Math.max(Y_STEP, Math.ceil((peak * 100) / Y_STEP) * Y_STEP)
-  const scaleMax = topPct / 100
-  const yTicks = Array.from(
-    { length: Math.floor(topPct / Y_STEP) },
-    (_, i) => (i + 1) * Y_STEP
+  const n = Math.max(a.length, b.length, 1)
+  const data = Array.from({ length: n }, (_, index) => ({
+    label: index === n - 1 ? `${index}+` : String(index),
+    a: Math.round((a[index] ?? 0) * 100),
+    b: -Math.round((b[index] ?? 0) * 100),
+  }))
+  const peak = Math.max(
+    ...data.flatMap((row) => [Math.abs(row.a), Math.abs(row.b)]),
+    HEALTH_Y_STEP
   )
-
-  const n = a.length
-  const xStep = n > 24 ? 5 : n > 8 ? 2 : 1
-  const xTicks = Array.from({ length: n }, (_, i) => i).filter(
-    (i) => i % xStep === 0 || i === n - 1
+  const top = Math.max(
+    HEALTH_Y_STEP,
+    Math.ceil(peak / HEALTH_Y_STEP) * HEALTH_Y_STEP
   )
+  const chartConfig: EChartsChartConfig = {
+    a: {
+      label: nameA,
+      colors: { light: [paintA.color], dark: [paintA.color] },
+    },
+    b: {
+      label: nameB,
+      colors: { light: [paintB.color], dark: [paintB.color] },
+    },
+  }
+  const series = [
+    { key: "a", name: nameA, color: paintA.color },
+    { key: "b", name: nameB, color: paintB.color },
+  ] as const
 
   return (
-    <div className="flex gap-3">
-      <div className="relative w-10 shrink-0" style={{ height: RH }}>
-        {yTicks
-          .filter((pct) => pct % Y_LABEL_EVERY === 0 || pct === topPct)
-          .flatMap((pct) => [-1, 1].map((dir) => ({ pct, dir })))
-          .map(({ pct, dir }) => (
-            <span
-              key={`${pct}-${dir}`}
-              className="absolute right-0 -translate-y-1/2 text-xs text-muted-foreground tabular-nums"
-              style={{ top: `${50 - dir * (pct / topPct) * 45}%` }}
+    <div className="w-full">
+      <p className="px-6 pb-3 text-center text-xs text-muted-foreground">
+        % of each site&apos;s pages with this many issues. You above, them
+        below.
+      </p>
+      <div style={{ height: HEALTH_CHART_HEIGHT }}>
+        <EChartsAreaChart
+          className="h-full w-full"
+          chartOptions={{
+            grid: { left: 44, right: 24, top: 8, bottom: 28 },
+            yAxis: {
+              type: "value",
+              min: -top,
+              max: top,
+              interval: 20,
+              axisLine: { show: false },
+              axisTick: { show: false },
+              splitLine: { show: false },
+              axisLabel: {
+                fontSize: 10,
+                formatter: (value: number) =>
+                  `${Math.abs(Math.round(value))}%`,
+              },
+            },
+            tooltip: {
+              trigger: "axis",
+              confine: true,
+              backgroundColor: "transparent",
+              borderWidth: 0,
+              padding: 0,
+              extraCssText: "box-shadow:none;",
+              formatter: (params: unknown) =>
+                formatHealthTooltip(params, nameA, nameB),
+            },
+          }}
+          config={chartConfig}
+          curveType="monotone"
+          data={data}
+          enableHoverHighlight
+          onSelectionChange={setSelectedKey}
+          selectedDataKey={selectedKey}
+          xDataKey="label"
+        >
+          <EChartsAreaChart.Grid />
+          <EChartsAreaChart.XAxis
+            dataKey="label"
+            tickFormatter={(value, index) =>
+              index % 2 === 0 || value.endsWith("+") ? value : ""
+            }
+          />
+          <EChartsAreaChart.YAxis hideDots />
+          {series.map((item) => (
+            <EChartsAreaChart.Area
+              key={item.key}
+              dataKey={item.key}
+              isClickable
+              strokeVariant="solid"
+              strokeWidth={2.5}
+              variant="lines"
             >
-              {pct}%
-            </span>
+              <EChartsAreaChart.Dot variant="border" />
+              <EChartsAreaChart.ActiveDot variant="default" />
+            </EChartsAreaChart.Area>
           ))}
+        </EChartsAreaChart>
       </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="relative" style={{ height: RH }}>
-          <svg
-            viewBox={`0 0 ${RW} ${RH}`}
-            preserveAspectRatio="none"
-            className="h-full w-full"
-            role="img"
-            aria-label="Share of pages by issue count"
-          >
-            <defs>
-              <linearGradient id="cmp-ridge-b" x1="0" y1="1" x2="0" y2="0">
-                <stop offset="0%" stopColor={paintB.color} stopOpacity={0.45} />
-                <stop offset="100%" stopColor={paintB.color} stopOpacity={0.04} />
-              </linearGradient>
-              <linearGradient id="cmp-ridge-a" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={paintA.color} stopOpacity={0.45} />
-                <stop offset="100%" stopColor={paintA.color} stopOpacity={0.04} />
-              </linearGradient>
-            </defs>
-
-            {xTicks.map((i) => (
-              <line
-                key={`x-${i}`}
-                x1={(i / (n - 1)) * RW}
-                y1={RMID - RAMP}
-                x2={(i / (n - 1)) * RW}
-                y2={RMID + RAMP}
-                stroke="var(--border)"
-                strokeDasharray="2 6"
-                vectorEffect="non-scaling-stroke"
-              />
-            ))}
-            {yTicks
-              .flatMap((pct) => [-1, 1].map((dir) => ({ pct, dir })))
-              .map(({ pct, dir }) => (
-                <line
-                  key={`y-${pct}-${dir}`}
-                  x1={0}
-                  y1={RMID - dir * (pct / topPct) * RAMP}
-                  x2={RW}
-                  y2={RMID - dir * (pct / topPct) * RAMP}
-                  stroke="var(--border)"
-                  strokeDasharray="2 6"
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
-
-            <path d={area(b, 1, scaleMax)} fill="url(#cmp-ridge-b)" />
-            <path d={area(a, -1, scaleMax)} fill="url(#cmp-ridge-a)" />
-            <path
-              d={area(b, 1, scaleMax)}
-              fill="none"
-              stroke={paintB.color}
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-            />
-            <path
-              d={area(a, -1, scaleMax)}
-              fill="none"
-              stroke={paintA.color}
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-            />
-            <line
-              x1={0}
-              y1={RMID}
-              x2={RW}
-              y2={RMID}
-              stroke="var(--border)"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-
-          <span
-            className="pointer-events-none absolute top-0 right-0 text-sm font-medium"
-            style={{ color: paintB.color }}
-          >
-            {nameB}
-          </span>
-          <span
-            className="pointer-events-none absolute right-0 bottom-0 text-sm font-medium"
-            style={{ color: paintA.color }}
-          >
-            {nameA}
-          </span>
+      <div className="px-6 pt-8 sm:pt-10">
+        <div className="flex flex-wrap justify-center lg:flex-nowrap">
+          {series.map((item, index) => {
+            const isSelected = selectedKey === item.key
+            const isDimmed = selectedKey !== null && !isSelected
+            return (
+              <button
+                aria-pressed={isSelected}
+                className={cn(
+                  "flex w-1/2 min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md px-2 py-1.5 text-center transition-opacity duration-150 sm:px-3",
+                  "hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
+                  "lg:flex-1 lg:px-2",
+                  index > 0 && "border-l border-border",
+                  isDimmed && "opacity-40"
+                )}
+                key={item.key}
+                onClick={() =>
+                  setSelectedKey((current) =>
+                    current === item.key ? null : item.key
+                  )
+                }
+                title={item.name}
+                type="button"
+              >
+                <div className="flex max-w-full min-w-0 items-center justify-center gap-1.5 text-xs font-medium text-foreground">
+                  <span
+                    className="size-2 shrink-0 rounded-[2px]"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="truncate">{item.name}</span>
+                </div>
+              </button>
+            )
+          })}
         </div>
-
-        <div className="relative mt-2 h-4">
-          {xTicks.map((i) => (
-            <span
-              key={i}
-              className="absolute -translate-x-1/2 text-xs text-muted-foreground tabular-nums"
-              style={{ left: `${(i / (n - 1)) * 100}%` }}
-            >
-              {i === n - 1 ? `${i}+` : i}
-            </span>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">Issues on a page</p>
       </div>
     </div>
   )
+}
+
+function formatHealthTooltip(
+  params: unknown,
+  nameA: string,
+  nameB: string
+) {
+  const items = (Array.isArray(params) ? params : [params]) as Array<{
+    seriesId?: string
+    seriesName?: string
+    value?: number
+    axisValue?: string
+  }>
+  const axis = String(items[0]?.axisValue ?? "")
+  const body = items
+    .map((item) => {
+      const key =
+        item.seriesId === "a" || item.seriesName === nameA
+          ? "a"
+          : item.seriesId === "b" || item.seriesName === nameB
+            ? "b"
+            : null
+      if (!key) return ""
+      const value = typeof item.value === "number" ? Math.abs(item.value) : 0
+      return tooltipRow({
+        dimmed: "",
+        indicatorHtml: tooltipIndicatorHtml(key, 1),
+        labelText: key === "a" ? nameA : nameB,
+        valueText: `${Math.round(value)}% of pages`,
+      })
+    })
+    .filter(Boolean)
+    .join("")
+  const label =
+    axis === "1" ? "1 issue on a page" : `${axis} issues on a page`
+  return tooltipShell({
+    body,
+    label,
+    roundness: "lg",
+    variant: "default",
+  })
 }
 
 /* ------------------------------------------------------------------ legend */

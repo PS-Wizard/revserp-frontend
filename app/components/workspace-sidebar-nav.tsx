@@ -11,6 +11,8 @@ import {
   SearchCheckIcon,
   SearchIcon,
   SparklesIcon,
+  SwordsIcon,
+  TagsIcon,
 } from "lucide-react"
 
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
@@ -117,6 +119,7 @@ type WorkspaceSidebarNavProps = {
   auditTab: AuditTab
   auditNavDisabled?: boolean
   gscConnector: boolean
+  maxCompetitors: number
   isSidebarCollapsed: boolean
   onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
   view: DashboardView
@@ -126,6 +129,7 @@ export function WorkspaceSidebarNav({
   auditTab,
   auditNavDisabled = false,
   gscConnector,
+  maxCompetitors,
   isSidebarCollapsed,
   onSelectWorkspace,
   view,
@@ -164,6 +168,26 @@ export function WorkspaceSidebarNav({
             itemRef={setItemRef("visibility")}
             onMouseEnter={() => showPill("visibility")}
           />
+          <NavItem
+            label="Keywords"
+            icon={TagsIcon}
+            active={view === "keywords"}
+            collapsed={isSidebarCollapsed}
+            onClick={() => onSelectWorkspace("keywords")}
+            itemRef={setItemRef("keywords")}
+            onMouseEnter={() => showPill("keywords")}
+          />
+          {maxCompetitors > 0 ? (
+            <NavItem
+              label="Competitors"
+              icon={SwordsIcon}
+              active={view === "competitors"}
+              collapsed={isSidebarCollapsed}
+              onClick={() => onSelectWorkspace("competitors")}
+              itemRef={setItemRef("competitors")}
+              onMouseEnter={() => showPill("competitors")}
+            />
+          ) : null}
           {gscConnector ? (
             <NavItem
               label="Search Console"

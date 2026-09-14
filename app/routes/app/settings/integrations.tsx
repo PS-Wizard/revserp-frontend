@@ -215,7 +215,13 @@ ${code}`
         onExportAudit={() => {}}
         onViewChange={(view) =>
           void navigate(
-            view === "search-console" ? "/app#search-console" : "/app"
+            view === "search-console"
+              ? "/app#search-console"
+              : view === "competitors"
+                ? "/app#competitors"
+                : view === "keywords"
+                  ? "/app#keywords"
+                  : "/app"
           )
         }
         organizationId={me.active_org_id}

@@ -26,7 +26,6 @@ import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspac
 import { OverviewPillarScoresSection } from "~/components/overview-pillar-scores-section"
 import { OverviewScoreHistoryChart } from "~/components/overview-score-history-chart"
 import { OverviewWorkFixesCards } from "~/components/overview-work-fixes-cards"
-import { OverviewSecondaryCards } from "~/components/overview-secondary-cards"
 import { PageHealthView } from "~/components/page-audit/page-health-view"
 import { usePageAudit } from "~/components/page-audit/page-audit-context"
 import { ThinkingOrb } from "thinking-orbs"
@@ -36,6 +35,8 @@ import {
   type CrawlBreakdownScores,
 } from "~/components/pillar-audit-view"
 import { CompareView } from "~/components/compare/compare-view"
+import { CompetitorsView } from "~/components/competitors/competitors-view"
+import { KeywordsView } from "~/components/keywords/keywords-view"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
@@ -172,28 +173,30 @@ const PILLAR_TABS: ReadonlyArray<{
 const viewLabels: Record<DashboardView, string> = {
   "revserp-audit": "Revserp Audit",
   "revserp-visibility": "Revserp Visibility",
+  keywords: "Keywords",
+  competitors: "Competitors",
   "search-console": "Search Console",
   compare: "Compare",
 }
 
 function RevserpAuditPanel({
-  activeProjectId,
   auditTab,
   crawlBreakdowns,
   completedCrawlId,
   currentBreakdown,
   currentUserId,
   isViewingRunningCrawl,
+  onAuditTabChange,
   shouldReduceMotion,
   sortedCompletedCrawls,
 }: {
-  activeProjectId: string | null | undefined
   auditTab: AuditTab
   crawlBreakdowns: CrawlBreakdown[]
   completedCrawlId: string | null
   currentBreakdown: ScoreBreakdownResponse | null
   currentUserId: string
   isViewingRunningCrawl: boolean
+  onAuditTabChange: (tab: AuditTab) => void
   shouldReduceMotion: boolean | null
   sortedCompletedCrawls: CrawlResponse[]
 }) {
@@ -220,9 +223,9 @@ function RevserpAuditPanel({
           <OverviewPillarScoresSection
             crawlBreakdowns={crawlBreakdowns}
             currentCrawlId={completedCrawlId ?? undefined}
+            onSelectPillar={onAuditTabChange}
           />
           <OverviewScoreHistoryChart crawls={sortedCompletedCrawls} />
-          <OverviewSecondaryCards projectId={activeProjectId ?? null} />
           <OverviewWorkFixesCards
             crawlId={completedCrawlId}
             currentUserId={currentUserId}
@@ -322,9 +325,14 @@ export default function AppPage() {
       me.features?.gsc_connector === false
     )
       return
+    if (
+      target.view === "competitors" &&
+      (me.features?.max_competitors ?? 0) === 0
+    )
+      return
     setView(target.view)
     if ("tab" in target) setAuditTab(target.tab)
-  }, [location.hash, me.features?.gsc_connector])
+  }, [location.hash, me.features?.gsc_connector, me.features?.max_competitors])
 
   useEffect(() => {
     const desired =
@@ -332,7 +340,11 @@ export default function AppPage() {
         ? `#${auditTab}-tab`
         : view === "search-console"
           ? "#search-console"
-          : ""
+          : view === "competitors"
+            ? "#competitors"
+            : view === "keywords"
+              ? "#keywords"
+              : ""
     if (location.hash === desired) return
     lastWrittenHashRef.current = desired
     void navigate(
@@ -397,7 +409,8 @@ export default function AppPage() {
     [projectCrawls]
   )
 
-  const pollEnabled = hasActiveCrawlAnywhere || isStartingCrawl
+  const pollEnabled =
+    hasActiveCrawlAnywhere || isStartingCrawl || view === "competitors"
 
   // Stable revalidate ref so the tracking hook's poll never depends on the
   // revalidator object and thus never tears down on revalidation.
@@ -413,7 +426,7 @@ export default function AppPage() {
   }, [])
 
   const goToCrawl = useCallback(
-    (projectId: string, crawlId?: string) => {
+    (projectId: string, crawlId?: string, destination?: "competitors") => {
       const params = new URLSearchParams(location.search)
       params.set("project", projectId)
       if (projectId !== activeProject?.id) {
@@ -421,12 +434,13 @@ export default function AppPage() {
       }
       if (crawlId) {
         params.set("crawl", crawlId)
-      } else {
+      } else if (destination !== "competitors") {
         params.delete("crawl")
       }
-      void navigate(`${location.pathname}?${params.toString()}`)
+      const hash = destination === "competitors" ? "#competitors" : ""
+      void navigate(`${location.pathname}?${params.toString()}${hash}`)
     },
-    [navigate, location.pathname, location.search]
+    [activeProject?.id, navigate, location.pathname, location.search]
   )
 
   const projectNameById = useMemo(() => {
@@ -706,7 +720,6 @@ export default function AppPage() {
           {view === "revserp-audit" ? (
             <div className="relative">
               <RevserpAuditPanel
-                activeProjectId={activeProject?.id}
                 auditTab={auditTab}
                 crawlBreakdowns={stableCrawlBreakdowns}
                 completedCrawlId={
@@ -717,6 +730,7 @@ export default function AppPage() {
                 currentBreakdown={stableCurrentBreakdown}
                 currentUserId={me.user.id}
                 isViewingRunningCrawl={isViewingRunningCrawl}
+                onAuditTabChange={setAuditTab}
                 shouldReduceMotion={shouldReduceMotion}
                 sortedCompletedCrawls={stableSortedCompletedCrawls}
               />
@@ -763,6 +777,16 @@ export default function AppPage() {
             <RevserpVisibilityView
               activeProject={activeProject}
               currentCrawl={stableCurrentCrawl}
+            />
+          ) : view === "keywords" ? (
+            <KeywordsView projectId={activeProject?.id ?? null} />
+          ) : view === "competitors" &&
+            (me.features?.max_competitors ?? 0) > 0 ? (
+            <CompetitorsView
+              activeProject={activeProject}
+              currentCrawl={currentCrawl}
+              maxCompetitors={me.features.max_competitors}
+              trackCrawl={trackCrawl}
             />
           ) : view === "search-console" &&
             me.features?.gsc_connector !== false ? (

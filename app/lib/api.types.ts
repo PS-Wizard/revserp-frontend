@@ -78,6 +78,31 @@ export type ProjectBusinessProfileStatusResponse = {
   business_profile?: ProjectBusinessProfileResponse
 }
 
+export type KeywordCoverageState =
+  "likely_targeted" | "no_landing_page" | "cannibalized"
+
+export type KeywordCoverageField = "title" | "h1" | "url"
+
+export type KeywordCoverageMatch = {
+  url: string
+  field: KeywordCoverageField
+}
+
+export type KeywordCoverageSeed = {
+  keyword: string
+  /** True when this row is the primary_location geo seed, not a profile keyword. */
+  geo?: boolean
+  state: KeywordCoverageState
+  matches: KeywordCoverageMatch[]
+}
+
+/** GET /projects/{projectID}/keywords — crawl × profile matrix. Always recomputed. */
+export type ProjectKeywordsResponse = {
+  project_id: string
+  crawl_id?: string | null
+  seeds: KeywordCoverageSeed[]
+}
+
 export type ProjectAIQuestionsResponse = {
   questions: string[]
   generation_model: string
@@ -108,6 +133,9 @@ export type CrawlResponse = {
   aeo_score?: number
   pagespeed_score?: number
   overall_score?: number
+  parent_crawl_id?: string
+  competitor_id?: string
+  source?: string
   started_at?: string
   completed_at?: string
   created_at: string
@@ -133,6 +161,8 @@ export type ActiveCrawlResponse = {
   urls_discovered: number
   urls_crawled: number
   created_at: string
+  source?: string
+  competitor_label?: string
 }
 
 export type ActiveCrawlsResponse = {
@@ -394,6 +424,7 @@ export type OrgFeatures = {
   ai_monthly_message_limit: number
   ai_concurrent_turn_limit_per_user: number
   ai_allowed_reasoning_efforts: AIReasoningEffort[]
+  max_competitors: number
 }
 
 export type AdminWorkspaceFeatures = OrgFeatures & {
@@ -730,3 +761,127 @@ export type ScorePotentialResponse =
       potential_available: false
       reason?: string
     }
+
+export type CompetitorCrawlResponse = {
+  id: string
+  project_id: string
+  status: CrawlStatus
+  phase?: CrawlPhase | null
+  urls_discovered: number
+  urls_crawled: number
+  seo_score?: number | null
+  aeo_score?: number | null
+  pagespeed_score?: number | null
+  overall_score?: number | null
+  started_at?: string
+  completed_at?: string
+  created_at: string
+}
+
+export type CompetitorResponse = {
+  id: string
+  seed_url: string
+  name: string
+  created_at: string
+  crawl?: CompetitorCrawlResponse | null
+}
+
+export type ProjectCompetitorsResponse = {
+  max_competitors: number
+  competitors: CompetitorResponse[]
+}
+
+export type EnqueueCompetitorCrawlsResponse = {
+  crawls: Array<{ id: string }>
+}
+
+/** GET /crawls/{competitorCrawlId}/competitor-gap */
+export type CompetitorGapReport = {
+  version: string
+  radius: number
+  your_pages: number
+  their_pages: number
+  you_breakdown: ScoreBreakdownResponse
+  them_breakdown: ScoreBreakdownResponse
+  your_slice: CompetitorGapSlicePage[]
+  their_slice: CompetitorGapSlicePage[]
+  issues: CompetitorGapIssueRow[]
+  spread: CompetitorGapSpreadRow[]
+  page_health: {
+    you: CompetitorGapPageHealth
+    them: CompetitorGapPageHealth
+  }
+  presence: CompetitorGapPresenceRow[]
+  psi: {
+    you: CompetitorGapPSIMetrics | null
+    them: CompetitorGapPSIMetrics | null
+  }
+  homepage: {
+    you: CompetitorGapHomepage
+    them: CompetitorGapHomepage
+  }
+  content: {
+    you: CompetitorGapContent
+    them: CompetitorGapContent
+  }
+}
+
+export type CompetitorGapSlicePage = {
+  url: string
+  hop: number
+}
+
+export type CompetitorGapSpreadRow = {
+  id: string
+  label: string
+  pillar: "seo" | "aeo" | "pagespeed" | string
+  you: number
+  them: number
+}
+
+export type CompetitorGapPageHealth = {
+  /** Always 21 entries: pages with 0..19 issues, then 20+. */
+  buckets: number[]
+  total_pages: number
+}
+
+export type CompetitorGapIssueRow = {
+  id: string
+  label: string
+  you: number
+  them: number
+}
+
+export type CompetitorGapPresenceRow = {
+  id: string
+  label: string
+  you: boolean
+  them: boolean
+}
+
+export type CompetitorGapPSIMetrics = {
+  performance: number | null
+  lcp: number | null
+  fcp: number | null
+  cls: number | null
+  fid: number | null
+  speed_index: number | null
+  tti: number | null
+}
+
+export type CompetitorGapHomepage = {
+  url: string
+  title: boolean
+  meta: boolean
+  h1: boolean
+  canonical: boolean
+  og: boolean
+  json_ld: boolean
+  word_count: number
+}
+
+export type CompetitorGapContent = {
+  median_word_count: number | null
+  pages_with_h1: number
+  pages_with_meta: number
+}

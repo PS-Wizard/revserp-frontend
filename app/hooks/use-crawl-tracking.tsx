@@ -15,8 +15,23 @@ const POLL_INTERVAL_MS = 3000
 // it, so the compact response is used directly without casting.
 type CrawlStatusSnapshot = Pick<
   CrawlResponse,
-  "status" | "phase" | "project_id" | "urls_discovered" | "urls_crawled"
->
+  "status" | "phase" | "project_id" | "urls_discovered" | "urls_crawled" | "source"
+> & {
+  competitor_label?: string
+}
+
+function isCompetitorCrawl(crawl: CrawlStatusSnapshot) {
+  return crawl.source === "competitor"
+}
+
+function crawlProgressDescription(crawl: CrawlStatusSnapshot) {
+  const remaining = Math.max(0, crawl.urls_discovered - crawl.urls_crawled)
+  const counts = `${crawl.urls_crawled} / ${crawl.urls_discovered} crawled`
+  if (remaining > 0) {
+    return `${counts} · ${remaining} left`
+  }
+  return counts
+}
 
 /**
  * Tracks in-flight crawls by id and polls until each reaches a terminal state
@@ -47,7 +62,11 @@ export function useCrawlTracking({
   orgId: string
   enabled: boolean
   projectNameById: Map<string, string>
-  goToCrawl: (projectId: string, crawlId?: string) => void
+  goToCrawl: (
+    projectId: string,
+    crawlId?: string,
+    destination?: "competitors"
+  ) => void
   revalidate: () => void
 }): { trackCrawl: (id: string) => void; cancelDialog: React.ReactNode } {
   const trackedIdsRef = useRef<Set<string>>(new Set())
@@ -101,6 +120,15 @@ export function useCrawlTracking({
         revalidateRef.current()
       }
       const projectName = projectNameByIdRef.current.get(crawl.project_id)
+      const competitorLabel = crawl.competitor_label?.trim() || undefined
+      const competitor = isCompetitorCrawl(crawl)
+      const openTrackedCrawl = () => {
+        if (competitor) {
+          goToCrawlRef.current(crawl.project_id, undefined, "competitors")
+          return
+        }
+        goToCrawlRef.current(crawl.project_id, id)
+      }
       // In-flight crawls get View + Cancel side by side. Rendered as a raw
       // element (not sonner's {label,onClick}) so the Cancel click opens the
       // confirm dialog instead of dismissing the toast. data-button/data-cancel
@@ -126,7 +154,7 @@ export function useCrawlTracking({
             className="ml-0!"
             type="button"
             data-button=""
-            onClick={() => goToCrawlRef.current(crawl.project_id, id)}
+            onClick={openTrackedCrawl}
           >
             View
           </button>
@@ -136,13 +164,19 @@ export function useCrawlTracking({
       switch (crawl.status) {
         case "queued":
           toast.loading(
-            <span className="shimmer text-muted-foreground">Queued…</span>,
+            <span className="shimmer text-muted-foreground">
+              {competitor ? "Queued competitor crawl…" : "Queued…"}
+            </span>,
             {
               id,
               duration: Infinity,
-              description: projectName
-                ? `${projectName} is waiting for another crawl to finish.`
-                : "Waiting for another crawl to finish.",
+              description: competitor
+                ? competitorLabel
+                  ? `${competitorLabel} is waiting to crawl.`
+                  : "Waiting to crawl this competitor."
+                : projectName
+                  ? `${projectName} is waiting for another crawl to finish.`
+                  : "Waiting for another crawl to finish.",
               action: cancellableAction,
             }
           )
@@ -151,36 +185,51 @@ export function useCrawlTracking({
           if (crawl.phase === "analyzing") {
             toast.loading(
               <span className="shimmer text-muted-foreground">
-                Analyzing issues…
+                {competitor ? "Analyzing competitor…" : "Analyzing issues…"}
               </span>,
               {
                 id,
                 duration: Infinity,
-                description: projectName
-                  ? `${projectName} crawl is being analyzed.`
-                  : undefined,
+                description: competitor
+                  ? competitorLabel
+                    ? `${competitorLabel} is being analyzed.`
+                    : undefined
+                  : projectName
+                    ? `${projectName} crawl is being analyzed.`
+                    : undefined,
                 action: cancellableAction,
               }
             )
           } else if (crawl.urls_discovered === 0) {
             toast.loading(
               <span className="shimmer text-muted-foreground">
-                Discovering URLs…
+                {competitor
+                  ? "Discovering competitor pages…"
+                  : "Discovering URLs…"}
               </span>,
               {
                 id,
                 duration: Infinity,
-                description: "Analyzing sitemap…",
+                description: competitor
+                  ? competitorLabel ?? "Starting from the competitor homepage."
+                  : "Analyzing sitemap…",
                 action: cancellableAction,
               }
             )
           } else {
             toast.loading(
-              <span className="shimmer text-muted-foreground">Crawling…</span>,
+              <span className="shimmer text-muted-foreground">
+                {competitor ? "Crawling competitors…" : "Crawling…"}
+              </span>,
               {
                 id,
                 duration: Infinity,
-                description: (
+                description: competitor ? (
+                  <span>
+                    {competitorLabel ? `${competitorLabel} · ` : null}
+                    {crawlProgressDescription(crawl)}
+                  </span>
+                ) : (
                   <span>
                     {crawl.urls_crawled} / {crawl.urls_discovered} crawled
                   </span>
@@ -193,26 +242,40 @@ export function useCrawlTracking({
         case "completed":
           trackedIdsRef.current.delete(id)
           lastStatusRef.current.delete(id)
-          toast.success("Crawl complete", {
-            id,
-            description: projectName
-              ? `${projectName} is ready to review.`
-              : undefined,
-            action: {
-              label: "View",
-              onClick: () => goToCrawlRef.current(crawl.project_id, id),
-            },
-          })
+          toast.success(
+            competitor ? "Competitor crawl complete" : "Crawl complete",
+            {
+              id,
+              description: competitor
+                ? competitorLabel
+                  ? `${competitorLabel} is ready to review.`
+                  : "Ready to review."
+                : projectName
+                  ? `${projectName} is ready to review.`
+                  : undefined,
+              action: {
+                label: "View",
+                onClick: openTrackedCrawl,
+              },
+            }
+          )
           break
         case "failed":
           trackedIdsRef.current.delete(id)
           lastStatusRef.current.delete(id)
-          toast.error("Crawl failed", {
-            id,
-            description: projectName
-              ? `${projectName} crawl failed.`
-              : "The crawl failed.",
-          })
+          toast.error(
+            competitor ? "Competitor crawl failed" : "Crawl failed",
+            {
+              id,
+              description: competitor
+                ? competitorLabel
+                  ? `${competitorLabel} crawl failed.`
+                  : "The competitor crawl failed."
+                : projectName
+                  ? `${projectName} crawl failed.`
+                  : "The crawl failed.",
+            }
+          )
           break
         case "cancelled":
           trackedIdsRef.current.delete(id)

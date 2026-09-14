@@ -17,7 +17,13 @@ export function invalidateBusinessProfile(
   queryClient: QueryClient,
   projectId: string
 ) {
-  return queryClient.invalidateQueries({
-    queryKey: businessProfileQueryKey(projectId),
-  })
+  return queryClient
+    .invalidateQueries({
+      queryKey: businessProfileQueryKey(projectId),
+    })
+    .then(() =>
+      queryClient.invalidateQueries({
+        queryKey: ["project-keywords", projectId],
+      })
+    )
 }

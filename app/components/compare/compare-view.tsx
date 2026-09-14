@@ -12,7 +12,6 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { ScrollArea } from "~/components/ui/scroll-area"
-import { Separator } from "~/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import type { CrawlResponse } from "~/lib/api.types"
 
@@ -338,21 +337,6 @@ export const CompareView = memo(function CompareView({
                 nameA={a.projectName}
                 nameB={b.projectName}
               />
-              <Separator className="mt-10 mb-6" />
-              <ul className="space-y-2.5">
-                <Finding
-                  name={b.projectName}
-                  paint={PAINT_B}
-                  clean={pct(sharesB[0])}
-                  median={median(sharesB)}
-                />
-                <Finding
-                  name={a.projectName}
-                  paint={PAINT_A}
-                  clean={pct(sharesA[0])}
-                  median={median(sharesA)}
-                />
-              </ul>
             </CardContent>
           </Card>
         </div>
@@ -361,48 +345,6 @@ export const CompareView = memo(function CompareView({
     </Shell>
   )
 })
-
-function pct(share: number) {
-  return `${Math.round(share * 100)}%`
-}
-
-/** Median issue count from the histogram shares. */
-function median(shares: number[]) {
-  let cumulative = 0
-  for (let i = 0; i < shares.length; i++) {
-    cumulative += shares[i]
-    if (cumulative >= 0.5) return i === shares.length - 1 ? `${i}+` : `${i}`
-  }
-  return "0"
-}
-
-function Finding({
-  name,
-  paint,
-  clean,
-  median: medianIssues,
-}: {
-  name: string
-  paint: typeof PAINT_A
-  clean: string
-  median: string
-}) {
-  return (
-    <li className="flex items-baseline gap-2.5 text-sm">
-      <span
-        className="mt-1.5 size-2 shrink-0 rounded-[3px]"
-        style={{ backgroundColor: paint.color }}
-      />
-      <span className="text-muted-foreground">
-        <span className="font-medium" style={{ color: paint.color }}>
-          {name}
-        </span>{" "}
-        keeps {clean} of its pages clean, at a median of {medianIssues} issues
-        per page.
-      </span>
-    </li>
-  )
-}
 
 /* ---------------------------------------------------------------- chrome */
 

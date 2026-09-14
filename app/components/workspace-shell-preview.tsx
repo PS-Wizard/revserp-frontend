@@ -2,6 +2,7 @@
 
 import type { CSSProperties, FormEvent, ReactNode } from "react"
 import {
+  createContext,
   useCallback,
   useEffect,
   useMemo,
@@ -29,6 +30,8 @@ import {
   SearchCheckIcon,
   SearchIcon,
   SparklesIcon,
+  SwordsIcon,
+  TagsIcon,
 } from "lucide-react"
 import {
   AnimatePresence,
@@ -66,6 +69,7 @@ import {
   SidebarProvider,
 } from "~/components/ui/sidebar"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
+import { PAINT_A, PAINT_B } from "~/components/compare/helpers"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
@@ -230,6 +234,11 @@ const initialRunCrawlState: RunCrawlState = {
   starting: false,
 }
 
+/** Insights fills the navbar center while a competitor comparison is open. */
+export const SetInsightsNavbarLabel = createContext<
+  (label: { you: string; them: string } | null) => void
+>(() => {})
+
 /** Full application-shell contract; the route owns all loader data and view state. */
 export type WorkspaceShellPreviewProps = AppNavbarProps & {
   children: ReactNode
@@ -276,6 +285,10 @@ export function WorkspaceShellPreview({
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false)
   const [selectedAuditPage, setSelectedAuditPage] =
     useState<SelectedAuditPage | null>(null)
+  const [insightsNavbarLabel, setInsightsNavbarLabel] = useState<{
+    you: string
+    them: string
+  } | null>(null)
   // Stable opener handed to in-shell views (summary greeting) through context.
   const openProjectPanel = useCallback(() => setIsProjectPanelOpen(true), [])
   const [createProject, createProjectDispatch] = useReducer(
@@ -297,6 +310,10 @@ export function WorkspaceShellPreview({
   useEffect(() => {
     setSelectedAuditPage(null)
   }, [activeProjectId, currentCrawl?.id])
+
+  useEffect(() => {
+    if (view !== "competitors") setInsightsNavbarLabel(null)
+  }, [view])
 
   const pageAuditValue = useMemo(
     () => ({
@@ -539,6 +556,22 @@ export function WorkspaceShellPreview({
       label: "Visibility test",
       onSelect: () => selectWorkspace("revserp-visibility"),
     },
+    {
+      icon: TagsIcon,
+      isActive: view === "keywords",
+      label: "Keywords",
+      onSelect: () => selectWorkspace("keywords"),
+    },
+    ...(features.max_competitors > 0
+      ? [
+          {
+            icon: SwordsIcon,
+            isActive: view === "competitors",
+            label: "Competitors",
+            onSelect: () => selectWorkspace("competitors"),
+          },
+        ]
+      : []),
     ...(features.gsc_connector
       ? [
           {
@@ -640,13 +673,18 @@ export function WorkspaceShellPreview({
       ? (auditSections.find(([, tab]) => tab === auditTab)?.[0] ?? "Overview")
       : view === "revserp-visibility"
         ? "Visibility test"
-        : view === "search-console"
-          ? "Search Console"
-          : view === "compare"
-            ? (compareLabel ?? "Compare")
-            : "Revbot"
+        : view === "keywords"
+          ? "Keywords"
+          : view === "competitors"
+            ? "Competitors"
+            : view === "search-console"
+              ? "Search Console"
+              : view === "compare"
+                ? (compareLabel ?? "Compare")
+                : "Revbot"
 
   return (
+    <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
     <LayoutGroup id="workspace-preview">
       <SidebarProvider
         className="relative h-svh min-h-0 bg-background text-foreground"
@@ -781,6 +819,7 @@ export function WorkspaceShellPreview({
                 auditTab={auditTab}
                 auditNavDisabled={Boolean(selectedAuditPage)}
                 gscConnector={features.gsc_connector}
+                maxCompetitors={features.max_competitors}
                 isSidebarCollapsed={isSidebarCollapsed}
                 onSelectWorkspace={selectWorkspace}
                 view={view}
@@ -811,6 +850,27 @@ export function WorkspaceShellPreview({
           </Sidebar>
           <section className="relative ml-16 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
             <header className="relative z-30 grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] items-center gap-3 border-b border-border px-4 md:px-6">
+              {insightsNavbarLabel ? (
+                <p className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      className="size-2 shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: PAINT_A.color }}
+                    />
+                    <span className="truncate">{insightsNavbarLabel.you}</span>
+                  </span>
+                  <span className="shrink-0 font-normal text-muted-foreground">
+                    vs
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span
+                      className="size-2 shrink-0 rounded-[2px]"
+                      style={{ backgroundColor: PAINT_B.color }}
+                    />
+                    <span className="truncate">{insightsNavbarLabel.them}</span>
+                  </span>
+                </p>
+              ) : null}
               <h1 className="flex min-w-0 items-center gap-1.5 text-sm">
                 <DropdownMenu>
                   <DropdownMenuTrigger
@@ -1343,5 +1403,6 @@ export function WorkspaceShellPreview({
         workspaceActions={workspaceActions}
       />
     </LayoutGroup>
+    </SetInsightsNavbarLabel.Provider>
   )
 }

@@ -13,18 +13,16 @@ export const PILLAR_LABEL: Record<PillarId, string> = {
   pagespeed: "PageSpeed",
 }
 
-// Two identity hues, drawn from the palette the audit radials already use.
-// Colour marks which site a mark belongs to. Direction is never colour — it is
-// bar length — so nothing here needs a red/green convention.
+// You = blue, them = red. Same hues the SEO / AEO history lines already use.
 export const PAINT_A = {
-  color: "oklch(0.78 0.12 200)",
-  soft: "oklch(0.78 0.12 200 / 0.16)",
-  dim: "oklch(0.78 0.12 200 / 0.28)",
+  color: "oklch(0.78 0.12 230)",
+  soft: "oklch(0.78 0.12 230 / 0.16)",
+  dim: "oklch(0.78 0.12 230 / 0.28)",
 }
 export const PAINT_B = {
-  color: "oklch(0.84 0.15 88)",
-  soft: "oklch(0.84 0.15 88 / 0.16)",
-  dim: "oklch(0.84 0.15 88 / 0.28)",
+  color: "oklch(0.75 0.16 25)",
+  soft: "oklch(0.75 0.16 25 / 0.16)",
+  dim: "oklch(0.75 0.16 25 / 0.28)",
 }
 
 export function pillarScore(
