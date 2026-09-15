@@ -97,7 +97,11 @@ export async function loader({
 
 function getAuthorizationErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 404 || error.status === 401) {
+    if (error.status === 401) {
+      return "Your Revserp login is still open, but the auth session behind it expired. Log out of Revserp, log back in, then start the connection again from your AI client."
+    }
+
+    if (error.status === 404) {
       return "This authorization request expired or was already used. Start the connection again from your AI client."
     }
 
