@@ -49,6 +49,11 @@ const FEATURE_COLUMNS = [
     label: "AI Chat",
     description: "Enables the future AI Chat workspace.",
   },
+  {
+    key: "integrations",
+    label: "Integrations",
+    description: "Integrations tab, API keys, and MCP connections.",
+  },
 ] as const
 
 type FeatureKey = (typeof FEATURE_COLUMNS)[number]["key"]
@@ -291,6 +296,7 @@ export function FeaturesTab() {
           auto_crawl: row.auto_crawl,
           gsc_connector: row.gsc_connector,
           ai_chat: row.ai_chat,
+          integrations: row.integrations,
           ai_use_internal_prompt: row.ai_use_internal_prompt,
           ai_monthly_message_limit: row.ai_monthly_message_limit,
           ai_visibility_audit_monthly_limit:

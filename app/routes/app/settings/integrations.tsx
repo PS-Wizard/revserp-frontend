@@ -73,6 +73,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const { me, projects, active_project: activeProject, crawls } = bootstrap
 
+  if (me.features?.integrations === false) {
+    throw redirect("/app")
+  }
+
   const recentCrawls = crawls ?? []
   const projectCrawls = activeProject
     ? { [activeProject.id]: recentCrawls }

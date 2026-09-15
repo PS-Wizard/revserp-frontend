@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import type { MeResponse } from "~/lib/api.types"
+import { useFeatures } from "~/lib/features"
 import { HoverPill } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 
@@ -88,6 +89,7 @@ export function ProfileMenu({
   onSelectOrganization,
 }: ProfileMenuProps) {
   const navigate = useNavigate()
+  const features = useFeatures()
   const isSwitchingWorkspace = workspaceState === "switching"
   const isLeavingWorkspace = workspaceState === "leaving"
   const isLoggingOut = workspaceState === "logging-out"
@@ -306,20 +308,22 @@ export function ProfileMenu({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-            onClick={() => {
-              navigate("/app/settings/integrations")
-            }}
-            onMouseEnter={() => showProfilePill(4)}
-            ref={(element) => {
-              profileItemRefs.current[4] = element
-            }}
-            variant="default"
-          >
-            <SettingsIcon />
-            Integrations
-          </DropdownMenuItem>
+          {features.integrations !== false ? (
+            <DropdownMenuItem
+              className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+              onClick={() => {
+                navigate("/app/settings/integrations")
+              }}
+              onMouseEnter={() => showProfilePill(4)}
+              ref={(element) => {
+                profileItemRefs.current[4] = element
+              }}
+              variant="default"
+            >
+              <SettingsIcon />
+              Integrations
+            </DropdownMenuItem>
+          ) : null}
           {isPlatformAdmin ? (
             <DropdownMenuItem
               className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"

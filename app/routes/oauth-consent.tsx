@@ -97,6 +97,10 @@ function getAuthorizationErrorMessage(error: unknown) {
       return "This authorization request expired or was already used. Start the connection again from your AI client."
     }
 
+    if (error.status === 403) {
+      return "Integrations are not enabled for this workspace."
+    }
+
     if (error.status === 502) {
       return "The authorization service is having a temporary problem. Please try again in a moment."
     }
