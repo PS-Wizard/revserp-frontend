@@ -6,6 +6,7 @@ export default [
   route("login", "routes/login.tsx"),
   route("signup", "routes/signup.tsx"),
   route("auth/callback", "routes/auth-callback.tsx"),
+  route("oauth/consent", "routes/oauth-consent.tsx"),
   route("invite/:token", "routes/invite.tsx"),
   route("account-suspended", "routes/account-suspended.tsx"),
   route("app", "routes/app.tsx"),
