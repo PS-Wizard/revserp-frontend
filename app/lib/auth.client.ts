@@ -77,7 +77,9 @@ export async function resolveOAuthSessionFromCallback(): Promise<Session> {
     }
 
     const oauthSession = data.session
-    await supabaseClient.auth.signOut({ scope: "local" })
+    // Do not auth.signOut(). scope=local still POSTs /logout and revokes the
+    // GoTrue session we are about to copy onto the Revserp cookie.
+    clearSupabaseBrowserStorage()
     return oauthSession
   }
 
@@ -95,9 +97,19 @@ export async function resolveOAuthSessionFromCallback(): Promise<Session> {
 }
 
 export async function clearSupabaseBrowserSession() {
+  clearSupabaseBrowserStorage()
+}
+
+function clearSupabaseBrowserStorage() {
   if (typeof window === "undefined") {
     return
   }
 
-  await getSupabaseBrowserClient().auth.signOut({ scope: "local" })
+  const storage = window.localStorage
+  for (let index = storage.length - 1; index >= 0; index--) {
+    const key = storage.key(index)
+    if (key?.startsWith("sb-")) {
+      storage.removeItem(key)
+    }
+  }
 }
