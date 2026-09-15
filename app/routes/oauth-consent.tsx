@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { useLoaderData } from "react-router"
 import type { LoaderFunctionArgs } from "react-router"
-import { redirect } from "react-router"
 import { ShieldCheckIcon } from "lucide-react"
 
 import { Button } from "~/components/ui/button"
@@ -71,12 +70,11 @@ export async function loader({
       request
     )
   } catch (error) {
-    // The session can expire between the auth check and this call.
-    if (error instanceof ApiError && error.status === 401) {
-      const nextPath = `${requestUrl.pathname}${requestUrl.search}`
-      throw redirect(`/login?next=${encodeURIComponent(nextPath)}`)
-    }
-
+    // Do not bounce 401 back to /login here. This page already passed
+    // requireAuthenticatedUser, so a 401 from the authorization lookup is a
+    // missing/expired request (or a dead Supabase token), not a logged-out
+    // user. Sending them to login while the session cookie is valid loops:
+    // login sees /me, redirects back here, 401 again.
     return { state: "error", message: getAuthorizationErrorMessage(error) }
   }
 
@@ -99,7 +97,7 @@ export async function loader({
 
 function getAuthorizationErrorMessage(error: unknown) {
   if (error instanceof ApiError) {
-    if (error.status === 404) {
+    if (error.status === 404 || error.status === 401) {
       return "This authorization request expired or was already used. Start the connection again from your AI client."
     }
 
