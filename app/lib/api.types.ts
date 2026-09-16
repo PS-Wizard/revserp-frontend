@@ -434,6 +434,7 @@ export type OrgFeatures = {
   ai_concurrent_turn_limit_per_user: number
   ai_allowed_reasoning_efforts: AIReasoningEffort[]
   max_competitors: number
+  max_projects: number
 }
 
 export type AdminWorkspaceFeatures = OrgFeatures & {

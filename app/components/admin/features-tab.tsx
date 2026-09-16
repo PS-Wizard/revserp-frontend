@@ -60,6 +60,7 @@ type FeatureKey = (typeof FEATURE_COLUMNS)[number]["key"]
 const MAX_AI_MONTHLY_MESSAGE_LIMIT = 1_000_000
 const MAX_AI_VISIBILITY_AUDIT_LIMIT = 1_000_000
 const MAX_COMPETITORS_LIMIT = 100
+const MAX_PROJECTS_LIMIT = 1000
 const MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER = 1
 const MAX_AI_CONCURRENT_TURN_LIMIT_PER_USER = 20
 const REASONING_EFFORT_ORDER = [
@@ -116,6 +117,9 @@ function hasInvalidAISettings(workspace: AdminWorkspaceFeatures) {
     !Number.isInteger(workspace.max_competitors) ||
     workspace.max_competitors < 0 ||
     workspace.max_competitors > MAX_COMPETITORS_LIMIT ||
+    !Number.isInteger(workspace.max_projects) ||
+    workspace.max_projects < 0 ||
+    workspace.max_projects > MAX_PROJECTS_LIMIT ||
     !Number.isInteger(workspace.ai_concurrent_turn_limit_per_user) ||
     workspace.ai_concurrent_turn_limit_per_user <
       MIN_AI_CONCURRENT_TURN_LIMIT_PER_USER ||
@@ -252,6 +256,7 @@ export function FeaturesTab() {
           edited.ai_visibility_audit_monthly_limit !==
             workspace.ai_visibility_audit_monthly_limit ||
           edited.max_competitors !== workspace.max_competitors ||
+          edited.max_projects !== workspace.max_projects ||
           edited.ai_concurrent_turn_limit_per_user !==
             workspace.ai_concurrent_turn_limit_per_user ||
           !sameStringArrays(
@@ -302,6 +307,7 @@ export function FeaturesTab() {
           ai_visibility_audit_monthly_limit:
             row.ai_visibility_audit_monthly_limit,
           max_competitors: row.max_competitors,
+          max_projects: row.max_projects,
           ai_concurrent_turn_limit_per_user:
             row.ai_concurrent_turn_limit_per_user,
           ai_allowed_reasoning_efforts: normalizeReasoningEfforts(
@@ -351,6 +357,7 @@ export function FeaturesTab() {
       (column) => `${column.label} off`
     ),
     ...(row.max_competitors === 0 ? ["Competitors off"] : []),
+    ...(row.max_projects === 0 ? ["Projects off"] : []),
   ]
 
   const monthlyLimitInvalid =
@@ -369,6 +376,11 @@ export function FeaturesTab() {
     (!Number.isInteger(open.max_competitors) ||
       open.max_competitors < 0 ||
       open.max_competitors > MAX_COMPETITORS_LIMIT)
+  const maxProjectsInvalid =
+    open !== null &&
+    (!Number.isInteger(open.max_projects) ||
+      open.max_projects < 0 ||
+      open.max_projects > MAX_PROJECTS_LIMIT)
   const concurrentTurnLimitInvalid =
     open !== null &&
     (!Number.isInteger(open.ai_concurrent_turn_limit_per_user) ||
@@ -625,6 +637,35 @@ export function FeaturesTab() {
                       {maxCompetitorsInvalid
                         ? "Enter an integer from 0 to 100."
                         : "Org cap applied to every project in the workspace. 0 disables the Competitors tab."}
+                    </FieldDescription>
+                  </Field>
+                  <Field data-invalid={maxProjectsInvalid}>
+                    <FieldLabel htmlFor="max-projects">
+                      Max projects per workspace
+                    </FieldLabel>
+                    <Input
+                      id="max-projects"
+                      type="number"
+                      min={0}
+                      max={MAX_PROJECTS_LIMIT}
+                      step={1}
+                      value={
+                        Number.isNaN(open.max_projects) ? "" : open.max_projects
+                      }
+                      aria-invalid={maxProjectsInvalid}
+                      onChange={(event) =>
+                        updateRow(openWorkspace, {
+                          max_projects:
+                            event.target.value === ""
+                              ? Number.NaN
+                              : Number(event.target.value),
+                        })
+                      }
+                    />
+                    <FieldDescription>
+                      {maxProjectsInvalid
+                        ? "Enter an integer from 0 to 1000."
+                        : "Maximum projects allowed in the workspace. 0 disables project creation."}
                     </FieldDescription>
                   </Field>
                   <Field data-invalid={concurrentTurnLimitInvalid}>

@@ -100,7 +100,7 @@ import {
 } from "~/components/page-audit/page-audit-context"
 import { PageSearchBar } from "~/components/page-audit/page-search-bar"
 import { getCrawlTimestamp } from "~/lib/crawl"
-import { clientApiFetch, clientApiPost } from "~/lib/api"
+import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   CrawlResponse,
   CrawlsResponse,
@@ -108,6 +108,7 @@ import type {
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
+import { toast } from "sonner"
 
 const auditSections = [
   ["Overview", "overview", GaugeIcon],
@@ -605,6 +606,15 @@ export function WorkspaceShellPreview({
       createProjectDispatch({ type: "CREATED" })
       selectProject(project.id)
     } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status === 409 &&
+        error.message === "project_limit_reached"
+      ) {
+        createProjectDispatch({ type: "CREATED" })
+        toast.error("You have exceeded your project limit. Please contact us.")
+        return
+      }
       createProjectDispatch({
         type: "ERROR",
         value:
