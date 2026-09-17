@@ -86,6 +86,14 @@ type AiConfig = {
   question_generation_prompt: string
 }
 
+// The chat prompt is code-owned. base_system_prompt is read-only: the two
+// audience fields are optional deltas appended to it, never replacements.
+type AiConfigResponse = {
+  config: AiConfig
+  default: AiConfig
+  base_system_prompt: string
+}
+
 // --- Scoring Tab ---
 function ScoringTab() {
   const [config, setConfig] = useState<ScoringConfig | null>(null)
@@ -423,12 +431,14 @@ function AIConfigTab() {
     question_generation_prompt: "",
   })
   const [saving, setSaving] = useState(false)
+  const [basePrompt, setBasePrompt] = useState("")
 
   useEffect(() => {
-    clientApiFetch<{ config: AiConfig; default: AiConfig }>("/admin/ai-config")
+    clientApiFetch<AiConfigResponse>("/admin/ai-config")
       .then((data) => {
         setConfig(data.config)
         setDefaultConfig(data.default)
+        setBasePrompt(data.base_system_prompt ?? "")
       })
       .catch(() => toast.error("Failed to load AI config"))
   }, [])
@@ -482,7 +492,26 @@ function AIConfigTab() {
       <div className="flex flex-col gap-4">
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>Internal system prompt</Label>
+            <Label>Base system prompt</Label>
+            <p className="text-xs text-muted-foreground">
+              Owned by the code and applied to every workspace. The fields
+              below are added after it and cannot remove it.
+            </p>
+            <Textarea
+              className="min-h-[220px] font-mono text-xs"
+              value={basePrompt}
+              readOnly
+            />
+          </CardContent>
+        </Card>
+
+        <Card size="sm">
+          <CardContent className="flex flex-col gap-1.5">
+            <Label>Internal workspace instructions</Label>
+            <p className="text-xs text-muted-foreground">
+              Appended to the base prompt for workspaces that use the internal
+              prompt. Leave empty to use the base prompt alone.
+            </p>
             <Textarea
               className="min-h-[140px] font-mono"
               value={config.internal_system_prompt}
@@ -492,17 +521,18 @@ function AIConfigTab() {
                   internal_system_prompt: e.target.value,
                 })
               }
-              placeholder={
-                defaultConfig.internal_system_prompt ||
-                "Internal system prompt..."
-              }
+              placeholder="Optional extra instructions appended to the base prompt..."
             />
           </CardContent>
         </Card>
 
         <Card size="sm">
           <CardContent className="flex flex-col gap-1.5">
-            <Label>External system prompt</Label>
+            <Label>External workspace instructions</Label>
+            <p className="text-xs text-muted-foreground">
+              Appended to the base prompt for workspaces that use the external
+              prompt. Leave empty to use the base prompt alone.
+            </p>
             <Textarea
               className="min-h-[120px] font-mono"
               value={config.external_system_prompt}
@@ -512,10 +542,7 @@ function AIConfigTab() {
                   external_system_prompt: e.target.value,
                 })
               }
-              placeholder={
-                defaultConfig.external_system_prompt ||
-                "External system prompt..."
-              }
+              placeholder="Optional extra instructions appended to the base prompt..."
             />
           </CardContent>
         </Card>
