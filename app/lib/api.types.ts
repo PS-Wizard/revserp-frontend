@@ -66,6 +66,11 @@ export type ProjectBusinessProfileResponse = {
   primary_category?: string
   primary_location?: string
   business_description?: string
+  product_description?: string
+  target_audience?: string
+  business_competitors: string[]
+  branded_keywords: string[]
+  non_branded_keywords: string[]
   seed_prompts: string[]
   target_keywords: string[]
   created_at: string

@@ -1,7 +1,7 @@
 "use client"
 
 import { useQueryClient } from "@tanstack/react-query"
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import type { FormEvent } from "react"
 
 import type {
@@ -48,6 +48,11 @@ type ProfileSnapshot = {
   primaryCategory: string
   primaryLocation: string
   businessDescription: string
+  productDescription: string
+  targetAudience: string
+  businessCompetitors: string
+  brandedKeywords: string
+  nonBrandedKeywords: string
   seedPrompts: string[]
   targetKeywords: string
 }
@@ -66,6 +71,11 @@ export function useBusinessProfile() {
   const [primaryCategory, setPrimaryCategory] = useState("")
   const [primaryLocation, setPrimaryLocation] = useState("")
   const [businessDescription, setBusinessDescription] = useState("")
+  const [productDescription, setProductDescription] = useState("")
+  const [targetAudience, setTargetAudience] = useState("")
+  const [businessCompetitors, setBusinessCompetitors] = useState("")
+  const [brandedKeywords, setBrandedKeywords] = useState("")
+  const [nonBrandedKeywords, setNonBrandedKeywords] = useState("")
   const [targetKeywords, setLoadedTargetKeywords] = useState("")
   const targetKeywordsDraftRef = useRef("")
   const [hasTargetKeywordsChanges, setHasTargetKeywordsChanges] =
@@ -86,6 +96,20 @@ export function useBusinessProfile() {
   const canManageBusinessProfile =
     businessProfileStatus?.can_manage_profile === true
 
+  // The backend drops a branded term that also appears in non-branded, so the
+  // two lists can never overlap on save. Reject it here instead of letting a
+  // user's term disappear silently.
+  const duplicateKeywords = useMemo(() => {
+    const nonBranded = new Set(
+      parseTargetKeywords(nonBrandedKeywords).map((keyword) =>
+        keyword.toLowerCase()
+      )
+    )
+    return parseTargetKeywords(brandedKeywords).filter((keyword) =>
+      nonBranded.has(keyword.toLowerCase())
+    )
+  }, [brandedKeywords, nonBrandedKeywords])
+
   const hasUnsavedChanges =
     savedSnapshot === null ||
     brandName !== savedSnapshot.brandName ||
@@ -93,6 +117,11 @@ export function useBusinessProfile() {
     primaryCategory !== savedSnapshot.primaryCategory ||
     primaryLocation !== savedSnapshot.primaryLocation ||
     businessDescription !== savedSnapshot.businessDescription ||
+    productDescription !== savedSnapshot.productDescription ||
+    targetAudience !== savedSnapshot.targetAudience ||
+    businessCompetitors !== savedSnapshot.businessCompetitors ||
+    brandedKeywords !== savedSnapshot.brandedKeywords ||
+    nonBrandedKeywords !== savedSnapshot.nonBrandedKeywords ||
     hasTargetKeywordsChanges ||
     seedPrompts.some((p, i) => p !== savedSnapshot.seedPrompts[i])
 
@@ -106,6 +135,11 @@ export function useBusinessProfile() {
       primaryCategory: profile?.primary_category ?? "",
       primaryLocation: profile?.primary_location ?? "",
       businessDescription: profile?.business_description ?? "",
+      productDescription: profile?.product_description ?? "",
+      targetAudience: profile?.target_audience ?? "",
+      businessCompetitors: formatTargetKeywords(profile?.business_competitors),
+      brandedKeywords: formatTargetKeywords(profile?.branded_keywords),
+      nonBrandedKeywords: formatTargetKeywords(profile?.non_branded_keywords),
       seedPrompts: Array.from(
         { length: 5 },
         (_, index) => profile?.seed_prompts?.[index] ?? ""
@@ -118,6 +152,11 @@ export function useBusinessProfile() {
     setPrimaryCategory(snapshot.primaryCategory)
     setPrimaryLocation(snapshot.primaryLocation)
     setBusinessDescription(snapshot.businessDescription)
+    setProductDescription(snapshot.productDescription)
+    setTargetAudience(snapshot.targetAudience)
+    setBusinessCompetitors(snapshot.businessCompetitors)
+    setBrandedKeywords(snapshot.brandedKeywords)
+    setNonBrandedKeywords(snapshot.nonBrandedKeywords)
     setLoadedTargetKeywords(snapshot.targetKeywords)
     targetKeywordsDraftRef.current = snapshot.targetKeywords
     setHasTargetKeywordsChanges(false)
@@ -311,6 +350,13 @@ export function useBusinessProfile() {
       return
     }
 
+    if (duplicateKeywords.length > 0) {
+      setBusinessProfileError(
+        `These keywords are in both lists: ${duplicateKeywords.join(", ")}. Remove them from one list.`
+      )
+      return
+    }
+
     setBusinessProfileError("")
     setIsSavingBusinessProfile(true)
 
@@ -329,6 +375,11 @@ export function useBusinessProfile() {
           primary_category: primaryCategory,
           primary_location: primaryLocation,
           business_description: businessDescription,
+          product_description: productDescription,
+          target_audience: targetAudience,
+          business_competitors: parseTargetKeywords(businessCompetitors),
+          branded_keywords: parseTargetKeywords(brandedKeywords),
+          non_branded_keywords: parseTargetKeywords(nonBrandedKeywords),
           target_keywords: parseTargetKeywords(targetKeywordsDraftRef.current),
           seed_prompts: seedPrompts.flatMap((prompt) => {
             const trimmedPrompt = prompt.trim()
@@ -367,8 +418,14 @@ export function useBusinessProfile() {
     primaryCategory,
     primaryLocation,
     businessDescription,
+    productDescription,
+    targetAudience,
+    businessCompetitors,
+    brandedKeywords,
+    nonBrandedKeywords,
     targetKeywords,
     seedPrompts,
+    duplicateKeywords,
     businessProfileError,
     isLoadingBusinessProfile,
     isSavingBusinessProfile,
@@ -387,6 +444,11 @@ export function useBusinessProfile() {
     setPrimaryCategory,
     setPrimaryLocation,
     setBusinessDescription,
+    setProductDescription,
+    setTargetAudience,
+    setBusinessCompetitors,
+    setBrandedKeywords,
+    setNonBrandedKeywords,
     setTargetKeywords: updateTargetKeywords,
     setSeedPrompts,
   }

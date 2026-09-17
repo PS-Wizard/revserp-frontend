@@ -40,38 +40,7 @@ type CreateProjectEvent =
 // --- Dialogs ---
 
 export type AppNavbarDialogsProps = {
-  businessProfile: {
-    businessProfileProject: ReturnType<
-      typeof useBusinessProfile
-    >["businessProfileProject"]
-    brandName: string
-    websiteUrl: string
-    primaryCategory: string
-    primaryLocation: string
-    businessDescription: string
-    targetKeywords: string
-    seedPrompts: string[]
-    businessProfileError: string
-    isLoadingBusinessProfile: boolean
-    isSavingBusinessProfile: boolean
-    canManageBusinessProfile: boolean
-    aiQuestions: ReturnType<typeof useBusinessProfile>["aiQuestions"]
-    isLoadingAIQuestions: boolean
-    isRegeneratingAIQuestions: boolean
-    hasUnsavedChanges: boolean
-    closeBusinessProfileDrawer: () => void
-    updateSeedPrompt: (index: number, value: string) => void
-    handleSaveBusinessProfile: (
-      event: FormEvent<HTMLFormElement>
-    ) => Promise<void>
-    regenerateAIQuestions: () => Promise<void>
-    setBrandName: (v: string) => void
-    setWebsiteUrl: (v: string) => void
-    setPrimaryCategory: (v: string) => void
-    setPrimaryLocation: (v: string) => void
-    setBusinessDescription: (v: string) => void
-    setTargetKeywords: (v: string) => void
-  }
+  businessProfile: ReturnType<typeof useBusinessProfile>
   createProject: CreateProjectState
   createProjectDispatch: React.Dispatch<CreateProjectEvent>
   handleCreateProject: (event: FormEvent<HTMLFormElement>) => Promise<void>
@@ -89,65 +58,9 @@ export function AppNavbarDialogs({
   projectActions,
   workspaceActions,
 }: AppNavbarDialogsProps) {
-  const {
-    businessProfileProject,
-    brandName,
-    websiteUrl,
-    primaryCategory,
-    primaryLocation,
-    businessDescription,
-    targetKeywords,
-    seedPrompts,
-    businessProfileError,
-    isLoadingBusinessProfile,
-    isSavingBusinessProfile,
-    canManageBusinessProfile,
-    aiQuestions,
-    isLoadingAIQuestions,
-    isRegeneratingAIQuestions,
-    hasUnsavedChanges,
-    closeBusinessProfileDrawer,
-    updateSeedPrompt,
-    handleSaveBusinessProfile,
-    regenerateAIQuestions,
-    setBrandName,
-    setWebsiteUrl,
-    setPrimaryCategory,
-    setPrimaryLocation,
-    setBusinessDescription,
-    setTargetKeywords,
-  } = businessProfile
-
   return (
     <>
-      <BusinessProfileDrawer
-        aiQuestions={aiQuestions}
-        brandName={brandName}
-        businessDescription={businessDescription}
-        businessProfileError={businessProfileError}
-        businessProfileProject={businessProfileProject}
-        canManageBusinessProfile={canManageBusinessProfile}
-        hasUnsavedChanges={hasUnsavedChanges}
-        isLoadingAIQuestions={isLoadingAIQuestions}
-        isLoadingBusinessProfile={isLoadingBusinessProfile}
-        isRegeneratingAIQuestions={isRegeneratingAIQuestions}
-        isSavingBusinessProfile={isSavingBusinessProfile}
-        primaryCategory={primaryCategory}
-        primaryLocation={primaryLocation}
-        seedPrompts={seedPrompts}
-        targetKeywords={targetKeywords}
-        websiteUrl={websiteUrl}
-        onBrandNameChange={setBrandName}
-        onBusinessDescriptionChange={setBusinessDescription}
-        onClose={closeBusinessProfileDrawer}
-        onPrimaryCategoryChange={setPrimaryCategory}
-        onPrimaryLocationChange={setPrimaryLocation}
-        onRegenerateAIQuestions={() => void regenerateAIQuestions()}
-        onSeedPromptChange={updateSeedPrompt}
-        onSubmit={handleSaveBusinessProfile}
-        onTargetKeywordsChange={setTargetKeywords}
-        onWebsiteUrlChange={setWebsiteUrl}
-      />
+      <BusinessProfileDrawer businessProfile={businessProfile} />
 
       <CreateProjectDialog
         createProjectError={createProject.createProjectError}

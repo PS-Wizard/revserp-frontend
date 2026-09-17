@@ -17,15 +17,28 @@ import {
 } from "~/lib/business-profile-query"
 import { useFeatures } from "~/lib/features"
 
-const KEYWORD_PROMPT = `Review my GSC data if it’s connected. If GSC isn’t available, analyze the latest crawl data instead.
+const KEYWORD_PROMPT = `Review my GSC data if it's connected. If GSC isn't available, analyze the latest crawl data instead.
+
+Start by calling get_business_profile so you know the brand name, category, location, description, products, audience, and any keywords already saved.
 
 Use the available data to understand what the business currently ranks for and what search terms it should target:
 
 * Prioritize GSC impressions, queries, clicks, and rankings when available.
-* Otherwise, inspect crawled URLs and their page titles to understand the site’s services, topics, and target keywords.
+* Otherwise, inspect crawled URLs and their page titles to understand the site's services, topics, and target keywords.
 * Read the page content of important pages where necessary for additional context.
 * Identify high-value keywords and queries the business is already getting visibility for or has a realistic opportunity to target.
-* Use those findings to update and optimize the business profile so its description, services, categories, and wording better align with relevant search demand.
+
+Then update the business profile in the three keyword lists:
+
+1. branded_keywords: terms that contain the brand name.
+2. non_branded_keywords: terms a customer would search without the brand name.
+3. target_keywords: the phrases the site should actually target, drawn from the non-branded terms and the evidence above.
+
+Keep branded and non-branded disjoint. Never put the same term in both, because the server drops it from branded when it also appears in non-branded.
+
+The keyword lists replace the stored list completely, so merge your findings with the terms already there. Never drop an existing term unless the evidence shows it is wrong.
+
+Also tighten the description, products, audience, category, and wording where the evidence shows they are off.
 
 Base recommendations on actual search/crawl evidence rather than guessing keywords.`
 
