@@ -397,15 +397,6 @@ export const CompetitorsView = memo(function CompetitorsView({
       )
     },
     enabled: Boolean(projectId),
-    refetchInterval: (query) => {
-      const competitors = query.state.data?.competitors ?? []
-      const hasActiveCrawl = competitors.some(
-        (competitor) =>
-          competitor.crawl?.status === "queued" ||
-          competitor.crawl?.status === "running"
-      )
-      return hasActiveCrawl ? 3000 : false
-    },
   })
 
   const competitors = data?.competitors ?? []

@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Loader2, TagsIcon } from "lucide-react"
 
 import { OverviewKeywordCloud } from "~/components/overview-keyword-cloud"
 import { useRevbotStartPrompt } from "~/components/revbot/revbot-start-prompt-context"
+import { useOrganizationEventsListener } from "~/hooks/use-organization-events"
 import { Button } from "~/components/ui/button"
 import { Card } from "~/components/ui/card"
 import { Skeleton } from "~/components/ui/skeleton"
@@ -91,7 +92,17 @@ export function OverviewTargetKeywordsCard({
     queryFn: () => fetchBusinessProfile(projectId!),
     enabled: Boolean(projectId),
     placeholderData: (previous) => previous,
-    refetchInterval: watching ? 4000 : false,
+  })
+
+  const projectIdRef = useRef(projectId)
+  projectIdRef.current = projectId
+
+  // A business profile update (e.g. from Revbot) is what we were waiting for;
+  // the provider already invalidated the query, so just end the watching state.
+  useOrganizationEventsListener((event) => {
+    if (event.type !== "business_profile.updated") return
+    if (event.project_id && event.project_id !== projectIdRef.current) return
+    setWatching(false)
   })
 
   const keywords = useMemo(() => {

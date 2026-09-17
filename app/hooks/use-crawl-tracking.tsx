@@ -6,18 +6,57 @@ import {
   type CancelCrawlTarget,
 } from "~/components/cancel-crawl-dialog"
 import { clientApiFetch } from "~/lib/api"
-import type { ActiveCrawlsResponse, CrawlResponse } from "~/lib/api.types"
-
-const POLL_INTERVAL_MS = 3000
+import type {
+  ActiveCrawlsResponse,
+  CrawlEventPayload,
+  CrawlResponse,
+  CrawlStatus,
+  OrganizationEventFrame,
+} from "~/lib/api.types"
 
 // Compact status shape `applyCrawlStatus` needs. Both the org active-crawl
 // rows (`ActiveCrawlResponse`) and full `GET /crawls/:id` responses satisfy
 // it, so the compact response is used directly without casting.
 type CrawlStatusSnapshot = Pick<
   CrawlResponse,
-  "status" | "phase" | "project_id" | "urls_discovered" | "urls_crawled" | "source"
+  | "status"
+  | "phase"
+  | "project_id"
+  | "urls_discovered"
+  | "urls_crawled"
+  | "source"
 > & {
   competitor_label?: string
+}
+
+const CRAWL_STATUSES = new Set<CrawlStatus>([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+])
+
+function crawlStatusFromEvent(
+  type: string,
+  payloadStatus: CrawlStatus | undefined
+): CrawlStatus | null {
+  if (payloadStatus && CRAWL_STATUSES.has(payloadStatus)) return payloadStatus
+  switch (type) {
+    case "crawl.queued":
+      return "queued"
+    case "crawl.started":
+    case "crawl.progress":
+      return "running"
+    case "crawl.completed":
+      return "completed"
+    case "crawl.failed":
+      return "failed"
+    case "crawl.cancelled":
+      return "cancelled"
+    default:
+      return null
+  }
 }
 
 function isCompetitorCrawl(crawl: CrawlStatusSnapshot) {
@@ -34,33 +73,28 @@ function crawlProgressDescription(crawl: CrawlStatusSnapshot) {
 }
 
 /**
- * Tracks in-flight crawls by id and polls until each reaches a terminal state
- * (completed, failed, or cancelled). Drives one sonner toast per tracked id.
+ * Tracks in-flight crawls by id and drives one sonner toast per tracked id.
  *
- * Each tick makes ONE org-wide `GET /organizations/:orgId/crawls/active`
- * request that both discovers active crawls (e.g. started in another tab)
- * and refreshes queued/running toasts/progress. Per-id `GET /crawls/:id`
- * requests happen only when a previously tracked id disappears from a
- * successful active list — the only signal it may have gone terminal — so we
- * can OBSERVE the exact status instead of assuming.
+ * Crawl lifecycle now arrives over the organization events stream:
+ * `handleCrawlEvent` feeds `crawl.*` frames through the same apply/status logic
+ * the old active-crawl poll used. `syncActiveCrawls` is a one-shot authoritative
+ * read used on mount and on every fresh `ready` frame so a page that loads
+ * mid-crawl (including externally/MCP/auto/competitor crawls) still discovers it.
  *
  * Ids are seeded two ways:
  *  - `trackCrawl(id)` — called immediately after this tab's own kickoff POST.
- *  - the org-wide `/crawls/active` endpoint while `enabled` is true.
+ *  - any `crawl.*` SSE frame, plus the one-shot `/crawls/active` sync.
  *
- * Tracked ids are only dropped once we OBSERVE a terminal status, so
- * simultaneous completions, fast crawls, and failed/cancelled crawls are all
- * reported correctly.
+ * Tracked ids are only dropped once a terminal status is applied, so
+ * simultaneous completions and fast crawls are reported correctly.
  */
 export function useCrawlTracking({
   orgId,
-  enabled,
   projectNameById,
   goToCrawl,
   revalidate,
 }: {
   orgId: string
-  enabled: boolean
   projectNameById: Map<string, string>
   goToCrawl: (
     projectId: string,
@@ -68,18 +102,21 @@ export function useCrawlTracking({
     destination?: "competitors"
   ) => void
   revalidate: () => void
-}): { trackCrawl: (id: string) => void; cancelDialog: React.ReactNode } {
+}): {
+  trackCrawl: (id: string) => void
+  handleCrawlEvent: (event: OrganizationEventFrame) => void
+  syncActiveCrawls: () => void
+  cancelDialog: React.ReactNode
+} {
   const trackedIdsRef = useRef<Set<string>>(new Set())
   // Last status seen per tracked crawl, so a status change (e.g. queued ->
   // running -> terminal) refetches the loader and keeps the navbar in sync
-  // with the live poll instead of showing stale loader data.
+  // with live events instead of showing stale loader data.
   const lastStatusRef = useRef<Map<string, string>>(new Map())
   const [cancelTarget, setCancelTarget] = useState<CancelCrawlTarget | null>(
     null
   )
 
-  const enabledRef = useRef(enabled)
-  enabledRef.current = enabled
   const orgIdRef = useRef(orgId)
   orgIdRef.current = orgId
   const projectNameByIdRef = useRef(projectNameById)
@@ -93,28 +130,10 @@ export function useCrawlTracking({
     trackedIdsRef.current.add(id)
   }, [])
 
-  // Cancel is a POST; the crawl keeps being polled, so the next tick observes
-  // status 'cancelled' and dismisses the toast. Show an interim state meanwhile.
-  const confirmCancel = useCallback(async (id: string) => {
-    try {
-      await clientApiFetch(`/crawls/${id}/cancel`, { method: "POST" })
-      toast.loading(
-        <span className="shimmer text-muted-foreground">Cancelling…</span>,
-        { id, duration: Infinity }
-      )
-    } catch (error) {
-      console.error(`Failed to cancel crawl ${id}:`, error)
-      toast.error("Couldn't cancel crawl", { id: `${id}-cancel-error` })
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    let tickInFlight = false
-
-    function applyCrawlStatus(id: string, crawl: CrawlStatusSnapshot) {
+  const applyCrawlStatus = useCallback(
+    (id: string, crawl: CrawlStatusSnapshot) => {
       // Refetch loader-backed data (which the navbar reads) whenever the
-      // authoritative status changes, so it never lags the live poll/toast.
+      // authoritative status changes, so it never lags the live toast.
       if (lastStatusRef.current.get(id) !== crawl.status) {
         lastStatusRef.current.set(id, crawl.status)
         revalidateRef.current()
@@ -133,7 +152,7 @@ export function useCrawlTracking({
       // element (not sonner's {label,onClick}) so the Cancel click opens the
       // confirm dialog instead of dismissing the toast. data-button/data-cancel
       // pick up sonner's own button styling. The dialog state lives outside the
-      // toast, so it survives the toast being recreated on every poll tick.
+      // toast, so it survives the toast being recreated on every progress event.
       // shrink-0 keeps the pair intact; the description column shrinks instead
       // (see the `content` override in ui/sonner.tsx). ml-0! cancels the
       // `margin-left:auto` sonner puts on every [data-button] — meant for a
@@ -211,7 +230,8 @@ export function useCrawlTracking({
                 id,
                 duration: Infinity,
                 description: competitor
-                  ? competitorLabel ?? "Starting from the competitor homepage."
+                  ? (competitorLabel ??
+                    "Starting from the competitor homepage.")
                   : "Analyzing sitemap…",
                 action: cancellableAction,
               }
@@ -263,19 +283,16 @@ export function useCrawlTracking({
         case "failed":
           trackedIdsRef.current.delete(id)
           lastStatusRef.current.delete(id)
-          toast.error(
-            competitor ? "Competitor crawl failed" : "Crawl failed",
-            {
-              id,
-              description: competitor
-                ? competitorLabel
-                  ? `${competitorLabel} crawl failed.`
-                  : "The competitor crawl failed."
-                : projectName
-                  ? `${projectName} crawl failed.`
-                  : "The crawl failed.",
-            }
-          )
+          toast.error(competitor ? "Competitor crawl failed" : "Crawl failed", {
+            id,
+            description: competitor
+              ? competitorLabel
+                ? `${competitorLabel} crawl failed.`
+                : "The competitor crawl failed."
+              : projectName
+                ? `${projectName} crawl failed.`
+                : "The crawl failed.",
+          })
           break
         case "cancelled":
           trackedIdsRef.current.delete(id)
@@ -283,83 +300,75 @@ export function useCrawlTracking({
           toast.dismiss(id)
           break
       }
-    }
+    },
+    []
+  )
 
-    async function tick() {
-      // One simple guard keeps the interval, visibility, and initial ticks
-      // from overlapping; also pauses all polling network work while hidden.
-      if (tickInFlight || document.hidden) return
-      // Poll while discovery is enabled or any crawl is still tracked — a
-      // locally started crawl must keep polling even during loader lag.
-      if (!enabledRef.current && trackedIdsRef.current.size === 0) return
-      tickInFlight = true
-      try {
-        const idsBefore = Array.from(trackedIdsRef.current)
-        const response = await clientApiFetch<ActiveCrawlsResponse>(
-          `/organizations/${orgIdRef.current}/crawls/active`
-        ).catch((error: unknown) => {
-          // A failed org request tells us nothing about tracked crawls:
-          // keep them tracked and skip per-id lookups until a later tick.
-          console.error("Failed to poll active crawls:", error)
-          return null
-        })
-        if (cancelled || !response) return
+  const handleCrawlEvent = useCallback(
+    (event: OrganizationEventFrame) => {
+      const crawlId = event.resource_id
+      if (!crawlId) return
+      const payload = event.payload as CrawlEventPayload
+      const status = crawlStatusFromEvent(event.type, payload.status)
+      if (!status) return
+      trackedIdsRef.current.add(crawlId)
+      applyCrawlStatus(crawlId, {
+        project_id: event.project_id ?? "",
+        status,
+        phase: payload.phase ?? null,
+        urls_discovered: payload.urls_discovered ?? 0,
+        urls_crawled: payload.urls_crawled ?? 0,
+        source: payload.source,
+        competitor_label: payload.competitor_label,
+      })
+    },
+    [applyCrawlStatus]
+  )
 
-        // One request drives discovery AND live toast/progress updates, so
-        // nothing still present in it needs a per-id fetch.
-        const activeIds = new Set<string>()
-        for (const crawl of response.crawls) {
-          activeIds.add(crawl.id)
-          trackedIdsRef.current.add(crawl.id)
-          applyCrawlStatus(crawl.id, crawl)
-        }
-
-        // Ids that vanished from a SUCCESSFUL active list may have gone
-        // terminal; observe the exact status once via the authoritative
-        // endpoint instead of assuming from disappearance.
-        await Promise.all(
-          idsBefore
-            .filter((id) => !activeIds.has(id))
-            .map(async (id) => {
-              try {
-                const crawl = await clientApiFetch<CrawlResponse>(
-                  `/crawls/${id}`
-                )
-                if (cancelled) return
-                applyCrawlStatus(id, crawl)
-              } catch (error) {
-                console.error(`Failed to poll crawl ${id}:`, error)
-              }
-            })
-        )
-      } finally {
-        tickInFlight = false
+  // One-shot authoritative read: discovers already-running crawls (this tab or
+  // elsewhere) without polling. `ready` frames call this again on reconnect.
+  const syncActiveCrawls = useCallback(async () => {
+    try {
+      const response = await clientApiFetch<ActiveCrawlsResponse>(
+        `/organizations/${orgIdRef.current}/crawls/active`
+      )
+      for (const crawl of response.crawls) {
+        trackedIdsRef.current.add(crawl.id)
+        applyCrawlStatus(crawl.id, crawl)
       }
+    } catch (error) {
+      console.error("Failed to sync active crawls:", error)
     }
+  }, [applyCrawlStatus])
 
-    function onVisibilityChange() {
-      if (!document.hidden) void tick()
+  // Cancel is a POST; the crawl keeps being observed, so the next event reports
+  // status 'cancelled' and dismisses the toast. Show an interim state meanwhile.
+  const confirmCancel = useCallback(async (id: string) => {
+    try {
+      await clientApiFetch(`/crawls/${id}/cancel`, { method: "POST" })
+      toast.loading(
+        <span className="shimmer text-muted-foreground">Cancelling…</span>,
+        { id, duration: Infinity }
+      )
+    } catch (error) {
+      console.error(`Failed to cancel crawl ${id}:`, error)
+      toast.error("Couldn't cancel crawl", { id: `${id}-cancel-error` })
     }
+  }, [])
 
-    void tick()
-    const interval = window.setInterval(() => {
-      void tick()
-    }, POLL_INTERVAL_MS)
-    document.addEventListener("visibilitychange", onVisibilityChange)
+  useEffect(() => {
+    void syncActiveCrawls()
 
     return () => {
-      cancelled = true
-      window.clearInterval(interval)
-      document.removeEventListener("visibilitychange", onVisibilityChange)
       for (const id of trackedIdsRef.current) {
         toast.dismiss(id)
       }
-      // Org switch: drop old-org ids so they are never fetched under the
+      // Org switch: drop old-org ids so they are never applied under the
       // next org.
       trackedIdsRef.current.clear()
       lastStatusRef.current.clear()
     }
-  }, [orgId]) // re-runs only on org switch; `enabled` is read live via a ref
+  }, [orgId, syncActiveCrawls])
 
   const cancelDialog = (
     <CancelCrawlDialog
@@ -371,5 +380,5 @@ export function useCrawlTracking({
     />
   )
 
-  return { trackCrawl, cancelDialog }
+  return { trackCrawl, handleCrawlEvent, syncActiveCrawls, cancelDialog }
 }

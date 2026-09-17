@@ -6,7 +6,6 @@ import type { FormEvent } from "react"
 
 import type {
   ProjectAIQuestionsResponse,
-  ProjectAIQuestionsStatusResponse,
   ProjectBusinessProfileResponse,
   ProjectBusinessProfileStatusResponse,
   ProjectResponse,
@@ -14,15 +13,15 @@ import type {
 import { ApiError, clientApiFetch, clientApiPut } from "~/lib/api"
 import { toast } from "sonner"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
+import { useOrganizationEventsListener } from "~/hooks/use-organization-events"
 
 const EMPTY_SEED_PROMPTS = ["", "", "", "", ""]
 const REGENERATE_TOAST_CLASS = "w-fit"
-const GENERATION_POLL_MS = 2000
-const GENERATION_POLL_MAX_ATTEMPTS = 90
 
-function isGenerationJobAfter(requestedAt: string | undefined, requestedAfterMs: number) {
-  if (!requestedAt) return false
-  return new Date(requestedAt).getTime() >= requestedAfterMs - 1000
+type PendingGeneration = {
+  projectId: string
+  requestedAfterMs: number
+  toastId?: string | number
 }
 
 function formatTargetKeywords(keywords?: string[]) {
@@ -82,6 +81,7 @@ export function useBusinessProfile() {
   const [isRegeneratingAIQuestions, setIsRegeneratingAIQuestions] =
     useState(false)
   const activeProjectIdRef = useRef<string | null>(null)
+  const pendingGenerationRef = useRef<PendingGeneration | null>(null)
 
   const canManageBusinessProfile =
     businessProfileStatus?.can_manage_profile === true
@@ -137,87 +137,73 @@ export function useBusinessProfile() {
     }
   }
 
-  async function pollAIQuestionsGeneration(
+  function beginGenerationTracking(
     projectId: string,
-    {
-      requestedAfterMs,
-      toastId,
-    }: {
-      requestedAfterMs: number
-      toastId?: string | number
-    }
+    requestedAfterMs: number,
+    toastId?: string | number
   ) {
-    setIsRegeneratingAIQuestions(true)
-
-    try {
-      for (let attempt = 0; attempt < GENERATION_POLL_MAX_ATTEMPTS; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, GENERATION_POLL_MS))
-        if (activeProjectIdRef.current !== projectId) {
-          if (toastId !== undefined) toast.dismiss(toastId)
-          return
-        }
-
-        const generation = await clientApiFetch<ProjectAIQuestionsStatusResponse>(
-          `/projects/${projectId}/ai-questions/status`
-        )
-        if (activeProjectIdRef.current !== projectId) {
-          if (toastId !== undefined) toast.dismiss(toastId)
-          return
-        }
-
-        if (
-          generation.status === "none" ||
-          generation.status === "pending" ||
-          generation.status === "running"
-        ) {
-          continue
-        }
-
-        if (generation.status === "completed") {
-          if (!isGenerationJobAfter(generation.requested_at, requestedAfterMs)) {
-            continue
-          }
-          await fetchAIQuestions(projectId)
-          if (toastId !== undefined) {
-            toast.success("Questions regenerated", {
-              className: REGENERATE_TOAST_CLASS,
-              id: toastId,
-            })
-          }
-          return
-        }
-
-        if (generation.status === "failed") {
-          if (!isGenerationJobAfter(generation.requested_at, requestedAfterMs)) {
-            continue
-          }
-          await fetchAIQuestions(projectId)
-          if (toastId !== undefined) {
-            toast.error(
-              generation.error?.trim() ||
-                "Question generation failed — try again.",
-              {
-                className: REGENERATE_TOAST_CLASS,
-                id: toastId,
-              }
-            )
-          }
-          return
-        }
-      }
-
-      if (toastId !== undefined) {
-        toast.error("Question generation timed out — try again.", {
-          className: REGENERATE_TOAST_CLASS,
-          id: toastId,
-        })
-      }
-    } finally {
-      setIsRegeneratingAIQuestions(false)
+    pendingGenerationRef.current = { projectId, requestedAfterMs, toastId }
+    if (activeProjectIdRef.current === projectId) {
+      setIsRegeneratingAIQuestions(true)
     }
   }
 
+  // Drive the Regenerating questions toast to its terminal state from SSE.
+  // The loading toast is still created by the click; this only completes it,
+  // preserving project-switch dismissal via activeProjectIdRef.
+  useOrganizationEventsListener((event) => {
+    if (!event.type.startsWith("prompt_generation.")) return
+    const pending = pendingGenerationRef.current
+    if (!pending) return
+    const eventProjectId = event.project_id ?? event.resource_id
+    if (eventProjectId !== pending.projectId) return
+    if (
+      event.type === "prompt_generation.queued" ||
+      event.type === "prompt_generation.started"
+    ) {
+      return
+    }
+    if (activeProjectIdRef.current !== pending.projectId) {
+      if (pending.toastId !== undefined) toast.dismiss(pending.toastId)
+      pendingGenerationRef.current = null
+      return
+    }
+    const eventTime = Date.parse(event.created_at)
+    if (
+      Number.isFinite(eventTime) &&
+      eventTime < pending.requestedAfterMs - 1000
+    ) {
+      // Replay of a job triggered before this regeneration started.
+      return
+    }
+    pendingGenerationRef.current = null
+    const { toastId } = pending
+    void fetchAIQuestions(pending.projectId)
+    setIsRegeneratingAIQuestions(false)
+    if (toastId === undefined) return
+    if (event.type === "prompt_generation.completed") {
+      toast.success("Questions regenerated", {
+        className: REGENERATE_TOAST_CLASS,
+        id: toastId,
+      })
+    } else if (event.type === "prompt_generation.failed") {
+      const message =
+        typeof event.payload.error === "string" && event.payload.error.trim()
+          ? event.payload.error.trim()
+          : "Question generation failed — try again."
+      toast.error(message, {
+        className: REGENERATE_TOAST_CLASS,
+        id: toastId,
+      })
+    }
+  })
+
   async function openBusinessProfileDrawer(project: ProjectResponse) {
+    const pending = pendingGenerationRef.current
+    if (pending && pending.projectId !== project.id) {
+      if (pending.toastId !== undefined) toast.dismiss(pending.toastId)
+      pendingGenerationRef.current = null
+    }
     activeProjectIdRef.current = project.id
     setBusinessProfileProject(project)
     setBusinessProfileStatus(null)
@@ -292,17 +278,20 @@ export function useBusinessProfile() {
       duration: Infinity,
     })
 
+    setAIQuestions(null)
+    beginGenerationTracking(
+      businessProfileProject.id,
+      requestedAfterMs,
+      toastId
+    )
     try {
       await clientApiFetch<{ status: string }>(
         `/projects/${businessProfileProject.id}/ai-questions/regenerate`,
         { method: "POST" }
       )
-      setAIQuestions(null)
-      void pollAIQuestionsGeneration(businessProfileProject.id, {
-        requestedAfterMs,
-        toastId,
-      })
     } catch (error) {
+      pendingGenerationRef.current = null
+      setIsRegeneratingAIQuestions(false)
       toast.dismiss(toastId)
       toast.error(
         error instanceof ApiError
@@ -325,9 +314,15 @@ export function useBusinessProfile() {
     setBusinessProfileError("")
     setIsSavingBusinessProfile(true)
 
+    // The backend enqueues prompt generation before the PUT returns, so a fast
+    // terminal SSE frame can beat the response. Track the automatic job with a
+    // pre-request timestamp first; there is no toast for this path.
+    const projectId = businessProfileProject.id
+    beginGenerationTracking(projectId, Date.now())
+
     try {
       const profile = await clientApiPut<ProjectBusinessProfileResponse>(
-        `/projects/${businessProfileProject.id}/business-profile`,
+        `/projects/${projectId}/business-profile`,
         {
           brand_name: brandName,
           website_url: websiteUrl,
@@ -348,12 +343,13 @@ export function useBusinessProfile() {
         business_profile: profile,
       })
       applyBusinessProfile(profile, businessProfileProject)
-      void invalidateBusinessProfile(queryClient, businessProfileProject.id)
+      void invalidateBusinessProfile(queryClient, projectId)
       closeBusinessProfileDrawer()
-      void pollAIQuestionsGeneration(businessProfileProject.id, {
-        requestedAfterMs: Date.now(),
-      })
     } catch (error) {
+      if (pendingGenerationRef.current?.projectId === projectId) {
+        pendingGenerationRef.current = null
+        setIsRegeneratingAIQuestions(false)
+      }
       setBusinessProfileError(
         error instanceof Error
           ? error.message

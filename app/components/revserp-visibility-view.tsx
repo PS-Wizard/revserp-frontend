@@ -698,11 +698,6 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
     queryFn: () =>
       clientApiFetch<AIAuditResponse>(`/ai-audits/${resolvedAuditId!}`),
     enabled: Boolean(resolvedAuditId),
-    refetchInterval: (query) => {
-      const s = query.state.data?.status
-      if (s === "queued" || s === "running") return 2000
-      return false
-    },
   })
 
   const handleRunTest = useCallback(async () => {

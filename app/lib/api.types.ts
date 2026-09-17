@@ -976,3 +976,57 @@ export type MapsReviewsResponse = {
   refetch_available_after: string | null
   reviews: MapsReview[]
 }
+
+/** Names emitted by GET /organizations/{organizationID}/events (SSE). */
+export type OrganizationEventType =
+  | "ready"
+  | "crawl.queued"
+  | "crawl.started"
+  | "crawl.progress"
+  | "crawl.completed"
+  | "crawl.failed"
+  | "crawl.cancelled"
+  | "project.created"
+  | "project.updated"
+  | "project.deleted"
+  | "ai_audit.queued"
+  | "ai_audit.started"
+  | "ai_audit.progress"
+  | "ai_audit.completed"
+  | "ai_audit.completed_with_failures"
+  | "ai_audit.failed"
+  | "prompt_generation.queued"
+  | "prompt_generation.started"
+  | "prompt_generation.completed"
+  | "prompt_generation.failed"
+  | "maps_visibility.queued"
+  | "maps_visibility.started"
+  | "maps_visibility.completed"
+  | "maps_visibility.failed"
+  | "business_profile.updated"
+  | "project_competitor.created"
+  | "project_competitor.deleted"
+
+/**
+ * One domain frame from the organization events stream. The SSE event name is
+ * the type; payload values are hints that callers verify against authoritative
+ * reads rather than rebuilding resources from.
+ */
+export type OrganizationEventFrame = {
+  type: OrganizationEventType | string
+  organization_id: string
+  project_id: string | null
+  resource_id: string | null
+  payload: Record<string, unknown>
+  created_at: string
+}
+
+/** `payload` of a crawl.* frame. */
+export type CrawlEventPayload = {
+  status?: CrawlStatus
+  phase?: CrawlPhase | null
+  urls_discovered?: number
+  urls_crawled?: number
+  source?: string
+  competitor_label?: string
+}

@@ -719,11 +719,6 @@ export function OverviewMapsVisibilityCard({
     enabled: Boolean(projectId),
     staleTime: 0,
     placeholderData: (previous) => previous,
-    refetchInterval: (current) => {
-      const status = current.state.data?.status
-      if (status === "queued" || status === "running") return 2500
-      return false
-    },
   })
 
   const startRun = useMutation({

@@ -51,6 +51,7 @@ import {
 import { Tabs, TabsContent } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
+import { OrganizationEventsProvider } from "~/hooks/use-organization-events"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { isAccountSuspended } from "~/lib/auth.server"
@@ -203,9 +204,7 @@ function RevserpAuditPanel({
   const pageAudit = usePageAudit()
   const selectedPage = pageAudit?.selectedPage ?? null
 
-  const contentKey = selectedPage
-    ? `page-${selectedPage.id}`
-    : auditTab
+  const contentKey = selectedPage ? `page-${selectedPage.id}` : auditTab
 
   const mainContent =
     selectedPage && completedCrawlId ? (
@@ -216,10 +215,7 @@ function RevserpAuditPanel({
       />
     ) : (
       <Tabs value={auditTab} className="gap-6">
-        <TabsContent
-          value="overview"
-          className="flex flex-col gap-4 md:gap-6"
-        >
+        <TabsContent value="overview" className="flex flex-col gap-4 md:gap-6">
           <OverviewPillarScoresSection
             crawlBreakdowns={crawlBreakdowns}
             currentCrawlId={completedCrawlId ?? undefined}
@@ -397,22 +393,7 @@ export default function AppPage() {
       null,
     [sortedCrawls, sortedCompletedCrawls, selectedCrawlId]
   )
-
-  // Org-wide "is any crawl in flight" signal — gates the poll.
-  const hasActiveCrawlAnywhere = useMemo(
-    () =>
-      Object.values(projectCrawls).some((crawls) =>
-        crawls.some(
-          (crawl) => crawl.status === "queued" || crawl.status === "running"
-        )
-      ),
-    [projectCrawls]
-  )
-
-  const pollEnabled =
-    hasActiveCrawlAnywhere || isStartingCrawl || view === "competitors"
-
-  // Stable revalidate ref so the tracking hook's poll never depends on the
+  // Stable revalidate ref so the tracking hook never depends on the
   // revalidator object and thus never tears down on revalidation.
   const revalidateRef = useRef(revalidator.revalidate)
   revalidateRef.current = revalidator.revalidate
@@ -443,6 +424,19 @@ export default function AppPage() {
     [activeProject?.id, navigate, location.pathname, location.search]
   )
 
+  const goToVisibility = useCallback(
+    (projectId: string | null) => {
+      setView("revserp-visibility")
+      if (!projectId || projectId === activeProject?.id) return
+      const params = new URLSearchParams(location.search)
+      params.set("project", projectId)
+      params.delete("crawl")
+      params.delete("revbotConversation")
+      void navigate(`${location.pathname}?${params.toString()}`)
+    },
+    [activeProject?.id, navigate, location.pathname, location.search]
+  )
+
   const projectNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const project of projects) {
@@ -451,13 +445,13 @@ export default function AppPage() {
     return map
   }, [projects])
 
-  const { trackCrawl, cancelDialog } = useCrawlTracking({
-    orgId: me.active_org_id,
-    enabled: pollEnabled,
-    projectNameById,
-    goToCrawl,
-    revalidate: revalidateIfIdle,
-  })
+  const { trackCrawl, handleCrawlEvent, syncActiveCrawls, cancelDialog } =
+    useCrawlTracking({
+      orgId: me.active_org_id,
+      projectNameById,
+      goToCrawl,
+      revalidate: revalidateIfIdle,
+    })
 
   // Fetch compact per-crawl bucket-score history for the full crawl history,
   // ungated by tab so SEO/AEO/PageSpeed tabs get real trend data too (not
@@ -680,155 +674,163 @@ export default function AppPage() {
   }, [compareTarget, compareSides])
 
   return (
-    <FeaturesProvider features={me.features}>
-      <IssueWorkspacePanelProvider
-        crawlId={
-          stableCurrentCrawl?.status === "completed"
-            ? stableCurrentCrawl.id
-            : null
-        }
-        currentUserId={me.user.id}
-      >
-        <WorkspaceShellPreview
-          activeProjectId={activeProject?.id}
-          auditTab={auditTab}
-          compareLabel={
-            compareSides ? `vs ${compareSides.b.projectName}` : null
+    <OrganizationEventsProvider
+      onCrawlEvent={handleCrawlEvent}
+      onReady={syncActiveCrawls}
+      onViewVisibility={goToVisibility}
+      orgId={me.active_org_id}
+      revalidate={revalidateIfIdle}
+    >
+      <FeaturesProvider features={me.features}>
+        <IssueWorkspacePanelProvider
+          crawlId={
+            stableCurrentCrawl?.status === "completed"
+              ? stableCurrentCrawl.id
+              : null
           }
-          crawlStatusLabel={crawlStatusLabel}
-          currentCrawl={currentCrawl}
-          isCrawlRunning={isCrawlRunning}
-          isExportingAudit={isExporting}
-          isPlatformAdmin={me.is_platform_admin}
-          onAuditTabChange={setAuditTab}
-          onCompareCrawl={handleCompareCrawl}
-          onCrawlStart={handleCrawlStart}
-          onExportAudit={handleExportAudit}
-          onRevbotConversationChange={handleRevbotConversationChange}
-          onViewChange={setView}
-          organizationId={me.active_org_id}
-          organizations={me.organizations}
-          projectCrawls={projectCrawls}
-          projects={projects}
-          revbotConversationId={revbotConversationId}
-          userEmail={me.user.email}
-          userName={me.user.name}
-          view={view}
+          currentUserId={me.user.id}
         >
-          {cancelDialog}
+          <WorkspaceShellPreview
+            activeProjectId={activeProject?.id}
+            auditTab={auditTab}
+            compareLabel={
+              compareSides ? `vs ${compareSides.b.projectName}` : null
+            }
+            crawlStatusLabel={crawlStatusLabel}
+            currentCrawl={currentCrawl}
+            isCrawlRunning={isCrawlRunning}
+            isExportingAudit={isExporting}
+            isPlatformAdmin={me.is_platform_admin}
+            onAuditTabChange={setAuditTab}
+            onCompareCrawl={handleCompareCrawl}
+            onCrawlStart={handleCrawlStart}
+            onExportAudit={handleExportAudit}
+            onRevbotConversationChange={handleRevbotConversationChange}
+            onViewChange={setView}
+            organizationId={me.active_org_id}
+            organizations={me.organizations}
+            projectCrawls={projectCrawls}
+            projects={projects}
+            revbotConversationId={revbotConversationId}
+            userEmail={me.user.email}
+            userName={me.user.name}
+            view={view}
+          >
+            {cancelDialog}
 
-          {view === "revserp-audit" ? (
-            <div className="relative">
-              <RevserpAuditPanel
-                auditTab={auditTab}
-                crawlBreakdowns={stableCrawlBreakdowns}
-                completedCrawlId={
-                  stableCurrentCrawl?.status === "completed"
-                    ? stableCurrentCrawl.id
-                    : null
-                }
-                currentBreakdown={stableCurrentBreakdown}
-                currentUserId={me.user.id}
-                isViewingRunningCrawl={isViewingRunningCrawl}
-                onAuditTabChange={setAuditTab}
-                shouldReduceMotion={shouldReduceMotion}
-                sortedCompletedCrawls={stableSortedCompletedCrawls}
-              />
+            {view === "revserp-audit" ? (
+              <div className="relative">
+                <RevserpAuditPanel
+                  auditTab={auditTab}
+                  crawlBreakdowns={stableCrawlBreakdowns}
+                  completedCrawlId={
+                    stableCurrentCrawl?.status === "completed"
+                      ? stableCurrentCrawl.id
+                      : null
+                  }
+                  currentBreakdown={stableCurrentBreakdown}
+                  currentUserId={me.user.id}
+                  isViewingRunningCrawl={isViewingRunningCrawl}
+                  onAuditTabChange={setAuditTab}
+                  shouldReduceMotion={shouldReduceMotion}
+                  sortedCompletedCrawls={stableSortedCompletedCrawls}
+                />
 
-              {isViewingRunningCrawl ? (
-                <>
-                  {/* Dimmer covers the content region only (below the navbar), so the
+                {isViewingRunningCrawl ? (
+                  <>
+                    {/* Dimmer covers the content region only (below the navbar), so the
                   navbar stays interactive while a crawl runs. */}
-                  <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
-                  {/* Card is fixed to the viewport center (~50vh) so it's visible without
+                    <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
+                    {/* Card is fixed to the viewport center (~50vh) so it's visible without
                   scrolling regardless of page height. */}
-                  <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
-                    <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                      <ThinkingOrb
-                        aria-hidden="true"
-                        className="shrink-0"
-                        size={64}
-                        state="working"
-                      />
-                      <div className="flex flex-col gap-1">
-                        <h2 className="text-lg font-medium">
-                          {crawlStatusLabel === "queued"
-                            ? "Queued"
-                            : "Crawl in progress"}
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          {activeProject?.name || "This project"} is currently{" "}
-                          {crawlStatusLabel}. Scores will refresh automatically
-                          when the crawl finishes.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </>
-              ) : null}
-            </div>
-          ) : view === "compare" && compareSides ? (
-            <CompareView
-              a={compareSides.a}
-              b={compareSides.b}
-              onExit={handleExitCompare}
-            />
-          ) : view === "revserp-visibility" ? (
-            <RevserpVisibilityView
-              activeProject={activeProject}
-              currentCrawl={stableCurrentCrawl}
-            />
-          ) : view === "keywords" ? (
-            <KeywordsView projectId={activeProject?.id ?? null} />
-          ) : view === "competitors" &&
-            (me.features?.max_competitors ?? 0) > 0 ? (
-            <CompetitorsView
-              activeProject={activeProject}
-              currentCrawl={currentCrawl}
-              maxCompetitors={me.features.max_competitors}
-              trackCrawl={trackCrawl}
-            />
-          ) : view === "search-console" &&
-            me.features?.gsc_connector !== false ? (
-            <SearchConsoleView
-              key={activeProject?.id}
-              activeProject={activeProject}
-              completedCrawls={stableSortedCompletedCrawls}
-              isOrganizationOwner={isOrganizationOwner}
-            />
-          ) : (
-            <div className="p-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>{viewLabels[view]}</CardTitle>
-                  <CardDescription>
-                    Placeholder app view for the protected dashboard shell.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-                  <p>Current section: {viewLabels[view]}</p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-          {showPrintSections && (
-            <PdfPrintSections
-              coverRef={coverRef}
-              overallRef={overallRef}
-              seoRef={seoRef}
-              aeoRef={aeoRef}
-              pagespeedRef={pagespeedRef}
-              crawlBreakdowns={stableCrawlBreakdowns}
-              recentCrawls={stableSortedCompletedCrawls}
-              currentCrawl={stableCurrentCrawl}
-              previousCrawl={stablePreviousCrawl}
-              currentBreakdown={stableCurrentBreakdown}
-              activeProjectName={activeProject?.name}
-            />
-          )}
-        </WorkspaceShellPreview>
-      </IssueWorkspacePanelProvider>
-    </FeaturesProvider>
+                    <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
+                      <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+                        <ThinkingOrb
+                          aria-hidden="true"
+                          className="shrink-0"
+                          size={64}
+                          state="working"
+                        />
+                        <div className="flex flex-col gap-1">
+                          <h2 className="text-lg font-medium">
+                            {crawlStatusLabel === "queued"
+                              ? "Queued"
+                              : "Crawl in progress"}
+                          </h2>
+                          <p className="text-sm text-muted-foreground">
+                            {activeProject?.name || "This project"} is currently{" "}
+                            {crawlStatusLabel}. Scores will refresh
+                            automatically when the crawl finishes.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </>
+                ) : null}
+              </div>
+            ) : view === "compare" && compareSides ? (
+              <CompareView
+                a={compareSides.a}
+                b={compareSides.b}
+                onExit={handleExitCompare}
+              />
+            ) : view === "revserp-visibility" ? (
+              <RevserpVisibilityView
+                activeProject={activeProject}
+                currentCrawl={stableCurrentCrawl}
+              />
+            ) : view === "keywords" ? (
+              <KeywordsView projectId={activeProject?.id ?? null} />
+            ) : view === "competitors" &&
+              (me.features?.max_competitors ?? 0) > 0 ? (
+              <CompetitorsView
+                activeProject={activeProject}
+                currentCrawl={currentCrawl}
+                maxCompetitors={me.features.max_competitors}
+                trackCrawl={trackCrawl}
+              />
+            ) : view === "search-console" &&
+              me.features?.gsc_connector !== false ? (
+              <SearchConsoleView
+                key={activeProject?.id}
+                activeProject={activeProject}
+                completedCrawls={stableSortedCompletedCrawls}
+                isOrganizationOwner={isOrganizationOwner}
+              />
+            ) : (
+              <div className="p-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{viewLabels[view]}</CardTitle>
+                    <CardDescription>
+                      Placeholder app view for the protected dashboard shell.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+                    <p>Current section: {viewLabels[view]}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+            {showPrintSections && (
+              <PdfPrintSections
+                coverRef={coverRef}
+                overallRef={overallRef}
+                seoRef={seoRef}
+                aeoRef={aeoRef}
+                pagespeedRef={pagespeedRef}
+                crawlBreakdowns={stableCrawlBreakdowns}
+                recentCrawls={stableSortedCompletedCrawls}
+                currentCrawl={stableCurrentCrawl}
+                previousCrawl={stablePreviousCrawl}
+                currentBreakdown={stableCurrentBreakdown}
+                activeProjectName={activeProject?.name}
+              />
+            )}
+          </WorkspaceShellPreview>
+        </IssueWorkspacePanelProvider>
+      </FeaturesProvider>
+    </OrganizationEventsProvider>
   )
 }
 
