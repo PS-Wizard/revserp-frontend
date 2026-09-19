@@ -16,7 +16,6 @@ const DRIVE_DELAYS = Array.from({ length: 9 }, (_, index) => {
   return (column + Math.abs(row - 1)) * 90
 })
 
-
 function formatDuration(ms: number) {
   const total = ms / 1000
   if (total < 60) return `${total.toFixed(1)}s`
@@ -38,9 +37,7 @@ function useElapsed(startedAt: number | null, active: boolean) {
         setElapsed(`${total.toFixed(1)}s`)
         return
       }
-      setElapsed(
-        `${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`
-      )
+      setElapsed(`${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`)
     }
 
     tick()
@@ -52,7 +49,7 @@ function useElapsed(startedAt: number | null, active: boolean) {
   return elapsed
 }
 
-function DriveSpinner({ className }: { className?: string }) {
+export function DriveSpinner({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
@@ -72,10 +69,19 @@ function DriveSpinner({ className }: { className?: string }) {
   )
 }
 
-function ShimmerLabel({ children }: { children: string }) {
+export function ShimmerLabel({
+  children,
+  className,
+}: {
+  children: string
+  className?: string
+}) {
   return (
     <span
-      className="bg-clip-text text-[13px] font-medium text-transparent motion-reduce:text-zinc-300"
+      className={cn(
+        "bg-clip-text text-[13px] font-medium text-transparent motion-reduce:text-zinc-300",
+        className
+      )}
       style={{
         backgroundImage:
           "linear-gradient(90deg, rgb(113 113 122) 35%, rgb(244 244 245) 50%, rgb(113 113 122) 65%)",
@@ -123,7 +129,6 @@ function formatToolMeta(name: string, args: Record<string, unknown>) {
     .map(([key, value]) => `${key}: ${String(value)}`)
     .join(" · ")
 }
-
 
 function ToolOutcomeIcon({ outcome }: { outcome: ToolOutcome }) {
   if (outcome === "running") {
@@ -193,7 +198,8 @@ function ToolCallRow({
     <div
       className={cn(
         "w-full",
-        !isLast && (isDark ? "border-b border-white/5" : "border-b border-border/60")
+        !isLast &&
+          (isDark ? "border-b border-white/5" : "border-b border-border/60")
       )}
     >
       <button
@@ -262,9 +268,7 @@ function ToolCallRow({
                 <p
                   className={cn(
                     "text-[12px] leading-relaxed",
-                    outcome === "failed"
-                      ? "text-red-200/90"
-                      : "text-zinc-400"
+                    outcome === "failed" ? "text-red-200/90" : "text-zinc-400"
                   )}
                 >
                   {detail}
@@ -272,7 +276,9 @@ function ToolCallRow({
               ) : outcome === "running" ? (
                 <p className="text-[12px] text-zinc-500">Running tool…</p>
               ) : outcome === "partial" ? (
-                <p className="text-[12px] text-zinc-500">No results returned.</p>
+                <p className="text-[12px] text-zinc-500">
+                  No results returned.
+                </p>
               ) : null}
             </div>
           </div>

@@ -1,3 +1,5 @@
+import type { ProjectSetupResponse } from "~/lib/api.types"
+
 export class ApiError extends Error {
   status: number
   details: unknown
@@ -225,4 +227,26 @@ function extractErrorMessage(responseBody: unknown) {
   }
 
   return errorValue
+}
+
+// --- Project setup ---
+
+/**
+ * GET /projects/{id}/setup. Returns null when the backend reports no setup row
+ * (404), so callers can treat "not found" as "not started yet".
+ */
+export async function fetchProjectSetup(projectId: string) {
+  try {
+    return await clientApiFetch<ProjectSetupResponse | null>(
+      `/projects/${projectId}/setup`
+    )
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null
+    throw error
+  }
+}
+
+/** POST /projects/{id}/setup. Idempotent; the backend owns the workflow. */
+export function startProjectSetup(projectId: string) {
+  return clientApiPost<ProjectSetupResponse>(`/projects/${projectId}/setup`, {})
 }

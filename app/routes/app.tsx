@@ -38,6 +38,7 @@ import { CompareView } from "~/components/compare/compare-view"
 import { CompetitorsView } from "~/components/competitors/competitors-view"
 import { KeywordsView } from "~/components/keywords/keywords-view"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
+import { ProjectSetupPanel } from "~/components/project-setup-panel"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { FeaturesProvider } from "~/lib/features"
@@ -51,6 +52,7 @@ import {
 import { Tabs, TabsContent } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
+import { useProjectSetup } from "~/hooks/use-project-setup"
 import { OrganizationEventsProvider } from "~/hooks/use-organization-events"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
@@ -453,6 +455,27 @@ export default function AppPage() {
       revalidate: revalidateIfIdle,
     })
 
+  // One setup read per project while the audit view is mounted; the SSE
+  // provider refreshes it on every project_setup frame (no polling).
+  const projectSetup = useProjectSetup({
+    projectId: activeProject?.id ?? null,
+    enabled: view === "revserp-audit" && !!activeProject,
+  })
+
+  // A row that is not yet completed (including `ready` and in-flight/failed
+  // states) keeps the setup UI. A resolved `null` means no setup row: legacy
+  // projects fall through to their normal manual flow, and a no-crawl project
+  // only keeps the setup UI while the GET is still loading, to avoid a flash.
+  const activeSetup = projectSetup.setup
+  const setupIsActive =
+    activeSetup !== null && activeSetup.status !== "completed"
+  const setupIsLoading =
+    activeSetup === null && projectSetup.isLoading && recentCrawls.length === 0
+  const showProjectSetup =
+    view === "revserp-audit" &&
+    !!activeProject &&
+    (setupIsActive || setupIsLoading)
+
   // Fetch compact per-crawl bucket-score history for the full crawl history,
   // ungated by tab so SEO/AEO/PageSpeed tabs get real trend data too (not
   // just the current crawl). One request per project via the dedicated
@@ -719,55 +742,66 @@ export default function AppPage() {
             {cancelDialog}
 
             {view === "revserp-audit" ? (
-              <div className="relative">
-                <RevserpAuditPanel
-                  auditTab={auditTab}
-                  crawlBreakdowns={stableCrawlBreakdowns}
-                  completedCrawlId={
-                    stableCurrentCrawl?.status === "completed"
-                      ? stableCurrentCrawl.id
-                      : null
-                  }
-                  currentBreakdown={stableCurrentBreakdown}
-                  currentUserId={me.user.id}
-                  isViewingRunningCrawl={isViewingRunningCrawl}
-                  onAuditTabChange={setAuditTab}
-                  shouldReduceMotion={shouldReduceMotion}
-                  sortedCompletedCrawls={stableSortedCompletedCrawls}
+              showProjectSetup ? (
+                <ProjectSetupPanel
+                  canStart={isOrganizationOwner}
+                  isLoading={projectSetup.isLoading}
+                  isStarting={projectSetup.isStarting}
+                  onStart={() => void projectSetup.start()}
+                  setup={projectSetup.setup}
+                  startError={projectSetup.startError}
                 />
+              ) : (
+                <div className="relative">
+                  <RevserpAuditPanel
+                    auditTab={auditTab}
+                    crawlBreakdowns={stableCrawlBreakdowns}
+                    completedCrawlId={
+                      stableCurrentCrawl?.status === "completed"
+                        ? stableCurrentCrawl.id
+                        : null
+                    }
+                    currentBreakdown={stableCurrentBreakdown}
+                    currentUserId={me.user.id}
+                    isViewingRunningCrawl={isViewingRunningCrawl}
+                    onAuditTabChange={setAuditTab}
+                    shouldReduceMotion={shouldReduceMotion}
+                    sortedCompletedCrawls={stableSortedCompletedCrawls}
+                  />
 
-                {isViewingRunningCrawl ? (
-                  <>
-                    {/* Dimmer covers the content region only (below the navbar), so the
+                  {isViewingRunningCrawl ? (
+                    <>
+                      {/* Dimmer covers the content region only (below the navbar), so the
                   navbar stays interactive while a crawl runs. */}
-                    <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
-                    {/* Card is fixed to the viewport center (~50vh) so it's visible without
+                      <div className="absolute inset-0 z-10 bg-black/20 backdrop-blur-md" />
+                      {/* Card is fixed to the viewport center (~50vh) so it's visible without
                   scrolling regardless of page height. */}
-                    <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
-                      <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                        <ThinkingOrb
-                          aria-hidden="true"
-                          className="shrink-0"
-                          size={64}
-                          state="working"
-                        />
-                        <div className="flex flex-col gap-1">
-                          <h2 className="text-lg font-medium">
-                            {crawlStatusLabel === "queued"
-                              ? "Queued"
-                              : "Crawl in progress"}
-                          </h2>
-                          <p className="text-sm text-muted-foreground">
-                            {activeProject?.name || "This project"} is currently{" "}
-                            {crawlStatusLabel}. Scores will refresh
-                            automatically when the crawl finishes.
-                          </p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </>
-                ) : null}
-              </div>
+                      <Card className="fixed top-1/2 left-1/2 z-20 w-full max-w-md -translate-x-1/2 -translate-y-1/2 bg-gradient-to-br from-card via-card to-muted/30 shadow-xl">
+                        <CardContent className="flex flex-col items-center justify-center gap-4 py-12 text-center">
+                          <ThinkingOrb
+                            aria-hidden="true"
+                            className="shrink-0"
+                            size={64}
+                            state="working"
+                          />
+                          <div className="flex flex-col gap-1">
+                            <h2 className="text-lg font-medium">
+                              {crawlStatusLabel === "queued"
+                                ? "Queued"
+                                : "Crawl in progress"}
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                              {activeProject?.name || "This project"} is
+                              currently {crawlStatusLabel}. Scores will refresh
+                              automatically when the crawl finishes.
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  ) : null}
+                </div>
+              )
             ) : view === "compare" && compareSides ? (
               <CompareView
                 a={compareSides.a}

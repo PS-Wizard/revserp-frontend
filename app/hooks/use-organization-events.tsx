@@ -313,6 +313,38 @@ export function OrganizationEventsProvider({
         return
       }
 
+      // Setup progress is backend-owned: refresh the setup row on every frame
+      // and pull fresh loader data once the setup finishes. No polling and no
+      // second EventSource.
+      if (type.startsWith("project_setup.")) {
+        if (event.project_id) {
+          void queryClient.invalidateQueries({
+            queryKey: ["project-setup", event.project_id],
+          })
+        }
+        if (type === "project_setup.completed") {
+          // Completion is the first moment every setup-fed view can have
+          // data. Refresh them all, then pull fresh loader data so the audit
+          // view swaps in even if a granular event was missed mid-reconnect.
+          if (event.project_id) {
+            void queryClient.invalidateQueries({
+              queryKey: ["bucket-trends", event.project_id],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ["business-profile", event.project_id],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ["project-keywords", event.project_id],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ["ai-audits-list", event.project_id],
+            })
+          }
+          revalidateRef.current()
+        }
+        return
+      }
+
       if (type.startsWith("project.")) {
         revalidateRef.current()
       }

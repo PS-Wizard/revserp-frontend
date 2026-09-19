@@ -58,6 +58,28 @@ export type ProjectResponse = {
   base_url: string
 }
 
+/** Once-per-project automated setup, driven entirely by the backend. */
+export type ProjectSetupStep =
+  "crawling" | "profile_generation" | "prompt_generation" | "visibility"
+
+export type ProjectSetupStatus =
+  ProjectSetupStep | "ready" | "completed" | "failed"
+
+export type ProjectSetupResponse = {
+  id: string
+  organization_id: string
+  project_id: string
+  requested_by_user_id: string
+  status: ProjectSetupStatus
+  crawl_id?: string | null
+  error?: string | null
+  failed_step?: ProjectSetupStep | null
+  visibility_skip_reason?: string | null
+  created_at: string
+  updated_at: string
+  completed_at?: string | null
+}
+
 export type ProjectBusinessProfileResponse = {
   id: string
   project_id: string
@@ -1011,6 +1033,10 @@ export type OrganizationEventType =
   | "business_profile.updated"
   | "project_competitor.created"
   | "project_competitor.deleted"
+  | "project_setup.started"
+  | "project_setup.status_changed"
+  | "project_setup.completed"
+  | "project_setup.failed"
 
 /**
  * One domain frame from the organization events stream. The SSE event name is

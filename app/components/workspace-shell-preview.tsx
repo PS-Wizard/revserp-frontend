@@ -1203,6 +1203,7 @@ export function WorkspaceShellPreview({
               <AnimatePresence initial={false} mode="wait">
                 <motion.div
                   animate={{ opacity: 1 }}
+                  className="flex min-h-full flex-col"
                   exit={{ opacity: 0 }}
                   initial={{ opacity: 0 }}
                   key={workspaceContentKey}
