@@ -30,24 +30,38 @@ import {
   FieldLabel,
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
-import { Separator } from "~/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { Textarea } from "~/components/ui/textarea"
 import type { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import type { ProjectAIQuestionsResponse } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
-// Full width on small screens, half on larger. The same data attribute the
-// drawer primitive uses keeps these in one tailwind-merge group, so they replace
-// the built-in w-3/4 and sm:max-w-sm instead of fighting them.
+// Nested drawers (Keywords, Competitors, Seed prompts) keep the right-side
+// width: full width on small screens, half on larger. The same data attribute
+// the drawer primitive uses keeps these in one tailwind-merge group, so they
+// replace the built-in w-3/4 and sm:max-w-sm instead of fighting them.
 const SIDE_DRAWER_WIDTH =
   "data-[vaul-drawer-direction=right]:w-full data-[vaul-drawer-direction=right]:sm:w-1/2 data-[vaul-drawer-direction=right]:sm:max-w-none"
+
+// The business profile panel is a fullscreen bottom sheet that covers the
+// sidebar and top navbar, so it needs its own sizing rather than
+// SIDE_DRAWER_WIDTH. It overrides the primitive's bottom-sheet cap
+// (max-h-[80vh]), top margin and rounded top edge. dvh keeps it flush to the
+// viewport on mobile, where the browser chrome would otherwise clip it.
+const FULLSCREEN_SHEET =
+  "overflow-hidden data-[vaul-drawer-direction=bottom]:h-[100dvh] data-[vaul-drawer-direction=bottom]:max-h-none data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:rounded-none data-[vaul-drawer-direction=bottom]:rounded-t-none"
 
 // The Revbot island is z-[100] and its menus are z-[110]/z-[120], so a plain
 // z-50 drawer opens underneath them.
 const SIDE_DRAWER_LAYER = "z-[130]"
 
 const selectableTextClass = "select-text [user-select:text] [touch-action:auto]"
+
+// One type scale. Section title > section description > field label (the Label
+// primitive default: text-sm font-medium) > hint. One vertical rhythm too:
+// gap-8 between sections, gap-4 inside a field grid or stack.
+const SECTION_TITLE_CLASS = "text-base font-semibold tracking-tight"
+const SECTION_DESCRIPTION_CLASS = "text-sm text-muted-foreground"
+const HINT_CLASS = "text-xs text-muted-foreground"
 
 type BusinessProfileState = ReturnType<typeof useBusinessProfile>
 
@@ -125,15 +139,16 @@ export function BusinessProfileDrawer({
 
   return (
     <Drawer
-      direction="right"
+      direction="bottom"
       open={businessProfileProject !== null}
+      repositionInputs={false}
       onOpenChange={(open) => {
         if (open) return
         closeAllDrawers()
       }}
     >
       <DrawerContent
-        className={cn(SIDE_DRAWER_WIDTH, SIDE_DRAWER_LAYER)}
+        className={cn(FULLSCREEN_SHEET, SIDE_DRAWER_LAYER)}
         overlayClassName={SIDE_DRAWER_LAYER}
       >
         {businessProfileProject ? (
@@ -141,136 +156,167 @@ export function BusinessProfileDrawer({
             className="flex min-h-0 flex-1 flex-col"
             onSubmit={handleSaveBusinessProfile}
           >
-            <DrawerHeader className="pb-2">
-              <div className="flex items-start gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
-                  <Building2 className="size-4" />
-                </span>
-                <div className="min-w-0">
+            <header className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-3 sm:px-6">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground ring-1 ring-border/50">
+                <Building2 className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
                   <DrawerTitle>Business profile</DrawerTitle>
-                  <DrawerDescription className="mt-0.5 truncate">
-                    Context that grounds AI audits and generated questions for{" "}
-                    {businessProfileProject.name}.
-                  </DrawerDescription>
+                  {hasUnsavedChanges ? (
+                    <Badge className="px-1.5" variant="secondary">
+                      Unsaved changes
+                    </Badge>
+                  ) : null}
                 </div>
+                <DrawerDescription className="truncate">
+                  {businessProfileProject.name}
+                </DrawerDescription>
               </div>
-            </DrawerHeader>
-
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-6">
-              {isLoadingBusinessProfile ? (
-                <div className="flex min-h-72 items-center justify-center">
-                  <ThinkingOrb
-                    aria-label="Loading business profile"
-                    className="shrink-0"
-                    size={20}
-                    state="searching"
-                    style={{ width: 24, height: 24 }}
-                  />
-                </div>
-              ) : (
-                <div className="flex flex-col gap-6">
-                  <section className="flex flex-col gap-4">
-                    <SectionHeading
-                      description="How customers and AI models identify the business."
-                      icon={Building2}
-                      title="Identity"
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <Button
+                  onClick={closeAllDrawers}
+                  type="button"
+                  variant="outline"
+                >
+                  Close
+                </Button>
+                <Button
+                  disabled={
+                    !canManageBusinessProfile ||
+                    !hasUnsavedChanges ||
+                    hasDuplicateKeywords ||
+                    isLoadingBusinessProfile ||
+                    isSavingBusinessProfile
+                  }
+                  type="submit"
+                >
+                  {isSavingBusinessProfile ? (
+                    <ThinkingOrb
+                      aria-hidden="true"
+                      className="shrink-0"
+                      size={20}
+                      state="working"
+                      style={{ width: 18, height: 18 }}
                     />
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="business-brand-name">
-                          Brand name
-                        </FieldLabel>
-                        <Input
-                          disabled={fieldsDisabled}
-                          id="business-brand-name"
-                          onChange={(event) => setBrandName(event.target.value)}
-                          placeholder="Revserp.ai"
-                          value={brandName}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="business-website-url">
-                          Website URL
-                        </FieldLabel>
-                        <Input
-                          disabled={fieldsDisabled}
-                          id="business-website-url"
-                          onChange={(event) =>
-                            setWebsiteUrl(event.target.value)
-                          }
-                          placeholder="https://revserp.ai"
-                          value={websiteUrl}
-                        />
-                      </Field>
-                    </div>
-                  </section>
+                  ) : null}
+                  {isSavingBusinessProfile ? "Saving..." : "Save profile"}
+                </Button>
+              </div>
+            </header>
 
-                  <Separator />
-
-                  <section className="flex flex-col gap-4">
-                    <SectionHeading
-                      description="Used for the Maps visibility test and location questions."
-                      icon={MapPin}
-                      title="Category and location"
+            <div
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"
+              data-vaul-no-drag
+            >
+              <div
+                className="min-w-0 px-4 py-6 sm:px-6 lg:flex-1 lg:overflow-y-auto"
+                data-vaul-no-drag
+              >
+                {isLoadingBusinessProfile ? (
+                  <div className="flex min-h-72 items-center justify-center">
+                    <ThinkingOrb
+                      aria-label="Loading business profile"
+                      className="shrink-0"
+                      size={20}
+                      state="searching"
+                      style={{ width: 24, height: 24 }}
                     />
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="business-primary-category">
-                          Primary category
-                        </FieldLabel>
-                        <Input
-                          disabled={fieldsDisabled}
-                          id="business-primary-category"
-                          onChange={(event) =>
-                            setPrimaryCategory(event.target.value)
-                          }
-                          placeholder="SEO software"
-                          value={primaryCategory}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="business-primary-location">
-                          Primary location
-                        </FieldLabel>
-                        <FieldDescription>
-                          City, district, region, or country.
-                        </FieldDescription>
-                        <Input
-                          disabled={fieldsDisabled}
-                          id="business-primary-location"
-                          onChange={(event) =>
-                            setPrimaryLocation(event.target.value)
-                          }
-                          placeholder="Kathmandu, Bagmati, Nepal"
-                          value={primaryLocation}
-                        />
-                      </Field>
-                    </div>
-                  </section>
-
-                  <Separator />
-
-                  <section className="flex flex-col gap-4">
-                    <SectionHeading
-                      description="What the business sells, and to whom."
-                      icon={Package}
-                      title="Offer and audience"
-                    />
-                    <Tabs defaultValue="business">
-                      <TabsList className="w-full">
-                        <TabsTrigger value="business">Business</TabsTrigger>
-                        <TabsTrigger value="product">Products</TabsTrigger>
-                        <TabsTrigger value="audience">Audience</TabsTrigger>
-                      </TabsList>
-                      <TabsContent className="pt-2" value="business">
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-8">
+                    <section className="flex flex-col gap-4">
+                      <SectionHeading
+                        description="How customers and AI models identify the business."
+                        icon={Building2}
+                        title="Identity"
+                      />
+                      <div className="grid gap-4 sm:grid-cols-2">
                         <Field>
-                          <FieldDescription>
-                            What the business is, its services, and its
-                            positioning.
+                          <FieldLabel htmlFor="business-brand-name">
+                            Brand name
+                          </FieldLabel>
+                          <Input
+                            disabled={fieldsDisabled}
+                            id="business-brand-name"
+                            onChange={(event) =>
+                              setBrandName(event.target.value)
+                            }
+                            placeholder="Revserp.ai"
+                            value={brandName}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="business-website-url">
+                            Website URL
+                          </FieldLabel>
+                          <Input
+                            disabled={fieldsDisabled}
+                            id="business-website-url"
+                            onChange={(event) =>
+                              setWebsiteUrl(event.target.value)
+                            }
+                            placeholder="https://revserp.ai"
+                            value={websiteUrl}
+                          />
+                        </Field>
+                      </div>
+                    </section>
+
+                    <section className="flex flex-col gap-4">
+                      <SectionHeading
+                        description="Used for the Maps visibility test and location questions."
+                        icon={MapPin}
+                        title="Category and location"
+                      />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="business-primary-category">
+                            Primary category
+                          </FieldLabel>
+                          <Input
+                            disabled={fieldsDisabled}
+                            id="business-primary-category"
+                            onChange={(event) =>
+                              setPrimaryCategory(event.target.value)
+                            }
+                            placeholder="SEO software"
+                            value={primaryCategory}
+                          />
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="business-primary-location">
+                            Primary location
+                          </FieldLabel>
+                          <Input
+                            disabled={fieldsDisabled}
+                            id="business-primary-location"
+                            onChange={(event) =>
+                              setPrimaryLocation(event.target.value)
+                            }
+                            placeholder="Kathmandu, Bagmati, Nepal"
+                            value={primaryLocation}
+                          />
+                          <FieldDescription className={HINT_CLASS}>
+                            City, district, region, or country.
                           </FieldDescription>
+                        </Field>
+                      </div>
+                    </section>
+
+                    <section className="flex flex-col gap-4">
+                      <SectionHeading
+                        description="What the business sells, and to whom."
+                        icon={Package}
+                        title="Offer and audience"
+                      />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field>
+                          <FieldLabel htmlFor="business-description">
+                            Business description
+                          </FieldLabel>
                           <Textarea
-                            aria-label="Business description"
-                            className="min-h-40 resize-none"
+                            className="field-sizing-content min-h-24 resize-none"
                             disabled={fieldsDisabled}
                             id="business-description"
                             onChange={(event) =>
@@ -279,16 +325,17 @@ export function BusinessProfileDrawer({
                             placeholder="We help lean SaaS teams find and fix the SEO problems that cost them traffic..."
                             value={businessDescription}
                           />
-                        </Field>
-                      </TabsContent>
-                      <TabsContent className="pt-2" value="product">
-                        <Field>
-                          <FieldDescription>
-                            The specific things you sell, in plain terms.
+                          <FieldDescription className={HINT_CLASS}>
+                            What the business is, its services, and its
+                            positioning.
                           </FieldDescription>
+                        </Field>
+                        <Field>
+                          <FieldLabel htmlFor="business-product-description">
+                            Products and services
+                          </FieldLabel>
                           <Textarea
-                            aria-label="Product description"
-                            className="min-h-40 resize-none"
+                            className="field-sizing-content min-h-24 resize-none"
                             disabled={fieldsDisabled}
                             id="business-product-description"
                             onChange={(event) =>
@@ -297,17 +344,16 @@ export function BusinessProfileDrawer({
                             placeholder="Technical site audits, keyword coverage tracking, AI visibility checks..."
                             value={productDescription}
                           />
-                        </Field>
-                      </TabsContent>
-                      <TabsContent className="pt-2" value="audience">
-                        <Field>
-                          <FieldDescription>
-                            Who buys this. Segment, industry, budget, or team
-                            size.
+                          <FieldDescription className={HINT_CLASS}>
+                            The specific things you sell, in plain terms.
                           </FieldDescription>
+                        </Field>
+                        <Field className="sm:col-span-2">
+                          <FieldLabel htmlFor="business-target-audience">
+                            Target audience
+                          </FieldLabel>
                           <Textarea
-                            aria-label="Target audience"
-                            className="min-h-40 resize-none"
+                            className="field-sizing-content min-h-24 resize-none"
                             disabled={fieldsDisabled}
                             id="business-target-audience"
                             onChange={(event) =>
@@ -316,100 +362,80 @@ export function BusinessProfileDrawer({
                             placeholder="Lean B2B SaaS marketing teams in the US and EU, 5 to 50 people..."
                             value={targetAudience}
                           />
+                          <FieldDescription className={HINT_CLASS}>
+                            Who buys this. Segment, industry, budget, or team
+                            size.
+                          </FieldDescription>
                         </Field>
-                      </TabsContent>
-                    </Tabs>
-                  </section>
+                      </div>
+                    </section>
 
-                  <Separator />
+                    <section className="flex flex-col gap-4">
+                      <SectionHeading
+                        description="Lists that seed keywords, comparisons, and questions."
+                        icon={Tags}
+                        title="Keywords and context"
+                      />
+                      <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
+                        <SectionRow
+                          description="Branded, non-branded, and target keywords."
+                          icon={Tags}
+                          label="Keywords"
+                          meta={
+                            hasDuplicateKeywords
+                              ? "Duplicate terms"
+                              : `${countList(brandedKeywords)} branded · ${countList(nonBrandedKeywords)} non-branded`
+                          }
+                          onOpen={() => setKeywordsOpen(true)}
+                          warn={hasDuplicateKeywords}
+                        />
+                        <SectionRow
+                          description="Businesses you compete with."
+                          icon={Swords}
+                          label="Competitors"
+                          meta={`${countList(businessCompetitors)}`}
+                          onOpen={() => setCompetitorsOpen(true)}
+                        />
+                        <SectionRow
+                          description="Up to 5 starting questions for AI audits."
+                          icon={ListChecks}
+                          label="Seed prompts"
+                          meta={`${seedPrompts.filter((prompt) => prompt.trim()).length} of 5`}
+                          onOpen={() => setSeedPromptsOpen(true)}
+                        />
+                      </div>
+                    </section>
 
-                  <section className="flex flex-col gap-3">
-                    <SectionHeading
-                      description="Lists that seed keywords, comparisons, and question generation."
-                      icon={Tags}
-                      title="Keywords and context"
-                    />
-                    <SectionRow
-                      description="Branded, non-branded, and target keywords."
-                      icon={Tags}
-                      label="Keywords"
-                      meta={
-                        hasDuplicateKeywords
-                          ? "Duplicate terms"
-                          : `${countList(brandedKeywords)} branded · ${countList(nonBrandedKeywords)} non-branded`
-                      }
-                      onOpen={() => setKeywordsOpen(true)}
-                      warn={hasDuplicateKeywords}
-                    />
-                    <SectionRow
-                      description="Businesses you compete with."
-                      icon={Swords}
-                      label="Competitors"
-                      meta={`${countList(businessCompetitors)}`}
-                      onOpen={() => setCompetitorsOpen(true)}
-                    />
-                    <SectionRow
-                      description="Up to 5 starting questions for AI audits."
-                      icon={ListChecks}
-                      label="Seed prompts"
-                      meta={`${seedPrompts.filter((prompt) => prompt.trim()).length} of 5`}
-                      onOpen={() => setSeedPromptsOpen(true)}
-                    />
-                  </section>
+                    {!canManageBusinessProfile ? (
+                      <p className={SECTION_DESCRIPTION_CLASS}>
+                        View-only access. Workspace owners can update this
+                        profile.
+                      </p>
+                    ) : null}
 
-                  <Separator />
+                    {businessProfileError ? (
+                      <p className="text-sm text-destructive">
+                        {businessProfileError}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
 
-                  <AIGeneratedQuestions
-                    aiQuestions={aiQuestions}
-                    canManage={canManageBusinessProfile}
-                    isLoading={isLoadingAIQuestions}
-                    isRegenerating={isRegeneratingAIQuestions}
-                    onRegenerate={regenerateAIQuestions}
-                    questionCount={questionCount}
-                  />
-
-                  {!canManageBusinessProfile ? (
-                    <p className="text-sm text-muted-foreground">
-                      View-only access. Workspace owners can update this
-                      profile.
-                    </p>
-                  ) : null}
-
-                  {businessProfileError ? (
-                    <p className="text-sm text-destructive">
-                      {businessProfileError}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </div>
-
-            <DrawerFooter className="flex-row items-center justify-end gap-2 border-t border-border/50">
-              <Button onClick={closeAllDrawers} type="button" variant="outline">
-                Close
-              </Button>
-              <Button
-                disabled={
-                  !canManageBusinessProfile ||
-                  !hasUnsavedChanges ||
-                  hasDuplicateKeywords ||
-                  isLoadingBusinessProfile ||
-                  isSavingBusinessProfile
-                }
-                type="submit"
+              <aside
+                className="shrink-0 border-t border-border/60 px-4 py-6 sm:px-6 lg:w-96 lg:overflow-y-auto lg:border-t-0 lg:border-l xl:w-[28rem]"
+                data-vaul-no-drag
               >
-                {isSavingBusinessProfile ? (
-                  <ThinkingOrb
-                    aria-hidden="true"
-                    className="shrink-0"
-                    size={20}
-                    state="working"
-                    style={{ width: 18, height: 18 }}
-                  />
-                ) : null}
-                {isSavingBusinessProfile ? "Saving..." : "Save profile"}
-              </Button>
-            </DrawerFooter>
+                <AIGeneratedQuestions
+                  aiQuestions={aiQuestions}
+                  canManage={canManageBusinessProfile}
+                  isLoading={isLoadingAIQuestions}
+                  isRegenerating={isRegeneratingAIQuestions}
+                  onRegenerate={regenerateAIQuestions}
+                  questionCount={questionCount}
+                />
+              </aside>
+            </div>
           </form>
         ) : null}
 
@@ -435,9 +461,6 @@ export function BusinessProfileDrawer({
                   <FieldLabel htmlFor="business-branded-keywords">
                     Branded keywords
                   </FieldLabel>
-                  <FieldDescription>
-                    Terms that include your brand name.
-                  </FieldDescription>
                   <Textarea
                     className="min-h-24 resize-none"
                     disabled={fieldsDisabled}
@@ -446,14 +469,14 @@ export function BusinessProfileDrawer({
                     placeholder={"revserp\nrevserp ai audit"}
                     value={brandedKeywords}
                   />
+                  <FieldDescription className={HINT_CLASS}>
+                    Terms that include your brand name.
+                  </FieldDescription>
                 </Field>
                 <Field data-invalid={hasDuplicateKeywords}>
                   <FieldLabel htmlFor="business-non-branded-keywords">
                     Non-branded keywords
                   </FieldLabel>
-                  <FieldDescription>
-                    Terms customers search for without your brand.
-                  </FieldDescription>
                   <Textarea
                     className="min-h-24 resize-none"
                     disabled={fieldsDisabled}
@@ -464,6 +487,9 @@ export function BusinessProfileDrawer({
                     placeholder={"seo audit\nsite crawler\nai visibility"}
                     value={nonBrandedKeywords}
                   />
+                  <FieldDescription className={HINT_CLASS}>
+                    Terms customers search for without your brand.
+                  </FieldDescription>
                 </Field>
                 {hasDuplicateKeywords ? (
                   <FieldDescription className="text-destructive">
@@ -475,10 +501,6 @@ export function BusinessProfileDrawer({
                   <FieldLabel htmlFor="business-target-keywords">
                     Target keywords
                   </FieldLabel>
-                  <FieldDescription>
-                    Normally written by Revbot from the Keywords tab, with Find
-                    keywords. You can still edit the list here.
-                  </FieldDescription>
                   <Textarea
                     className="min-h-24 resize-none"
                     defaultValue={targetKeywords}
@@ -488,6 +510,10 @@ export function BusinessProfileDrawer({
                     onChange={(event) => setTargetKeywords(event.target.value)}
                     placeholder={"seo audit\nsite crawler\nai visibility"}
                   />
+                  <FieldDescription className={HINT_CLASS}>
+                    Normally written by Revbot from the Keywords tab, with Find
+                    keywords. You can still edit the list here.
+                  </FieldDescription>
                 </Field>
               </FieldGroup>
             </div>
@@ -523,9 +549,6 @@ export function BusinessProfileDrawer({
                 <FieldLabel htmlFor="business-competitors">
                   Business competitors
                 </FieldLabel>
-                <FieldDescription>
-                  One per line, or separated by commas.
-                </FieldDescription>
                 <Textarea
                   className="min-h-40 resize-none"
                   disabled={fieldsDisabled}
@@ -536,6 +559,9 @@ export function BusinessProfileDrawer({
                   placeholder={"Ahrefs\nSemrush\nSurfer SEO"}
                   value={businessCompetitors}
                 />
+                <FieldDescription className={HINT_CLASS}>
+                  One per line, or separated by commas.
+                </FieldDescription>
               </Field>
             </div>
             <DrawerFooter className="flex-row justify-end">
@@ -604,14 +630,14 @@ function SectionHeading({
   title: string
 }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground ring-1 ring-border/50">
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-muted/60 text-muted-foreground ring-1 ring-border/50">
         <Icon className="size-3.5" />
       </span>
       <div className="min-w-0">
-        <p className="text-sm font-medium">{title}</p>
+        <h2 className={SECTION_TITLE_CLASS}>{title}</h2>
         {description ? (
-          <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+          <p className={cn("mt-1", SECTION_DESCRIPTION_CLASS)}>{description}</p>
         ) : null}
       </div>
     </div>
@@ -636,8 +662,8 @@ function SectionRow({
   return (
     <button
       className={cn(
-        "flex w-full cursor-pointer items-center gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring",
-        warn && "border-destructive/50"
+        "flex w-full cursor-pointer items-center gap-3 px-3 py-3 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+        warn && "bg-destructive/5"
       )}
       onClick={onOpen}
       type="button"
@@ -692,7 +718,7 @@ function AIGeneratedQuestions({
             <Sparkles className="size-3.5" />
           </span>
           <div className="min-w-0">
-            <p className="flex items-center gap-2 text-sm font-medium">
+            <p className={cn("flex items-center gap-2", SECTION_TITLE_CLASS)}>
               AI generated questions
               {hasQuestions ? (
                 <Badge className="px-1.5 text-[10px]" variant="secondary">
@@ -700,7 +726,7 @@ function AIGeneratedQuestions({
                 </Badge>
               ) : null}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className={cn("mt-1", SECTION_DESCRIPTION_CLASS)}>
               Used to check your visibility across AI models.
             </p>
           </div>
