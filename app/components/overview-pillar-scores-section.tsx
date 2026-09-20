@@ -96,35 +96,29 @@ export const PillarScoresRow = memo(function PillarScoresRow({
   }
 
   return (
-    <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
-      <div className="min-w-0 self-start min-[1440px]:self-stretch">
+    <div className="grid items-stretch gap-4 md:grid-cols-2 min-[1440px]:grid-cols-4">
+      <ScoreRadialChart
+        centerValue={charts.overall.centerValue}
+        description="Current crawl pillar scores"
+        segments={charts.overall.segments}
+        title="Overall Score"
+      />
+      {charts.pillars.map((pillar) => (
         <ScoreRadialChart
-          centerValue={charts.overall.centerValue}
-          description="Current crawl pillar scores"
-          segments={charts.overall.segments}
-          title="Overall Score"
+          key={pillar.id}
+          centerLabel={pillar.label}
+          centerValue={pillar.centerValue}
+          description="Current crawl bucket scores"
+          onSelect={
+            onSelectPillar
+              ? () => onSelectPillar(pillar.id as OverviewPillarId)
+              : undefined
+          }
+          selectLabel={`Open ${pillar.label} tab`}
+          segments={pillar.segments}
+          title={`${pillar.label} Score`}
         />
-      </div>
-      <div className="@container/buckets h-full w-full min-w-0">
-        <div className="grid h-full auto-rows-fr grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-3">
-          {charts.pillars.map((pillar) => (
-            <ScoreRadialChart
-              key={pillar.id}
-              centerLabel={pillar.label}
-              centerValue={pillar.centerValue}
-              description="Current crawl bucket scores"
-              onSelect={
-                onSelectPillar
-                  ? () => onSelectPillar(pillar.id as OverviewPillarId)
-                  : undefined
-              }
-              selectLabel={`Open ${pillar.label} tab`}
-              segments={pillar.segments}
-              title={`${pillar.label} Score`}
-            />
-          ))}
-        </div>
-      </div>
+      ))}
     </div>
   )
 })
@@ -146,22 +140,18 @@ export const PillarScoresCompare = memo(function PillarScoresCompare({
   return (
     <div className="flex flex-col">
       <PillarScoresRow breakdown={you} colorSource="seo" />
-      <div className="grid gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
+      <div className="grid gap-4 md:grid-cols-2 min-[1440px]:grid-cols-4">
         <ScoreDelta
           them={themCharts.overall.centerValue}
           you={youCharts.overall.centerValue}
         />
-        <div className="@container/buckets w-full min-w-0">
-          <div className="grid grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-3">
-            {youCharts.pillars.map((pillar, index) => (
-              <ScoreDelta
-                key={pillar.id}
-                them={themCharts.pillars[index]?.centerValue}
-                you={pillar.centerValue}
-              />
-            ))}
-          </div>
-        </div>
+        {youCharts.pillars.map((pillar, index) => (
+          <ScoreDelta
+            key={pillar.id}
+            them={themCharts.pillars[index]?.centerValue}
+            you={pillar.centerValue}
+          />
+        ))}
       </div>
       <PillarScoresRow breakdown={them} colorSource="aeo" />
     </div>
