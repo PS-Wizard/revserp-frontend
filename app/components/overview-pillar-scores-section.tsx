@@ -97,7 +97,7 @@ export const PillarScoresRow = memo(function PillarScoresRow({
 
   return (
     <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
-      <div className="min-w-0 self-start">
+      <div className="min-w-0 self-start min-[1440px]:self-stretch">
         <ScoreRadialChart
           centerValue={charts.overall.centerValue}
           description="Current crawl pillar scores"
