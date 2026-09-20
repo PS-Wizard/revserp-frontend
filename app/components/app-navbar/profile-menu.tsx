@@ -34,6 +34,12 @@ import type { MeResponse } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
 import { HoverPill } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
+import {
+  clearInstallPrompt,
+  getInstallPrompt,
+  subscribeInstallPrompt,
+  type BeforeInstallPromptEvent,
+} from "~/lib/pwa-install"
 
 import { getWorkspaceInitials } from "./utils"
 
@@ -57,11 +63,6 @@ type ProfileMenuProps = {
   onSelectOrganization: (organizationId: string) => void
 }
 
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
-}
-
 function isStandaloneMode() {
   if (typeof window === "undefined") return false
   const iosNavigator = navigator as Navigator & { standalone?: boolean }
@@ -82,17 +83,6 @@ function isIOSSafari() {
     /Safari/i.test(navigator.userAgent) &&
     !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent)
   )
-}
-
-let deferredInstallPrompt: BeforeInstallPromptEvent | null = null
-if (typeof window !== "undefined") {
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault()
-    deferredInstallPrompt = event as BeforeInstallPromptEvent
-  })
-  window.addEventListener("appinstalled", () => {
-    deferredInstallPrompt = null
-  })
 }
 
 export function ProfileMenu({
@@ -121,7 +111,7 @@ export function ProfileMenu({
       document.documentElement.classList.contains("dark")
   )
   const [installPrompt, setInstallPrompt] =
-    useState<BeforeInstallPromptEvent | null>(() => deferredInstallPrompt)
+    useState<BeforeInstallPromptEvent | null>(getInstallPrompt)
   const [isStandalone, setIsStandalone] = useState(false)
   const [profilePill, setProfilePill] = useState<{
     height: number
@@ -131,19 +121,12 @@ export function ProfileMenu({
 
   useEffect(() => {
     setIsStandalone(isStandaloneMode())
-    const handleInstallPrompt = (event: Event) => {
-      event.preventDefault()
-      setInstallPrompt(event as BeforeInstallPromptEvent)
-    }
-    const clearInstallPrompt = () => {
-      setInstallPrompt(null)
-      setIsStandalone(true)
-    }
-    window.addEventListener("beforeinstallprompt", handleInstallPrompt)
-    window.addEventListener("appinstalled", clearInstallPrompt)
+    const unsubscribe = subscribeInstallPrompt(setInstallPrompt)
+    const handleInstalled = () => setIsStandalone(true)
+    window.addEventListener("appinstalled", handleInstalled)
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleInstallPrompt)
-      window.removeEventListener("appinstalled", clearInstallPrompt)
+      unsubscribe()
+      window.removeEventListener("appinstalled", handleInstalled)
     }
   }, [])
 
@@ -153,8 +136,8 @@ export function ProfileMenu({
       void installPrompt
         .prompt()
         .then(() => installPrompt.userChoice)
-        .then(() => setInstallPrompt(null))
-        .catch(() => setInstallPrompt(null))
+        .then(clearInstallPrompt)
+        .catch(clearInstallPrompt)
       return
     }
     if (isIOSSafari()) {

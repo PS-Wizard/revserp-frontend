@@ -13,6 +13,7 @@ import { useState } from "react"
 import { TooltipProvider } from "~/components/ui/tooltip"
 import { Toaster } from "~/components/ui/sonner"
 import { makeQueryClient } from "~/lib/query-client"
+import "~/lib/pwa-install"
 
 import type { Route } from "./+types/root"
 import "./app.css"
