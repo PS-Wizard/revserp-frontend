@@ -97,12 +97,14 @@ export const PillarScoresRow = memo(function PillarScoresRow({
 
   return (
     <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
-      <ScoreRadialChart
-        centerValue={charts.overall.centerValue}
-        description="Current crawl pillar scores"
-        segments={charts.overall.segments}
-        title="Overall Score"
-      />
+      <div className="min-w-0 self-start">
+        <ScoreRadialChart
+          centerValue={charts.overall.centerValue}
+          description="Current crawl pillar scores"
+          segments={charts.overall.segments}
+          title="Overall Score"
+        />
+      </div>
       <div className="@container/buckets h-full w-full min-w-0">
         <div className="grid h-full auto-rows-fr grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-3">
           {charts.pillars.map((pillar) => (

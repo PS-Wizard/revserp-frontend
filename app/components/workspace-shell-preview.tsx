@@ -874,9 +874,9 @@ export function WorkspaceShellPreview({
             </SidebarFooter>
           </Sidebar>
           <section className="relative ml-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:ml-16">
-            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] md:px-6">
+            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(12rem,20rem)_auto] md:justify-between md:px-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] xl:justify-normal">
               {insightsNavbarLabel ? (
-                <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:flex md:px-6">
+                <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6 xl:flex">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span
                       className="size-2 shrink-0 rounded-[2px]"
@@ -897,7 +897,7 @@ export function WorkspaceShellPreview({
                 </p>
               ) : null}
               <SidebarTrigger aria-label="Open navigation" className="md:hidden" />
-              <h1 className="hidden min-w-0 items-center gap-1.5 text-sm md:flex">
+              <h1 className="hidden min-w-0 items-center gap-1.5 text-sm xl:flex">
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
