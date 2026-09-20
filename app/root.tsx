@@ -33,7 +33,9 @@ if (
   !import.meta.env.DEV &&
   "serviceWorker" in navigator
 ) {
-  void navigator.serviceWorker.register("/sw.js")
+  void navigator.serviceWorker
+    .register("/sw.js", { updateViaCache: "none" })
+    .catch(() => {})
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -44,6 +46,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#050505" />
         <link href="/manifest.webmanifest" rel="manifest" />
+        <link
+          href="/icons/favicon-32.png"
+          rel="icon"
+          sizes="32x32"
+          type="image/png"
+        />
+        <link
+          href="/icons/favicon-16.png"
+          rel="icon"
+          sizes="16x16"
+          type="image/png"
+        />
+        <link href="/favicon.ico" rel="icon" />
+        <link
+          href="/icons/apple-touch-icon.png"
+          rel="apple-touch-icon"
+          sizes="180x180"
+        />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+          name="apple-mobile-web-app-status-bar-style"
+          content="black"
+        />
+        <meta name="apple-mobile-web-app-title" content="Revserp" />
         <script dangerouslySetInnerHTML={{ __html: restoreThemeScript }} />
         <Meta />
         <Links />
@@ -64,7 +90,6 @@ export default function App() {
   // useState initializer runs once per component instance — safe for SSR because
   // each server request gets its own React tree (and thus its own QueryClient).
   const [queryClient] = useState(() => makeQueryClient())
-
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,22 +1,32 @@
 {
+  "id": "/",
   "name": "Revserp",
   "short_name": "Revserp",
+  "description": "SEO and AEO audit workspace for analyzing search visibility, rankings, and content opportunities.",
   "start_url": "/app",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#030f14",
-  "theme_color": "#030f14",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "categories": ["business", "productivity"],
   "icons": [
     {
-      "src": "/icons/revserp-192.png",
+      "src": "/icons/revserp-icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/icons/revserp-512.png",
+      "src": "/icons/revserp-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/revserp-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

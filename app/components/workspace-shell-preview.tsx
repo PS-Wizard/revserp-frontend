@@ -67,6 +67,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarTrigger,
 } from "~/components/ui/sidebar"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { PAINT_A, PAINT_B } from "~/components/compare/helpers"
@@ -107,6 +108,7 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
+import { useIsMobile } from "~/hooks/use-mobile"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 import { toast } from "sonner"
 
@@ -279,7 +281,11 @@ export function WorkspaceShellPreview({
   const [islandState, setIslandState] = useState<
     "docked" | "minimized" | "maximized"
   >("docked")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true)
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] =
+    useState(true)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
+  const isMobile = useIsMobile()
+  const isSidebarCollapsed = isDesktopSidebarCollapsed && !isMobile
   const [isIslandThinking, setIsIslandThinking] = useState(false)
   const [islandConversationTitle, setIslandConversationTitle] =
     useState("New chat")
@@ -541,7 +547,8 @@ export function WorkspaceShellPreview({
   ) {
     onViewChange(nextView)
     if (nextAuditTab !== undefined) onAuditTabChange(nextAuditTab)
-    setIsSidebarCollapsed(true)
+    setIsDesktopSidebarCollapsed(true)
+    setIsMobileSidebarOpen(false)
   }
 
   const workspaceNavItems = [
@@ -698,7 +705,9 @@ export function WorkspaceShellPreview({
     <LayoutGroup id="workspace-preview">
       <SidebarProvider
         className="relative h-svh min-h-0 bg-background text-foreground"
-        open={!isSidebarCollapsed}
+        open={!isDesktopSidebarCollapsed}
+        openMobile={isMobileSidebarOpen}
+        onOpenMobileChange={setIsMobileSidebarOpen}
         style={
           {
             "--sidebar-width": isSidebarCollapsed ? "4rem" : "18rem",
@@ -710,8 +719,8 @@ export function WorkspaceShellPreview({
             collapsible="none"
             className={
               isSidebarCollapsed
-                ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-sidebar p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none"
-                : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-sidebar p-3 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none"
+                ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-sidebar p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
+                : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-sidebar p-3 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
             }
           >
             <div>
@@ -738,7 +747,9 @@ export function WorkspaceShellPreview({
                         }
                         className="h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
                         onClick={() =>
-                          setIsSidebarCollapsed((collapsed) => !collapsed)
+                          isMobile
+                            ? setIsMobileSidebarOpen(false)
+                            : setIsDesktopSidebarCollapsed((collapsed) => !collapsed)
                         }
                         size="icon-sm"
                         type="button"
@@ -769,7 +780,10 @@ export function WorkspaceShellPreview({
                             ? "mx-auto !size-10 justify-center rounded-md bg-muted/70 text-sm font-semibold"
                             : "!h-auto gap-3 rounded-md bg-muted/70 p-3 text-left"
                         }
-                        onClick={() => setIsProjectPanelOpen(true)}
+                        onClick={() => {
+                          setIsMobileSidebarOpen(false)
+                          setIsProjectPanelOpen(true)
+                        }}
                         size="lg"
                         title={
                           isSidebarCollapsed ? activeProject?.name : undefined
@@ -801,9 +815,10 @@ export function WorkspaceShellPreview({
                                   ? "mx-auto mt-1 !size-10 justify-center rounded-md text-muted-foreground hover:text-foreground"
                                   : "mt-1 !h-auto gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
                               }
-                              onClick={() =>
+                              onClick={() => {
+                                setIsMobileSidebarOpen(false)
                                 createProjectDispatch({ type: "OPEN" })
-                              }
+                              }}
                               type="button"
                             >
                               <PlusIcon
@@ -858,10 +873,10 @@ export function WorkspaceShellPreview({
               />
             </SidebarFooter>
           </Sidebar>
-          <section className="relative ml-16 flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] items-center gap-3 border-b border-border px-4 md:px-6">
+          <section className="relative ml-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:ml-16">
+            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] md:px-6">
               {insightsNavbarLabel ? (
-                <p className="pointer-events-none absolute inset-x-0 flex items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6">
+                <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:flex md:px-6">
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span
                       className="size-2 shrink-0 rounded-[2px]"
@@ -881,7 +896,8 @@ export function WorkspaceShellPreview({
                   </span>
                 </p>
               ) : null}
-              <h1 className="flex min-w-0 items-center gap-1.5 text-sm">
+              <SidebarTrigger aria-label="Open navigation" className="md:hidden" />
+              <h1 className="hidden min-w-0 items-center gap-1.5 text-sm md:flex">
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={

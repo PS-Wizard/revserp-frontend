@@ -1,14 +1,18 @@
 import { Link } from "react-router"
-import { Asterisk } from "lucide-react"
 
 import { cn } from "~/lib/utils"
 
 export function RevserpLogo({ className }: { className?: string }) {
   return (
     <span className={cn("flex items-center gap-2 font-medium", className)}>
-      <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <Asterisk />
-      </div>
+      <img
+        alt=""
+        aria-hidden="true"
+        className="size-6 rounded-md"
+        height={24}
+        src="/icons/favicon-32.png"
+        width={24}
+      />
       Revserp.ai
     </span>
   )
@@ -27,9 +31,14 @@ export function RevserpLogoLink({
       prefetch="intent"
       className={cn("flex items-center gap-2 font-medium", className)}
     >
-      <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <Asterisk />
-      </div>
+      <img
+        alt=""
+        aria-hidden="true"
+        className="size-6 rounded-md"
+        height={24}
+        src="/icons/favicon-32.png"
+        width={24}
+      />
       Revserp.ai
     </Link>
   )

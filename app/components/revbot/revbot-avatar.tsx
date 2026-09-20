@@ -87,7 +87,7 @@ export function RevbotDockedAvatar({
       animate="always"
       aria-hidden
       background={false}
-      className="shrink-0"
+      className="size-10 shrink-0 md:size-[52px]"
       expression={active ? thinking : surprised}
       name={REVBOT_AVATAR_NAME}
       palette={REVBOT_PALETTE}

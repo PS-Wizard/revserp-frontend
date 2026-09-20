@@ -37,10 +37,12 @@ export type IslandState = "docked" | "minimized" | "maximized"
 
 const ISLAND_LAYOUT_ID = "ai-island"
 
-export const islandDockedSizeClass = "size-[4.5rem]"
+export const islandDockedSizeClass = "size-14 md:size-[4.5rem]"
 
 /** Traditional chatbot anchor — bottom-right of the viewport. */
 const islandAnchorClass = "fixed bottom-6 right-6 z-[100]"
+const islandDockedAnchorClass =
+  "fixed bottom-4 right-4 z-[100] md:bottom-6 md:right-6"
 
 const islandMaximizedAnchorClass =
   "pointer-events-none fixed inset-3 z-[100] flex"
@@ -105,7 +107,7 @@ export function DynamicIslandDockedChrome({
   )
 
   return (
-    <div className={cn("pointer-events-none", islandAnchorClass)}>
+    <div className={cn("pointer-events-none", islandDockedAnchorClass)}>
       {dockedButton}
     </div>
   )

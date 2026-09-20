@@ -62,6 +62,28 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
+function isStandaloneMode() {
+  if (typeof window === "undefined") return false
+  const iosNavigator = navigator as Navigator & { standalone?: boolean }
+  return (
+    (window.matchMedia?.("(display-mode: standalone)")?.matches ?? false) ||
+    iosNavigator.standalone === true
+  )
+}
+
+function isIOSSafari() {
+  if (typeof window === "undefined") return false
+  const { navigator } = window
+  const isAppleMobile =
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  return (
+    isAppleMobile &&
+    /Safari/i.test(navigator.userAgent) &&
+    !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(navigator.userAgent)
+  )
+}
+
 let deferredInstallPrompt: BeforeInstallPromptEvent | null = null
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -100,6 +122,7 @@ export function ProfileMenu({
   )
   const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(() => deferredInstallPrompt)
+  const [isStandalone, setIsStandalone] = useState(false)
   const [profilePill, setProfilePill] = useState<{
     height: number
     top: number
@@ -107,11 +130,15 @@ export function ProfileMenu({
   const profileItemRefs = useRef<(HTMLElement | null)[]>([])
 
   useEffect(() => {
+    setIsStandalone(isStandaloneMode())
     const handleInstallPrompt = (event: Event) => {
       event.preventDefault()
       setInstallPrompt(event as BeforeInstallPromptEvent)
     }
-    const clearInstallPrompt = () => setInstallPrompt(null)
+    const clearInstallPrompt = () => {
+      setInstallPrompt(null)
+      setIsStandalone(true)
+    }
     window.addEventListener("beforeinstallprompt", handleInstallPrompt)
     window.addEventListener("appinstalled", clearInstallPrompt)
     return () => {
@@ -121,28 +148,24 @@ export function ProfileMenu({
   }, [])
 
   const handleInstall = () => {
+    if (isStandalone) return
     if (installPrompt) {
-      void installPrompt.prompt().then(() => setInstallPrompt(null))
+      void installPrompt
+        .prompt()
+        .then(() => installPrompt.userChoice)
+        .then(() => setInstallPrompt(null))
+        .catch(() => setInstallPrompt(null))
       return
     }
-    // Chrome may still be evaluating installability (the service worker only
-    // just became active). Wait briefly for the event; if it arrives, fire the
-    // native prompt immediately. Otherwise fall back to guidance.
-    const timeout = window.setTimeout(() => {
+    if (isIOSSafari()) {
       toast("Install Revserp", {
-        description:
-          "Use your browser's menu: Install app / Add to Home Screen.",
+        description: "Tap Share, then Add to Home Screen.",
       })
-    }, 5000)
-    const capture = (event: Event) => {
-      window.clearTimeout(timeout)
-      window.removeEventListener("beforeinstallprompt", capture)
-      event.preventDefault()
-      const promptEvent = event as BeforeInstallPromptEvent
-      setInstallPrompt(promptEvent)
-      void promptEvent.prompt()
+      return
     }
-    window.addEventListener("beforeinstallprompt", capture)
+    toast("Install Revserp", {
+      description: "Use your browser menu: Install app / Add to Home Screen.",
+    })
   }
   function showProfilePill(index: number) {
     const target = profileItemRefs.current[index]
@@ -219,22 +242,26 @@ export function ProfileMenu({
             Dark mode
           </DropdownMenuCheckboxItem>
         </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem
-            className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-            onClick={handleInstall}
-            onMouseEnter={() => showProfilePill(1)}
-            ref={(element) => {
-              profileItemRefs.current[1] = element
-            }}
-            variant="default"
-          >
-            <DownloadIcon />
-            Download app
-          </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
+        {isStandalone ? null : (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+                onClick={handleInstall}
+                onMouseEnter={() => showProfilePill(1)}
+                ref={(element) => {
+                  profileItemRefs.current[1] = element
+                }}
+                variant="default"
+              >
+                <DownloadIcon />
+                Download app
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuGroup>
           <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
           <DropdownMenuSub>
