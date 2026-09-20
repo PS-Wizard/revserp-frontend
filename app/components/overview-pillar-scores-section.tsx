@@ -96,7 +96,7 @@ export const PillarScoresRow = memo(function PillarScoresRow({
   }
 
   return (
-    <div className="grid items-stretch gap-4 md:grid-cols-2 min-[1440px]:grid-cols-4">
+    <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,9fr)_repeat(3,minmax(0,7fr))]">
       <ScoreRadialChart
         centerValue={charts.overall.centerValue}
         description="Current crawl pillar scores"
@@ -140,7 +140,7 @@ export const PillarScoresCompare = memo(function PillarScoresCompare({
   return (
     <div className="flex flex-col">
       <PillarScoresRow breakdown={you} colorSource="seo" />
-      <div className="grid gap-4 md:grid-cols-2 min-[1440px]:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,9fr)_repeat(3,minmax(0,7fr))]">
         <ScoreDelta
           them={themCharts.overall.centerValue}
           you={youCharts.overall.centerValue}
