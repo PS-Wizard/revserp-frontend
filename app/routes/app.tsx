@@ -462,18 +462,20 @@ export default function AppPage() {
     enabled: view === "revserp-audit" && !!activeProject,
   })
 
-  // A row that is not yet completed (including `ready` and in-flight/failed
-  // states) keeps the setup UI. A resolved `null` means no setup row: legacy
-  // projects fall through to their normal manual flow, and a no-crawl project
-  // only keeps the setup UI while the GET is still loading, to avoid a flash.
+  // Setup only blocks the audit view until the project's first completed crawl.
+  // A manual crawl can unlock the normal view while profile and visibility setup
+  // remain unfinished.
   const activeSetup = projectSetup.setup
   const setupIsActive =
     activeSetup !== null && activeSetup.status !== "completed"
   const setupIsLoading =
-    activeSetup === null && projectSetup.isLoading && recentCrawls.length === 0
+    activeSetup === null &&
+    projectSetup.isLoading &&
+    sortedCompletedCrawls.length === 0
   const showProjectSetup =
     view === "revserp-audit" &&
     !!activeProject &&
+    sortedCompletedCrawls.length === 0 &&
     (setupIsActive || setupIsLoading)
 
   // Fetch compact per-crawl bucket-score history for the full crawl history,
