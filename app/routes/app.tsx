@@ -41,6 +41,7 @@ import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import { ProjectSetupPanel } from "~/components/project-setup-panel"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
+import { AnalyticsView } from "~/components/analytics-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
@@ -179,6 +180,7 @@ const viewLabels: Record<DashboardView, string> = {
   keywords: "Keywords",
   competitors: "Competitors",
   "search-console": "Search Console",
+  analytics: "Google Analytics",
   compare: "Compare",
 }
 
@@ -319,7 +321,7 @@ export default function AppPage() {
     const target = revbotHashTarget(location.hash.replace(/^#/, ""))
     if (!target) return
     if (
-      target.view === "search-console" &&
+      (target.view === "search-console" || target.view === "analytics") &&
       me.features?.gsc_connector === false
     )
       return
@@ -338,11 +340,13 @@ export default function AppPage() {
         ? `#${auditTab}-tab`
         : view === "search-console"
           ? "#search-console"
-          : view === "competitors"
-            ? "#competitors"
-            : view === "keywords"
-              ? "#keywords"
-              : ""
+          : view === "analytics"
+            ? "#analytics"
+            : view === "competitors"
+              ? "#competitors"
+              : view === "keywords"
+                ? "#keywords"
+                : ""
     if (location.hash === desired) return
     lastWrittenHashRef.current = desired
     void navigate(
@@ -833,6 +837,12 @@ export default function AppPage() {
                 key={activeProject?.id}
                 activeProject={activeProject}
                 completedCrawls={stableSortedCompletedCrawls}
+                isOrganizationOwner={isOrganizationOwner}
+              />
+            ) : view === "analytics" && me.features?.gsc_connector !== false ? (
+              <AnalyticsView
+                key={activeProject?.id}
+                activeProject={activeProject}
                 isOrganizationOwner={isOrganizationOwner}
               />
             ) : (

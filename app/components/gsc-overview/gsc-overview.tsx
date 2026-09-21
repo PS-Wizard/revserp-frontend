@@ -9,6 +9,7 @@ import type {
   ProjectGSCStatusResponse,
 } from "~/lib/api.types"
 import { getCrawlTimestamp } from "~/lib/crawl"
+import { DataLoadingState } from "~/components/data-loading-state"
 
 import { GSCHeaderCard } from "./header-card"
 import { GSCMetricGrid } from "./metric-grid"
@@ -157,6 +158,7 @@ export function GSCOverview({
   status,
   overviewResponse,
   overviewErrorMessage,
+  isLoading,
   isOrganizationOwner,
   onRefreshOverview,
   completedCrawls,
@@ -165,6 +167,7 @@ export function GSCOverview({
   status: ProjectGSCStatusResponse
   overviewResponse: ProjectGSCOverviewResponse | null
   overviewErrorMessage: string
+  isLoading: boolean
   isOrganizationOwner: boolean
   onRefreshOverview: () => Promise<void>
   completedCrawls: CrawlResponse[]
@@ -494,6 +497,8 @@ export function GSCOverview({
             tableSort={state.tableSort}
           />
         </>
+      ) : isLoading ? (
+        <DataLoadingState label="Loading Search Console data..." />
       ) : (
         <div className="mx-4 rounded-xl border border-border/50 bg-card px-8 py-10 text-sm text-muted-foreground sm:mx-6 lg:mx-4">
           No Search Console overview data is available yet.

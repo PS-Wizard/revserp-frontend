@@ -10,6 +10,7 @@ export type DashboardView =
   | "keywords"
   | "competitors"
   | "search-console"
+  | "analytics"
   | "compare"
 export type AuditTab = "overview" | "seo" | "aeo" | "pagespeed" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
@@ -24,6 +25,7 @@ export function revbotHashTarget(
 ):
   | { view: "revserp-audit"; tab: AuditTab }
   | { view: "search-console" }
+  | { view: "analytics" }
   | { view: "competitors" }
   | { view: "keywords" }
   | null {
@@ -41,6 +43,8 @@ export function revbotHashTarget(
       }
     case "search-console":
       return { view: "search-console" }
+    case "analytics":
+      return { view: "analytics" }
     case "competitors":
       return { view: "competitors" }
     case "keywords":

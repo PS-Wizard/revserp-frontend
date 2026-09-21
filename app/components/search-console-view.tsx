@@ -4,6 +4,7 @@ import { memo, useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { GSCOverview } from "~/components/gsc-overview/gsc-overview"
+import { DataLoadingState } from "~/components/data-loading-state"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -33,7 +34,8 @@ function isAllowedGSCAuthURL(rawURL: string) {
   try {
     const parsed = new URL(rawURL)
     return (
-      parsed.protocol === "https:" && ALLOWED_GSC_AUTH_HOSTS.has(parsed.hostname)
+      parsed.protocol === "https:" &&
+      ALLOWED_GSC_AUTH_HOSTS.has(parsed.hostname)
     )
   } catch {
     return false
@@ -212,12 +214,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   }
 
   if (isLoadingGSC && !gscStatus) {
-    return (
-      <GSCStateCard
-        description="Fetching GSC only because this tab is open."
-        title="Loading Search Console"
-      />
-    )
+    return <DataLoadingState label="Loading Search Console..." />
   }
 
   if (gscLoadErrorMessage && !gscStatus) {
@@ -236,6 +233,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         activeProjectID={activeProject.id}
         completedCrawls={completedCrawls}
         isOrganizationOwner={isOrganizationOwner}
+        isLoading={isLoadingOverview}
         onRefreshOverview={handleRefreshOverview}
         overviewErrorMessage={gscLoadErrorMessage}
         overviewResponse={gscOverview ?? null}

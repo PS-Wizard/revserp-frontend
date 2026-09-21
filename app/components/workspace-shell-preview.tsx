@@ -14,6 +14,7 @@ import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
   ActivityIcon,
   Building2Icon,
+  ChartNoAxesCombinedIcon,
   CheckIcon,
   ChevronDownIcon,
   CircleIcon,
@@ -588,6 +589,12 @@ export function WorkspaceShellPreview({
             label: "Search Console",
             onSelect: () => selectWorkspace("search-console"),
           },
+          {
+            icon: ChartNoAxesCombinedIcon,
+            isActive: view === "analytics",
+            label: "Google Analytics",
+            onSelect: () => selectWorkspace("analytics"),
+          },
         ]
       : []),
   ]
@@ -696,7 +703,9 @@ export function WorkspaceShellPreview({
             ? "Competitors"
             : view === "search-console"
               ? "Search Console"
-              : view === "compare"
+              : view === "analytics"
+                ? "Google Analytics"
+                : view === "compare"
                 ? (compareLabel ?? "Compare")
                 : "Revbot"
 

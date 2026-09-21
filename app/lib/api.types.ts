@@ -294,6 +294,80 @@ export type ProjectGSCStatusResponse = {
   token_error?: string
 }
 
+export type ProjectAnalyticsPropertyResponse = {
+  property_id: string
+  display_name: string
+  account_display_name?: string
+}
+
+export type ProjectAnalyticsStatusResponse = {
+  has_google_connection: boolean
+  has_analytics_scope: boolean
+  google_connection_id?: string
+  google_account_email?: string
+  google_status?: string
+  needs_reconnect: boolean
+  can_manage_connection: boolean
+  connected: boolean
+  selected_property?: ProjectAnalyticsPropertyResponse
+  available_properties: ProjectAnalyticsPropertyResponse[]
+  token_error?: string
+}
+
+export type AnalyticsMetricSummaryResponse = {
+  current: number
+  previous: number
+}
+
+export type ProjectAnalyticsRowResponse = {
+  label: string
+  active_users: number
+  sessions: number
+  engagement_rate: number
+  key_events: number
+}
+
+export type ProjectAnalyticsTrendResponse = {
+  date: string
+  active_users: number
+  sessions: number
+  engagement_rate: number
+  key_events: number
+}
+
+export type ProjectAnalyticsOverviewResponse = {
+  project_id: string
+  property_id: string
+  property_name: string
+  google_connection: string
+  overview: {
+    history_days: number
+    window_days: number
+    range: {
+      current_start: string
+      current_end: string
+      previous_start: string
+      previous_end: string
+    }
+    summary: {
+      active_users: AnalyticsMetricSummaryResponse
+      sessions: AnalyticsMetricSummaryResponse
+      engagement_rate: AnalyticsMetricSummaryResponse
+      key_events: AnalyticsMetricSummaryResponse
+    }
+    trend: ProjectAnalyticsTrendResponse[]
+    landing_pages: ProjectAnalyticsRowResponse[]
+    channels: ProjectAnalyticsRowResponse[]
+    sources: ProjectAnalyticsRowResponse[]
+    countries: ProjectAnalyticsRowResponse[]
+    devices: ProjectAnalyticsRowResponse[]
+  }
+}
+
+export type ProjectAnalyticsRealtimeResponse = {
+  active_users: number
+}
+
 export type GSCMetricSummaryResponse = {
   current: number
   previous: number

@@ -221,11 +221,13 @@ ${code}`
           void navigate(
             view === "search-console"
               ? "/app#search-console"
-              : view === "competitors"
-                ? "/app#competitors"
-                : view === "keywords"
-                  ? "/app#keywords"
-                  : "/app"
+              : view === "analytics"
+                ? "/app#analytics"
+                : view === "competitors"
+                  ? "/app#competitors"
+                  : view === "keywords"
+                    ? "/app#keywords"
+                    : "/app"
           )
         }
         organizationId={me.active_org_id}

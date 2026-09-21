@@ -4,6 +4,7 @@ import type { ReactElement } from "react"
 
 import {
   ActivityIcon,
+  ChartNoAxesCombinedIcon,
   CheckIcon,
   EyeIcon,
   GaugeIcon,
@@ -189,15 +190,26 @@ export function WorkspaceSidebarNav({
             />
           ) : null}
           {gscConnector ? (
-            <NavItem
-              label="Search Console"
-              icon={SearchCheckIcon}
-              active={view === "search-console"}
-              collapsed={isSidebarCollapsed}
-              onClick={() => onSelectWorkspace("search-console")}
-              itemRef={setItemRef("search-console")}
-              onMouseEnter={() => showPill("search-console")}
-            />
+            <>
+              <NavItem
+                label="Search Console"
+                icon={SearchCheckIcon}
+                active={view === "search-console"}
+                collapsed={isSidebarCollapsed}
+                onClick={() => onSelectWorkspace("search-console")}
+                itemRef={setItemRef("search-console")}
+                onMouseEnter={() => showPill("search-console")}
+              />
+              <NavItem
+                label="Google Analytics"
+                icon={ChartNoAxesCombinedIcon}
+                active={view === "analytics"}
+                collapsed={isSidebarCollapsed}
+                onClick={() => onSelectWorkspace("analytics")}
+                itemRef={setItemRef("analytics")}
+                onMouseEnter={() => showPill("analytics")}
+              />
+            </>
           ) : null}
         </SidebarMenu>
       </SidebarGroup>
