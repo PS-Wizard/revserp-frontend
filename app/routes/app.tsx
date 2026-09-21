@@ -462,20 +462,22 @@ export default function AppPage() {
     enabled: view === "revserp-audit" && !!activeProject,
   })
 
-  // Setup only blocks the audit view until the project's first completed crawl.
-  // A manual crawl can unlock the normal view while profile and visibility setup
-  // remain unfinished.
+  // Keep showing setup after its own crawl completes. A separate manual crawl
+  // can unlock the audit view while the remaining setup steps stay unfinished.
   const activeSetup = projectSetup.setup
+  const hasCompletedCrawlOutsideSetup = sortedCompletedCrawls.some(
+    (crawl) => crawl.id !== activeSetup?.crawl_id
+  )
   const setupIsActive =
     activeSetup !== null && activeSetup.status !== "completed"
   const setupIsLoading =
     activeSetup === null &&
     projectSetup.isLoading &&
-    sortedCompletedCrawls.length === 0
+    !hasCompletedCrawlOutsideSetup
   const showProjectSetup =
     view === "revserp-audit" &&
     !!activeProject &&
-    sortedCompletedCrawls.length === 0 &&
+    !hasCompletedCrawlOutsideSetup &&
     (setupIsActive || setupIsLoading)
 
   // Fetch compact per-crawl bucket-score history for the full crawl history,
