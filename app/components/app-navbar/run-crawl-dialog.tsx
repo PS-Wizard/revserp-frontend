@@ -1,4 +1,4 @@
-import { RefreshCwIcon, ShieldCheckIcon } from "lucide-react"
+import { MonitorPlayIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react"
 import { ThinkingOrb } from "thinking-orbs"
 import { Button } from "~/components/ui/button"
 import {
@@ -25,6 +25,7 @@ type RunCrawlDialogProps = {
   fetchTimeoutSeconds: string
   forceFullCrawl: boolean
   honourRobotsTxt: boolean
+  renderJavaScript: boolean
   isCrawlRunning: boolean
   isOpen: boolean
   isStartingCrawl: boolean
@@ -36,6 +37,7 @@ type RunCrawlDialogProps = {
   onFetchTimeoutSecondsChange: (value: string) => void
   onForceFullCrawlChange: (value: boolean) => void
   onHonourRobotsTxtChange: (value: boolean) => void
+  onRenderJavaScriptChange: (value: boolean) => void
   onMaxDepthChange: (value: string) => void
   onMaxPagesChange: (value: string) => void
   onDelayMsChange: (value: string) => void
@@ -50,6 +52,7 @@ export function RunCrawlDialog({
   fetchTimeoutSeconds,
   forceFullCrawl,
   honourRobotsTxt,
+  renderJavaScript,
   isCrawlRunning,
   isOpen,
   isStartingCrawl,
@@ -61,6 +64,7 @@ export function RunCrawlDialog({
   onFetchTimeoutSecondsChange,
   onForceFullCrawlChange,
   onHonourRobotsTxtChange,
+  onRenderJavaScriptChange,
   onMaxDepthChange,
   onMaxPagesChange,
   onDelayMsChange,
@@ -188,6 +192,18 @@ export function RunCrawlDialog({
               <FieldDescription>
                 Skip pages disallowed by the site's robots.txt.
               </FieldDescription>
+            </Field>
+            <Field>
+              <Button
+                aria-pressed={renderJavaScript}
+                className="w-full"
+                onClick={() => onRenderJavaScriptChange(!renderJavaScript)}
+                type="button"
+                variant={renderJavaScript ? "default" : "outline"}
+              >
+                <MonitorPlayIcon data-icon="inline-start" />
+                Render JavaScript
+              </Button>
             </Field>
             </FieldGroup>
 

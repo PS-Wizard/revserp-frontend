@@ -164,6 +164,7 @@ type RunCrawlState = {
   isOpen: boolean
   forceFullCrawl: boolean
   honourRobotsTxt: boolean
+  renderJavaScript: boolean
   maxDepth: string
   maxPages: string
   delayMs: string
@@ -174,7 +175,7 @@ type RunCrawlState = {
 }
 type RunCrawlEvent =
   | { type: "OPEN" | "CLOSE" | "STARTING" | "STARTED" }
-  | { type: "FORCE_FULL_CRAWL" | "HONOUR_ROBOTS_TXT"; value: boolean }
+  | { type: "FORCE_FULL_CRAWL" | "HONOUR_ROBOTS_TXT" | "RENDER_JAVASCRIPT"; value: boolean }
   | {
       type:
         | "MAX_DEPTH"
@@ -199,6 +200,8 @@ function runCrawlReducer(
       return { ...state, forceFullCrawl: event.value }
     case "HONOUR_ROBOTS_TXT":
       return { ...state, honourRobotsTxt: event.value }
+    case "RENDER_JAVASCRIPT":
+      return { ...state, renderJavaScript: event.value }
     case "MAX_DEPTH":
       return { ...state, maxDepth: event.value }
     case "MAX_PAGES":
@@ -214,7 +217,7 @@ function runCrawlReducer(
     case "STARTING":
       return { ...state, starting: true, error: "" }
     case "STARTED":
-      return { ...state, starting: false, isOpen: false, forceFullCrawl: false, honourRobotsTxt: false }
+      return { ...state, starting: false, isOpen: false, forceFullCrawl: false, honourRobotsTxt: false, renderJavaScript: false }
   }
 }
 
@@ -229,6 +232,7 @@ const initialRunCrawlState: RunCrawlState = {
   isOpen: false,
   forceFullCrawl: false,
   honourRobotsTxt: false,
+  renderJavaScript: false,
   maxDepth: "5",
   maxPages: "",
   delayMs: "",
@@ -673,6 +677,7 @@ export function WorkspaceShellPreview({
             fetch_timeout_seconds: fetchTimeoutSeconds,
             force_full_crawl: runCrawl.forceFullCrawl,
             honour_robots_txt: runCrawl.honourRobotsTxt,
+            render_javascript: runCrawl.renderJavaScript,
             ...(maxPages === undefined ? {} : { max_pages: maxPages }),
             ...(delayMs === undefined ? {} : { request_delay_ms: delayMs }),
             ...(jitterMs === undefined ? {} : { request_jitter_ms: jitterMs }),
@@ -1370,6 +1375,7 @@ export function WorkspaceShellPreview({
         fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
         forceFullCrawl={runCrawl.forceFullCrawl}
         honourRobotsTxt={runCrawl.honourRobotsTxt}
+        renderJavaScript={runCrawl.renderJavaScript}
         isCrawlRunning={isCrawlRunning}
         isOpen={runCrawl.isOpen}
         isStartingCrawl={runCrawl.starting}
@@ -1388,6 +1394,9 @@ export function WorkspaceShellPreview({
         }
         onHonourRobotsTxtChange={(value) =>
           runCrawlDispatch({ type: "HONOUR_ROBOTS_TXT", value })
+        }
+        onRenderJavaScriptChange={(value) =>
+          runCrawlDispatch({ type: "RENDER_JAVASCRIPT", value })
         }
         onJitterMsChange={(value) =>
           runCrawlDispatch({ type: "JITTER_MS", value })
