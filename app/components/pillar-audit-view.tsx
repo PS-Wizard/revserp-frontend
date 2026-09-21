@@ -17,7 +17,7 @@ import { Separator } from "~/components/ui/separator"
 import { GooglePSIDrawer } from "~/components/gsc-overview/google-psi-drawer"
 import type { GooglePSIStoredResult } from "~/lib/api.types"
 import type { CrawlResponse, ScoreBreakdownResponse } from "~/lib/api.types"
-import { formatBucketLabel } from "~/lib/utils"
+import { cn, formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import {
   TrendBadge,
@@ -111,26 +111,27 @@ export const PillarAuditView = memo(function PillarAuditView({
           <div className="border-t border-border" />
         </div>
         <div className="grid items-stretch gap-4 px-4 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:px-6 lg:pt-4">
-        <ScoreRadialChart
-          centerLabel={title}
-          centerValue={currentPillar?.score}
-          description="Current crawl bucket scores"
-          segments={radialSegments}
-          title={`${title} Score`}
-        />
-        <BucketScoreCards
-          crawlBreakdowns={crawlBreakdowns}
-          currentCrawlId={currentCrawlId}
-          pillarId={pillarId}
-          psiResult={
-            pillarId === "pagespeed"
-              ? ((
-                  currentEntry?.crawl
-                    ?.google_psi_results as GooglePSIStoredResult[]
-                )?.[0] ?? null)
-              : null
-          }
-        />
+          <ScoreRadialChart
+            centerLabel={title}
+            centerValue={currentPillar?.score}
+            description="Current crawl bucket scores"
+            segments={radialSegments}
+            title={`${title} Score`}
+          />
+          <BucketScoreCards
+            crawlBreakdowns={crawlBreakdowns}
+            currentCrawlId={currentCrawlId}
+            onSelectBucket={handleFocusBucket}
+            pillarId={pillarId}
+            psiResult={
+              pillarId === "pagespeed"
+                ? ((
+                    currentEntry?.crawl
+                      ?.google_psi_results as GooglePSIStoredResult[]
+                  )?.[0] ?? null)
+                : null
+            }
+          />
         </div>
       </div>
       <div className="px-4 lg:px-6">
@@ -166,11 +167,13 @@ export const PillarAuditView = memo(function PillarAuditView({
 const BucketScoreCards = memo(function BucketScoreCards({
   crawlBreakdowns,
   currentCrawlId,
+  onSelectBucket,
   pillarId,
   psiResult,
 }: {
   crawlBreakdowns: CrawlBreakdown[]
   currentCrawlId?: string
+  onSelectBucket?: (bucketId: string) => void
   pillarId: string
   psiResult: GooglePSIStoredResult | null
 }) {
@@ -218,68 +221,92 @@ const BucketScoreCards = memo(function BucketScoreCards({
   }
 
   return (
-    <div className="@container/buckets h-full min-w-0 w-full">
+    <div className="@container/buckets h-full w-full min-w-0">
       <div className="grid h-full auto-rows-fr grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-4">
-      {buckets.map((bucket) => {
-        const previousBucket = previousPillar?.buckets.find(
-          (item) => item.id === bucket.id
-        )
-        const series = chronologicalBreakdowns.map(
-          ({ breakdown }) =>
-            breakdown.pillars
-              .find((pillar) => pillar.id === pillarId)
-              ?.buckets.find((item) => item.id === bucket.id)?.score
-        )
-        const delta = getRoundedDelta(bucket.score, previousBucket?.score)
+        {buckets.map((bucket) => {
+          const previousBucket = previousPillar?.buckets.find(
+            (item) => item.id === bucket.id
+          )
+          const series = chronologicalBreakdowns.map(
+            ({ breakdown }) =>
+              breakdown.pillars
+                .find((pillar) => pillar.id === pillarId)
+                ?.buckets.find((item) => item.id === bucket.id)?.score
+          )
+          const delta = getRoundedDelta(bucket.score, previousBucket?.score)
+          const bucketLabel = formatBucketLabel(bucket.id, bucket.label)
+          const opensPsiDrawer = bucket.id === "psi_cwv" && Boolean(psiResult)
+          const isInteractive = Boolean(onSelectBucket) || opensPsiDrawer
+          // Selecting a bucket card drills the issue explorer below to that bucket,
+          // which is what clicking the same box in the treemap already does.
+          const activate = () => {
+            if (opensPsiDrawer) setPsiDrawerOpen(true)
+            onSelectBucket?.(bucket.id)
+          }
 
-        return (
-          <>
-            <Card
-              className={`relative flex flex-col bg-gradient-to-br from-card via-card to-muted/30 ${
-                bucket.id === "psi_cwv" && psiResult
-                  ? "cursor-pointer transition hover:border-primary/30"
-                  : ""
-              }`}
-              key={bucket.id}
-              onClick={() => {
-                if (bucket.id === "psi_cwv" && psiResult) setPsiDrawerOpen(true)
-              }}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardDescription>
-                  {bucket.id === "psi_cwv" ? "Google PSI" : bucket.label}
-                </CardDescription>
-                {delta !== null && <TrendBadge delta={delta} />}
-              </CardHeader>
-              <div className="flex flex-1 items-center justify-center px-6 py-4">
-                <span className="font-heading text-4xl leading-none font-semibold tabular-nums">
-                  {bucket.score === undefined ? (
-                    "—"
-                  ) : (
-                    <>{Math.round(bucket.score)}%</>
-                  )}
-                </span>
-              </div>
-              <CardFooter className="flex items-end justify-between gap-4 text-sm">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <div className="font-medium">{getTrendLabel(delta)}</div>
-                  <div className="text-muted-foreground">
-                    {getTrendSummary(previousBucket?.score, bucket.score)}
-                  </div>
+          return (
+            <>
+              <Card
+                aria-label={
+                  onSelectBucket
+                    ? `View ${bucketLabel} issues`
+                    : opensPsiDrawer
+                      ? `Open ${bucketLabel} details`
+                      : undefined
+                }
+                className={cn(
+                  "relative flex flex-col bg-gradient-to-br from-card via-card to-muted/30",
+                  isInteractive &&
+                    "cursor-pointer transition hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
+                )}
+                key={bucket.id}
+                onClick={isInteractive ? activate : undefined}
+                onKeyDown={
+                  isInteractive
+                    ? (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault()
+                          activate()
+                        }
+                      }
+                    : undefined
+                }
+                role={isInteractive ? "button" : undefined}
+                tabIndex={isInteractive ? 0 : undefined}
+              >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardDescription>{bucketLabel}</CardDescription>
+                  {delta !== null && <TrendBadge delta={delta} />}
+                </CardHeader>
+                <div className="flex flex-1 items-center justify-center px-6 py-4">
+                  <span className="font-heading text-4xl leading-none font-semibold tabular-nums">
+                    {bucket.score === undefined ? (
+                      "—"
+                    ) : (
+                      <>{Math.round(bucket.score)}%</>
+                    )}
+                  </span>
                 </div>
-                <TrendSparkline values={series} trend={delta} />
-              </CardFooter>
-            </Card>
-            {bucket.id === "psi_cwv" && psiResult && (
-              <GooglePSIDrawer
-                open={psiDrawerOpen}
-                onClose={() => setPsiDrawerOpen(false)}
-                psiResult={psiResult}
-              />
-            )}
-          </>
-        )
-      })}
+                <CardFooter className="flex items-end justify-between gap-4 text-sm">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <div className="font-medium">{getTrendLabel(delta)}</div>
+                    <div className="text-muted-foreground">
+                      {getTrendSummary(previousBucket?.score, bucket.score)}
+                    </div>
+                  </div>
+                  <TrendSparkline values={series} trend={delta} />
+                </CardFooter>
+              </Card>
+              {bucket.id === "psi_cwv" && psiResult && (
+                <GooglePSIDrawer
+                  open={psiDrawerOpen}
+                  onClose={() => setPsiDrawerOpen(false)}
+                  psiResult={psiResult}
+                />
+              )}
+            </>
+          )
+        })}
       </div>
     </div>
   )
