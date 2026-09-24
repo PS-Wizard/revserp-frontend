@@ -7,6 +7,7 @@ import {
   ChartNoAxesCombinedIcon,
   CheckIcon,
   EyeIcon,
+  FileSearchIcon,
   GaugeIcon,
   NetworkIcon,
   SearchCheckIcon,
@@ -35,11 +36,14 @@ import { cn } from "~/lib/utils"
 // The calm summary home is a separate section from the audit breakdowns —
 // same treatment the Visibility/Search Console section gets below. Overview
 // keeps the audit tab set as it always was.
-const auditSections = [
+// Shared with the navbar section dropdown in workspace-shell-preview.tsx so
+// the two lists can never drift apart.
+export const auditSections = [
   ["Overview", "overview", GaugeIcon],
   ["SEO", "seo", SearchIcon],
   ["AEO", "aeo", SparklesIcon],
   ["PageSpeed", "pagespeed", ActivityIcon],
+  ["Pages", "pages", FileSearchIcon],
   ["Site graph", "site-graph", NetworkIcon],
 ] as const
 
@@ -118,7 +122,6 @@ function NavItem({
 
 type WorkspaceSidebarNavProps = {
   auditTab: AuditTab
-  auditNavDisabled?: boolean
   gscConnector: boolean
   maxCompetitors: number
   isSidebarCollapsed: boolean
@@ -128,7 +131,6 @@ type WorkspaceSidebarNavProps = {
 
 export function WorkspaceSidebarNav({
   auditTab,
-  auditNavDisabled = false,
   gscConnector,
   maxCompetitors,
   isSidebarCollapsed,
@@ -154,7 +156,6 @@ export function WorkspaceSidebarNav({
               icon={Icon}
               active={view === "revserp-audit" && auditTab === tab}
               collapsed={isSidebarCollapsed}
-              disabled={auditNavDisabled}
               onClick={() => onSelectWorkspace("revserp-audit", tab)}
               itemRef={setItemRef(tab)}
               onMouseEnter={() => showPill(tab)}

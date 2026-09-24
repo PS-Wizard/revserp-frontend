@@ -12,7 +12,8 @@ export type DashboardView =
   | "search-console"
   | "analytics"
   | "compare"
-export type AuditTab = "overview" | "seo" | "aeo" | "pagespeed" | "site-graph"
+export type AuditTab =
+  "overview" | "seo" | "aeo" | "pagespeed" | "pages" | "site-graph"
 export type ExportFormat = "csv" | "xlsx"
 
 /**
@@ -36,6 +37,7 @@ export function revbotHashTarget(
     case "seo":
     case "aeo":
     case "pagespeed":
+    case "pages":
     case "site-graph":
       return {
         view: "revserp-audit",

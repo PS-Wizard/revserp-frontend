@@ -12,7 +12,6 @@ import {
 } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
-  ActivityIcon,
   Building2Icon,
   ChartNoAxesCombinedIcon,
   CheckIcon,
@@ -23,13 +22,10 @@ import {
   EyeIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
-  GaugeIcon,
-  NetworkIcon,
   PanelLeftIcon,
   PlayIcon,
   PlusIcon,
   SearchCheckIcon,
-  SearchIcon,
   SparklesIcon,
   SwordsIcon,
   TagsIcon,
@@ -100,7 +96,6 @@ import {
   PageAuditContext,
   type SelectedAuditPage,
 } from "~/components/page-audit/page-audit-context"
-import { PageSearchBar } from "~/components/page-audit/page-search-bar"
 import { getCrawlTimestamp } from "~/lib/crawl"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
@@ -110,16 +105,11 @@ import type {
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
 import { useIsMobile } from "~/hooks/use-mobile"
-import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 import { toast } from "sonner"
-
-const auditSections = [
-  ["Overview", "overview", GaugeIcon],
-  ["SEO", "seo", SearchIcon],
-  ["AEO", "aeo", SparklesIcon],
-  ["PageSpeed", "pagespeed", ActivityIcon],
-  ["Site graph", "site-graph", NetworkIcon],
-] as const
+import {
+  auditSections,
+  WorkspaceSidebarNav,
+} from "~/components/workspace-sidebar-nav"
 
 type CreateProjectState = {
   isOpen: boolean
@@ -856,7 +846,6 @@ export function WorkspaceShellPreview({
               </SidebarContent>
               <WorkspaceSidebarNav
                 auditTab={auditTab}
-                auditNavDisabled={Boolean(selectedAuditPage)}
                 gscConnector={features.gsc_connector}
                 maxCompetitors={features.max_competitors}
                 isSidebarCollapsed={isSidebarCollapsed}
@@ -1067,23 +1056,7 @@ export function WorkspaceShellPreview({
                   </DropdownPillSurface>
                 </DropdownMenu>
               </h1>
-              {view === "revserp-audit" ? (
-                <PageSearchBar
-                  crawlId={
-                    currentCrawl?.status === "completed"
-                      ? currentCrawl.id
-                      : null
-                  }
-                  disabled={
-                    !currentCrawl || currentCrawl.status !== "completed"
-                  }
-                  onClearPage={() => setSelectedAuditPage(null)}
-                  onSelectPage={setSelectedAuditPage}
-                  selectedPage={selectedAuditPage}
-                />
-              ) : (
-                <div aria-hidden="true" />
-              )}
+              <div aria-hidden="true" />
               <div className="flex items-center justify-end gap-2">
                 <DropdownMenu>
                   <DropdownMenuTrigger

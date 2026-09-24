@@ -26,8 +26,7 @@ import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspac
 import { OverviewPillarScoresSection } from "~/components/overview-pillar-scores-section"
 import { OverviewScoreHistoryChart } from "~/components/overview-score-history-chart"
 import { OverviewWorkFixesCards } from "~/components/overview-work-fixes-cards"
-import { PageHealthView } from "~/components/page-audit/page-health-view"
-import { usePageAudit } from "~/components/page-audit/page-audit-context"
+import { PageAuditTab } from "~/components/page-audit/page-audit-tab"
 import { ThinkingOrb } from "thinking-orbs"
 import {
   PillarAuditView,
@@ -205,54 +204,48 @@ function RevserpAuditPanel({
   shouldReduceMotion: boolean | null
   sortedCompletedCrawls: CrawlResponse[]
 }) {
-  const pageAudit = usePageAudit()
-  const selectedPage = pageAudit?.selectedPage ?? null
+  const contentKey = auditTab
 
-  const contentKey = selectedPage ? `page-${selectedPage.id}` : auditTab
+  const mainContent = (
+    <Tabs value={auditTab} className="gap-6">
+      <TabsContent value="overview" className="flex flex-col gap-4 md:gap-6">
+        <OverviewPillarScoresSection
+          crawlBreakdowns={crawlBreakdowns}
+          currentCrawlId={completedCrawlId ?? undefined}
+          onSelectPillar={onAuditTabChange}
+        />
+        <OverviewScoreHistoryChart crawls={sortedCompletedCrawls} />
+        <OverviewWorkFixesCards
+          crawlId={completedCrawlId}
+          currentUserId={currentUserId}
+        />
+      </TabsContent>
 
-  const mainContent =
-    selectedPage && completedCrawlId ? (
-      <PageHealthView
-        breakdown={currentBreakdown}
-        crawlId={completedCrawlId}
-        page={selectedPage}
-      />
-    ) : (
-      <Tabs value={auditTab} className="gap-6">
-        <TabsContent value="overview" className="flex flex-col gap-4 md:gap-6">
-          <OverviewPillarScoresSection
+      {PILLAR_TABS.map(({ tab, pillarId, title }) => (
+        <TabsContent key={tab} value={tab}>
+          <PillarAuditView
             crawlBreakdowns={crawlBreakdowns}
+            currentBreakdown={currentBreakdown}
             currentCrawlId={completedCrawlId ?? undefined}
-            onSelectPillar={onAuditTabChange}
-          />
-          <OverviewScoreHistoryChart crawls={sortedCompletedCrawls} />
-          <OverviewWorkFixesCards
-            crawlId={completedCrawlId}
-            currentUserId={currentUserId}
+            pillarId={pillarId}
+            title={title}
           />
         </TabsContent>
+      ))}
 
-        {PILLAR_TABS.map(({ tab, pillarId, title }) => (
-          <TabsContent key={tab} value={tab}>
-            <PillarAuditView
-              crawlBreakdowns={crawlBreakdowns}
-              currentBreakdown={currentBreakdown}
-              currentCrawlId={completedCrawlId ?? undefined}
-              pillarId={pillarId}
-              title={title}
-            />
-          </TabsContent>
-        ))}
+      <TabsContent value="site-graph">
+        {auditTab === "site-graph" ? (
+          <Suspense fallback={null}>
+            <SiteGraphView currentCrawlId={completedCrawlId ?? undefined} />
+          </Suspense>
+        ) : null}
+      </TabsContent>
 
-        <TabsContent value="site-graph">
-          {auditTab === "site-graph" ? (
-            <Suspense fallback={null}>
-              <SiteGraphView currentCrawlId={completedCrawlId ?? undefined} />
-            </Suspense>
-          ) : null}
-        </TabsContent>
-      </Tabs>
-    )
+      <TabsContent value="pages">
+        <PageAuditTab breakdown={currentBreakdown} crawlId={completedCrawlId} />
+      </TabsContent>
+    </Tabs>
+  )
 
   return (
     <div className="@container/main relative flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
