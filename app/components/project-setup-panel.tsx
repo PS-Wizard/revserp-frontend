@@ -2,12 +2,18 @@
 
 import {
   AlertTriangleIcon,
+  Building2Icon,
   Check,
+  CircleCheckIcon,
+  CircleHelpIcon,
+  EyeIcon,
+  GlobeIcon,
   Loader2,
   Loader2Icon,
   RotateCcwIcon,
   SparklesIcon,
   X,
+  type LucideIcon,
 } from "lucide-react"
 
 import {
@@ -42,6 +48,54 @@ const STEP_STATUS_WORD: Record<StepState, string> = {
   active: "Running",
   failed: "Failed",
   pending: "Waiting",
+}
+
+// Per-stage copy for the panel heading. Typed as a full Record so a new
+// backend status fails the build instead of falling back to stale text.
+const SETUP_STAGE_COPY: Record<
+  ProjectSetupStatus,
+  { icon: LucideIcon; title: string; description: string }
+> = {
+  ready: {
+    icon: SparklesIcon,
+    title: "Set up this project",
+    description:
+      "Run the crawl, draft a business profile, generate questions, and check AI visibility in one go.",
+  },
+  crawling: {
+    icon: GlobeIcon,
+    title: "Crawling your site",
+    description:
+      "Crawling the whole site first, so every later step works from your real pages instead of assumptions.",
+  },
+  profile_generation: {
+    icon: Building2Icon,
+    title: "Drafting the business profile",
+    description:
+      "Reading the pages the crawl found to work out what you sell, who buys it, and what you should rank for.",
+  },
+  prompt_generation: {
+    icon: CircleHelpIcon,
+    title: "Generating questions",
+    description:
+      "Writing the questions your buyers ask, so you can see which ones your pages already answer.",
+  },
+  visibility: {
+    icon: EyeIcon,
+    title: "Checking AI visibility",
+    description:
+      "Asking AI assistants your buyers' questions to see how often they mention you.",
+  },
+  completed: {
+    icon: CircleCheckIcon,
+    title: "Setup complete",
+    description: "Everything finished. Your audit is on the next screen.",
+  },
+  failed: {
+    icon: AlertTriangleIcon,
+    title: "Project setup failed",
+    description: "Nothing was lost. Retry to run the remaining steps.",
+  },
 }
 
 function StepIcon({ state }: { state: StepState }) {
@@ -214,6 +268,8 @@ export function ProjectSetupPanel({
   // `crawling`. Progress only tracks an in-flight or failed setup.
   const isReady = setup?.status === "ready"
   const showProgress = (setup !== null && !isReady) || isLoading
+  const stage = SETUP_STAGE_COPY[setup?.status ?? "ready"]
+  const StageIcon = stage.icon
 
   // overflow-y-auto plus an auto-margin child centers the panel when it fits
   // and scrolls from the top when it does not. justify-center would clip the
@@ -222,25 +278,17 @@ export function ProjectSetupPanel({
     <div className="@container/main flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 lg:px-6">
       <div className="m-auto flex w-full max-w-lg flex-col items-center text-center">
         <div className="mb-5 flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted/50 ring-1 ring-border/50">
-          {isFailed ? (
-            <AlertTriangleIcon
-              aria-hidden="true"
-              className="size-8 text-destructive"
-            />
-          ) : (
-            <SparklesIcon
-              aria-hidden="true"
-              className="size-8 text-violet-400"
-            />
-          )}
+          <StageIcon
+            aria-hidden="true"
+            className={cn(
+              "size-8",
+              isFailed ? "text-destructive" : "text-violet-400"
+            )}
+          />
         </div>
-        <p className="text-xl font-semibold text-foreground">
-          {isFailed ? "Project setup failed" : "Set up this project"}
-        </p>
+        <p className="text-xl font-semibold text-foreground">{stage.title}</p>
         <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
-          {isFailed
-            ? "Nothing was lost. Retry to run the remaining steps."
-            : "Run the crawl, draft a business profile, generate questions, and check AI visibility in one go."}
+          {stage.description}
         </p>
 
         <div className="mt-8 flex w-full flex-col items-center gap-5">
