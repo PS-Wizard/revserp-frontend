@@ -95,7 +95,7 @@ export function ProjectPanel({
     <motion.div
       aria-label="Projects"
       aria-modal="true"
-      className="pointer-events-auto flex h-[min(520px,70vh)] w-full max-w-[58rem] min-w-0 flex-col overflow-hidden surface-dialog border border-border shadow-none"
+      className="surface-dialog pointer-events-auto flex h-[min(520px,70vh)] w-full max-w-[58rem] min-w-0 flex-col overflow-hidden border border-border shadow-none"
       layout
       layoutId="dock-context"
       ref={panelRef}
@@ -339,35 +339,40 @@ function CrawlPanel({
             {crawlPanelCrawls.map((crawl, index) => {
               const crawlItemProps = pillMenu.getItemProps(index)
               return (
-              <div
-                className={cn("relative z-10 rounded-lg", crawlItemProps.className)}
-                key={crawl.id}
-                onMouseEnter={crawlItemProps.onMouseEnter}
-                ref={crawlItemProps.ref}
-              >
-                <CrawlContextRow
-                  buttonClassName="hover:bg-transparent hover:text-current focus-visible:bg-transparent data-[active=true]:bg-transparent"
-                  crawl={crawl}
-                  disabled={deletingCrawlId !== null || exportingCrawlId !== null}
-                  exportFormat={exportFormat}
-                  isActive={crawl.id === currentCrawl?.id}
-                  isCancelling={cancellingCrawlId === crawl.id}
-                  isDeleting={deletingCrawlId === crawl.id}
-                  isExporting={exportingCrawlId === crawl.id}
-                  onCancel={() => onCancelCrawl(crawl)}
-                  onCompare={
-                    onCompareCrawl &&
-                    crawl.status === "completed" &&
-                    crawl.project_id !== currentCrawl?.project_id
-                      ? () => onCompareCrawl(crawl)
-                      : undefined
-                  }
-                  onDelete={() => onDeleteCrawl(crawl)}
-                  onExport={(format) => onExportCrawl(crawl, format)}
-                  onFormatChange={onExportFormatChange}
-                  onSelect={() => onSelectProject(crawl.project_id, crawl.id)}
-                />
-              </div>
+                <div
+                  className={cn(
+                    "relative z-10 rounded-lg",
+                    crawlItemProps.className
+                  )}
+                  key={crawl.id}
+                  onMouseEnter={crawlItemProps.onMouseEnter}
+                  ref={crawlItemProps.ref}
+                >
+                  <CrawlContextRow
+                    buttonClassName="hover:bg-transparent hover:text-current focus-visible:bg-transparent data-[active=true]:bg-transparent"
+                    crawl={crawl}
+                    disabled={
+                      deletingCrawlId !== null || exportingCrawlId !== null
+                    }
+                    exportFormat={exportFormat}
+                    isActive={crawl.id === currentCrawl?.id}
+                    isCancelling={cancellingCrawlId === crawl.id}
+                    isDeleting={deletingCrawlId === crawl.id}
+                    isExporting={exportingCrawlId === crawl.id}
+                    onCancel={() => onCancelCrawl(crawl)}
+                    onCompare={
+                      onCompareCrawl &&
+                      crawl.status === "completed" &&
+                      crawl.project_id !== currentCrawl?.project_id
+                        ? () => onCompareCrawl(crawl)
+                        : undefined
+                    }
+                    onDelete={() => onDeleteCrawl(crawl)}
+                    onExport={(format) => onExportCrawl(crawl, format)}
+                    onFormatChange={onExportFormatChange}
+                    onSelect={() => onSelectProject(crawl.project_id, crawl.id)}
+                  />
+                </div>
               )
             })}
           </div>

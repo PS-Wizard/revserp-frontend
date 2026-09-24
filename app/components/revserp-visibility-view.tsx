@@ -586,7 +586,9 @@ function VisibilityGrid({
                           <span className="shrink-0 text-xs font-medium text-muted-foreground">
                             {order}.
                           </span>
-                          <span className="min-w-0 line-clamp-2">{question}</span>
+                          <span className="line-clamp-2 min-w-0">
+                            {question}
+                          </span>
                         </span>
                       )}
                     </td>
@@ -686,7 +688,8 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
     enabled: Boolean(projectId && crawlId),
     select: (data) =>
       data.ai_audits.find((a) => a.crawl_id === crawlId) ??
-      (data.ai_audits[0] ?? null),
+      data.ai_audits[0] ??
+      null,
   })
 
   const resolvedAuditId = activeAuditId ?? listData?.id ?? null
@@ -772,7 +775,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   ).length
 
   return (
-    <div className="@container/main flex min-w-0 max-w-full flex-1 flex-col gap-10 overflow-x-hidden py-10">
+    <div className="@container/main flex max-w-full min-w-0 flex-1 flex-col gap-10 overflow-x-hidden py-10">
       {/* Header */}
       <div className="flex items-start justify-between gap-6 px-6 lg:px-8">
         <div className="space-y-2">
@@ -802,9 +805,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
       </div>
 
       {/* Running progress banner */}
-      {isRunning && (
-        <RunningBanner completedCount={completedCount} />
-      )}
+      {isRunning && <RunningBanner completedCount={completedCount} />}
 
       {/* Summary stats */}
       {successRuns.length > 0 && <SummaryCards runs={successRuns} />}

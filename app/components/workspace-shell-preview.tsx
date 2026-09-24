@@ -165,7 +165,10 @@ type RunCrawlState = {
 }
 type RunCrawlEvent =
   | { type: "OPEN" | "CLOSE" | "STARTING" | "STARTED" }
-  | { type: "FORCE_FULL_CRAWL" | "HONOUR_ROBOTS_TXT" | "RENDER_JAVASCRIPT"; value: boolean }
+  | {
+      type: "FORCE_FULL_CRAWL" | "HONOUR_ROBOTS_TXT" | "RENDER_JAVASCRIPT"
+      value: boolean
+    }
   | {
       type:
         | "MAX_DEPTH"
@@ -207,7 +210,14 @@ function runCrawlReducer(
     case "STARTING":
       return { ...state, starting: true, error: "" }
     case "STARTED":
-      return { ...state, starting: false, isOpen: false, forceFullCrawl: false, honourRobotsTxt: false, renderJavaScript: false }
+      return {
+        ...state,
+        starting: false,
+        isOpen: false,
+        forceFullCrawl: false,
+        honourRobotsTxt: false,
+        renderJavaScript: false,
+      }
   }
 }
 
@@ -701,726 +711,752 @@ export function WorkspaceShellPreview({
               : view === "analytics"
                 ? "Google Analytics"
                 : view === "compare"
-                ? (compareLabel ?? "Compare")
-                : "Revbot"
+                  ? (compareLabel ?? "Compare")
+                  : "Revbot"
 
   return (
     <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
-    <LayoutGroup id="workspace-preview">
-      <SidebarProvider
-        className="relative h-svh min-h-0 bg-background text-foreground"
-        open={!isDesktopSidebarCollapsed}
-        openMobile={isMobileSidebarOpen}
-        onOpenMobileChange={setIsMobileSidebarOpen}
-        style={
-          {
-            "--sidebar-width": isSidebarCollapsed ? "4rem" : "18rem",
-          } as CSSProperties
-        }
-      >
-        <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
-          <Sidebar
-            collapsible="none"
-            className={
-              isSidebarCollapsed
-                ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-sidebar p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
-                : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-sidebar p-3 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
-            }
-          >
-            <div>
-              <SidebarHeader
-                className={
-                  isSidebarCollapsed
-                    ? "flex-row items-center justify-center gap-0 p-0 py-3"
-                    : "flex-row items-center justify-between gap-0 px-2 py-3"
-                }
-              >
-                {isSidebarCollapsed ? null : (
-                  <span className="text-sm font-semibold tracking-tight">
-                    Revserp
-                  </span>
-                )}
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <Button
-                        aria-label={
-                          isSidebarCollapsed
-                            ? "Expand sidebar"
-                            : "Collapse sidebar"
-                        }
-                        className="h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
-                        onClick={() =>
-                          isMobile
-                            ? setIsMobileSidebarOpen(false)
-                            : setIsDesktopSidebarCollapsed((collapsed) => !collapsed)
-                        }
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <PanelLeftIcon
-                          aria-hidden="true"
-                          className={
-                            isSidebarCollapsed ? "rotate-180" : undefined
-                          }
-                        />
-                      </Button>
-                    }
-                  />
-                  <TooltipContent side="right">
-                    {isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                  </TooltipContent>
-                </Tooltip>
-              </SidebarHeader>
-              <Separator className="my-2" />
-              <SidebarContent className="flex-none gap-0 overflow-visible">
-                <SidebarGroup className="p-0">
-                  <SidebarMenu>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        className={
-                          isSidebarCollapsed
-                            ? "mx-auto !size-10 justify-center rounded-md bg-muted/70 text-sm font-semibold"
-                            : "!h-auto gap-3 rounded-md bg-muted/70 p-3 text-left"
-                        }
-                        onClick={() => {
-                          setIsMobileSidebarOpen(false)
-                          setIsProjectPanelOpen(true)
-                        }}
-                        size="lg"
-                        title={
-                          isSidebarCollapsed ? activeProject?.name : undefined
-                        }
-                        type="button"
-                      >
-                        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground text-xs font-semibold text-background">
-                          {activeProject?.name.slice(0, 1).toUpperCase() ?? "R"}
-                        </span>
-                        {isSidebarCollapsed ? null : (
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">
-                              {activeProject?.name ?? "Select a project"}
-                            </span>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              Project workspace
-                            </span>
-                          </span>
-                        )}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <SidebarMenuButton
-                              className={
-                                isSidebarCollapsed
-                                  ? "mx-auto mt-1 !size-10 justify-center rounded-md text-muted-foreground hover:text-foreground"
-                                  : "mt-1 !h-auto gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-                              }
-                              onClick={() => {
-                                setIsMobileSidebarOpen(false)
-                                createProjectDispatch({ type: "OPEN" })
-                              }}
-                              type="button"
-                            >
-                              <PlusIcon
-                                aria-hidden="true"
-                                className="size-4 shrink-0"
-                              />
-                              {isSidebarCollapsed ? null : "New Project"}
-                            </SidebarMenuButton>
-                          }
-                        />
-                        {isSidebarCollapsed ? (
-                          <TooltipContent side="right">
-                            New project
-                          </TooltipContent>
-                        ) : null}
-                      </Tooltip>
-                    </SidebarMenuItem>
-                  </SidebarMenu>
-                </SidebarGroup>
-                <Separator className="my-3" />
-              </SidebarContent>
-              <WorkspaceSidebarNav
-                auditTab={auditTab}
-                gscConnector={features.gsc_connector}
-                maxCompetitors={features.max_competitors}
-                isSidebarCollapsed={isSidebarCollapsed}
-                onSelectWorkspace={selectWorkspace}
-                view={view}
-              />
-            </div>
-            <div className="min-h-0 flex-1" />
-            <SidebarFooter className="gap-0 p-0 pt-3">
-              <ProfileMenu
-                compact
-                initials={initials}
-                isActiveOrganizationOwner={
-                  workspaceActions.isActiveOrganizationOwner
-                }
-                isPlatformAdmin={isPlatformAdmin}
-                onInviteOpen={workspaceActions.openInviteDialog}
-                onLeaveWorkspaceOpen={workspaceActions.openLeaveWorkspaceDialog}
-                onLogout={() => void workspaceActions.handleLogout()}
-                onSelectOrganization={(id) =>
-                  void workspaceActions.handleSelectOrganization(id)
-                }
-                organizationId={organizationId}
-                organizations={organizations}
-                profileActionError={workspaceActions.profileActionError}
-                userName={userName}
-                workspaceState={workspaceActions.workspaceState}
-              />
-            </SidebarFooter>
-          </Sidebar>
-          <section className="relative ml-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:ml-16">
-            <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(12rem,20rem)_auto] md:justify-between md:px-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] xl:justify-normal">
-              {insightsNavbarLabel ? (
-                <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6 xl:flex">
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span
-                      className="size-2 shrink-0 rounded-[2px]"
-                      style={{ backgroundColor: PAINT_A.color }}
-                    />
-                    <span className="truncate">{insightsNavbarLabel.you}</span>
-                  </span>
-                  <span className="shrink-0 font-normal text-muted-foreground">
-                    vs
-                  </span>
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <span
-                      className="size-2 shrink-0 rounded-[2px]"
-                      style={{ backgroundColor: PAINT_B.color }}
-                    />
-                    <span className="truncate">{insightsNavbarLabel.them}</span>
-                  </span>
-                </p>
-              ) : null}
-              <SidebarTrigger aria-label="Open navigation" className="md:hidden" />
-              <h1 className="hidden min-w-0 items-center gap-1.5 text-sm xl:flex">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <button
-                        aria-label="Switch project"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-semibold text-foreground hover:bg-accent data-[popup-open]:bg-accent"
-                        type="button"
-                      />
-                    }
-                  >
-                    <span className="truncate">
-                      {activeProject?.name ?? "Select a project"}
+      <LayoutGroup id="workspace-preview">
+        <SidebarProvider
+          className="relative h-svh min-h-0 bg-background text-foreground"
+          open={!isDesktopSidebarCollapsed}
+          openMobile={isMobileSidebarOpen}
+          onOpenMobileChange={setIsMobileSidebarOpen}
+          style={
+            {
+              "--sidebar-width": isSidebarCollapsed ? "4rem" : "18rem",
+            } as CSSProperties
+          }
+        >
+          <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
+            <Sidebar
+              collapsible="none"
+              className={
+                isSidebarCollapsed
+                  ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-sidebar p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
+                  : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-sidebar p-3 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
+              }
+            >
+              <div>
+                <SidebarHeader
+                  className={
+                    isSidebarCollapsed
+                      ? "flex-row items-center justify-center gap-0 p-0 py-3"
+                      : "flex-row items-center justify-between gap-0 px-2 py-3"
+                  }
+                >
+                  {isSidebarCollapsed ? null : (
+                    <span className="text-sm font-semibold tracking-tight">
+                      Revserp
                     </span>
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="start"
-                    className="max-h-80 w-56 overflow-y-auto overscroll-contain"
-                    side="bottom"
-                  >
-                    {(pill) => (
-                      <>
-                        <div className="sticky top-0 z-10 bg-popover">
-                          <DropdownMenuItem
-                            {...pill.getItemProps(0)}
-                            onClick={() =>
-                              createProjectDispatch({ type: "OPEN" })
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          aria-label={
+                            isSidebarCollapsed
+                              ? "Expand sidebar"
+                              : "Collapse sidebar"
+                          }
+                          className="h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
+                          onClick={() =>
+                            isMobile
+                              ? setIsMobileSidebarOpen(false)
+                              : setIsDesktopSidebarCollapsed(
+                                  (collapsed) => !collapsed
+                                )
+                          }
+                          size="icon-sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <PanelLeftIcon
+                            aria-hidden="true"
+                            className={
+                              isSidebarCollapsed ? "rotate-180" : undefined
                             }
-                          >
-                            <PlusIcon aria-hidden="true" className="size-4" />
-                            New Project
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator className="my-0" />
-                        </div>
-                        {projects.length ? (
-                          projects.map((project, index) => (
-                            <DropdownMenuItem
-                              key={project.id}
-                              {...pill.getItemProps(index + 1)}
-                              onClick={() => selectProject(project.id)}
-                            >
-                              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                <span className="truncate">{project.name}</span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                  {project.base_url}
-                                </span>
+                          />
+                        </Button>
+                      }
+                    />
+                    <TooltipContent side="right">
+                      {isSidebarCollapsed
+                        ? "Expand sidebar"
+                        : "Collapse sidebar"}
+                    </TooltipContent>
+                  </Tooltip>
+                </SidebarHeader>
+                <Separator className="my-2" />
+                <SidebarContent className="flex-none gap-0 overflow-visible">
+                  <SidebarGroup className="p-0">
+                    <SidebarMenu>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          className={
+                            isSidebarCollapsed
+                              ? "mx-auto !size-10 justify-center rounded-md bg-muted/70 text-sm font-semibold"
+                              : "!h-auto gap-3 rounded-md bg-muted/70 p-3 text-left"
+                          }
+                          onClick={() => {
+                            setIsMobileSidebarOpen(false)
+                            setIsProjectPanelOpen(true)
+                          }}
+                          size="lg"
+                          title={
+                            isSidebarCollapsed ? activeProject?.name : undefined
+                          }
+                          type="button"
+                        >
+                          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground text-xs font-semibold text-background">
+                            {activeProject?.name.slice(0, 1).toUpperCase() ??
+                              "R"}
+                          </span>
+                          {isSidebarCollapsed ? null : (
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">
+                                {activeProject?.name ?? "Select a project"}
                               </span>
-                              {project.id === activeProjectId ? (
-                                <CheckIcon className="ml-auto size-4 shrink-0" />
+                              <span className="block truncate text-xs text-muted-foreground">
+                                Project workspace
+                              </span>
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <SidebarMenuButton
+                                className={
+                                  isSidebarCollapsed
+                                    ? "mx-auto mt-1 !size-10 justify-center rounded-md text-muted-foreground hover:text-foreground"
+                                    : "mt-1 !h-auto gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+                                }
+                                onClick={() => {
+                                  setIsMobileSidebarOpen(false)
+                                  createProjectDispatch({ type: "OPEN" })
+                                }}
+                                type="button"
+                              >
+                                <PlusIcon
+                                  aria-hidden="true"
+                                  className="size-4 shrink-0"
+                                />
+                                {isSidebarCollapsed ? null : "New Project"}
+                              </SidebarMenuButton>
+                            }
+                          />
+                          {isSidebarCollapsed ? (
+                            <TooltipContent side="right">
+                              New project
+                            </TooltipContent>
+                          ) : null}
+                        </Tooltip>
+                      </SidebarMenuItem>
+                    </SidebarMenu>
+                  </SidebarGroup>
+                  <Separator className="my-3" />
+                </SidebarContent>
+                <WorkspaceSidebarNav
+                  auditTab={auditTab}
+                  gscConnector={features.gsc_connector}
+                  maxCompetitors={features.max_competitors}
+                  isSidebarCollapsed={isSidebarCollapsed}
+                  onSelectWorkspace={selectWorkspace}
+                  view={view}
+                />
+              </div>
+              <div className="min-h-0 flex-1" />
+              <SidebarFooter className="gap-0 p-0 pt-3">
+                <ProfileMenu
+                  compact
+                  initials={initials}
+                  isActiveOrganizationOwner={
+                    workspaceActions.isActiveOrganizationOwner
+                  }
+                  isPlatformAdmin={isPlatformAdmin}
+                  onInviteOpen={workspaceActions.openInviteDialog}
+                  onLeaveWorkspaceOpen={
+                    workspaceActions.openLeaveWorkspaceDialog
+                  }
+                  onLogout={() => void workspaceActions.handleLogout()}
+                  onSelectOrganization={(id) =>
+                    void workspaceActions.handleSelectOrganization(id)
+                  }
+                  organizationId={organizationId}
+                  organizations={organizations}
+                  profileActionError={workspaceActions.profileActionError}
+                  userName={userName}
+                  workspaceState={workspaceActions.workspaceState}
+                />
+              </SidebarFooter>
+            </Sidebar>
+            <section className="relative ml-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:ml-16">
+              <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(12rem,20rem)_auto] md:justify-between md:px-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] xl:justify-normal">
+                {insightsNavbarLabel ? (
+                  <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6 xl:flex">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className="size-2 shrink-0 rounded-[2px]"
+                        style={{ backgroundColor: PAINT_A.color }}
+                      />
+                      <span className="truncate">
+                        {insightsNavbarLabel.you}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-normal text-muted-foreground">
+                      vs
+                    </span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className="size-2 shrink-0 rounded-[2px]"
+                        style={{ backgroundColor: PAINT_B.color }}
+                      />
+                      <span className="truncate">
+                        {insightsNavbarLabel.them}
+                      </span>
+                    </span>
+                  </p>
+                ) : null}
+                <SidebarTrigger
+                  aria-label="Open navigation"
+                  className="md:hidden"
+                />
+                <h1 className="hidden min-w-0 items-center gap-1.5 text-sm xl:flex">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          aria-label="Switch project"
+                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-semibold text-foreground hover:bg-accent data-[popup-open]:bg-accent"
+                          type="button"
+                        />
+                      }
+                    >
+                      <span className="truncate">
+                        {activeProject?.name ?? "Select a project"}
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="start"
+                      className="max-h-80 w-56 overflow-y-auto overscroll-contain"
+                      side="bottom"
+                    >
+                      {(pill) => (
+                        <>
+                          <div className="sticky top-0 z-10 bg-popover">
+                            <DropdownMenuItem
+                              {...pill.getItemProps(0)}
+                              onClick={() =>
+                                createProjectDispatch({ type: "OPEN" })
+                              }
+                            >
+                              <PlusIcon aria-hidden="true" className="size-4" />
+                              New Project
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator className="my-0" />
+                          </div>
+                          {projects.length ? (
+                            projects.map((project, index) => (
+                              <DropdownMenuItem
+                                key={project.id}
+                                {...pill.getItemProps(index + 1)}
+                                onClick={() => selectProject(project.id)}
+                              >
+                                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                  <span className="truncate">
+                                    {project.name}
+                                  </span>
+                                  <span className="truncate text-xs text-muted-foreground">
+                                    {project.base_url}
+                                  </span>
+                                </span>
+                                {project.id === activeProjectId ? (
+                                  <CheckIcon className="ml-auto size-4 shrink-0" />
+                                ) : null}
+                              </DropdownMenuItem>
+                            ))
+                          ) : (
+                            <DropdownMenuItem
+                              {...pill.getItemProps(1)}
+                              disabled
+                            >
+                              No projects yet
+                            </DropdownMenuItem>
+                          )}
+                        </>
+                      )}
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <CircleIcon
+                    aria-hidden="true"
+                    className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          aria-label="Select crawl"
+                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-accent"
+                          disabled={!activeProject}
+                          type="button"
+                        />
+                      }
+                    >
+                      <span className="truncate">
+                        {currentCrawl
+                          ? formatCrawlDateTime(currentCrawl)
+                          : "No crawl yet"}
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="start"
+                      className="w-56"
+                      side="bottom"
+                    >
+                      {(pill) =>
+                        activeProjectCrawls.length ? (
+                          activeProjectCrawls.map((crawl, index) => (
+                            <DropdownMenuItem
+                              key={crawl.id}
+                              {...pill.getItemProps(index)}
+                              onClick={() => selectCrawl(crawl.id)}
+                            >
+                              <span className="truncate">
+                                {formatCrawlDateTime(crawl)}
+                              </span>
+                              {currentCrawl?.id === crawl.id ? (
+                                <CheckIcon className="ml-auto size-4" />
                               ) : null}
                             </DropdownMenuItem>
                           ))
                         ) : (
-                          <DropdownMenuItem
-                            {...pill.getItemProps(1)}
-                            disabled
-                          >
-                            No projects yet
-                          </DropdownMenuItem>
-                        )}
-                      </>
-                    )}
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <CircleIcon
-                  aria-hidden="true"
-                  className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <button
-                        aria-label="Select crawl"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-accent"
-                        disabled={!activeProject}
-                        type="button"
-                      />
-                    }
-                  >
-                    <span className="truncate">
-                      {currentCrawl
-                        ? formatCrawlDateTime(currentCrawl)
-                        : "No crawl yet"}
-                    </span>
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="start"
-                    className="w-56"
-                    side="bottom"
-                  >
-                    {(pill) =>
-                      activeProjectCrawls.length ? (
-                        activeProjectCrawls.map((crawl, index) => (
-                          <DropdownMenuItem
-                            key={crawl.id}
-                            {...pill.getItemProps(index)}
-                            onClick={() => selectCrawl(crawl.id)}
-                          >
-                            <span className="truncate">
-                              {formatCrawlDateTime(crawl)}
-                            </span>
-                            {currentCrawl?.id === crawl.id ? (
-                              <CheckIcon className="ml-auto size-4" />
-                            ) : null}
-                          </DropdownMenuItem>
-                        ))
-                      ) : (
-                        <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                          No crawls yet
-                        </DropdownMenuItem>
-                      )
-                    }
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <CircleIcon
-                  aria-hidden="true"
-                  className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-                />
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <button
-                        aria-label="Switch workspace section"
-                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-medium text-foreground hover:bg-accent data-[popup-open]:bg-accent"
-                        type="button"
-                      />
-                    }
-                  >
-                    <span className="truncate">{headerLabel}</span>
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="start"
-                    className="w-48"
-                    side="bottom"
-                  >
-                    {(pill) =>
-                      workspaceNavItems.map((item, index) => {
-                        const Icon = item.icon
-                        return (
-                          <DropdownMenuItem
-                            key={item.label}
-                            {...pill.getItemProps(index)}
-                            onClick={item.onSelect}
-                          >
-                            <Icon aria-hidden="true" />
-                            {item.label}
-                            {item.isActive ? (
-                              <CheckIcon className="ml-auto size-4" />
-                            ) : null}
+                          <DropdownMenuItem {...pill.getItemProps(0)} disabled>
+                            No crawls yet
                           </DropdownMenuItem>
                         )
-                      })
-                    }
-                  </DropdownPillSurface>
-                </DropdownMenu>
-              </h1>
-              <div aria-hidden="true" />
-              <div className="flex items-center justify-end gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        className="hidden lg:inline-flex"
-                        disabled={!activeProject}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
+                      }
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <CircleIcon
+                    aria-hidden="true"
+                    className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          aria-label="Switch workspace section"
+                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-medium text-foreground hover:bg-accent data-[popup-open]:bg-accent"
+                          type="button"
+                        />
+                      }
+                    >
+                      <span className="truncate">{headerLabel}</span>
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="start"
+                      className="w-48"
+                      side="bottom"
+                    >
+                      {(pill) =>
+                        workspaceNavItems.map((item, index) => {
+                          const Icon = item.icon
+                          return (
+                            <DropdownMenuItem
+                              key={item.label}
+                              {...pill.getItemProps(index)}
+                              onClick={item.onSelect}
+                            >
+                              <Icon aria-hidden="true" />
+                              {item.label}
+                              {item.isActive ? (
+                                <CheckIcon className="ml-auto size-4" />
+                              ) : null}
+                            </DropdownMenuItem>
+                          )
+                        })
+                      }
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                </h1>
+                <div aria-hidden="true" />
+                <div className="flex items-center justify-end gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          className="hidden lg:inline-flex"
+                          disabled={!activeProject}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        />
+                      }
+                    >
+                      <CogIcon aria-hidden="true" />
+                      Configure
+                      <ChevronDownIcon
+                        aria-hidden="true"
+                        className="size-3.5 text-muted-foreground"
                       />
-                    }
-                  >
-                    <CogIcon aria-hidden="true" />
-                    Configure
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="end"
-                    className="w-48"
-                    side="bottom"
-                  >
-                    {(pill) => (
-                      <>
-                        {features.auto_crawl ? (
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="end"
+                      className="w-48"
+                      side="bottom"
+                    >
+                      {(pill) => (
+                        <>
+                          {features.auto_crawl ? (
+                            <DropdownMenuItem
+                              {...pill.getItemProps(0)}
+                              disabled={!activeProject || autoCrawl.isSaving}
+                              onClick={() =>
+                                autoCrawl.enabled
+                                  ? void autoCrawl.handleDisable()
+                                  : void autoCrawl.openDialog()
+                              }
+                            >
+                              <SparklesIcon aria-hidden="true" />
+                              {autoCrawl.enabled
+                                ? "Auto crawl on"
+                                : "Auto crawl"}
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem
-                            {...pill.getItemProps(0)}
-                            disabled={!activeProject || autoCrawl.isSaving}
+                            {...pill.getItemProps(features.auto_crawl ? 1 : 0)}
+                            disabled={!activeProject}
                             onClick={() =>
-                              autoCrawl.enabled
-                                ? void autoCrawl.handleDisable()
-                                : void autoCrawl.openDialog()
+                              activeProject &&
+                              businessProfile.openBusinessProfileDrawer(
+                                activeProject
+                              )
                             }
                           >
-                            <SparklesIcon aria-hidden="true" />
-                            {autoCrawl.enabled ? "Auto crawl on" : "Auto crawl"}
+                            <Building2Icon aria-hidden="true" />
+                            Business profile
                           </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem
-                          {...pill.getItemProps(features.auto_crawl ? 1 : 0)}
-                          disabled={!activeProject}
-                          onClick={() =>
-                            activeProject &&
-                            businessProfile.openBusinessProfileDrawer(
-                              activeProject
-                            )
-                          }
-                        >
-                          <Building2Icon aria-hidden="true" />
-                          Business profile
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        className="hidden md:inline-flex"
-                        disabled={!currentCrawl}
-                        size="sm"
-                        type="button"
-                        variant="outline"
+                        </>
+                      )}
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          className="hidden md:inline-flex"
+                          disabled={!currentCrawl}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        />
+                      }
+                    >
+                      <DownloadIcon aria-hidden="true" />
+                      {isExportingAudit || isExportingCrawl
+                        ? "Exporting…"
+                        : "Export"}
+                      <ChevronDownIcon
+                        aria-hidden="true"
+                        className="size-3.5 text-muted-foreground"
                       />
-                    }
+                    </DropdownMenuTrigger>
+                    <DropdownPillSurface
+                      align="end"
+                      className="w-52"
+                      side="bottom"
+                    >
+                      {(pill) => (
+                        <>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(0)}
+                            disabled={
+                              !currentCrawlCompleted || isExportingAudit
+                            }
+                            onClick={onExportAudit}
+                          >
+                            <FileTextIcon aria-hidden="true" />
+                            {isExportingAudit
+                              ? "Generating audit…"
+                              : "Export PDF audit"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(1)}
+                            disabled={
+                              !currentCrawlCompleted || isExportingCrawl
+                            }
+                            onClick={() =>
+                              currentCrawl &&
+                              void projectActions.handleExportCrawl(
+                                currentCrawl,
+                                "xlsx"
+                              )
+                            }
+                          >
+                            <FileSpreadsheetIcon aria-hidden="true" />
+                            Export crawl as XLSX
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(2)}
+                            disabled={
+                              !currentCrawlCompleted || isExportingCrawl
+                            }
+                            onClick={() =>
+                              currentCrawl &&
+                              void projectActions.handleExportCrawl(
+                                currentCrawl,
+                                "csv"
+                              )
+                            }
+                          >
+                            <FileSpreadsheetIcon aria-hidden="true" />
+                            Export crawl as CSV
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownPillSurface>
+                  </DropdownMenu>
+                  <Button
+                    disabled={!activeProject || isCrawlRunning}
+                    onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                    size="sm"
+                    type="button"
                   >
-                    <DownloadIcon aria-hidden="true" />
-                    {isExportingAudit || isExportingCrawl
-                      ? "Exporting…"
-                      : "Export"}
-                    <ChevronDownIcon
-                      aria-hidden="true"
-                      className="size-3.5 text-muted-foreground"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownPillSurface
-                    align="end"
-                    className="w-52"
-                    side="bottom"
+                    <PlayIcon aria-hidden="true" />
+                    {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                  </Button>
+                </div>
+              </header>
+              <div
+                className={
+                  islandState === "maximized"
+                    ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto"
+                    : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
+                }
+              >
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    animate={{ opacity: 1 }}
+                    className="flex min-h-full flex-col"
+                    exit={{ opacity: 0 }}
+                    initial={{ opacity: 0 }}
+                    key={workspaceContentKey}
+                    transition={{
+                      duration: shouldReduceMotion ? 0 : 0.15,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
                   >
-                    {(pill) => (
-                      <>
-                        <DropdownMenuItem
-                          {...pill.getItemProps(0)}
-                          disabled={!currentCrawlCompleted || isExportingAudit}
-                          onClick={onExportAudit}
+                    <RevbotStartPromptContext.Provider
+                      value={features.ai_chat ? revbotStartPromptValue : null}
+                    >
+                      <PageAuditContext.Provider value={pageAuditValue}>
+                        <ProjectPanelOpenContext.Provider
+                          value={openProjectPanel}
                         >
-                          <FileTextIcon aria-hidden="true" />
-                          {isExportingAudit
-                            ? "Generating audit…"
-                            : "Export PDF audit"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...pill.getItemProps(1)}
-                          disabled={!currentCrawlCompleted || isExportingCrawl}
-                          onClick={() =>
-                            currentCrawl &&
-                            void projectActions.handleExportCrawl(
-                              currentCrawl,
-                              "xlsx"
-                            )
-                          }
-                        >
-                          <FileSpreadsheetIcon aria-hidden="true" />
-                          Export crawl as XLSX
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          {...pill.getItemProps(2)}
-                          disabled={!currentCrawlCompleted || isExportingCrawl}
-                          onClick={() =>
-                            currentCrawl &&
-                            void projectActions.handleExportCrawl(
-                              currentCrawl,
-                              "csv"
-                            )
-                          }
-                        >
-                          <FileSpreadsheetIcon aria-hidden="true" />
-                          Export crawl as CSV
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownPillSurface>
-                </DropdownMenu>
-                <Button
-                  disabled={!activeProject || isCrawlRunning}
-                  onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                  size="sm"
-                  type="button"
-                >
-                  <PlayIcon aria-hidden="true" />
-                  {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                </Button>
+                          {children}
+                        </ProjectPanelOpenContext.Provider>
+                      </PageAuditContext.Provider>
+                    </RevbotStartPromptContext.Provider>
+                  </motion.div>
+                </AnimatePresence>
               </div>
-            </header>
-            <div
-              className={
-                islandState === "maximized"
-                  ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto"
-                  : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
-              }
-            >
-              <AnimatePresence initial={false} mode="wait">
-                <motion.div
+            </section>
+            {features.ai_chat ? (
+              <LayoutGroup id="ai-island-group">
+                {islandState === "docked" ? (
+                  <DynamicIslandDockedChrome
+                    active={isIslandThinking || isRevbotTurnActive}
+                    onOpen={openIsland}
+                    transition={islandMorphTransition}
+                  />
+                ) : (
+                  <DynamicIslandPanel
+                    activeConversationId={islandRevbot.conversationId}
+                    conversations={islandRevbot.conversations}
+                    controlsDisabled={islandRevbot.loading}
+                    isConversationActive={islandRevbot.conversationActive}
+                    onDock={dockIsland}
+                    onDeleteConversation={(id) =>
+                      void islandRevbot.deleteConversation(id)
+                    }
+                    onMaximize={maximizeIsland}
+                    onMinimize={minimizeIsland}
+                    onNewChat={() => islandRevbot.newChat()}
+                    onSelectConversation={(id) =>
+                      void islandRevbot.selectConversation(id)
+                    }
+                    panelState={
+                      islandState === "maximized" ? "maximized" : "minimized"
+                    }
+                    title={islandConversationTitle}
+                    transition={islandMorphTransition}
+                  >
+                    {activeProject ? (
+                      <RevbotViewContent
+                        activeProject={activeProject}
+                        allowedEfforts={features.ai_allowed_reasoning_efforts}
+                        compact
+                        defaultHistoryOpen={false}
+                        hideCompactHeader
+                        hideHistory={islandState !== "maximized"}
+                        onActivityChange={setIsIslandThinking}
+                        onEditorLink={handleRevbotEditorLink}
+                        onInternalLink={handleRevbotInternalLink}
+                        onTitleChange={setIslandConversationTitle}
+                        revbot={islandRevbot}
+                        showMessageAvatar={islandState === "maximized"}
+                        showMic={false}
+                        variant="dark"
+                      />
+                    ) : null}
+                  </DynamicIslandPanel>
+                )}
+              </LayoutGroup>
+            ) : null}
+            <AnimatePresence>
+              {isProjectPanelOpen ? (
+                <motion.button
                   animate={{ opacity: 1 }}
-                  className="flex min-h-full flex-col"
+                  aria-label="Close project selector"
+                  className="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm"
                   exit={{ opacity: 0 }}
                   initial={{ opacity: 0 }}
-                  key={workspaceContentKey}
-                  transition={{
-                    duration: shouldReduceMotion ? 0 : 0.15,
-                    ease: [0.22, 1, 0.36, 1],
-                  }}
-                >
-                  <RevbotStartPromptContext.Provider
-                    value={features.ai_chat ? revbotStartPromptValue : null}
-                  >
-                    <PageAuditContext.Provider value={pageAuditValue}>
-                      <ProjectPanelOpenContext.Provider value={openProjectPanel}>
-                        {children}
-                      </ProjectPanelOpenContext.Provider>
-                    </PageAuditContext.Provider>
-                  </RevbotStartPromptContext.Provider>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </section>
-          {features.ai_chat ? (
-            <LayoutGroup id="ai-island-group">
-              {islandState === "docked" ? (
-                <DynamicIslandDockedChrome
-                  active={isIslandThinking || isRevbotTurnActive}
-                  onOpen={openIsland}
-                  transition={islandMorphTransition}
+                  key="project-panel-backdrop"
+                  onClick={() => setIsProjectPanelOpen(false)}
+                  transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
+                  type="button"
                 />
-              ) : (
-                <DynamicIslandPanel
-                  activeConversationId={islandRevbot.conversationId}
-                  conversations={islandRevbot.conversations}
-                  controlsDisabled={islandRevbot.loading}
-                  isConversationActive={islandRevbot.conversationActive}
-                  onDock={dockIsland}
-                  onDeleteConversation={(id) =>
-                    void islandRevbot.deleteConversation(id)
-                  }
-                  onMaximize={maximizeIsland}
-                  onMinimize={minimizeIsland}
-                  onNewChat={() => islandRevbot.newChat()}
-                  onSelectConversation={(id) =>
-                    void islandRevbot.selectConversation(id)
-                  }
-                  panelState={
-                    islandState === "maximized" ? "maximized" : "minimized"
-                  }
-                  title={islandConversationTitle}
-                  transition={islandMorphTransition}
-                >
-                  {activeProject ? (
-                    <RevbotViewContent
-                      activeProject={activeProject}
-                      allowedEfforts={features.ai_allowed_reasoning_efforts}
-                      compact
-                      defaultHistoryOpen={false}
-                      hideCompactHeader
-                      hideHistory={islandState !== "maximized"}
-                      onActivityChange={setIsIslandThinking}
-                      onEditorLink={handleRevbotEditorLink}
-                      onInternalLink={handleRevbotInternalLink}
-                      onTitleChange={setIslandConversationTitle}
-                      revbot={islandRevbot}
-                      showMessageAvatar={islandState === "maximized"}
-                      showMic={false}
-                      variant="dark"
-                    />
-                  ) : null}
-                </DynamicIslandPanel>
-              )}
-            </LayoutGroup>
-          ) : null}
-          <AnimatePresence>
+              ) : null}
+            </AnimatePresence>
             {isProjectPanelOpen ? (
-              <motion.button
-                animate={{ opacity: 1 }}
-                aria-label="Close project selector"
-                className="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm"
-                exit={{ opacity: 0 }}
-                initial={{ opacity: 0 }}
-                key="project-panel-backdrop"
-                onClick={() => setIsProjectPanelOpen(false)}
-                transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
-                type="button"
-              />
+              <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+                <ProjectPanel
+                  activeProjectId={activeProjectId}
+                  cancellingCrawlId={projectActions.cancellingCrawlId}
+                  crawlPanelCrawls={crawlPanelCrawls}
+                  currentCrawl={currentCrawl}
+                  deletingCrawlId={projectActions.deletingCrawlId}
+                  deletingProjectId={projectActions.deletingProjectId}
+                  exportFormat={projectActions.exportFormat}
+                  exportingCrawlId={projectActions.exportingCrawlId}
+                  onCancelCrawl={(crawl) =>
+                    void projectActions.handleCancelCrawl(crawl)
+                  }
+                  onCompareCrawl={(crawl) => {
+                    setIsProjectPanelOpen(false)
+                    onCompareCrawl(crawl)
+                  }}
+                  onCreateProjectOpen={() => {
+                    setIsProjectPanelOpen(false)
+                    createProjectDispatch({ type: "OPEN" })
+                  }}
+                  onDeleteCrawl={projectActions.openDeleteCrawlDialog}
+                  onDeleteProject={projectActions.openDeleteProjectDialog}
+                  onExportCrawl={(crawl, format) =>
+                    void projectActions.handleExportCrawl(crawl, format)
+                  }
+                  onExportFormatChange={projectActions.onExportFormatChange}
+                  onOpenBusinessProfile={(project) => {
+                    setIsProjectPanelOpen(false)
+                    businessProfile.openBusinessProfileDrawer(project)
+                  }}
+                  onProjectHover={(id) => hoverProject(id)}
+                  onSelectProject={(projectId, crawlId) => {
+                    setIsProjectPanelOpen(false)
+                    selectProject(projectId, crawlId)
+                  }}
+                  projectActionError={projectActions.projectActionError}
+                  projects={projects}
+                  reducedMotion={shouldReduceMotion}
+                />
+              </div>
             ) : null}
-          </AnimatePresence>
-          {isProjectPanelOpen ? (
-            <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-              <ProjectPanel
-                activeProjectId={activeProjectId}
-                cancellingCrawlId={projectActions.cancellingCrawlId}
-                crawlPanelCrawls={crawlPanelCrawls}
-                currentCrawl={currentCrawl}
-                deletingCrawlId={projectActions.deletingCrawlId}
-                deletingProjectId={projectActions.deletingProjectId}
-                exportFormat={projectActions.exportFormat}
-                exportingCrawlId={projectActions.exportingCrawlId}
-                onCancelCrawl={(crawl) =>
-                  void projectActions.handleCancelCrawl(crawl)
-                }
-                onCompareCrawl={(crawl) => {
-                  setIsProjectPanelOpen(false)
-                  onCompareCrawl(crawl)
-                }}
-                onCreateProjectOpen={() => {
-                  setIsProjectPanelOpen(false)
-                  createProjectDispatch({ type: "OPEN" })
-                }}
-                onDeleteCrawl={projectActions.openDeleteCrawlDialog}
-                onDeleteProject={projectActions.openDeleteProjectDialog}
-                onExportCrawl={(crawl, format) =>
-                  void projectActions.handleExportCrawl(crawl, format)
-                }
-                onExportFormatChange={projectActions.onExportFormatChange}
-                onOpenBusinessProfile={(project) => {
-                  setIsProjectPanelOpen(false)
-                  businessProfile.openBusinessProfileDrawer(project)
-                }}
-                onProjectHover={(id) => hoverProject(id)}
-                onSelectProject={(projectId, crawlId) => {
-                  setIsProjectPanelOpen(false)
-                  selectProject(projectId, crawlId)
-                }}
-                projectActionError={projectActions.projectActionError}
-                projects={projects}
-                reducedMotion={shouldReduceMotion}
-              />
-            </div>
-          ) : null}
-        </motion.main>
-      </SidebarProvider>
-      <PageEditor />
-      <RunCrawlDialog
-        activeProject={activeProject}
-        activeProjectId={activeProjectId}
-        delayMs={runCrawl.delayMs}
-        fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
-        forceFullCrawl={runCrawl.forceFullCrawl}
-        honourRobotsTxt={runCrawl.honourRobotsTxt}
-        renderJavaScript={runCrawl.renderJavaScript}
-        isCrawlRunning={isCrawlRunning}
-        isOpen={runCrawl.isOpen}
-        isStartingCrawl={runCrawl.starting}
-        jitterMs={runCrawl.jitterMs}
-        maxDepth={runCrawl.maxDepth}
-        maxPages={runCrawl.maxPages}
-        runCrawlError={runCrawl.error}
-        onDelayMsChange={(value) =>
-          runCrawlDispatch({ type: "DELAY_MS", value })
-        }
-        onFetchTimeoutSecondsChange={(value) =>
-          runCrawlDispatch({ type: "FETCH_TIMEOUT", value })
-        }
-        onForceFullCrawlChange={(value) =>
-          runCrawlDispatch({ type: "FORCE_FULL_CRAWL", value })
-        }
-        onHonourRobotsTxtChange={(value) =>
-          runCrawlDispatch({ type: "HONOUR_ROBOTS_TXT", value })
-        }
-        onRenderJavaScriptChange={(value) =>
-          runCrawlDispatch({ type: "RENDER_JAVASCRIPT", value })
-        }
-        onJitterMsChange={(value) =>
-          runCrawlDispatch({ type: "JITTER_MS", value })
-        }
-        onMaxDepthChange={(value) =>
-          runCrawlDispatch({ type: "MAX_DEPTH", value })
-        }
-        onMaxPagesChange={(value) =>
-          runCrawlDispatch({ type: "MAX_PAGES", value })
-        }
-        onOpenChange={(open) =>
-          runCrawlDispatch({ type: open ? "OPEN" : "CLOSE" })
-        }
-        onSubmit={handleRunCrawl}
-      />
-      <AutoCrawlDialog
-        config={autoCrawl.config}
-        error={autoCrawl.error}
-        isOpen={autoCrawl.isDialogOpen}
-        isSaving={autoCrawl.isSaving}
-        nextRunAt={autoCrawl.nextRunAt}
-        onConfigChange={autoCrawl.setConfig}
-        onOpenChange={(open) =>
-          open ? void autoCrawl.openDialog() : autoCrawl.closeDialog()
-        }
-        onSubmit={() => void autoCrawl.handleSaveConfig()}
-      />
-      <AppNavbarDialogs
-        businessProfile={businessProfile}
-        createProject={{
-          isCreateProjectOpen: createProject.isOpen,
-          projectName: createProject.name,
-          projectBaseUrl: createProject.baseUrl,
-          createProjectError: createProject.error,
-          isCreatingProject: createProject.creating,
-        }}
-        createProjectDispatch={(event) => {
-          if (event.type === "OPEN") createProjectDispatch({ type: "OPEN" })
-          else if (event.type === "CLOSE")
-            createProjectDispatch({ type: "CLOSE" })
-          else if (event.type === "SET_NAME")
-            createProjectDispatch({ type: "NAME", value: event.value })
-          else if (event.type === "SET_BASE_URL")
-            createProjectDispatch({ type: "BASE_URL", value: event.value })
-        }}
-        handleCreateProject={handleCreateProject}
-        onDismissDock={() => setIsProjectPanelOpen(false)}
-        projectActions={projectActions}
-        workspaceActions={workspaceActions}
-      />
-    </LayoutGroup>
+          </motion.main>
+        </SidebarProvider>
+        <PageEditor />
+        <RunCrawlDialog
+          activeProject={activeProject}
+          activeProjectId={activeProjectId}
+          delayMs={runCrawl.delayMs}
+          fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
+          forceFullCrawl={runCrawl.forceFullCrawl}
+          honourRobotsTxt={runCrawl.honourRobotsTxt}
+          renderJavaScript={runCrawl.renderJavaScript}
+          isCrawlRunning={isCrawlRunning}
+          isOpen={runCrawl.isOpen}
+          isStartingCrawl={runCrawl.starting}
+          jitterMs={runCrawl.jitterMs}
+          maxDepth={runCrawl.maxDepth}
+          maxPages={runCrawl.maxPages}
+          runCrawlError={runCrawl.error}
+          onDelayMsChange={(value) =>
+            runCrawlDispatch({ type: "DELAY_MS", value })
+          }
+          onFetchTimeoutSecondsChange={(value) =>
+            runCrawlDispatch({ type: "FETCH_TIMEOUT", value })
+          }
+          onForceFullCrawlChange={(value) =>
+            runCrawlDispatch({ type: "FORCE_FULL_CRAWL", value })
+          }
+          onHonourRobotsTxtChange={(value) =>
+            runCrawlDispatch({ type: "HONOUR_ROBOTS_TXT", value })
+          }
+          onRenderJavaScriptChange={(value) =>
+            runCrawlDispatch({ type: "RENDER_JAVASCRIPT", value })
+          }
+          onJitterMsChange={(value) =>
+            runCrawlDispatch({ type: "JITTER_MS", value })
+          }
+          onMaxDepthChange={(value) =>
+            runCrawlDispatch({ type: "MAX_DEPTH", value })
+          }
+          onMaxPagesChange={(value) =>
+            runCrawlDispatch({ type: "MAX_PAGES", value })
+          }
+          onOpenChange={(open) =>
+            runCrawlDispatch({ type: open ? "OPEN" : "CLOSE" })
+          }
+          onSubmit={handleRunCrawl}
+        />
+        <AutoCrawlDialog
+          config={autoCrawl.config}
+          error={autoCrawl.error}
+          isOpen={autoCrawl.isDialogOpen}
+          isSaving={autoCrawl.isSaving}
+          nextRunAt={autoCrawl.nextRunAt}
+          onConfigChange={autoCrawl.setConfig}
+          onOpenChange={(open) =>
+            open ? void autoCrawl.openDialog() : autoCrawl.closeDialog()
+          }
+          onSubmit={() => void autoCrawl.handleSaveConfig()}
+        />
+        <AppNavbarDialogs
+          businessProfile={businessProfile}
+          createProject={{
+            isCreateProjectOpen: createProject.isOpen,
+            projectName: createProject.name,
+            projectBaseUrl: createProject.baseUrl,
+            createProjectError: createProject.error,
+            isCreatingProject: createProject.creating,
+          }}
+          createProjectDispatch={(event) => {
+            if (event.type === "OPEN") createProjectDispatch({ type: "OPEN" })
+            else if (event.type === "CLOSE")
+              createProjectDispatch({ type: "CLOSE" })
+            else if (event.type === "SET_NAME")
+              createProjectDispatch({ type: "NAME", value: event.value })
+            else if (event.type === "SET_BASE_URL")
+              createProjectDispatch({ type: "BASE_URL", value: event.value })
+          }}
+          handleCreateProject={handleCreateProject}
+          onDismissDock={() => setIsProjectPanelOpen(false)}
+          projectActions={projectActions}
+          workspaceActions={workspaceActions}
+        />
+      </LayoutGroup>
     </SetInsightsNavbarLabel.Provider>
   )
 }

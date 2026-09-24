@@ -189,4 +189,3 @@ export const SummaryScoreHistoryChart = memo(function SummaryScoreHistoryChart({
     </Card>
   )
 })
-

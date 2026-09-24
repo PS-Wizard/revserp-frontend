@@ -104,7 +104,6 @@ function gapOf(pair: BucketPair) {
   return Math.abs((pair.a ?? 0) - (pair.b ?? 0))
 }
 
-
 export type IssuePair = {
   id: string
   label: string

@@ -30,7 +30,12 @@ import {
 
 export type SidePaint = { color: string; soft: string; dim: string }
 
-type TwoSide = { nameA: string; nameB: string; paintA: SidePaint; paintB: SidePaint }
+type TwoSide = {
+  nameA: string
+  nameB: string
+  paintA: SidePaint
+  paintB: SidePaint
+}
 
 function config({ nameA, nameB, paintA, paintB }: TwoSide): ChartConfig {
   return {
@@ -38,7 +43,6 @@ function config({ nameA, nameB, paintA, paintB }: TwoSide): ChartConfig {
     b: { label: nameB, color: paintB.color },
   }
 }
-
 
 /**
  * Value label pinned to a bar's OUTER end — left site's number on the left,
@@ -69,7 +73,9 @@ function endLabel(
     const width = Number(props.width ?? 0)
     const height = Number(props.height ?? 0)
     const outer =
-      side === "left" ? Math.min(x, x + width) - 10 : Math.max(x, x + width) + 10
+      side === "left"
+        ? Math.min(x, x + width) - 10
+        : Math.max(x, x + width) + 10
     return (
       <text
         x={outer}
@@ -147,7 +153,6 @@ export function ScoreBars({
   )
 }
 
-
 /* ----------------------------------------------------------------- buckets */
 
 export type BucketRow = {
@@ -207,7 +212,10 @@ export function BucketBars({
           radius={[0, 3, 3, 0]}
           minPointSize={1}
         >
-          <LabelList dataKey="b" content={endLabel("left", paintB.color, asScore)} />
+          <LabelList
+            dataKey="b"
+            content={endLabel("left", paintB.color, asScore)}
+          />
         </Bar>
         <Bar dataKey="aShared" stackId="s" fill={paintA.dim} barSize={16} />
         <Bar
@@ -218,7 +226,10 @@ export function BucketBars({
           radius={[0, 3, 3, 0]}
           minPointSize={1}
         >
-          <LabelList dataKey="a" content={endLabel("right", paintA.color, asScore)} />
+          <LabelList
+            dataKey="a"
+            content={endLabel("right", paintA.color, asScore)}
+          />
         </Bar>
       </BarChart>
     </ChartContainer>
@@ -243,11 +254,32 @@ export function BucketRadar({
       config={config({ nameA, nameB, paintA, paintB })}
       className="aspect-square h-[380px] w-full"
     >
-      <RadarChart data={rows} outerRadius="68%" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-        <PolarGrid gridType="polygon" radialLines={false} stroke="var(--border)" />
-        <PolarAngleAxis dataKey="label" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} />
-        <Radar dataKey="b" stroke={paintB.color} fill={paintB.color} fillOpacity={0.14} />
-        <Radar dataKey="a" stroke={paintA.color} fill={paintA.color} fillOpacity={0.14} />
+      <RadarChart
+        data={rows}
+        outerRadius="68%"
+        margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+      >
+        <PolarGrid
+          gridType="polygon"
+          radialLines={false}
+          stroke="var(--border)"
+        />
+        <PolarAngleAxis
+          dataKey="label"
+          tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
+        />
+        <Radar
+          dataKey="b"
+          stroke={paintB.color}
+          fill={paintB.color}
+          fillOpacity={0.14}
+        />
+        <Radar
+          dataKey="a"
+          stroke={paintA.color}
+          fill={paintA.color}
+          fillOpacity={0.14}
+        />
       </RadarChart>
     </ChartContainer>
   )
@@ -258,7 +290,11 @@ export function BucketRadar({
 export type SpreadRow = { label: string; pillar: string; a: number; b: number }
 
 const fmtPct = (value: number) =>
-  value === 0 ? "0%" : value < 1 ? `${value.toFixed(1)}%` : `${Math.round(value)}%`
+  value === 0
+    ? "0%"
+    : value < 1
+      ? `${value.toFixed(1)}%`
+      : `${Math.round(value)}%`
 
 /**
  * Prevalence, diverging off a shared zero. Deliberately NOT two-toned like the
@@ -309,7 +345,10 @@ export function SpreadBars({
           radius={[0, 3, 3, 0]}
           minPointSize={1}
         >
-          <LabelList dataKey="b" content={endLabel("left", paintB.color, fmtPct)} />
+          <LabelList
+            dataKey="b"
+            content={endLabel("left", paintB.color, fmtPct)}
+          />
         </Bar>
         <Bar
           dataKey="aVal"
@@ -319,7 +358,10 @@ export function SpreadBars({
           radius={[0, 3, 3, 0]}
           minPointSize={1}
         >
-          <LabelList dataKey="a" content={endLabel("right", paintA.color, fmtPct)} />
+          <LabelList
+            dataKey="a"
+            content={endLabel("right", paintA.color, fmtPct)}
+          />
         </Bar>
       </BarChart>
     </ChartContainer>
@@ -397,8 +439,7 @@ export function HealthRidge({
               splitLine: { show: false },
               axisLabel: {
                 fontSize: 10,
-                formatter: (value: number) =>
-                  `${Math.abs(Math.round(value))}%`,
+                formatter: (value: number) => `${Math.abs(Math.round(value))}%`,
               },
             },
             tooltip: {
@@ -483,11 +524,7 @@ export function HealthRidge({
   )
 }
 
-function formatHealthTooltip(
-  params: unknown,
-  nameA: string,
-  nameB: string
-) {
+function formatHealthTooltip(params: unknown, nameA: string, nameB: string) {
   const items = (Array.isArray(params) ? params : [params]) as Array<{
     seriesId?: string
     seriesName?: string
@@ -514,8 +551,7 @@ function formatHealthTooltip(
     })
     .filter(Boolean)
     .join("")
-  const label =
-    axis === "1" ? "1 issue on a page" : `${axis} issues on a page`
+  const label = axis === "1" ? "1 issue on a page" : `${axis} issues on a page`
   return tooltipShell({
     body,
     label,
@@ -544,7 +580,9 @@ export function CompareLegend({
             className="size-2.5 rounded-[3px]"
             style={{ backgroundColor: entry.color }}
           />
-          <span className="font-medium text-muted-foreground">{entry.name}</span>
+          <span className="font-medium text-muted-foreground">
+            {entry.name}
+          </span>
         </span>
       ))}
     </div>

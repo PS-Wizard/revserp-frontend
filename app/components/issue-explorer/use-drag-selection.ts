@@ -52,7 +52,10 @@ export function useDragSelection(
     (key: string) => ({
       onPointerDown: (event: React.PointerEvent) => {
         if (event.button !== 0) return
-        anchorRef.current = { key, wasChecked: checkedRef.current.includes(key) }
+        anchorRef.current = {
+          key,
+          wasChecked: checkedRef.current.includes(key),
+        }
         workingRef.current = null
       },
       onPointerEnter: (event: React.PointerEvent) => {

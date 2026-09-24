@@ -84,7 +84,12 @@ export const CompareView = memo(function CompareView({
     [breakdownA, breakdownB, pillar]
   )
   const radarRows = useMemo(
-    () => buckets.map((row) => ({ label: row.label, a: row.a ?? 0, b: row.b ?? 0 })),
+    () =>
+      buckets.map((row) => ({
+        label: row.label,
+        a: row.a ?? 0,
+        b: row.b ?? 0,
+      })),
     [buckets]
   )
   const summary = useMemo(
@@ -139,14 +144,24 @@ export const CompareView = memo(function CompareView({
       {/* headline scores — two tiles plus one grouped bar chart */}
       <div className="grid gap-6 px-4 lg:grid-cols-[minmax(0,0.32fr)_minmax(0,1fr)] lg:px-6">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
-          <ScoreTile side={b} paint={PAINT_B} against={breakdownA.overall_score} />
-          <ScoreTile side={a} paint={PAINT_A} against={breakdownB.overall_score} />
+          <ScoreTile
+            side={b}
+            paint={PAINT_B}
+            against={breakdownA.overall_score}
+          />
+          <ScoreTile
+            side={a}
+            paint={PAINT_A}
+            against={breakdownB.overall_score}
+          />
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>Scores</CardTitle>
-            <CardDescription>Overall and pillar scores, side by side</CardDescription>
+            <CardDescription>
+              Overall and pillar scores, side by side
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ScoreBars rows={scores} {...legend} />
@@ -215,7 +230,9 @@ export const CompareView = memo(function CompareView({
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Issue balance</CardTitle>
-            <CardDescription>Lower share of pages wins the issue</CardDescription>
+            <CardDescription>
+              Lower share of pages wins the issue
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-6">
             <div>
@@ -255,8 +272,16 @@ export const CompareView = memo(function CompareView({
               </div>
               <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
                 <Tally n={summary.ahead} label="ahead" color={PAINT_A.color} />
-                <Tally n={summary.behind} label="behind" color={PAINT_B.color} />
-                <Tally n={summary.level} label="level" color="var(--muted-foreground)" />
+                <Tally
+                  n={summary.behind}
+                  label="behind"
+                  color={PAINT_B.color}
+                />
+                <Tally
+                  n={summary.level}
+                  label="level"
+                  color="var(--muted-foreground)"
+                />
               </div>
             </div>
 
@@ -265,14 +290,18 @@ export const CompareView = memo(function CompareView({
                 paint={PAINT_A}
                 label="Widest lead"
                 detail={summary.lead?.label ?? "None"}
-                value={summary.lead ? `${Math.round(summary.lead.gap)} pts` : "—"}
+                value={
+                  summary.lead ? `${Math.round(summary.lead.gap)} pts` : "—"
+                }
               />
               <BalanceRow
                 paint={PAINT_B}
                 label="Widest deficit"
                 detail={summary.deficit?.label ?? "None"}
                 value={
-                  summary.deficit ? `${Math.round(summary.deficit.gap)} pts` : "—"
+                  summary.deficit
+                    ? `${Math.round(summary.deficit.gap)} pts`
+                    : "—"
                 }
               />
             </dl>
@@ -288,7 +317,9 @@ export const CompareView = memo(function CompareView({
             <CardAction>
               <Tabs
                 value={spreadFilter}
-                onValueChange={(value) => setSpreadFilter(value as SpreadFilter)}
+                onValueChange={(value) =>
+                  setSpreadFilter(value as SpreadFilter)
+                }
               >
                 <TabsList>
                   <TabsTrigger value="all">All</TabsTrigger>
@@ -341,7 +372,6 @@ export const CompareView = memo(function CompareView({
           </Card>
         </div>
       ) : null}
-
     </Shell>
   )
 })
@@ -358,8 +388,8 @@ function Shell({
     <div className="@container/main relative flex flex-1 flex-col gap-6 py-6">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 lg:px-6">
         <h1 className="font-heading text-lg font-medium">
-          {b.projectName}{" "}
-          <span className="text-muted-foreground">vs</span> {a.projectName}
+          {b.projectName} <span className="text-muted-foreground">vs</span>{" "}
+          {a.projectName}
         </h1>
         <button
           className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-accent hover:text-foreground"

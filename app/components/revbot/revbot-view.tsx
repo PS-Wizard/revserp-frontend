@@ -118,7 +118,11 @@ function StreamingAssistantMessage({
   }, [displayedWords])
 
   const rafRef = useRef<number | null>(null)
-  const pendingRef = useRef<{ start: number; from: number; total: number } | null>(null)
+  const pendingRef = useRef<{
+    start: number
+    from: number
+    total: number
+  } | null>(null)
   const prevContentRef = useRef(content)
   const prevMessageIdRef = useRef(messageId)
 
@@ -233,7 +237,11 @@ function StreamingAssistantMessage({
         }
         return
       }
-      if (displayedRef.current < totalWords && pendingRef.current === null && totalWords > 0) {
+      if (
+        displayedRef.current < totalWords &&
+        pendingRef.current === null &&
+        totalWords > 0
+      ) {
         // mount with backlog
         if (displayedRef.current === 0) {
           const nxt = 1
@@ -291,7 +299,9 @@ function StreamingAssistantMessage({
     }
     return tokens.length
   }
-  const displayedTokenCount = isReduced ? tokens.length : getDisplayedTokenCount()
+  const displayedTokenCount = isReduced
+    ? tokens.length
+    : getDisplayedTokenCount()
   const visibleTokens = tokens.slice(0, displayedTokenCount)
 
   return (
@@ -743,7 +753,8 @@ export function RevbotViewContent({
                               revbot.status === "failed" ||
                               revbot.status === "stopped"
                             const showMessageActions =
-                              turnFinished && (Boolean(message.content) || canRetry)
+                              turnFinished &&
+                              (Boolean(message.content) || canRetry)
 
                             return (
                               <div
@@ -780,7 +791,8 @@ export function RevbotViewContent({
                                       content={message.content}
                                       messageId={message.id}
                                     />
-                                  ) : message.id !== activeAssistantMessageId ? (
+                                  ) : message.id !==
+                                    activeAssistantMessageId ? (
                                     <RevbotMarkdown
                                       components={markdownComponents}
                                     >

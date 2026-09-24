@@ -1,5 +1,8 @@
-import { indicatorBackground, type ResolvedColors } from "~/components/evilcharts/ui/echarts-chart";
-import type { TooltipComponentOption } from "echarts/components";
+import {
+  indicatorBackground,
+  type ResolvedColors,
+} from "~/components/evilcharts/ui/echarts-chart"
+import type { TooltipComponentOption } from "echarts/components"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tooltip — the shared HTML shell/row primitives and the chart-agnostic option
@@ -8,40 +11,40 @@ import type { TooltipComponentOption } from "echarts/components";
 // chart composes its own rows but shares the shell/styling and base option.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type TooltipVariant = "default" | "frosted-glass";
-export type TooltipRoundness = "sm" | "md" | "lg" | "xl";
+export type TooltipVariant = "default" | "frosted-glass"
+export type TooltipRoundness = "sm" | "md" | "lg" | "xl"
 // Tooltip anchoring: "variable" follows both axes (ECharts default, current
 // behavior); "fixed" tracks the pointer's X (centered) but stays pinned near
 // the top (fixed Y).
-export type TooltipPosition = "fixed" | "variable";
+export type TooltipPosition = "fixed" | "variable"
 
 export const roundnessClass: Record<TooltipRoundness, string> = {
   sm: "rounded-sm",
   md: "rounded-md",
   lg: "rounded-lg",
   xl: "rounded-xl",
-};
+}
 
 export const tooltipVariantClass: Record<TooltipVariant, string> = {
   default: "bg-background",
   "frosted-glass": "bg-background/50 backdrop-blur-md",
-};
+}
 
 export function escapeTooltipHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
-    if (character === "&") return "&amp;";
-    if (character === "<") return "&lt;";
-    if (character === ">") return "&gt;";
-    if (character === '"') return "&quot;";
-    return "&#39;";
-  });
+    if (character === "&") return "&amp;"
+    if (character === "<") return "&lt;"
+    if (character === ">") return "&gt;"
+    if (character === '"') return "&quot;"
+    return "&#39;"
+  })
 }
 
 // The standard series indicator swatch — a rounded square filled with the
 // series' solid var or multi-stop gradient (indicatorBackground). A chart drops
 // this into a tooltipRow's `indicatorHtml`.
 export function tooltipIndicatorHtml(key: string, colorsCount: number): string {
-  return `<div class="h-2.5 w-2.5 shrink-0 rounded-[2px]" style="background:${indicatorBackground(key, colorsCount)}"></div>`;
+  return `<div class="h-2.5 w-2.5 shrink-0 rounded-[2px]" style="background:${indicatorBackground(key, colorsCount)}"></div>`
 }
 
 // One tooltip row: indicator swatch + label/value pair. `dimmed` is a class
@@ -53,10 +56,10 @@ export function tooltipRow({
   valueText,
   dimmed,
 }: {
-  indicatorHtml: string;
-  labelText: string;
-  valueText: string;
-  dimmed: string;
+  indicatorHtml: string
+  labelText: string
+  valueText: string
+  dimmed: string
 }): string {
   return `<div class="flex w-full flex-wrap items-center gap-2${dimmed}">
           ${indicatorHtml}
@@ -64,7 +67,7 @@ export function tooltipRow({
             <span class="text-muted-foreground">${escapeTooltipHtml(labelText)}</span>
             <span class="text-foreground font-mono font-medium tabular-nums">${escapeTooltipHtml(valueText)}</span>
           </div>
-        </div>`;
+        </div>`
 }
 
 // The outer tooltip surface — border, padding, shadow, roundness + variant
@@ -75,15 +78,15 @@ export function tooltipShell({
   roundness,
   variant,
 }: {
-  label: string;
-  body: string;
-  roundness: TooltipRoundness;
-  variant: TooltipVariant;
+  label: string
+  body: string
+  roundness: TooltipRoundness
+  variant: TooltipVariant
 }): string {
   return `<div class="grid min-w-32 items-start gap-1.5 border border-border/50 px-2.5 py-1.5 text-xs shadow-xl ${roundnessClass[roundness]} ${tooltipVariantClass[variant]}">
       <div class="font-medium text-primary">${escapeTooltipHtml(label)}</div>
       <div class="grid gap-1.5">${body}</div>
-    </div>`;
+    </div>`
 }
 
 // Maps the TooltipPosition prop onto the ECharts tooltip `position` field.
@@ -91,10 +94,13 @@ export function tooltipShell({
 // a callback that centers the tooltip on the pointer's X but pins it near the
 // top (fixed Y).
 export function resolveTooltipPosition(
-  position: TooltipPosition,
+  position: TooltipPosition
 ): TooltipComponentOption["position"] {
-  if (position === "variable") return undefined;
-  return (point, _params, _dom, _rect, size) => [point[0] - size.contentSize[0] / 2, 8];
+  if (position === "variable") return undefined
+  return (point, _params, _dom, _rect, size) => [
+    point[0] - size.contentSize[0] / 2,
+    8,
+  ]
 }
 
 // The chart-agnostic tooltip option fields (show, trigger, confine,
@@ -102,14 +108,14 @@ export function resolveTooltipPosition(
 // supplies only `formatter` and spreads this in. `axisPointerColor` is the
 // pre-resolved cursor-line color, so this helper needs no live token read.
 export function tooltipBaseOption(params: {
-  present: boolean;
-  cursor: boolean;
-  tokens: ResolvedColors["tokens"];
-  position: TooltipPosition;
-  axisPointerColor: string;
-  strokeWidth: number;
+  present: boolean
+  cursor: boolean
+  tokens: ResolvedColors["tokens"]
+  position: TooltipPosition
+  axisPointerColor: string
+  strokeWidth: number
 }): TooltipComponentOption {
-  const { present, cursor, position, axisPointerColor, strokeWidth } = params;
+  const { present, cursor, position, axisPointerColor, strokeWidth } = params
 
   return {
     show: present,
@@ -131,5 +137,5 @@ export function tooltipBaseOption(params: {
         }
       : { type: "none" },
     position: resolveTooltipPosition(position),
-  };
+  }
 }

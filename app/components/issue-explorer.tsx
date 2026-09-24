@@ -644,16 +644,15 @@ export const IssueExplorer = memo(function IssueExplorer({
   }, [displayedUrls, checkedUrlKeys])
 
   const selectedUrlCount = checkedUrlKeys.length
-  const recommendFixesOverLimit =
-    selectedUrlCount > MAX_RECOMMEND_FIXES_URLS
+  const recommendFixesOverLimit = selectedUrlCount > MAX_RECOMMEND_FIXES_URLS
   const canRecommendFixes = Boolean(
     features.ai_chat &&
-      startPrompt &&
-      effectivePillar &&
-      drilledBucket &&
-      drilledIssueType &&
-      selectedUrlCount > 0 &&
-      !recommendFixesOverLimit
+    startPrompt &&
+    effectivePillar &&
+    drilledBucket &&
+    drilledIssueType &&
+    selectedUrlCount > 0 &&
+    !recommendFixesOverLimit
   )
 
   const onRecommendFixes = useCallback(() => {

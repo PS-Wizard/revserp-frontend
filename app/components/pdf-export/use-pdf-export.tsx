@@ -126,13 +126,14 @@ export function usePdfExport({
       await new Promise((r) => setTimeout(r, 2000))
 
       const captureOpts = { pixelRatio: 2, backgroundColor: "#09090b" }
-      const [coverPng, overallPng, seoPng, aeoPng, pagespeedPng] = await Promise.all([
-        toPng(coverRef.current!, captureOpts),
-        toPng(overallRef.current!, captureOpts),
-        toPng(seoRef.current!, captureOpts),
-        toPng(aeoRef.current!, captureOpts),
-        toPng(pagespeedRef.current!, captureOpts),
-      ])
+      const [coverPng, overallPng, seoPng, aeoPng, pagespeedPng] =
+        await Promise.all([
+          toPng(coverRef.current!, captureOpts),
+          toPng(overallRef.current!, captureOpts),
+          toPng(seoRef.current!, captureOpts),
+          toPng(aeoRef.current!, captureOpts),
+          toPng(pagespeedRef.current!, captureOpts),
+        ])
 
       const pdf = new jsPDF({
         orientation: "landscape",
@@ -208,7 +209,10 @@ export function usePdfExport({
           pdf.setFont("helvetica", "normal")
           pdf.setFontSize(9.5)
           pdf.setTextColor(...DARK_BODY)
-          const itemLines = pdf.splitTextToSize(sanitizeForPdf(`${prefix(i)}${item}`), CONTENT_W - 8)
+          const itemLines = pdf.splitTextToSize(
+            sanitizeForPdf(`${prefix(i)}${item}`),
+            CONTENT_W - 8
+          )
           for (const line of itemLines) {
             cursorY = ensureSpace(cursorY)
             pdf.text(line, MARGIN + 8, cursorY)
@@ -283,8 +287,18 @@ export function usePdfExport({
         }
         cursorY += 6
 
-        cursorY = renderBlock("STRENGTHS", section.commentary.strengths, cursorY, () => "•  ")
-        cursorY = renderBlock("AREAS OF CONCERN", section.commentary.concerns, cursorY, () => "•  ")
+        cursorY = renderBlock(
+          "STRENGTHS",
+          section.commentary.strengths,
+          cursorY,
+          () => "•  "
+        )
+        cursorY = renderBlock(
+          "AREAS OF CONCERN",
+          section.commentary.concerns,
+          cursorY,
+          () => "•  "
+        )
         cursorY = renderBlock(
           "RECOMMENDED ACTIONS",
           section.commentary.recommendations,

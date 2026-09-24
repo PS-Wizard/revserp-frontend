@@ -304,7 +304,8 @@ export function RevbotComposer({
       28 * actionColCount + (effortButtonRef.current?.offsetWidth ?? 0)
 
     const inlineGaps = 4 * 4
-    const inlineInputWidth = controls.clientWidth - fixedControlsWidth - inlineGaps
+    const inlineInputWidth =
+      controls.clientWidth - fixedControlsWidth - inlineGaps
     const needsFullWidth =
       prompt.includes("\n") || measure.offsetWidth + 8 > inlineInputWidth
     if (needsFullWidth !== expanded) setExpanded(needsFullWidth)
@@ -315,7 +316,8 @@ export function RevbotComposer({
       Math.max(contentHeight, 28),
       maxTextareaHeight
     )}px`
-    textarea.style.overflowY = contentHeight > maxTextareaHeight ? "auto" : "hidden"
+    textarea.style.overflowY =
+      contentHeight > maxTextareaHeight ? "auto" : "hidden"
   }, [actionColCount, expanded, prompt])
 
   useEffect(() => {
@@ -648,7 +650,8 @@ export function RevbotComposer({
             ))
           ) : (
             <div className="flex h-9 items-center px-2 text-[12px] text-muted-foreground">
-              No matching {autocomplete.mode === "source" ? "sources" : "commands"}
+              No matching{" "}
+              {autocomplete.mode === "source" ? "sources" : "commands"}
             </div>
           )}
           <div className="mt-1 border-t px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">
@@ -733,7 +736,7 @@ export function RevbotComposer({
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute invisible whitespace-pre text-[13px] leading-[18px]"
+          className="pointer-events-none invisible absolute text-[13px] leading-[18px] whitespace-pre"
           ref={measureRef}
         >
           {prompt}
@@ -827,7 +830,7 @@ export function RevbotComposer({
                 ? "col-span-full col-start-1 row-start-1"
                 : "col-start-2 row-start-1 min-w-0",
               isDark
-                ? "!bg-transparent selection:bg-white/20 [tap-highlight-color:transparent] active:!bg-transparent focus:!bg-transparent focus-visible:!bg-transparent"
+                ? "!bg-transparent [tap-highlight-color:transparent] selection:bg-white/20 focus:!bg-transparent focus-visible:!bg-transparent active:!bg-transparent"
                 : "dark:bg-transparent"
             )}
             disabled={disabled}
@@ -849,9 +852,7 @@ export function RevbotComposer({
               className={cn(
                 "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
                 isDark && "hover:bg-white/10",
-                expanded
-                  ? "col-start-2 row-start-2"
-                  : "col-start-3 row-start-1"
+                expanded ? "col-start-2 row-start-2" : "col-start-3 row-start-1"
               )}
               disabled={disabled}
               onClick={() => {
@@ -889,7 +890,7 @@ export function RevbotComposer({
                     ? "col-start-2 row-start-2"
                     : "col-start-3 row-start-1",
                 listening &&
-                  "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  "text-destructive-foreground bg-destructive hover:bg-destructive/90"
               )}
               disabled={disabled || !speechRecognitionAvailable}
               onClick={handleDictationToggle}

@@ -22,15 +22,18 @@ const dimensionTabs: Array<{ key: GSCDimensionTab; label: string }> = [
   { key: "devices", label: "Devices" },
 ]
 
-const queryPresets: Array<{ key: GSCQueryPreset; label: string; hint: string }> =
-  [
-    { key: "all", label: "All queries", hint: "Every query, most clicks first" },
-    {
-      key: "questions",
-      label: "Questions",
-      hint: "Queries phrased as a question or a comparison",
-    },
-  ]
+const queryPresets: Array<{
+  key: GSCQueryPreset
+  label: string
+  hint: string
+}> = [
+  { key: "all", label: "All queries", hint: "Every query, most clicks first" },
+  {
+    key: "questions",
+    label: "Questions",
+    hint: "Queries phrased as a question or a comparison",
+  },
+]
 
 export function GSCTableSection({
   activeDimensionTab,

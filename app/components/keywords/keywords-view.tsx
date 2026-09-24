@@ -22,7 +22,8 @@ export function KeywordsView({ projectId }: Props) {
           Keywords
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          See which target phrases have a home on your site — and which need one.
+          See which target phrases have a home on your site — and which need
+          one.
         </p>
       </div>
 

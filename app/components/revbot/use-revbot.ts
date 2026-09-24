@@ -125,7 +125,9 @@ function isTurnTerminal(status: RevbotStatus) {
 }
 
 function assistantMessageForTurn(turn: AITurnResponse) {
-  return [...turn.messages].reverse().find((message) => message.role === "assistant")
+  return [...turn.messages]
+    .reverse()
+    .find((message) => message.role === "assistant")
 }
 
 function isRetryableCutoff(turn: AITurnResponse) {
@@ -814,7 +816,9 @@ export function useRevbot({
         // already reached a terminal state, apply it instead of reopening a
         // finished stream.
         try {
-          const turn = await clientApiFetch<AITurnResponse>(`/ai/turns/${turnId}`)
+          const turn = await clientApiFetch<AITurnResponse>(
+            `/ai/turns/${turnId}`
+          )
           if (
             generation !== generationRef.current ||
             controller.signal.aborted ||
@@ -1189,7 +1193,9 @@ export function useRevbot({
       activeRequestRef.current = true
       setState((current) => {
         const withoutFailedAssistant = retryAssistantId
-          ? current.messages.filter((message) => message.id !== retryAssistantId)
+          ? current.messages.filter(
+              (message) => message.id !== retryAssistantId
+            )
           : current.messages
         const nextMessages = retryAssistantId
           ? [...withoutFailedAssistant, optimisticAssistant]

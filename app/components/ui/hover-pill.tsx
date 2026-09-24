@@ -1,9 +1,7 @@
 import type { CSSProperties, ReactNode } from "react"
 import { useRef, useState } from "react"
 
-import {
-  DropdownMenuContent,
-} from "~/components/ui/dropdown-menu"
+import { DropdownMenuContent } from "~/components/ui/dropdown-menu"
 import { cn } from "~/lib/utils"
 
 export const HOVER_PILL_TRANSITION =
@@ -155,11 +153,7 @@ export function useTablePill() {
   return { clearPill, containerRef, pill, rowRefs, showPill }
 }
 
-export function TableHoverPill({
-  pill,
-}: {
-  pill: HoverPillRect
-}) {
+export function TableHoverPill({ pill }: { pill: HoverPillRect }) {
   return (
     <span
       aria-hidden="true"

@@ -48,9 +48,7 @@ export function RevbotConversationSearchInput({
         )}
         onChange={(event) => onChange(event.target.value)}
         onClick={inDropdown ? (event) => event.stopPropagation() : undefined}
-        onKeyDown={
-          inDropdown ? (event) => event.stopPropagation() : undefined
-        }
+        onKeyDown={inDropdown ? (event) => event.stopPropagation() : undefined}
         onPointerDown={
           inDropdown ? (event) => event.stopPropagation() : undefined
         }

@@ -1,9 +1,5 @@
 export type IssueChangeType =
-  | "fixed"
-  | "new"
-  | "still_open"
-  | "not_verified"
-  | "no_longer_detected"
+  "fixed" | "new" | "still_open" | "not_verified" | "no_longer_detected"
 
 export interface IssueWorkspaceIssue {
   url: string
@@ -81,10 +77,7 @@ export interface IssueWorkspacePageDetail {
 }
 
 export type IssueWorkspaceChangeStatus =
-  | "fixed"
-  | "no_longer_detected"
-  | "awaiting_verification"
-  | "new"
+  "fixed" | "no_longer_detected" | "awaiting_verification" | "new"
 
 export type IssueWorkspaceBrowseTarget =
   | { kind: "summary" }

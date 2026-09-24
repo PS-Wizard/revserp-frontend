@@ -21,7 +21,9 @@ export function buildPageScopedBreakdown(
       const buckets = pillar.buckets
         .map((bucket) => {
           const issues = bucket.issues
-            .filter((issue) => keys.has(issueKey(pillar.id, bucket.id, issue.id)))
+            .filter((issue) =>
+              keys.has(issueKey(pillar.id, bucket.id, issue.id))
+            )
             .map((issue) => ({
               ...issue,
               issue_row_count: 1,
@@ -44,7 +46,9 @@ export function buildPageScopedBreakdown(
             issues,
           }
         })
-        .filter((bucket): bucket is NonNullable<typeof bucket> => bucket !== null)
+        .filter(
+          (bucket): bucket is NonNullable<typeof bucket> => bucket !== null
+        )
 
       if (!buckets.length) return null
 

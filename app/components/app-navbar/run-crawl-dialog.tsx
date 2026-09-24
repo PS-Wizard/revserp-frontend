@@ -87,124 +87,124 @@ export function RunCrawlDialog({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <FieldGroup>
               <Field>
-              <FieldLabel htmlFor="max-depth">Max depth</FieldLabel>
-              <Input
-                id="max-depth"
-                min="0"
-                onChange={(event) => onMaxDepthChange(event.target.value)}
-                step="1"
-                type="number"
-                value={maxDepth}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="max-pages">Max pages</FieldLabel>
-              <Input
-                id="max-pages"
-                min="1"
-                onChange={(event) => onMaxPagesChange(event.target.value)}
-                placeholder="Unlimited"
-                step="1"
-                type="number"
-                value={maxPages}
-              />
-              <FieldDescription>
-                Leave blank to crawl every discovered page.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="delay-ms">Delay (ms)</FieldLabel>
-              <Input
-                id="delay-ms"
-                min="1"
-                onChange={(event) => onDelayMsChange(event.target.value)}
-                placeholder="No delay"
-                step="1"
-                type="number"
-                value={delayMs}
-              />
-              <FieldDescription>
-                Time each worker waits between requests. Leave blank for no
-                delay.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="jitter-ms">Jitter (ms)</FieldLabel>
-              <Input
-                id="jitter-ms"
-                min="1"
-                onChange={(event) => onJitterMsChange(event.target.value)}
-                placeholder="None"
-                step="1"
-                type="number"
-                value={jitterMs}
-              />
-              <FieldDescription>
-                Randomizes the delay by ± this amount so requests look less
-                robotic. Leave blank for none.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="fetch-timeout-seconds">
-                Fetch timeout seconds
-              </FieldLabel>
-              <Input
-                id="fetch-timeout-seconds"
-                min="1"
-                onChange={(event) =>
-                  onFetchTimeoutSecondsChange(event.target.value)
-                }
-                step="1"
-                type="number"
-                value={fetchTimeoutSeconds}
-              />
-              <FieldDescription>
-                Recommended defaults are already filled in.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <Button
-                aria-pressed={forceFullCrawl}
-                className="w-full"
-                onClick={() => onForceFullCrawlChange(!forceFullCrawl)}
-                type="button"
-                variant={forceFullCrawl ? "default" : "outline"}
-              >
-                <RefreshCwIcon data-icon="inline-start" />
-                Force full crawl
-              </Button>
-              <FieldDescription>
-                Refetch and process every page instead of reusing unchanged
-                pages.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <Button
-                aria-pressed={honourRobotsTxt}
-                className="w-full"
-                onClick={() => onHonourRobotsTxtChange(!honourRobotsTxt)}
-                type="button"
-                variant={honourRobotsTxt ? "default" : "outline"}
-              >
-                <ShieldCheckIcon data-icon="inline-start" />
-                Honour robots.txt
-              </Button>
-              <FieldDescription>
-                Skip pages disallowed by the site's robots.txt.
-              </FieldDescription>
-            </Field>
-            <Field>
-              <Button
-                aria-pressed={renderJavaScript}
-                className="w-full"
-                onClick={() => onRenderJavaScriptChange(!renderJavaScript)}
-                type="button"
-                variant={renderJavaScript ? "default" : "outline"}
-              >
-                <MonitorPlayIcon data-icon="inline-start" />
-                Render JavaScript
-              </Button>
-            </Field>
+                <FieldLabel htmlFor="max-depth">Max depth</FieldLabel>
+                <Input
+                  id="max-depth"
+                  min="0"
+                  onChange={(event) => onMaxDepthChange(event.target.value)}
+                  step="1"
+                  type="number"
+                  value={maxDepth}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="max-pages">Max pages</FieldLabel>
+                <Input
+                  id="max-pages"
+                  min="1"
+                  onChange={(event) => onMaxPagesChange(event.target.value)}
+                  placeholder="Unlimited"
+                  step="1"
+                  type="number"
+                  value={maxPages}
+                />
+                <FieldDescription>
+                  Leave blank to crawl every discovered page.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="delay-ms">Delay (ms)</FieldLabel>
+                <Input
+                  id="delay-ms"
+                  min="1"
+                  onChange={(event) => onDelayMsChange(event.target.value)}
+                  placeholder="No delay"
+                  step="1"
+                  type="number"
+                  value={delayMs}
+                />
+                <FieldDescription>
+                  Time each worker waits between requests. Leave blank for no
+                  delay.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="jitter-ms">Jitter (ms)</FieldLabel>
+                <Input
+                  id="jitter-ms"
+                  min="1"
+                  onChange={(event) => onJitterMsChange(event.target.value)}
+                  placeholder="None"
+                  step="1"
+                  type="number"
+                  value={jitterMs}
+                />
+                <FieldDescription>
+                  Randomizes the delay by ± this amount so requests look less
+                  robotic. Leave blank for none.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="fetch-timeout-seconds">
+                  Fetch timeout seconds
+                </FieldLabel>
+                <Input
+                  id="fetch-timeout-seconds"
+                  min="1"
+                  onChange={(event) =>
+                    onFetchTimeoutSecondsChange(event.target.value)
+                  }
+                  step="1"
+                  type="number"
+                  value={fetchTimeoutSeconds}
+                />
+                <FieldDescription>
+                  Recommended defaults are already filled in.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <Button
+                  aria-pressed={forceFullCrawl}
+                  className="w-full"
+                  onClick={() => onForceFullCrawlChange(!forceFullCrawl)}
+                  type="button"
+                  variant={forceFullCrawl ? "default" : "outline"}
+                >
+                  <RefreshCwIcon data-icon="inline-start" />
+                  Force full crawl
+                </Button>
+                <FieldDescription>
+                  Refetch and process every page instead of reusing unchanged
+                  pages.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <Button
+                  aria-pressed={honourRobotsTxt}
+                  className="w-full"
+                  onClick={() => onHonourRobotsTxtChange(!honourRobotsTxt)}
+                  type="button"
+                  variant={honourRobotsTxt ? "default" : "outline"}
+                >
+                  <ShieldCheckIcon data-icon="inline-start" />
+                  Honour robots.txt
+                </Button>
+                <FieldDescription>
+                  Skip pages disallowed by the site's robots.txt.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <Button
+                  aria-pressed={renderJavaScript}
+                  className="w-full"
+                  onClick={() => onRenderJavaScriptChange(!renderJavaScript)}
+                  type="button"
+                  variant={renderJavaScript ? "default" : "outline"}
+                >
+                  <MonitorPlayIcon data-icon="inline-start" />
+                  Render JavaScript
+                </Button>
+              </Field>
             </FieldGroup>
 
             <FieldError className="mt-4">{runCrawlError}</FieldError>

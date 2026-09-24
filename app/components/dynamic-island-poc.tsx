@@ -87,7 +87,7 @@ export function DynamicIslandDockedChrome({
           <motion.button
             aria-label="Chat with Revbot (Command or Control + K)"
             className={cn(
-              "revbot-docked-launcher pointer-events-auto flex items-center justify-center overflow-hidden rounded-full border border-border surface-dialog",
+              "revbot-docked-launcher surface-dialog pointer-events-auto flex items-center justify-center overflow-hidden rounded-full border border-border",
               islandDockedSizeClass
             )}
             data-active={active ? "true" : undefined}
@@ -246,7 +246,7 @@ export function DynamicIslandPanel({
                 {(pill) => (
                   <>
                     <div
-                      className="sticky top-0 z-10 surface-dialog p-1.5 pb-2"
+                      className="surface-dialog sticky top-0 z-10 p-1.5 pb-2"
                       onPointerDown={(event) => event.stopPropagation()}
                     >
                       <RevbotConversationSearchInput

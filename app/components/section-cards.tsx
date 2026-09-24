@@ -91,9 +91,7 @@ export const SectionCards = memo(function SectionCards({
                 {card.value === undefined ? (
                   "—"
                 ) : (
-                  <>
-                    {Math.round(card.value)}%
-                  </>
+                  <>{Math.round(card.value)}%</>
                 )}
               </CardTitle>
               {delta !== null && <TrendBadge delta={delta} />}

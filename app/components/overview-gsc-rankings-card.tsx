@@ -220,7 +220,9 @@ function RankingsList({
             {hasMore ? (
               <div className="flex items-center justify-center py-3">
                 {isLoadingMore ? (
-                  <span className="text-xs text-muted-foreground">Loading…</span>
+                  <span className="text-xs text-muted-foreground">
+                    Loading…
+                  </span>
                 ) : (
                   <div className="h-1" ref={loadMoreRef} />
                 )}

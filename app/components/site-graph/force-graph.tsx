@@ -311,7 +311,10 @@ export const ForceGraph = memo(function ForceGraph({
 
     // The normal base render uses the shortest-path tree. Broken-page mode
     // uses every real inbound edge so each failure keeps all of its sources.
-    const { depth: nodeDepths, parent: nodeParents } = computeDepths(nodes, edges)
+    const { depth: nodeDepths, parent: nodeParents } = computeDepths(
+      nodes,
+      edges
+    )
     for (let i = 0; i < simNodes.length; i++) simNodes[i].depth = nodeDepths[i]
     const layoutEdges: Array<[number, number]> = []
     for (let i = 0; i < nodeParents.length; i++) {

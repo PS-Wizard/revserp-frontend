@@ -117,7 +117,9 @@ export function RevbotMessageAvatar({
         className
       )}
     >
-      {active ? <RevbotActiveRing className="-inset-0.5 border-white/35" /> : null}
+      {active ? (
+        <RevbotActiveRing className="-inset-0.5 border-white/35" />
+      ) : null}
       <RevbotAvatarCore active={active} size={size} />
     </div>
   )
@@ -127,7 +129,5 @@ export function RevbotMessageAvatar({
 export function RevbotEmptyAvatar({ size = 48 }: { size?: number }) {
   const { ref } = useGaze({ travel: 3, lookAt: "pointer" })
 
-  return (
-    <RevbotAvatarCore animate="always" ref={ref} size={size} />
-  )
+  return <RevbotAvatarCore animate="always" ref={ref} size={size} />
 }

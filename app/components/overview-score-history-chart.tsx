@@ -107,7 +107,7 @@ export const OverviewScoreHistoryChart = memo(
                 }
                 className={cn(
                   "flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md py-1.5 text-center transition-opacity duration-150",
-                  "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  "hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
                   "w-1/2 px-2 sm:w-1/4 sm:px-3 lg:flex-1 lg:px-2",
                   index > 0 && "border-l border-border",
                   isDimmed && "opacity-40"

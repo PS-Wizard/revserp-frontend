@@ -3,9 +3,7 @@ export type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
 }
 
-type InstallPromptListener = (
-  prompt: BeforeInstallPromptEvent | null
-) => void
+type InstallPromptListener = (prompt: BeforeInstallPromptEvent | null) => void
 
 let deferredInstallPrompt: BeforeInstallPromptEvent | null = null
 const listeners = new Set<InstallPromptListener>()

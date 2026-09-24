@@ -125,7 +125,7 @@ function Hero() {
         <LandingHeroBackground />
       </div>
 
-      <div className="relative z-10 mx-auto flex min-h-svh max-w-6xl flex-col justify-end px-6 pb-20 pt-28 md:px-10 md:pb-28 md:pt-32">
+      <div className="relative z-10 mx-auto flex min-h-svh max-w-6xl flex-col justify-end px-6 pt-28 pb-20 md:px-10 md:pt-32 md:pb-28">
         <div className="max-w-xl">
           <h1 className="text-[2.35rem] leading-[1.08] font-medium tracking-[-0.03em] text-white md:text-[3.25rem] lg:text-[3.75rem]">
             Fix what search sees before your rankings slip.
@@ -192,7 +192,7 @@ function Features() {
           {features.map((feature, index) => (
             <Reveal key={feature.title} delay={index * 40}>
               <article className="grid gap-3 py-8 md:grid-cols-[7rem_1fr] md:gap-10 md:py-10">
-                <p className="text-sm tabular-nums text-white/28">
+                <p className="text-sm text-white/28 tabular-nums">
                   {String(index + 1).padStart(2, "0")}
                 </p>
                 <div className="grid gap-3 md:grid-cols-[minmax(0,14rem)_1fr] md:gap-12">

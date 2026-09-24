@@ -73,11 +73,16 @@ export function PdfPrintSections({
   )
 
   const sortedCrawls = useMemo(
-    () => [...recentCrawls].sort((a, b) => {
-      const aTime = new Date(a.completed_at ?? a.started_at ?? a.created_at).getTime()
-      const bTime = new Date(b.completed_at ?? b.started_at ?? b.created_at).getTime()
-      return bTime - aTime
-    }),
+    () =>
+      [...recentCrawls].sort((a, b) => {
+        const aTime = new Date(
+          a.completed_at ?? a.started_at ?? a.created_at
+        ).getTime()
+        const bTime = new Date(
+          b.completed_at ?? b.started_at ?? b.created_at
+        ).getTime()
+        return bTime - aTime
+      }),
     [recentCrawls]
   )
 
@@ -103,7 +108,14 @@ export function PdfPrintSections({
 
       {/* Overall section */}
       <div ref={overallRef} style={{ background: "#09090b", padding: "16px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "0.3fr 0.7fr", gap: "16px", marginBottom: "16px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "0.3fr 0.7fr",
+            gap: "16px",
+            marginBottom: "16px",
+          }}
+        >
           <PrintDonutChart
             title="Overall Score"
             description="Current crawl pillar scores"
@@ -143,7 +155,10 @@ export function PdfPrintSections({
       </div>
 
       {/* PageSpeed section */}
-      <div ref={pagespeedRef} style={{ background: "#09090b", padding: "16px" }}>
+      <div
+        ref={pagespeedRef}
+        style={{ background: "#09090b", padding: "16px" }}
+      >
         <PillarSection
           crawlBreakdowns={crawlBreakdowns}
           pillarId="pagespeed"
@@ -222,23 +237,60 @@ function PrintCover({
       }}
     >
       {/* header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
+      >
         <div>
-          <div style={{ fontSize: 25, fontWeight: 600, letterSpacing: "-0.01em" }}>Revserp.ai</div>
-          <div style={{ fontSize: 15, color: COVER.muted, marginTop: 2 }}>a Revketer LLC product</div>
+          <div
+            style={{ fontSize: 25, fontWeight: 600, letterSpacing: "-0.01em" }}
+          >
+            Revserp.ai
+          </div>
+          <div style={{ fontSize: 15, color: COVER.muted, marginTop: 2 }}>
+            a Revketer LLC product
+          </div>
         </div>
-        <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.01em", fontVariantNumeric: "tabular-nums" }}>
+        <div
+          style={{
+            fontSize: 22,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {quarterStr}
         </div>
       </div>
 
       {/* title */}
       <div style={{ marginTop: 56 }}>
-        <h1 style={{ margin: 0, fontSize: 92, lineHeight: 0.92, fontWeight: 600, letterSpacing: "-0.035em", maxWidth: "64%" }}>
+        <h1
+          style={{
+            margin: 0,
+            fontSize: 92,
+            lineHeight: 0.92,
+            fontWeight: 600,
+            letterSpacing: "-0.035em",
+            maxWidth: "64%",
+          }}
+        >
           Site Audit Report
         </h1>
-        <p style={{ marginTop: 20, fontSize: 22, color: COVER.muted, maxWidth: "52%", lineHeight: 1.4 }}>
-          A complete assessment of search, answer-engine, and performance health for the crawled property.
+        <p
+          style={{
+            marginTop: 20,
+            fontSize: 22,
+            color: COVER.muted,
+            maxWidth: "52%",
+            lineHeight: 1.4,
+          }}
+        >
+          A complete assessment of search, answer-engine, and performance health
+          for the crawled property.
         </p>
       </div>
 
@@ -254,25 +306,56 @@ function PrintCover({
           height: 430,
         }}
       >
-        <div style={{ ...cellBase, gridColumn: 1, gridRow: "1 / 3", background: "linear-gradient(155deg, #242426 0%, #1c1c1e 60%)" }}>
-          <div style={{ ...capStyle, textTransform: "uppercase", letterSpacing: "0.16em", fontWeight: 600 }}>Overall</div>
+        <div
+          style={{
+            ...cellBase,
+            gridColumn: 1,
+            gridRow: "1 / 3",
+            background: "linear-gradient(155deg, #242426 0%, #1c1c1e 60%)",
+          }}
+        >
+          <div
+            style={{
+              ...capStyle,
+              textTransform: "uppercase",
+              letterSpacing: "0.16em",
+              fontWeight: 600,
+            }}
+          >
+            Overall
+          </div>
           <div style={{ ...valStyle, fontSize: 158 }}>
             {coverScore(currentCrawl?.overall_score)}
             {currentCrawl?.overall_score != null && (
-              <span style={{ fontSize: 46, fontWeight: 500, marginLeft: 4, color: COVER.muted }}>%</span>
+              <span
+                style={{
+                  fontSize: 46,
+                  fontWeight: 500,
+                  marginLeft: 4,
+                  color: COVER.muted,
+                }}
+              >
+                %
+              </span>
             )}
           </div>
-          <div style={{ fontSize: 17, color: COVER.muted, marginTop: 10 }}>Weighted across all three pillars</div>
+          <div style={{ fontSize: 17, color: COVER.muted, marginTop: 10 }}>
+            Weighted across all three pillars
+          </div>
         </div>
 
         <div style={{ ...cellBase, gridColumn: 2, gridRow: 1 }}>
           <div style={capStyle}>SEO</div>
-          <div style={{ ...valStyle, fontSize: 63 }}>{coverScore(currentCrawl?.seo_score)}</div>
+          <div style={{ ...valStyle, fontSize: 63 }}>
+            {coverScore(currentCrawl?.seo_score)}
+          </div>
         </div>
 
         <div style={{ ...cellBase, gridColumn: 3, gridRow: 1 }}>
           <div style={capStyle}>AEO</div>
-          <div style={{ ...valStyle, fontSize: 63 }}>{coverScore(currentCrawl?.aeo_score)}</div>
+          <div style={{ ...valStyle, fontSize: 63 }}>
+            {coverScore(currentCrawl?.aeo_score)}
+          </div>
         </div>
 
         <div
@@ -285,11 +368,22 @@ function PrintCover({
             justifyContent: "space-between",
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              paddingBottom: 8,
+            }}
+          >
             <span style={capStyle}>PageSpeed</span>
-            <span style={{ fontSize: 15, color: COVER.muted }}>Google PSI · mobile</span>
+            <span style={{ fontSize: 15, color: COVER.muted }}>
+              Google PSI · mobile
+            </span>
           </div>
-          <div style={{ ...valStyle, marginTop: 0, fontSize: 63 }}>{coverScore(currentCrawl?.pagespeed_score)}</div>
+          <div style={{ ...valStyle, marginTop: 0, fontSize: 63 }}>
+            {coverScore(currentCrawl?.pagespeed_score)}
+          </div>
         </div>
 
         <div
@@ -300,21 +394,30 @@ function PrintCover({
             border: `1px solid ${COVER.border}`,
             overflow: "hidden",
             position: "relative",
-            background: "linear-gradient(180deg, #fafafa 0%, #8f8f8f 40%, #4d4d4d 72%, #1c1c1e 100%)",
+            background:
+              "linear-gradient(180deg, #fafafa 0%, #8f8f8f 40%, #4d4d4d 72%, #1c1c1e 100%)",
           }}
         >
           <div
             style={{
               position: "absolute",
               inset: 0,
-              background: "repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 15px)",
+              background:
+                "repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 15px)",
             }}
           />
         </div>
       </div>
 
       {/* footer meta */}
-      <div style={{ marginTop: 28, display: "flex", justifyContent: "space-between", gap: 28 }}>
+      <div
+        style={{
+          marginTop: 28,
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 28,
+        }}
+      >
         {[
           { k: "Prepared for", v: projectName, right: false },
           { k: "Generated", v: dateStr, right: false },
@@ -322,8 +425,26 @@ function PrintCover({
           { k: "Presented by", v: "Revketer LLC", right: true },
         ].map((col) => (
           <div key={col.k} style={{ textAlign: col.right ? "right" : "left" }}>
-            <div style={{ color: COVER.muted, textTransform: "uppercase", letterSpacing: "0.14em", fontSize: 13 }}>{col.k}</div>
-            <div style={{ marginTop: 4, color: COVER.fg, fontWeight: 500, fontSize: 16 }}>{col.v}</div>
+            <div
+              style={{
+                color: COVER.muted,
+                textTransform: "uppercase",
+                letterSpacing: "0.14em",
+                fontSize: 13,
+              }}
+            >
+              {col.k}
+            </div>
+            <div
+              style={{
+                marginTop: 4,
+                color: COVER.fg,
+                fontWeight: 500,
+                fontSize: 16,
+              }}
+            >
+              {col.v}
+            </div>
           </div>
         ))}
       </div>
@@ -331,7 +452,12 @@ function PrintCover({
   )
 }
 
-type DonutSegment = { key: string; label: string; value?: number | null; color?: string }
+type DonutSegment = {
+  key: string
+  label: string
+  value?: number | null
+  color?: string
+}
 
 function PrintDonutChart({
   title,
@@ -366,33 +492,50 @@ function PrintDonutChart({
   })
 
   return (
-    <div style={{
-      background: "linear-gradient(135deg, #1c1c1e 0%, #161618 100%)",
-      border: "1px solid rgba(255,255,255,0.08)",
-      borderRadius: "12px",
-      padding: "20px",
-      display: "flex",
-      flexDirection: "column",
-      gap: "12px",
-    }}>
+    <div
+      style={{
+        background: "linear-gradient(135deg, #1c1c1e 0%, #161618 100%)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: "12px",
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+      }}
+    >
       <div>
-        <div style={{ color: "#fff", fontWeight: 600, fontSize: "15px" }}>{title}</div>
-        {description && <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>{description}</div>}
+        <div style={{ color: "#fff", fontWeight: 600, fontSize: "15px" }}>
+          {title}
+        </div>
+        {description && (
+          <div style={{ color: "#888", fontSize: "12px", marginTop: "2px" }}>
+            {description}
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", justifyContent: "center" }}>
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ overflow: "visible" }}>
+        <svg
+          width={SIZE}
+          height={SIZE}
+          viewBox={`0 0 ${SIZE} ${SIZE}`}
+          style={{ overflow: "visible" }}
+        >
           {rings.map(({ seg, r, dash, gap }) => (
             <g key={seg.key}>
               {/* track */}
               <circle
-                cx={CX} cy={CY} r={r}
+                cx={CX}
+                cy={CY}
+                r={r}
                 fill="none"
                 stroke="rgba(255,255,255,0.08)"
                 strokeWidth={RING_WIDTH}
               />
               {/* value arc */}
               <circle
-                cx={CX} cy={CY} r={r}
+                cx={CX}
+                cy={CY}
+                r={r}
                 fill="none"
                 stroke={seg.color ?? "#fff"}
                 strokeWidth={RING_WIDTH}
@@ -404,7 +547,15 @@ function PrintDonutChart({
           ))}
           {/* center label */}
           {centerValue != null && (
-            <text x={CX} y={CY + 7} textAnchor="middle" fill="#fff" fontSize="30" fontWeight="700" fontFamily="'Geist Variable', system-ui, sans-serif">
+            <text
+              x={CX}
+              y={CY + 7}
+              textAnchor="middle"
+              fill="#fff"
+              fontSize="30"
+              fontWeight="700"
+              fontFamily="'Geist Variable', system-ui, sans-serif"
+            >
               {Math.round(centerValue)}%
             </text>
           )}
@@ -413,12 +564,30 @@ function PrintDonutChart({
       {/* legend */}
       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
         {segments.map((seg) => (
-          <div key={seg.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px" }}>
+          <div
+            key={seg.key}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "12px",
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: seg.color ?? "#fff", flexShrink: 0 }} />
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: seg.color ?? "#fff",
+                  flexShrink: 0,
+                }}
+              />
               <span style={{ color: "#aaa" }}>{seg.label}</span>
             </div>
-            <span style={{ color: "#fff", fontWeight: 500 }}>{seg.value != null ? `${Math.round(seg.value)}%` : "N/A"}</span>
+            <span style={{ color: "#fff", fontWeight: 500 }}>
+              {seg.value != null ? `${Math.round(seg.value)}%` : "N/A"}
+            </span>
           </div>
         ))}
       </div>
@@ -446,15 +615,25 @@ function PillarSection({
       color: getPillarChartColor(pillarId, index),
     })) ?? []
 
-  const buckets = crawlBreakdowns[0]?.breakdown.pillars.find((p) => p.id === pillarId)?.buckets ?? []
-  const previousPillar = crawlBreakdowns[1]?.breakdown.pillars.find((p) => p.id === pillarId)
+  const buckets =
+    crawlBreakdowns[0]?.breakdown.pillars.find((p) => p.id === pillarId)
+      ?.buckets ?? []
+  const previousPillar = crawlBreakdowns[1]?.breakdown.pillars.find(
+    (p) => p.id === pillarId
+  )
   const chronologicalBreakdowns = useMemo(
     () => [...crawlBreakdowns].reverse(),
     [crawlBreakdowns]
   )
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "0.3fr 0.7fr", gap: "16px" }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "0.3fr 0.7fr",
+        gap: "16px",
+      }}
+    >
       <PrintDonutChart
         title={`${title} Score`}
         description="Current crawl bucket scores"
@@ -465,13 +644,17 @@ function PillarSection({
         <Card className="bg-gradient-to-br from-card via-card to-muted/30">
           <CardHeader>
             <CardTitle>No bucket scores yet</CardTitle>
-            <CardDescription>Run a completed crawl to populate this view.</CardDescription>
+            <CardDescription>
+              Run a completed crawl to populate this view.
+            </CardDescription>
           </CardHeader>
         </Card>
       ) : (
         <div className="grid grid-cols-4 gap-4">
           {buckets.map((bucket) => {
-            const previousBucket = previousPillar?.buckets.find((b) => b.id === bucket.id)
+            const previousBucket = previousPillar?.buckets.find(
+              (b) => b.id === bucket.id
+            )
             const series = chronologicalBreakdowns.map(
               ({ breakdown }) =>
                 breakdown.pillars

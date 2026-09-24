@@ -53,7 +53,9 @@ async function fetchMapsReviews(projectId: string, placeId: string) {
   }
 }
 
-function isReviewsRefetchAllowed(refetchAvailableAfter: string | null | undefined) {
+function isReviewsRefetchAllowed(
+  refetchAvailableAfter: string | null | undefined
+) {
   if (!refetchAvailableAfter) return true
   return new Date(refetchAvailableAfter).getTime() <= Date.now()
 }
@@ -95,7 +97,11 @@ function isItemMatched(
   if (!listing.resolved) return false
   if (listing.cid && item.cid === listing.cid) return true
   if (listing.place_id && item.placeId === listing.place_id) return true
-  if (listing.website && item.website && sameHost(item.website, listing.website)) {
+  if (
+    listing.website &&
+    item.website &&
+    sameHost(item.website, listing.website)
+  ) {
     return true
   }
   if (
@@ -189,7 +195,7 @@ function MapsRankingRow({
       className={cn(
         "flex min-h-14 w-full items-center gap-3 rounded-md py-4 text-left transition-colors hover:bg-foreground/[0.03]",
         !isLast && "border-b border-border/40",
-        isMatched && "bg-emerald-500/10 ring-1 ring-inset ring-emerald-500/30"
+        isMatched && "bg-emerald-500/10 ring-1 ring-emerald-500/30 ring-inset"
       )}
       onClick={onSelect}
       type="button"
@@ -197,9 +203,7 @@ function MapsRankingRow({
       <span
         className={cn(
           "w-6 shrink-0 text-center text-[13px] tabular-nums",
-          isMatched
-            ? "font-semibold text-emerald-500"
-            : "text-muted-foreground"
+          isMatched ? "font-semibold text-emerald-500" : "text-muted-foreground"
         )}
       >
         {item.position}
@@ -321,7 +325,7 @@ function ReviewCard({ review }: { review: MapsReview }) {
           <div className="size-9 shrink-0 rounded-full bg-muted" />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-snug">{review.user.name}</p>
+          <p className="text-sm leading-snug font-medium">{review.user.name}</p>
           <p className="text-xs text-muted-foreground">
             {review.user.reviews.toLocaleString()} reviews ·{" "}
             {review.user.photos.toLocaleString()} photos
@@ -645,7 +649,9 @@ function MapsListingDrawer({
               {item.types.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {item.types.map((type) => (
-                    <Badge key={type} variant="outline">{type}</Badge>
+                    <Badge key={type} variant="outline">
+                      {type}
+                    </Badge>
                   ))}
                 </div>
               ) : null}
@@ -664,7 +670,7 @@ function MapsListingDrawer({
                 </div>
               ) : null}
 
-              {(item.cid || item.placeId) ? (
+              {item.cid || item.placeId ? (
                 <div className="space-y-1 font-mono text-xs text-muted-foreground">
                   {item.cid ? <p>cid: {item.cid}</p> : null}
                   {item.placeId ? <p>placeId: {item.placeId}</p> : null}
@@ -789,10 +795,7 @@ export function OverviewMapsVisibilityCard({
     )
   } else if (!data) {
     body = (
-      <MapsEmptyState
-        isStarting={startRun.isPending}
-        onStart={handleStart}
-      />
+      <MapsEmptyState isStarting={startRun.isPending} onStart={handleStart} />
     )
   } else if (isRunning) {
     body = <RunningState />
@@ -836,10 +839,7 @@ export function OverviewMapsVisibilityCard({
     )
   } else {
     body = (
-      <MapsEmptyState
-        isStarting={startRun.isPending}
-        onStart={handleStart}
-      />
+      <MapsEmptyState isStarting={startRun.isPending} onStart={handleStart} />
     )
   }
 

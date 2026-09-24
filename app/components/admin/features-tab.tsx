@@ -131,44 +131,44 @@ function hasInvalidAISettings(workspace: AdminWorkspaceFeatures) {
 type EditedRows = Map<string, AdminWorkspaceFeatures>
 
 function ToggleRow({
-	checked,
-	label,
-	description,
-	meta,
-	disabled,
-	onChange,
+  checked,
+  label,
+  description,
+  meta,
+  disabled,
+  onChange,
 }: {
-	checked: boolean
-	label: string
-	description: string
-	meta?: string
-	disabled?: boolean
-	onChange: (checked: boolean) => void
+  checked: boolean
+  label: string
+  description: string
+  meta?: string
+  disabled?: boolean
+  onChange: (checked: boolean) => void
 }) {
-	const toggle = () => {
-		if (!disabled) onChange(!checked)
-	}
+  const toggle = () => {
+    if (!disabled) onChange(!checked)
+  }
 
-	return (
-		<div
-			role="checkbox"
-			aria-checked={checked}
-			aria-disabled={disabled}
-			aria-label={label}
-			tabIndex={disabled ? -1 : 0}
-			onClick={toggle}
-			onKeyDown={(event) => {
-				if (event.key === " " || event.key === "Enter") {
-					event.preventDefault()
-					toggle()
-				}
-			}}
-			className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-			checked
-				? "border-primary/30 bg-primary/5 dark:bg-primary/10"
-				: "border-dashed hover:bg-muted/40"
-			} ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
-		>
+  return (
+    <div
+      role="checkbox"
+      aria-checked={checked}
+      aria-disabled={disabled}
+      aria-label={label}
+      tabIndex={disabled ? -1 : 0}
+      onClick={toggle}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault()
+          toggle()
+        }
+      }}
+      className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        checked
+          ? "border-primary/30 bg-primary/5 dark:bg-primary/10"
+          : "border-dashed hover:bg-muted/40"
+      } ${disabled ? "cursor-not-allowed opacity-50" : ""}`}
+    >
       <span className="pointer-events-none mt-0.5">
         <Checkbox checked={checked} />
       </span>
@@ -369,8 +369,7 @@ export function FeaturesTab() {
     open !== null &&
     (!Number.isInteger(open.ai_visibility_audit_monthly_limit) ||
       open.ai_visibility_audit_monthly_limit < 0 ||
-      open.ai_visibility_audit_monthly_limit >
-        MAX_AI_VISIBILITY_AUDIT_LIMIT)
+      open.ai_visibility_audit_monthly_limit > MAX_AI_VISIBILITY_AUDIT_LIMIT)
   const maxCompetitorsInvalid =
     open !== null &&
     (!Number.isInteger(open.max_competitors) ||
@@ -780,33 +779,37 @@ export function FeaturesTab() {
                   <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
                     <FieldGroup className="gap-2">
                       {aiTools.map((tool) => {
-						const featureOff = tool.gated_by_feature
-							? open[tool.gated_by_feature as keyof AdminWorkspaceFeatures] === false
-							: false
-						return (
-							<ToggleRow
-								key={tool.name}
-								checked={!open.disabled_ai_tools.includes(tool.name)}
-								label={tool.label}
-								description={
-									featureOff
-										? `${tool.description} Requires the ${tool.gated_by_feature} feature.`
-										: tool.description
-								}
-								meta={tool.name}
-								disabled={featureOff}
-								onChange={(checked) =>
-									updateRow(openWorkspace, {
-										disabled_ai_tools: checked
-											? open.disabled_ai_tools.filter(
-													(name) => name !== tool.name
-												)
-												: [...open.disabled_ai_tools, tool.name],
-									})
-								}
-							/>
-						)
-					  })}
+                        const featureOff = tool.gated_by_feature
+                          ? open[
+                              tool.gated_by_feature as keyof AdminWorkspaceFeatures
+                            ] === false
+                          : false
+                        return (
+                          <ToggleRow
+                            key={tool.name}
+                            checked={
+                              !open.disabled_ai_tools.includes(tool.name)
+                            }
+                            label={tool.label}
+                            description={
+                              featureOff
+                                ? `${tool.description} Requires the ${tool.gated_by_feature} feature.`
+                                : tool.description
+                            }
+                            meta={tool.name}
+                            disabled={featureOff}
+                            onChange={(checked) =>
+                              updateRow(openWorkspace, {
+                                disabled_ai_tools: checked
+                                  ? open.disabled_ai_tools.filter(
+                                      (name) => name !== tool.name
+                                    )
+                                  : [...open.disabled_ai_tools, tool.name],
+                              })
+                            }
+                          />
+                        )
+                      })}
                     </FieldGroup>
                   </div>
 

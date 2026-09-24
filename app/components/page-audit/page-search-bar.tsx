@@ -1,13 +1,6 @@
 "use client"
 
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Loader2Icon, SearchIcon, XIcon } from "lucide-react"
 
 import {
@@ -138,7 +131,7 @@ export const PageSearchBar = memo(function PageSearchBar({
     : query
 
   return (
-    <div ref={rootRef} className="relative mx-auto w-full min-w-0 max-w-md">
+    <div ref={rootRef} className="relative mx-auto w-full max-w-md min-w-0">
       <SearchIcon
         aria-hidden="true"
         className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"

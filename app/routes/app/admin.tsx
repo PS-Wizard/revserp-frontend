@@ -494,8 +494,8 @@ function AIConfigTab() {
           <CardContent className="flex flex-col gap-1.5">
             <Label>Base system prompt</Label>
             <p className="text-xs text-muted-foreground">
-              Owned by the code and applied to every workspace. The fields
-              below are added after it and cannot remove it.
+              Owned by the code and applied to every workspace. The fields below
+              are added after it and cannot remove it.
             </p>
             <Textarea
               className="min-h-[220px] font-mono text-xs"

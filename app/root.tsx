@@ -66,10 +66,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           sizes="180x180"
         />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta
-          name="apple-mobile-web-app-status-bar-style"
-          content="black"
-        />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <meta name="apple-mobile-web-app-title" content="Revserp" />
         <script dangerouslySetInnerHTML={{ __html: restoreThemeScript }} />
         <Meta />

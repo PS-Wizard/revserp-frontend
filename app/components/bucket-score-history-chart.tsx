@@ -10,9 +10,7 @@ import type { CrawlResponse } from "~/lib/api.types"
 import { formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import { cn } from "~/lib/utils"
-import {
-  getScoreRange,
-} from "~/components/score-history-chart-utils"
+import { getScoreRange } from "~/components/score-history-chart-utils"
 
 type CrawlBreakdown = {
   crawl: CrawlResponse
@@ -130,7 +128,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
               }
               className={cn(
                 "flex min-w-0 cursor-pointer flex-col items-center gap-1 rounded-md py-1.5 text-center transition-opacity duration-150",
-                "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
                 buckets.length <= 2
                   ? "w-1/2 px-2 sm:px-3"
                   : buckets.length === 3
@@ -219,7 +217,5 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
     </div>
   )
 
-  return (
-    <section className="w-full min-w-0">{chartBody}</section>
-  )
+  return <section className="w-full min-w-0">{chartBody}</section>
 })

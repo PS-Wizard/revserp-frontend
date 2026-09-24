@@ -116,11 +116,7 @@ export function GSCDateRangePicker({
     [earliestTimestamp, latestTimestamp]
   )
 
-  const triggerLabel = formatRangeLabel(
-    appliedRange,
-    activePreset,
-    fullRange
-  )
+  const triggerLabel = formatRangeLabel(appliedRange, activePreset, fullRange)
 
   const disabledBefore = earliestTimestamp
     ? startOfDay(new Date(earliestTimestamp))
