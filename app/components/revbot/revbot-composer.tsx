@@ -122,6 +122,9 @@ function getAutocomplete(value: string, caret: number): Autocomplete | null {
 
 type DictationRecognition = {
   abort: () => void
+  continuous?: boolean
+  interimResults?: boolean
+  lang?: string
   onend: (() => void) | null
   onerror: (() => void) | null
   onresult: ((event: DictationRecognitionResultEvent) => void) | null
@@ -209,6 +212,14 @@ export function RevbotComposer({
   const shaderRef = useRef<ShaderController | null>(null)
   const sweepRef = useRef<ReturnType<typeof playSweep> | null>(null)
   const recognitionRef = useRef<DictationRecognition | null>(null)
+  const dictationBaseRef = useRef("")
+  const dictationCancelRef = useRef(false)
+  const dictationStartRef = useRef(0)
+  const dictationTimerRef = useRef<number | null>(null)
+  const dictationStreamRef = useRef<MediaStream | null>(null)
+  const dictationAudioRef = useRef<AudioContext | null>(null)
+  const dictationAnalyserRef = useRef<AnalyserNode | null>(null)
+  const dictationBinsRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
   const promptRef = useRef(prompt)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachmentsRef = useRef<ComposerAttachment[]>([])
@@ -217,6 +228,8 @@ export function RevbotComposer({
   const [speechRecognitionAvailable, setSpeechRecognitionAvailable] =
     useState(false)
   const [listening, setListening] = useState(false)
+  const [dictationSecs, setDictationSecs] = useState(0)
+  const [dictationLevels, setDictationLevels] = useState<number[]>([])
   const [sending, setSending] = useState(false)
 
   const autocompleteOptions =
@@ -235,20 +248,21 @@ export function RevbotComposer({
   const canSend =
     !disabled &&
     !sending &&
+    !listening &&
     (prompt.trim().length > 0 || attachments.length > 0)
   const showEffort = allowedEfforts.length > 1
   const actionColCount = (showMic ? 2 : 1) + (showEffort ? 1 : 0)
   const sendColClass = showEffort
     ? expanded
       ? showMic
-        ? "col-start-4 row-start-2"
+        ? "col-start-5 row-start-2"
         : "col-start-3 row-start-2"
       : showMic
         ? "col-start-5 row-start-1"
         : "col-start-4 row-start-1"
     : expanded
       ? showMic
-        ? "col-start-3 row-start-2"
+        ? "col-start-4 row-start-2"
         : "col-start-2 row-start-2"
       : showMic
         ? "col-start-4 row-start-1"
@@ -330,6 +344,7 @@ export function RevbotComposer({
     return () => {
       const recognition = recognitionRef.current
       recognitionRef.current = null
+      stopDictationVisuals()
       if (!recognition) return
       recognition.onend = null
       recognition.onerror = null
@@ -544,10 +559,131 @@ export function RevbotComposer({
     })
   }
 
+  function formatDictationSecs(total: number) {
+    const minutes = Math.floor(total / 60)
+    const seconds = total % 60
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`
+  }
+
+  function stopDictationVisuals() {
+    if (dictationTimerRef.current !== null) {
+      window.clearInterval(dictationTimerRef.current)
+      dictationTimerRef.current = null
+    }
+    const stream = dictationStreamRef.current
+    dictationStreamRef.current = null
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop()
+    }
+    const audio = dictationAudioRef.current
+    dictationAudioRef.current = null
+    dictationAnalyserRef.current = null
+    dictationBinsRef.current = null
+    if (audio) void audio.close().catch(() => undefined)
+    setDictationLevels([])
+    setDictationSecs(0)
+  }
+
+  function startDictationVisuals() {
+    dictationStartRef.current = Date.now()
+    setDictationSecs(0)
+    setDictationLevels([3, 4, 3, 5, 4, 3, 5, 6, 4, 3, 4, 3])
+    if (dictationTimerRef.current !== null) {
+      window.clearInterval(dictationTimerRef.current)
+    }
+    dictationTimerRef.current = window.setInterval(() => {
+      if (recognitionRef.current === null) return
+      setDictationSecs(
+        Math.floor((Date.now() - dictationStartRef.current) / 1000)
+      )
+      const analyser = dictationAnalyserRef.current
+      const bins = dictationBinsRef.current
+      if (analyser && bins) {
+        analyser.getByteFrequencyData(bins)
+        const bars: number[] = []
+        for (let index = 0; index < 12; index += 1) {
+          const value = bins[Math.floor((index / 12) * bins.length)] ?? 0
+          bars.push(2 + Math.round((value / 255) * 6))
+        }
+        setDictationLevels(bars)
+      } else {
+        const tick = Date.now() / 280
+        setDictationLevels(
+          Array.from(
+            { length: 12 },
+            (_, index) =>
+              3 + Math.round(3 * Math.abs(Math.sin(tick + index * 0.65)))
+          )
+        )
+      }
+    }, 150)
+    if (!navigator.mediaDevices?.getUserMedia) return
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(
+      (stream) => {
+        if (recognitionRef.current === null) {
+          for (const track of stream.getTracks()) track.stop()
+          return
+        }
+        dictationStreamRef.current = stream
+        try {
+          const windowWithWebkit = window as unknown as {
+            webkitAudioContext?: typeof AudioContext
+          }
+          const Context =
+            window.AudioContext ?? windowWithWebkit.webkitAudioContext
+          if (!Context) return
+          const context = new Context()
+          dictationAudioRef.current = context
+          const source = context.createMediaStreamSource(stream)
+          const analyser = context.createAnalyser()
+          analyser.fftSize = 64
+          source.connect(analyser)
+          dictationAnalyserRef.current = analyser
+          dictationBinsRef.current = new Uint8Array(analyser.frequencyBinCount)
+        } catch {
+          // Keep the fallback wave.
+        }
+      },
+      () => undefined
+    )
+  }
+
+  function endDictation() {
+    const recognition = recognitionRef.current
+    recognitionRef.current = null
+    stopDictationVisuals()
+    setListening(false)
+    if (!recognition) return
+    recognition.onend = null
+    recognition.onerror = null
+    recognition.onresult = null
+    recognition.onstart = null
+    try {
+      recognition.stop()
+    } catch {
+      // Already stopped.
+    }
+  }
+
+  function confirmDictation() {
+    dictationCancelRef.current = false
+    endDictation()
+  }
+
+  function cancelDictation() {
+    dictationCancelRef.current = true
+    const base = dictationBaseRef.current
+    updatePrompt(base, base.length)
+    endDictation()
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+    })
+  }
+
   function handleDictationToggle() {
-    if (!speechRecognitionAvailable) return
+    if (!speechRecognitionAvailable || disabled) return
     if (listening) {
-      recognitionRef.current?.stop()
+      confirmDictation()
       return
     }
 
@@ -557,32 +693,57 @@ export function RevbotComposer({
     if (!Recognition) return
 
     const recognition = new Recognition()
-    const initialPrompt = promptRef.current
     recognitionRef.current = recognition
-    recognition.onstart = () => setListening(true)
+    dictationBaseRef.current = promptRef.current
+    dictationCancelRef.current = false
+    try {
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = "en-US"
+    } catch {
+      // Defaults still work.
+    }
+    recognition.onstart = () => {
+      setListening(true)
+      startDictationVisuals()
+    }
     recognition.onend = () => {
       if (recognitionRef.current === recognition) recognitionRef.current = null
+      if (dictationCancelRef.current) {
+        const base = dictationBaseRef.current
+        updatePrompt(base, base.length)
+      }
+      stopDictationVisuals()
       setListening(false)
     }
     recognition.onerror = () => {
       if (recognitionRef.current === recognition) recognitionRef.current = null
+      if (dictationCancelRef.current) {
+        const base = dictationBaseRef.current
+        updatePrompt(base, base.length)
+      }
+      stopDictationVisuals()
       setListening(false)
     }
     recognition.onresult = (event) => {
+      if (dictationCancelRef.current) return
       let transcript = ""
       for (let index = 0; index < event.results.length; index += 1) {
         transcript += event.results[index][0]?.transcript ?? ""
       }
-      const nextPrompt = `${initialPrompt}${
-        initialPrompt && !/\s$/.test(initialPrompt) && transcript ? " " : ""
+      const base = dictationBaseRef.current
+      const nextPrompt = `${base}${
+        base && !/\s$/.test(base) && transcript ? " " : ""
       }${transcript}`
       updatePrompt(nextPrompt, nextPrompt.length)
     }
     try {
       recognition.start()
       setListening(true)
+      startDictationVisuals()
     } catch {
       if (recognitionRef.current === recognition) recognitionRef.current = null
+      stopDictationVisuals()
       setListening(false)
     }
   }
@@ -786,17 +947,17 @@ export function RevbotComposer({
             showEffort
               ? expanded
                 ? showMic
-                  ? "grid-cols-[minmax(0,1fr)_auto_28px_28px]"
+                  ? "grid-cols-[28px_28px_minmax(0,1fr)_auto_28px]"
                   : "grid-cols-[minmax(0,1fr)_auto_28px]"
                 : showMic
-                  ? "grid-cols-[28px_minmax(0,1fr)_auto_28px_28px]"
+                  ? "grid-cols-[28px_28px_minmax(0,1fr)_auto_28px]"
                   : "grid-cols-[28px_minmax(0,1fr)_auto_28px]"
               : expanded
                 ? showMic
-                  ? "grid-cols-[minmax(0,1fr)_28px_28px]"
+                  ? "grid-cols-[28px_28px_minmax(0,1fr)_28px]"
                   : "grid-cols-[minmax(0,1fr)_28px]"
                 : showMic
-                  ? "grid-cols-[28px_minmax(0,1fr)_28px_28px]"
+                  ? "grid-cols-[28px_28px_minmax(0,1fr)_28px]"
                   : "grid-cols-[28px_minmax(0,1fr)_28px]"
           )}
           ref={controlsRef}
@@ -820,31 +981,131 @@ export function RevbotComposer({
           >
             <PlusIcon aria-hidden="true" />
           </Button>
-          <Textarea
-            aria-activedescendant={activeOptionId}
-            aria-controls={autocomplete ? "revbot-autocomplete" : undefined}
-            aria-expanded={Boolean(autocomplete)}
-            className={cn(
-              "min-h-7 w-full resize-none border-0 bg-transparent px-1 py-[5px] text-[13px] leading-[18px] shadow-none outline-none focus-visible:border-0 focus-visible:ring-0",
-              expanded
-                ? "col-span-full col-start-1 row-start-1"
-                : "col-start-2 row-start-1 min-w-0",
-              isDark
-                ? "!bg-transparent [tap-highlight-color:transparent] selection:bg-white/20 focus:!bg-transparent focus-visible:!bg-transparent active:!bg-transparent"
-                : "dark:bg-transparent"
-            )}
-            disabled={disabled}
-            id={REVBOT_PROMPT_INPUT_ID}
-            onChange={(event) =>
-              updatePrompt(event.target.value, event.target.selectionStart)
-            }
-            onKeyDown={handlePromptKeyDown}
-            onPaste={handlePaste}
-            placeholder={listening ? "Listening…" : "Ask Revbot anything…"}
-            ref={textareaRef}
-            rows={1}
-            value={prompt}
-          />
+          {showMic ? (
+            <Button
+              aria-label={
+                speechRecognitionAvailable
+                  ? listening
+                    ? "Stop voice dictation"
+                    : "Start voice dictation"
+                  : "Voice dictation is not supported by this browser"
+              }
+              aria-pressed={listening}
+              className={cn(
+                "size-7 justify-self-start rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
+                isDark && "hover:bg-white/10",
+                expanded
+                  ? "col-start-2 row-start-2"
+                  : "col-start-2 row-start-1",
+                listening &&
+                  "text-destructive-foreground bg-destructive hover:bg-destructive/90"
+              )}
+              disabled={disabled || !speechRecognitionAvailable}
+              onClick={handleDictationToggle}
+              size="icon-sm"
+              title={
+                speechRecognitionAvailable
+                  ? listening
+                    ? "Listening — click to keep text"
+                    : "Start voice dictation"
+                  : "Voice dictation is not supported by this browser"
+              }
+              type="button"
+              variant="ghost"
+            >
+              <MicIcon
+                aria-hidden="true"
+                className={listening ? "animate-pulse" : undefined}
+              />
+            </Button>
+          ) : null}
+          {listening ? (
+            <div
+              aria-label="Recording voice"
+              className={cn(
+                "flex min-h-7 min-w-0 items-center gap-1.5 rounded-[8px] px-1 py-[5px]",
+                expanded
+                  ? "col-span-full col-start-1 row-start-1"
+                  : showMic
+                    ? "col-start-3 row-start-1"
+                    : "col-start-2 row-start-1",
+                isDark ? "bg-white/5" : "bg-accent/50"
+              )}
+              role="status"
+            >
+              <span
+                aria-hidden="true"
+                className="relative flex h-[18px] min-w-0 flex-1 items-center"
+              >
+                <span className="absolute inset-x-0 border-t border-dotted border-muted-foreground/40" />
+                <span className="relative mx-auto flex items-center gap-[3px] px-2">
+                  {dictationLevels.map((level, index) => (
+                    <span
+                      key={index}
+                      className="w-[3px] shrink-0 rounded-full bg-red-500"
+                      style={{ height: `${Math.min(18, 3 + level * 2)}px` }}
+                    />
+                  ))}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-muted-foreground tabular-nums">
+                <span className="size-1.5 animate-pulse rounded-full bg-red-500" />
+                {formatDictationSecs(dictationSecs)}
+              </span>
+              <button
+                aria-label="Discard dictation"
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
+                  isDark && "hover:bg-white/10"
+                )}
+                onClick={cancelDictation}
+                type="button"
+              >
+                <XIcon aria-hidden="true" className="size-4" />
+              </button>
+              <button
+                aria-label="Accept dictation"
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
+                  isDark && "hover:bg-white/10"
+                )}
+                onClick={confirmDictation}
+                type="button"
+              >
+                <Icon size={15} strokeWidth={2.4}>
+                  <path d="M20 6 9 17l-5-5" />
+                </Icon>
+              </button>
+            </div>
+          ) : (
+            <Textarea
+              aria-activedescendant={activeOptionId}
+              aria-controls={autocomplete ? "revbot-autocomplete" : undefined}
+              aria-expanded={Boolean(autocomplete)}
+              className={cn(
+                "min-h-7 w-full resize-none border-0 bg-transparent px-1 py-[5px] text-[13px] leading-[18px] shadow-none outline-none focus-visible:border-0 focus-visible:ring-0",
+                expanded
+                  ? "col-span-full col-start-1 row-start-1"
+                  : showMic
+                    ? "col-start-3 row-start-1 min-w-0"
+                    : "col-start-2 row-start-1 min-w-0",
+                isDark
+                  ? "!bg-transparent [tap-highlight-color:transparent] selection:bg-white/20 focus:!bg-transparent focus-visible:!bg-transparent active:!bg-transparent"
+                  : "dark:bg-transparent"
+              )}
+              disabled={disabled}
+              id={REVBOT_PROMPT_INPUT_ID}
+              onChange={(event) =>
+                updatePrompt(event.target.value, event.target.selectionStart)
+              }
+              onKeyDown={handlePromptKeyDown}
+              onPaste={handlePaste}
+              placeholder="Ask Revbot anything…"
+              ref={textareaRef}
+              rows={1}
+              value={prompt}
+            />
+          )}
           {showEffort ? (
             <button
               aria-expanded={effortOpen}
@@ -852,7 +1113,13 @@ export function RevbotComposer({
               className={cn(
                 "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
                 isDark && "hover:bg-white/10",
-                expanded ? "col-start-2 row-start-2" : "col-start-3 row-start-1"
+                expanded
+                  ? showMic
+                    ? "col-start-4 row-start-2"
+                    : "col-start-2 row-start-2"
+                  : showMic
+                    ? "col-start-4 row-start-1"
+                    : "col-start-3 row-start-1"
               )}
               disabled={disabled}
               onClick={() => {
@@ -869,47 +1136,6 @@ export function RevbotComposer({
                 </Icon>
               </span>
             </button>
-          ) : null}
-          {showMic ? (
-            <Button
-              aria-label={
-                speechRecognitionAvailable
-                  ? listening
-                    ? "Stop voice dictation"
-                    : "Start voice dictation"
-                  : "Voice dictation is not supported by this browser"
-              }
-              aria-pressed={listening}
-              className={cn(
-                "size-7 rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
-                showEffort
-                  ? expanded
-                    ? "col-start-3 row-start-2"
-                    : "col-start-4 row-start-1"
-                  : expanded
-                    ? "col-start-2 row-start-2"
-                    : "col-start-3 row-start-1",
-                listening &&
-                  "text-destructive-foreground bg-destructive hover:bg-destructive/90"
-              )}
-              disabled={disabled || !speechRecognitionAvailable}
-              onClick={handleDictationToggle}
-              size="icon-sm"
-              title={
-                speechRecognitionAvailable
-                  ? listening
-                    ? "Listening — click to stop"
-                    : "Start voice dictation"
-                  : "Voice dictation is not supported by this browser"
-              }
-              type="button"
-              variant="ghost"
-            >
-              <MicIcon
-                aria-hidden="true"
-                className={listening ? "animate-pulse" : undefined}
-              />
-            </Button>
           ) : null}
           {active ? (
             <Button

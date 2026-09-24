@@ -1308,7 +1308,7 @@ export function WorkspaceShellPreview({
                         onTitleChange={setIslandConversationTitle}
                         revbot={islandRevbot}
                         showMessageAvatar={islandState === "maximized"}
-                        showMic={false}
+                        showMic
                         variant="dark"
                       />
                     ) : null}
