@@ -44,6 +44,7 @@ export type SiteGraphFilter = {
   maxHops: number | null
   showOrphans: boolean
   brokenOnly: boolean
+  showBrokenSources: boolean
 }
 
 type SimLink = {
@@ -180,7 +181,8 @@ function computeDepths(
  * the two can never drift. Returns a per-node boolean of whether the node
  * survives all active constraints in `filter`; with no filter (or the default
  * all-visible filter) every node passes. The broken-pages filter also keeps
- * each direct inbound source so users can see which pages link to the failure.
+ * each direct inbound source (unless showBrokenSources is off) so users can
+ * see which pages link to the failure.
  */
 export function computeVisible(
   nodes: SiteGraphNode[],
@@ -199,9 +201,11 @@ export function computeVisible(
     for (let i = 0; i < n; i++) {
       if (nodes[i].broken) brokenContext.add(i)
     }
-    for (const [sourceIndex, targetIndex] of edges) {
-      if (!nodes[targetIndex]?.broken) continue
-      brokenContext.add(sourceIndex)
+    if (filter.showBrokenSources) {
+      for (const [sourceIndex, targetIndex] of edges) {
+        if (!nodes[targetIndex]?.broken) continue
+        brokenContext.add(sourceIndex)
+      }
     }
   }
 
@@ -929,8 +933,14 @@ export const ForceGraph = memo(function ForceGraph({
       const hadHover = hovered !== null
       hovered = node
       hoveredNeighbors = node
-        ? filterRef.current?.brokenOnly && node.broken
-          ? incomingNeighbors[node.index]
+        ? filterRef.current?.brokenOnly
+          ? node.broken
+            ? incomingNeighbors[node.index]
+            : new Set(
+                [...outgoingNeighbors[node.index]].filter(
+                  (neighborIndex) => simNodes[neighborIndex]?.broken
+                )
+              )
           : outgoingNeighbors[node.index]
         : null
       canvas.style.cursor = node ? "pointer" : "grab"
@@ -1120,6 +1130,7 @@ export const ForceGraph = memo(function ForceGraph({
     filter?.maxHops,
     filter?.showOrphans,
     filter?.brokenOnly,
+    filter?.showBrokenSources,
     opacityDecay,
   ])
 

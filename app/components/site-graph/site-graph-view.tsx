@@ -25,6 +25,7 @@ const DEFAULT_FILTER: SiteGraphFilter = {
   maxHops: null,
   showOrphans: true,
   brokenOnly: false,
+  showBrokenSources: false,
 }
 
 const HOPS_OPTIONS: Array<{ label: string; value: number | null }> = [
@@ -231,6 +232,32 @@ function FilterPanel({
             }
           />
         </div>
+
+        {filter.brokenOnly ? (
+          <div className="flex items-center justify-between text-xs">
+            <span
+              className="cursor-pointer select-none"
+              onClick={() =>
+                onChange({
+                  ...filter,
+                  showBrokenSources: !filter.showBrokenSources,
+                })
+              }
+            >
+              Show pages linking to broken
+            </span>
+            <Checkbox
+              aria-label="Show pages linking to broken"
+              checked={filter.showBrokenSources}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...filter,
+                  showBrokenSources: checked === true,
+                })
+              }
+            />
+          </div>
+        ) : null}
 
         <div className="border-t pt-2 text-xs text-muted-foreground">
           showing {visibleCount.toLocaleString()} of {total.toLocaleString()}{" "}
