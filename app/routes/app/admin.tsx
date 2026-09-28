@@ -571,7 +571,148 @@ function AIConfigTab() {
   )
 }
 
+// --- Crawl Config Tab ---
+type CrawlConfigResponse = {
+  worker_count: number
+  env_worker_count: number
+  override_worker_count: number | null
+  source: "admin" | "env"
+}
+
+function CrawlConfigTab() {
+  const [state, setState] = useState<CrawlConfigResponse | null>(null)
+  const [input, setInput] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await clientApiFetch<CrawlConfigResponse>("/admin/crawl-config")
+      setState(data)
+      setInput(String(data.worker_count))
+    } catch {
+      setError("Failed to load crawl config")
+      toast.error("Failed to load crawl config")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const handleSave = async () => {
+    const n = Number(input)
+    if (!Number.isInteger(n) || n < 1 || n > 100) {
+      toast.error("Worker count must be an integer between 1 and 100")
+      return
+    }
+    setSaving(true)
+    try {
+      const data = await clientApiPut<CrawlConfigResponse>("/admin/crawl-config", {
+        worker_count: n,
+      })
+      setState(data)
+      setInput(String(data.worker_count))
+      toast.success("Saved changes")
+    } catch {
+      toast.error("Failed to save changes")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReset = async () => {
+    setSaving(true)
+    try {
+      const data = await clientApiPost<CrawlConfigResponse>("/admin/crawl-config/reset", {})
+      setState(data)
+      setInput(String(data.worker_count))
+      toast.success("Reset to environment value")
+    } catch {
+      toast.error("Failed to reset")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <p className="text-sm text-muted-foreground">Loading crawl config...</p>
+    )
+  }
+
+  if (error && !state) {
+    return (
+      <div className="flex items-center gap-3">
+        <p className="text-sm text-destructive">{error}</p>
+        <Button size="sm" variant="outline" onClick={load}>
+          Retry
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-foreground">
+          Crawl Configuration
+        </span>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            <SaveIcon /> {saving ? "Saving..." : "Save"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReset}
+            disabled={saving}
+          >
+            <RotateCcwIcon /> Reset to env
+          </Button>
+        </div>
+      </div>
+
+      <Card size="sm">
+        <CardContent className="flex flex-col gap-1.5">
+          <Label htmlFor="crawl-worker-count">
+            Page worker count (CRAWL_PAGE_WORKER_COUNT)
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Changes apply to new crawls; in-flight crawls keep their existing pool.
+          </p>
+          <Input
+            id="crawl-worker-count"
+            type="number"
+            min={1}
+            max={100}
+            step={1}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+          />
+          {state && (
+            <p className="text-xs text-muted-foreground">
+              Effective: {state.worker_count} (source: {state.source}, env:{" "}
+              {state.env_worker_count}
+              {state.override_worker_count !== null
+                ? `, override: ${state.override_worker_count}`
+                : ""}
+              )
+            </p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 // --- Accounts Tab ---
+
 type UserRow = AdminUserResponse & {
   suspended_at?: string
   deleted_at?: string
@@ -1031,6 +1172,7 @@ export default function AdminPage() {
             <TabsTrigger value="ai-config">AI Config</TabsTrigger>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
+            <TabsTrigger value="crawl-config">Crawl Config</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -1039,6 +1181,7 @@ export default function AdminPage() {
         {tab === "ai-config" && <AIConfigTab />}
         {tab === "accounts" && <AccountsTab />}
         {tab === "features" && <FeaturesTab />}
+        {tab === "crawl-config" && <CrawlConfigTab />}
       </div>
     </div>
   )

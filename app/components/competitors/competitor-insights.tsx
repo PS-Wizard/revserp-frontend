@@ -225,8 +225,7 @@ export const CompetitorInsightsView = memo(function CompetitorInsightsView({
       subtitle={
         <p className="text-xs text-muted-foreground">
           Scored on {query.data.your_pages.toLocaleString()} vs{" "}
-          {query.data.their_pages.toLocaleString()} matching pages, hop ≤{" "}
-          {query.data.radius}. Not the full site.
+          {query.data.their_pages.toLocaleString()} pages.
         </p>
       }
     >

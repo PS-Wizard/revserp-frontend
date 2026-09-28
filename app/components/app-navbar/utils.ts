@@ -40,7 +40,9 @@ export function formatCrawlStats(crawl: CrawlResponse) {
     crawl.overall_score === undefined
       ? "No score"
       : `${crawl.overall_score}/100`
-  return `${score} · ${crawl.urls_crawled} crawled · ${crawl.urls_discovered} discovered`
+  // Unique/Crawled both read stored rows (post-redirect dedupe); fall back until backend emits page_count.
+  const pc = crawl.page_count ?? crawl.urls_crawled
+  return `${score} · Discovered: ${crawl.urls_discovered} · Unique: ${pc} · Crawled: ${pc}`
 }
 
 export function formatCrawlDate(crawl: CrawlResponse) {

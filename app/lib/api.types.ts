@@ -161,6 +161,7 @@ export type CrawlResponse = {
   config_snapshot?: unknown
   urls_discovered: number
   urls_crawled: number
+  page_count?: number
   max_depth_reached: number
   google_psi_results?: GooglePSIResults
   has_llms_txt?: boolean
@@ -195,6 +196,7 @@ export type ActiveCrawlResponse = {
   phase?: CrawlPhase | null
   urls_discovered: number
   urls_crawled: number
+  page_count?: number
   created_at: string
   source?: string
   competitor_label?: string
@@ -880,6 +882,7 @@ export type CompetitorCrawlResponse = {
   phase?: CrawlPhase | null
   urls_discovered: number
   urls_crawled: number
+  page_count?: number
   seo_score?: number | null
   aeo_score?: number | null
   pagespeed_score?: number | null
@@ -1132,6 +1135,7 @@ export type CrawlEventPayload = {
   phase?: CrawlPhase | null
   urls_discovered?: number
   urls_crawled?: number
+  page_count?: number
   source?: string
   competitor_label?: string
 }
