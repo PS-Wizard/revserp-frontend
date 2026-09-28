@@ -29,6 +29,7 @@ import {
   SparklesIcon,
   SwordsIcon,
   TagsIcon,
+  TrashIcon,
 } from "lucide-react"
 import {
   AnimatePresence,
@@ -1097,7 +1098,7 @@ export function WorkspaceShellPreview({
                       }
                     >
                       <CogIcon aria-hidden="true" />
-                      Configure
+                      Settings
                       <ChevronDownIcon
                         aria-hidden="true"
                         className="size-3.5 text-muted-foreground"
@@ -1138,6 +1139,29 @@ export function WorkspaceShellPreview({
                           >
                             <Building2Icon aria-hidden="true" />
                             Business profile
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            {...pill.getItemProps(features.auto_crawl ? 2 : 1)}
+                            disabled={!activeProject}
+                            onClick={() => {
+                              if (activeProject) projectActions.openDeleteProjectDialog(activeProject)
+                            }}
+                            variant="destructive"
+                          >
+                            <TrashIcon aria-hidden="true" />
+                            Delete project
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            {...pill.getItemProps(features.auto_crawl ? 3 : 2)}
+                            disabled={!currentCrawl || currentCrawl.status === "queued" || currentCrawl.status === "running"}
+                            onClick={() => {
+                              if (currentCrawl) projectActions.openDeleteCrawlDialog(currentCrawl)
+                            }}
+                            variant="destructive"
+                          >
+                            <TrashIcon aria-hidden="true" />
+                            Delete crawl
                           </DropdownMenuItem>
                         </>
                       )}
