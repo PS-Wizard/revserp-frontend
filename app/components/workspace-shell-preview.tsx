@@ -22,6 +22,7 @@ import {
   EyeIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
+  FolderPlusIcon,
   PanelLeftIcon,
   PlayIcon,
   PlusIcon,
@@ -42,6 +43,14 @@ import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { Button } from "~/components/ui/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty"
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -1280,7 +1289,47 @@ export function WorkspaceShellPreview({
                         <ProjectPanelOpenContext.Provider
                           value={openProjectPanel}
                         >
-                          {children}
+                          {projects.length === 0 ? (
+                            <div className="flex flex-1 items-center justify-center px-4 py-16 lg:px-6">
+                              <Empty className="border-0">
+                                <EmptyHeader>
+                                  <EmptyMedia
+                                    className="size-16 rounded-2xl bg-primary/10 text-primary [&_svg:not([class*='size-'])]:size-8"
+                                    variant="icon"
+                                  >
+                                    <FolderPlusIcon aria-hidden="true" />
+                                  </EmptyMedia>
+                                  <EmptyTitle
+                                    aria-level={2}
+                                    className="text-2xl"
+                                    role="heading"
+                                  >
+                                    Start with a project
+                                  </EmptyTitle>
+                                  <EmptyDescription>
+                                    Add a website. Then set up its crawl and
+                                    business profile.
+                                  </EmptyDescription>
+                                </EmptyHeader>
+                                <EmptyContent>
+                                  <Button
+                                    onClick={() =>
+                                      createProjectDispatch({ type: "OPEN" })
+                                    }
+                                    type="button"
+                                  >
+                                    <PlusIcon
+                                      aria-hidden="true"
+                                      data-icon="inline-start"
+                                    />
+                                    Create project
+                                  </Button>
+                                </EmptyContent>
+                              </Empty>
+                            </div>
+                          ) : (
+                            children
+                          )}
                         </ProjectPanelOpenContext.Provider>
                       </PageAuditContext.Provider>
                     </RevbotStartPromptContext.Provider>
