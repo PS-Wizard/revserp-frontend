@@ -51,8 +51,8 @@ const FEATURE_COLUMNS = [
   },
   {
     key: "integrations",
-    label: "Integrations",
-    description: "Integrations tab, API keys, and MCP connections.",
+    label: "MCP",
+    description: "Integrations page and MCP connections.",
   },
 ] as const
 

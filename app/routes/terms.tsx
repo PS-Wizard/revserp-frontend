@@ -24,7 +24,7 @@ const sections: TermsSection[] = [
     id: "service",
     title: "The Service",
     paragraphs: [
-      "RevSerp is a workspace-based website analysis platform. Depending on your plan and organization settings, the Service may include project management, website crawls, SEO/AEO/PageSpeed scoring, issue tracking, site-graph views, exports, optional Google Search Console reporting, optional Google PageSpeed Insights enrichment, AI chat grounded in your project data, AI question generation, visibility audits, and read-only API access.",
+      "RevSerp is a workspace-based website analysis platform. Depending on your plan and organization settings, the Service may include project management, website crawls, SEO/AEO/PageSpeed scoring, issue tracking, site-graph views, exports, optional Google Search Console reporting, optional Google PageSpeed Insights enrichment, AI chat grounded in your project data, AI question generation, visibility audits, and OAuth-protected MCP access with read and write capabilities.",
       "Feature availability, quotas, and limits may vary by organization, plan, and administrator configuration. We may change, limit, or discontinue parts of the Service.",
     ],
   },
@@ -89,10 +89,10 @@ const sections: TermsSection[] = [
     ],
   },
   {
-    id: "api-keys",
-    title: "API keys",
+    id: "mcp",
+    title: "AI connectors (MCP)",
     paragraphs: [
-      "If you use the read-only API, you are responsible for protecting setup codes and API keys, revoking exposed keys, and all activity performed with your keys. API access is subject to workspace permissions, documented read endpoints, and any plan or safety limits we apply.",
+      "If you connect an AI assistant through MCP with Revserp OAuth, you authorize read and write access to workspace data within your permissions, such as reading crawl results and issues and making changes you approve. You are responsible for connections you approve, for reviewing AI-assisted changes, and for all activity under your authorized connections. MCP access is subject to workspace permissions and any plan or safety limits we apply. Disconnect the connector and revoke access when you no longer use it.",
     ],
   },
   {
