@@ -1,7 +1,6 @@
 "use client"
 
-import type { ReactElement } from "react"
-
+import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
 import {
   ActivityIcon,
   BlocksIcon,
@@ -18,7 +17,6 @@ import {
   TagsIcon,
 } from "lucide-react"
 
-import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -26,19 +24,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "~/components/ui/sidebar"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip"
-import { HoverPill, useKeyedHoverPill } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 
 // The calm summary home is a separate section from the audit breakdowns —
 // same treatment the Visibility/Search Console section gets below. Overview
 // keeps the audit tab set as it always was.
-// Shared with the navbar section dropdown in workspace-shell-preview.tsx so
-// the two lists can never drift apart.
 export const auditSections = [
   ["Overview", "overview", GaugeIcon],
   ["SEO", "seo", SearchIcon],
@@ -48,186 +38,217 @@ export const auditSections = [
   ["Site graph", "site-graph", NetworkIcon],
 ] as const
 
-function CollapsedTooltip({
-  children,
-  label,
-  show,
-}: {
-  children: ReactElement
+const AUDIT_TAB_DESCRIPTIONS: Record<AuditTab, string> = {
+  overview: "Pillar scores from the latest crawl.",
+  seo: "Search issues found across every crawled page.",
+  aeo: "How well answer engines can read the site.",
+  pagespeed: "Core Web Vitals and loading performance.",
+  pages: "Every crawled page with the issues on it.",
+  "site-graph": "How the pages link to one another.",
+}
+
+export type NavTab = {
+  key: string
   label: string
-  show: boolean
-}) {
-  if (!show) return children
-  return (
-    <Tooltip>
-      <TooltipTrigger render={children} />
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
-  )
+  /** Shown in the dock panel; the mobile drawer lists labels only. */
+  description: string
+  Icon: typeof GaugeIcon
+  view: DashboardView
+  auditTab?: AuditTab
 }
 
-type NavItemProps = {
+export type NavGroup = {
+  key: string
   label: string
-  icon: typeof GaugeIcon
-  active: boolean
-  collapsed: boolean
-  disabled?: boolean
-  onClick: () => void
-  itemRef: (element: HTMLElement | null) => void
-  onMouseEnter: () => void
+  tabs: NavTab[]
 }
 
-function NavItem({
-  label,
-  icon: Icon,
-  active,
-  collapsed,
-  disabled = false,
-  onClick,
-  itemRef,
-  onMouseEnter,
-}: NavItemProps) {
-  return (
-    <SidebarMenuItem ref={itemRef}>
-      <CollapsedTooltip label={label} show={collapsed}>
-        <SidebarMenuButton
-          className={
-            collapsed
-              ? `relative z-10 !h-auto w-full justify-center rounded-md py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"} ${disabled ? "pointer-events-none opacity-40" : ""}`
-              : `relative z-10 !h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200 hover:bg-transparent hover:text-current active:bg-transparent data-active:bg-transparent data-active:text-foreground ${active ? "font-medium text-foreground" : "text-muted-foreground"} ${disabled ? "pointer-events-none opacity-40" : ""}`
-          }
-          disabled={disabled}
-          isActive={active}
-          onClick={disabled ? undefined : onClick}
-          onMouseEnter={disabled ? undefined : onMouseEnter}
-          title={collapsed ? label : undefined}
-          type="button"
-        >
-          <Icon aria-hidden="true" className="size-4 shrink-0" />
-          {collapsed ? null : label}
-          {collapsed ? null : (
-            <span
-              className={cn(
-                "ml-auto shrink-0",
-                active ? "text-foreground" : "invisible"
-              )}
-            >
-              <CheckIcon className="size-4" />
-            </span>
-          )}
-        </SidebarMenuButton>
-      </CollapsedTooltip>
-    </SidebarMenuItem>
-  )
-}
-
-type WorkspaceSidebarNavProps = {
-  auditTab: AuditTab
+type BuildGroupsInput = {
   gscConnector: boolean
   integrations: boolean
   maxCompetitors: number
-  isSidebarCollapsed: boolean
-  onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
-  view: DashboardView
 }
 
+/**
+ * Groups the workspace tabs by the question each one answers, not by where its
+ * data comes from. That is why Search Console sits with Keywords: both answer
+ * "how do I show up in search".
+ */
+export function buildWorkspaceNavGroups({
+  gscConnector,
+  integrations,
+  maxCompetitors,
+}: BuildGroupsInput): NavGroup[] {
+  const visibility: NavTab[] = []
+  if (gscConnector) {
+    visibility.push(
+      {
+        key: "search-console",
+        label: "Search Console",
+        description: "Queries, clicks and impressions from Google.",
+        Icon: SearchCheckIcon,
+        view: "search-console",
+      },
+      {
+        key: "analytics",
+        label: "Google Analytics",
+        description: "Traffic, engagement and conversions.",
+        Icon: ChartNoAxesCombinedIcon,
+        view: "analytics",
+      }
+    )
+  }
+  visibility.push(
+    {
+      key: "keywords",
+      label: "Keywords",
+      description: "Coverage, gaps and cannibalised terms.",
+      Icon: TagsIcon,
+      view: "keywords",
+    },
+    {
+      key: "visibility-test",
+      label: "Visibility test",
+      description: "Whether AI answers cite your site.",
+      Icon: EyeIcon,
+      view: "revserp-visibility",
+    }
+  )
+
+  const compare: NavTab[] = []
+  if (maxCompetitors > 0) {
+    compare.push({
+      key: "competitors",
+      label: "Competitors",
+      description: "Your crawl set measured against other sites.",
+      Icon: SwordsIcon,
+      view: "competitors",
+    })
+  }
+
+  const content: NavTab[] = []
+  if (integrations) {
+    content.push({
+      key: "rune-cms",
+      label: "Rune CMS",
+      description: "Draft, publish and sync site content.",
+      Icon: BlocksIcon,
+      view: "rune-cms",
+    })
+  }
+
+  return [
+    {
+      key: "audit",
+      label: "Audit",
+      tabs: auditSections.map(([label, tab, Icon]): NavTab => ({
+        key: `audit-${tab}`,
+        label,
+        description: AUDIT_TAB_DESCRIPTIONS[tab],
+        Icon,
+        view: "revserp-audit",
+        auditTab: tab,
+      })),
+    },
+    { key: "visibility", label: "Visibility", tabs: visibility },
+    { key: "compare", label: "Compare", tabs: compare },
+    { key: "content", label: "Content", tabs: content },
+  ].filter((group) => group.tabs.length > 0)
+}
+
+export function isWorkspaceTabActive(
+  tab: NavTab,
+  view: DashboardView,
+  auditTab: AuditTab
+): boolean {
+  return tab.view === view && (tab.auditTab === undefined || tab.auditTab === auditTab)
+}
+
+export function findActiveGroupIndex(
+  groups: NavGroup[],
+  view: DashboardView,
+  auditTab: AuditTab
+): number {
+  const index = groups.findIndex((group) =>
+    group.tabs.some((tab) => isWorkspaceTabActive(tab, view, auditTab))
+  )
+  return index === -1 ? 0 : index
+}
+
+export function findActiveTabKey(
+  groups: NavGroup[],
+  view: DashboardView,
+  auditTab: AuditTab
+): string | null {
+  for (const group of groups) {
+    for (const tab of group.tabs) {
+      if (isWorkspaceTabActive(tab, view, auditTab)) return tab.key
+    }
+  }
+  return null
+}
+
+/**
+ * The mobile drawer. Every group is listed with its tabs, because the drawer has
+ * height to spare and hiding tabs behind pagination in a vertical list would
+ * only add friction.
+ */
 export function WorkspaceSidebarNav({
   auditTab,
   gscConnector,
   integrations,
   maxCompetitors,
-  isSidebarCollapsed,
   onSelectWorkspace,
   view,
-}: WorkspaceSidebarNavProps) {
-  const { clearPill, pill, setItemRef, showPill } = useKeyedHoverPill()
+}: {
+  auditTab: AuditTab
+  gscConnector: boolean
+  integrations: boolean
+  maxCompetitors: number
+  onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  view: DashboardView
+}) {
+  const groups = buildWorkspaceNavGroups({
+    gscConnector,
+    integrations,
+    maxCompetitors,
+  })
 
   return (
-    <nav aria-label="Workspace sections">
-      <SidebarGroup className="p-0">
-        {isSidebarCollapsed ? null : (
+    <nav aria-label="Workspace sections" className="flex w-full flex-col gap-1">
+      {groups.map((group) => (
+        <SidebarGroup className="p-0" key={group.key}>
           <SidebarGroupLabel className="h-auto px-2 pb-1 text-[0.7rem] font-medium tracking-widest text-muted-foreground uppercase">
-            Audit
+            {group.label}
           </SidebarGroupLabel>
-        )}
-        <SidebarMenu className="relative" onMouseLeave={clearPill}>
-          <HoverPill className="inset-x-1 rounded-md" pill={pill} />
-          {auditSections.map(([label, tab, Icon]) => (
-            <NavItem
-              key={tab}
-              label={label}
-              icon={Icon}
-              active={view === "revserp-audit" && auditTab === tab}
-              collapsed={isSidebarCollapsed}
-              onClick={() => onSelectWorkspace("revserp-audit", tab)}
-              itemRef={setItemRef(tab)}
-              onMouseEnter={() => showPill(tab)}
-            />
-          ))}
-          <NavItem
-            label="Visibility test"
-            icon={EyeIcon}
-            active={view === "revserp-visibility"}
-            collapsed={isSidebarCollapsed}
-            onClick={() => onSelectWorkspace("revserp-visibility")}
-            itemRef={setItemRef("visibility")}
-            onMouseEnter={() => showPill("visibility")}
-          />
-          <NavItem
-            label="Keywords"
-            icon={TagsIcon}
-            active={view === "keywords"}
-            collapsed={isSidebarCollapsed}
-            onClick={() => onSelectWorkspace("keywords")}
-            itemRef={setItemRef("keywords")}
-            onMouseEnter={() => showPill("keywords")}
-          />
-          {maxCompetitors > 0 ? (
-            <NavItem
-              label="Competitors"
-              icon={SwordsIcon}
-              active={view === "competitors"}
-              collapsed={isSidebarCollapsed}
-              onClick={() => onSelectWorkspace("competitors")}
-              itemRef={setItemRef("competitors")}
-              onMouseEnter={() => showPill("competitors")}
-            />
-          ) : null}
-          {gscConnector ? (
-            <>
-              <NavItem
-                label="Search Console"
-                icon={SearchCheckIcon}
-                active={view === "search-console"}
-                collapsed={isSidebarCollapsed}
-                onClick={() => onSelectWorkspace("search-console")}
-                itemRef={setItemRef("search-console")}
-                onMouseEnter={() => showPill("search-console")}
-              />
-              <NavItem
-                label="Google Analytics"
-                icon={ChartNoAxesCombinedIcon}
-                active={view === "analytics"}
-                collapsed={isSidebarCollapsed}
-                onClick={() => onSelectWorkspace("analytics")}
-                itemRef={setItemRef("analytics")}
-                onMouseEnter={() => showPill("analytics")}
-              />
-            </>
-          ) : null}
-          {integrations ? (
-            <NavItem
-              label="Rune CMS"
-              icon={BlocksIcon}
-              active={view === "rune-cms"}
-              collapsed={isSidebarCollapsed}
-              onClick={() => onSelectWorkspace("rune-cms")}
-              itemRef={setItemRef("rune-cms")}
-              onMouseEnter={() => showPill("rune-cms")}
-            />
-          ) : null}
-        </SidebarMenu>
-      </SidebarGroup>
+          <SidebarMenu>
+            {group.tabs.map((tab) => {
+              const active = isWorkspaceTabActive(tab, view, auditTab)
+              return (
+                <SidebarMenuItem key={tab.key}>
+                  <SidebarMenuButton
+                    className={cn(
+                      "!h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200",
+                      active
+                        ? "bg-foreground/10 font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                    )}
+                    isActive={active}
+                    onClick={() => onSelectWorkspace(tab.view, tab.auditTab)}
+                    type="button"
+                  >
+                    <tab.Icon aria-hidden="true" className="size-4 shrink-0" />
+                    <span className="truncate">{tab.label}</span>
+                    <span className={cn("ml-auto shrink-0", active ? "" : "invisible")}>
+                      <CheckIcon className="size-4" />
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )
+            })}
+          </SidebarMenu>
+        </SidebarGroup>
+      ))}
     </nav>
   )
 }

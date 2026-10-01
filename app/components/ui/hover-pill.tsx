@@ -10,7 +10,12 @@ export const HOVER_PILL_TRANSITION =
 export const DROPDOWN_PILL_ITEM_CLASS =
   "relative z-10 focus:bg-transparent focus:text-current data-highlighted:bg-transparent data-highlighted:text-current data-selected:!bg-transparent data-selected:!text-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
 
-export type HoverPillRect = { height: number; top: number } | null
+export type HoverPillRect = {
+  height: number
+  top: number
+  left?: number
+  width?: number
+} | null
 
 export function hoverPillMotionStyle(pill: HoverPillRect): CSSProperties {
   return {
@@ -32,10 +37,16 @@ export function HoverPill({
     <span
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute inset-x-1 z-0 rounded-[6px] bg-accent",
+        "pointer-events-none absolute z-0 rounded-[6px] bg-accent",
+        pill && pill.width != null ? "inset-x-auto" : "inset-x-1",
         className
       )}
-      style={hoverPillMotionStyle(pill)}
+      style={{
+        ...hoverPillMotionStyle(pill),
+        ...(pill && pill.width != null
+          ? { left: pill.left, width: pill.width }
+          : null),
+      }}
     />
   )
 }
@@ -87,6 +98,8 @@ export function useKeyedHoverPill() {
     setPill({
       height: target.offsetHeight,
       top: target.offsetTop,
+      left: target.offsetLeft,
+      width: target.offsetWidth,
     })
   }
 

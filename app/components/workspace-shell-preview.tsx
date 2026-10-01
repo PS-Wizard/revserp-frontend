@@ -12,26 +12,13 @@ import {
 } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
-  BlocksIcon,
   Building2Icon,
-  ChartNoAxesCombinedIcon,
-  CheckIcon,
-  ChevronDownIcon,
-  CircleIcon,
-  CogIcon,
-  DownloadIcon,
-  EyeIcon,
   FileSpreadsheetIcon,
   FileTextIcon,
   FolderPlusIcon,
-  PanelLeftIcon,
   PlayIcon,
   PlusIcon,
-  SearchCheckIcon,
   SparklesIcon,
-  SwordsIcon,
-  TagsIcon,
-  TrashIcon,
 } from "lucide-react"
 import {
   AnimatePresence,
@@ -42,7 +29,6 @@ import {
 
 import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
-import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { Button } from "~/components/ui/button"
 import {
   Empty,
@@ -53,32 +39,11 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty"
 import {
-  DropdownMenu,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
-import { DropdownPillSurface } from "~/components/ui/hover-pill"
-import { Separator } from "~/components/ui/separator"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip"
-import {
   Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
 } from "~/components/ui/sidebar"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
-import { PAINT_A, PAINT_B } from "~/components/compare/helpers"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
@@ -86,7 +51,6 @@ import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actio
 import {
   formatCrawlDateTime,
   getCrawlValidationError,
-  getInitials,
 } from "~/components/app-navbar/utils"
 import { ProjectPanelOpenContext } from "~/components/summary/project-panel-context"
 import { ProjectPanel } from "~/components/command-dock/project-panel"
@@ -115,13 +79,8 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
-import { cn } from "~/lib/utils"
-import { useIsMobile } from "~/hooks/use-mobile"
 import { toast } from "sonner"
-import {
-  auditSections,
-  WorkspaceSidebarNav,
-} from "~/components/workspace-sidebar-nav"
+import { WorkspaceDockNav } from "~/components/workspace-dock-nav"
 
 type CreateProjectState = {
   isOpen: boolean
@@ -275,19 +234,15 @@ export function WorkspaceShellPreview({
   crawlStatusLabel,
   onCrawlStart,
   onCompareCrawl,
-  compareLabel,
   organizationId,
   organizations,
   projects,
-  userEmail,
-  userName,
   view,
   onViewChange,
   revbotConversationId,
   onRevbotConversationChange,
   auditTab,
   onAuditTabChange,
-  isPlatformAdmin,
   onExportAudit,
   isExportingAudit,
 }: WorkspaceShellPreviewProps) {
@@ -298,18 +253,14 @@ export function WorkspaceShellPreview({
   const [islandState, setIslandState] = useState<
     "docked" | "minimized" | "maximized"
   >("docked")
-  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] =
-    useState(true)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
-  const isMobile = useIsMobile()
-  const isSidebarCollapsed = isDesktopSidebarCollapsed && !isMobile
   const [isIslandThinking, setIsIslandThinking] = useState(false)
   const [islandConversationTitle, setIslandConversationTitle] =
     useState("New chat")
   const [isProjectPanelOpen, setIsProjectPanelOpen] = useState(false)
   const [selectedAuditPage, setSelectedAuditPage] =
     useState<SelectedAuditPage | null>(null)
-  const [insightsNavbarLabel, setInsightsNavbarLabel] = useState<{
+  const [, setInsightsNavbarLabel] = useState<{
     you: string
     them: string
   } | null>(null)
@@ -498,10 +449,6 @@ export function WorkspaceShellPreview({
   })
   const autoCrawl = useAutoCrawlSettings(activeProjectId)
   const businessProfile = useBusinessProfile()
-  const initials = useMemo(() => {
-    const source = userName?.trim() || userEmail.split("@")[0] || "R"
-    return getInitials(source, "R")
-  }, [userEmail, userName])
   const mergedProjectCrawls = {
     ...fetchedProjectCrawls.current,
     ...projectCrawls,
@@ -564,66 +511,10 @@ export function WorkspaceShellPreview({
   ) {
     onViewChange(nextView)
     if (nextAuditTab !== undefined) onAuditTabChange(nextAuditTab)
-    setIsDesktopSidebarCollapsed(true)
     setIsMobileSidebarOpen(false)
   }
 
-  const workspaceNavItems = [
-    ...auditSections.map(([label, tab, Icon]) => ({
-      icon: Icon,
-      isActive: view === "revserp-audit" && auditTab === tab,
-      label,
-      onSelect: () => selectWorkspace("revserp-audit", tab),
-    })),
-    {
-      icon: EyeIcon,
-      isActive: view === "revserp-visibility",
-      label: "Visibility test",
-      onSelect: () => selectWorkspace("revserp-visibility"),
-    },
-    {
-      icon: TagsIcon,
-      isActive: view === "keywords",
-      label: "Keywords",
-      onSelect: () => selectWorkspace("keywords"),
-    },
-    ...(features.max_competitors > 0
-      ? [
-          {
-            icon: SwordsIcon,
-            isActive: view === "competitors",
-            label: "Competitors",
-            onSelect: () => selectWorkspace("competitors"),
-          },
-        ]
-      : []),
-    ...(features.gsc_connector
-      ? [
-          {
-            icon: SearchCheckIcon,
-            isActive: view === "search-console",
-            label: "Search Console",
-            onSelect: () => selectWorkspace("search-console"),
-          },
-          {
-            icon: ChartNoAxesCombinedIcon,
-            isActive: view === "analytics",
-            label: "Google Analytics",
-            onSelect: () => selectWorkspace("analytics"),
-          },
-        ]
-      : []),
-    ...(features.integrations !== false
-      ? [
-          {
-            icon: BlocksIcon,
-            isActive: view === "rune-cms",
-            label: "Rune CMS",
-            onSelect: () => selectWorkspace("rune-cms"),
-          },
-        ]
-      : []),
-  ]
+  // The calm overview home hides the project/crawl/action chrome when useful.
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -718,594 +609,35 @@ export function WorkspaceShellPreview({
     }
   }
 
-  // The calm overview home hides the project/crawl/action chrome when useful.
-  const headerLabel =
-    view === "revserp-audit"
-      ? (auditSections.find(([, tab]) => tab === auditTab)?.[0] ?? "Overview")
-      : view === "revserp-visibility"
-        ? "Visibility test"
-        : view === "keywords"
-          ? "Keywords"
-          : view === "competitors"
-            ? "Competitors"
-            : view === "search-console"
-              ? "Search Console"
-              : view === "analytics"
-                ? "Google Analytics"
-                : view === "rune-cms"
-                  ? "Rune CMS"
-                  : view === "compare"
-                    ? (compareLabel ?? "Compare")
-                    : "Revbot"
-
-  const comparing = insightsNavbarLabel !== null
-
-  // The section switcher sits in the header centre on its own, and joins the
-  // project and crawl switchers on the left only while a comparison is open,
-  // where the centre belongs to the "us vs them" title instead.
-  const sectionSwitcher = (centered: boolean) => (
-    <>
-      {centered ? null : (
-        <CircleIcon
-          aria-hidden="true"
-          className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-        />
-      )}
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              aria-label="Switch workspace section"
-              className={cn(
-                "inline-flex min-w-0 items-center rounded-md text-foreground hover:bg-accent data-[popup-open]:bg-accent",
-                centered
-                  ? "px-2 py-1 text-base leading-tight font-medium"
-                  : "px-1 py-0.5 font-medium"
-              )}
-              type="button"
-            />
-          }
-        >
-          <span className="truncate">{headerLabel}</span>
-        </DropdownMenuTrigger>
-        <DropdownPillSurface
-          align={centered ? "center" : "start"}
-          className="w-48"
-          side="bottom"
-        >
-          {(pill) =>
-            workspaceNavItems.map((item, index) => {
-              const Icon = item.icon
-              return (
-                <DropdownMenuItem
-                  key={item.label}
-                  {...pill.getItemProps(index)}
-                  onClick={item.onSelect}
-                >
-                  <Icon aria-hidden="true" />
-                  {item.label}
-                  {item.isActive ? (
-                    <CheckIcon className="ml-auto size-4" />
-                  ) : null}
-                </DropdownMenuItem>
-              )
-            })}
-        </DropdownPillSurface>
-      </DropdownMenu>
-    </>
-  )
-
   return (
     <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
       <LayoutGroup id="workspace-preview">
         <SidebarProvider
           className="relative h-svh min-h-0 bg-background text-foreground"
-          open={!isDesktopSidebarCollapsed}
           openMobile={isMobileSidebarOpen}
           onOpenMobileChange={setIsMobileSidebarOpen}
-          style={
-            {
-              "--sidebar-width": isSidebarCollapsed ? "4rem" : "18rem",
-            } as CSSProperties
-          }
+          style={{ "--sidebar-width": "4rem" } as CSSProperties}
         >
           <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
-            <Sidebar
-              collapsible="none"
-              className={
-                isSidebarCollapsed
-                  ? "absolute inset-y-0 left-0 z-30 min-h-0 border-r border-border bg-sidebar p-2 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
-                  : "absolute inset-y-0 left-0 z-40 min-h-0 border-r border-border bg-sidebar p-3 text-foreground transition-[width,padding] duration-200 ease-out motion-reduce:transition-none max-md:hidden"
-              }
-            >
-              <div>
-                <SidebarHeader
-                  className={
-                    isSidebarCollapsed
-                      ? "flex-row items-center justify-center gap-0 p-0 py-3"
-                      : "flex-row items-center justify-between gap-0 px-2 py-3"
-                  }
+            <div className="relative flex h-full min-h-0 bg-shell-chrome">
+            <section className="relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+              <header className="relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden">
+                <SidebarTrigger aria-label="Open navigation" />
+                <button
+                  className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
+                  onClick={openProjectPanel}
+                  type="button"
                 >
-                  {isSidebarCollapsed ? null : (
-                    <span className="text-sm font-semibold tracking-tight">
-                      Revserp
-                    </span>
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <Button
-                          aria-label={
-                            isSidebarCollapsed
-                              ? "Expand sidebar"
-                              : "Collapse sidebar"
-                          }
-                          className="h-auto px-2 py-1 text-muted-foreground hover:text-foreground"
-                          onClick={() =>
-                            isMobile
-                              ? setIsMobileSidebarOpen(false)
-                              : setIsDesktopSidebarCollapsed(
-                                  (collapsed) => !collapsed
-                                )
-                          }
-                          size="icon-sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <PanelLeftIcon
-                            aria-hidden="true"
-                            className={
-                              isSidebarCollapsed ? "rotate-180" : undefined
-                            }
-                          />
-                        </Button>
-                      }
-                    />
-                    <TooltipContent side="right">
-                      {isSidebarCollapsed
-                        ? "Expand sidebar"
-                        : "Collapse sidebar"}
-                    </TooltipContent>
-                  </Tooltip>
-                </SidebarHeader>
-                <Separator className="my-2" />
-                <SidebarContent className="flex-none gap-0 overflow-visible">
-                  <SidebarGroup className="p-0">
-                    <SidebarMenu>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          className={
-                            isSidebarCollapsed
-                              ? "mx-auto !size-10 justify-center rounded-md bg-muted/70 text-sm font-semibold"
-                              : "!h-auto gap-3 rounded-md bg-muted/70 p-3 text-left"
-                          }
-                          onClick={() => {
-                            setIsMobileSidebarOpen(false)
-                            setIsProjectPanelOpen(true)
-                          }}
-                          size="lg"
-                          title={
-                            isSidebarCollapsed ? activeProject?.name : undefined
-                          }
-                          type="button"
-                        >
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-foreground text-xs font-semibold text-background">
-                            {activeProject?.name.slice(0, 1).toUpperCase() ??
-                              "R"}
-                          </span>
-                          {isSidebarCollapsed ? null : (
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">
-                                {activeProject?.name ?? "Select a project"}
-                              </span>
-                              <span className="block truncate text-xs text-muted-foreground">
-                                Project workspace
-                              </span>
-                            </span>
-                          )}
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                        <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <SidebarMenuButton
-                                className={
-                                  isSidebarCollapsed
-                                    ? "mx-auto mt-1 !size-10 justify-center rounded-md text-muted-foreground hover:text-foreground"
-                                    : "mt-1 !h-auto gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-                                }
-                                onClick={() => {
-                                  setIsMobileSidebarOpen(false)
-                                  createProjectDispatch({ type: "OPEN" })
-                                }}
-                                type="button"
-                              >
-                                <PlusIcon
-                                  aria-hidden="true"
-                                  className="size-4 shrink-0"
-                                />
-                                {isSidebarCollapsed ? null : "New Project"}
-                              </SidebarMenuButton>
-                            }
-                          />
-                          {isSidebarCollapsed ? (
-                            <TooltipContent side="right">
-                              New project
-                            </TooltipContent>
-                          ) : null}
-                        </Tooltip>
-                      </SidebarMenuItem>
-                    </SidebarMenu>
-                  </SidebarGroup>
-                  <Separator className="my-3" />
-                </SidebarContent>
-                <WorkspaceSidebarNav
-                  auditTab={auditTab}
-                  gscConnector={features.gsc_connector}
-                  integrations={features.integrations !== false}
-                  maxCompetitors={features.max_competitors}
-                  isSidebarCollapsed={isSidebarCollapsed}
-                  onSelectWorkspace={selectWorkspace}
-                  view={view}
-                />
-              </div>
-              <div className="min-h-0 flex-1" />
-              <SidebarFooter className="gap-0 p-0 pt-3">
-                <ProfileMenu
-                  compact
-                  initials={initials}
-                  isActiveOrganizationOwner={
-                    workspaceActions.isActiveOrganizationOwner
-                  }
-                  isPlatformAdmin={isPlatformAdmin}
-                  onInviteOpen={workspaceActions.openInviteDialog}
-                  onLeaveWorkspaceOpen={
-                    workspaceActions.openLeaveWorkspaceDialog
-                  }
-                  onLogout={() => void workspaceActions.handleLogout()}
-                  onSelectOrganization={(id) =>
-                    void workspaceActions.handleSelectOrganization(id)
-                  }
-                  organizationId={organizationId}
-                  organizations={organizations}
-                  profileActionError={workspaceActions.profileActionError}
-                  userName={userName}
-                  workspaceState={workspaceActions.workspaceState}
-                />
-              </SidebarFooter>
-            </Sidebar>
-            <section className="relative ml-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:ml-16">
-              <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(12rem,20rem)_auto] md:justify-between md:px-6 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:justify-normal">
-                {comparing ? (
-                  <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6 xl:flex">
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span
-                        className="size-2 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: PAINT_A.color }}
-                      />
-                      <span className="truncate">
-                        {insightsNavbarLabel?.you}
-                      </span>
-                    </span>
-                    <span className="shrink-0 font-normal text-muted-foreground">
-                      vs
-                    </span>
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span
-                        className="size-2 shrink-0 rounded-[2px]"
-                        style={{ backgroundColor: PAINT_B.color }}
-                      />
-                      <span className="truncate">
-                        {insightsNavbarLabel?.them}
-                      </span>
-                    </span>
-              </p>
-                ) : null}
-                <SidebarTrigger
-                  aria-label="Open navigation"
-                  className="md:hidden"
-                />
-                <h1 className="hidden min-w-0 items-center gap-1.5 text-sm xl:flex">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <button
-                          aria-label="Switch project"
-                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-semibold text-foreground hover:bg-accent data-[popup-open]:bg-accent"
-                          type="button"
-                        />
-                      }
-                    >
-                      <span className="truncate">
-                        {activeProject?.name ?? "Select a project"}
-                      </span>
-                    </DropdownMenuTrigger>
-                    <DropdownPillSurface
-                      align="start"
-                      className="max-h-80 w-56 overflow-y-auto overscroll-contain"
-                      side="bottom"
-                    >
-                      {(pill) => (
-                        <>
-                          <div className="sticky top-0 z-10 bg-popover">
-                            <DropdownMenuItem
-                              {...pill.getItemProps(0)}
-                              onClick={() =>
-                                createProjectDispatch({ type: "OPEN" })
-                              }
-                            >
-                              <PlusIcon aria-hidden="true" className="size-4" />
-                              New Project
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator className="my-0" />
-                          </div>
-                          {projects.length ? (
-                            projects.map((project, index) => (
-                              <DropdownMenuItem
-                                key={project.id}
-                                {...pill.getItemProps(index + 1)}
-                                onClick={() => selectProject(project.id)}
-                              >
-                                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                  <span className="truncate">
-                                    {project.name}
-                                  </span>
-                                  <span className="truncate text-xs text-muted-foreground">
-                                    {project.base_url}
-                                  </span>
-                                </span>
-                                {project.id === activeProjectId ? (
-                                  <CheckIcon className="ml-auto size-4 shrink-0" />
-                                ) : null}
-                              </DropdownMenuItem>
-                            ))
-                          ) : (
-                            <DropdownMenuItem
-                              {...pill.getItemProps(1)}
-                              disabled
-                            >
-                              No projects yet
-                            </DropdownMenuItem>
-                          )}
-                        </>
-                      )}
-                    </DropdownPillSurface>
-                  </DropdownMenu>
-                  <CircleIcon
-                    aria-hidden="true"
-                    className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-                  />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <button
-                          aria-label="Select crawl"
-                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-normal text-foreground hover:bg-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-accent"
-                          disabled={!activeProject}
-                          type="button"
-                        />
-                      }
-                    >
-                      <span className="truncate">
-                        {currentCrawl
-                          ? formatCrawlDateTime(currentCrawl)
-                          : "No crawl yet"}
-                      </span>
-                    </DropdownMenuTrigger>
-                    <DropdownPillSurface
-                      align="start"
-                      className="w-56"
-                      side="bottom"
-                    >
-                      {(pill) =>
-                        activeProjectCrawls.length ? (
-                          activeProjectCrawls.map((crawl, index) => (
-                            <DropdownMenuItem
-                              key={crawl.id}
-                              {...pill.getItemProps(index)}
-                              onClick={() => selectCrawl(crawl.id)}
-                            >
-                              <span className="truncate">
-                                {formatCrawlDateTime(crawl)}
-                              </span>
-                              {currentCrawl?.id === crawl.id ? (
-                                <CheckIcon className="ml-auto size-4" />
-                              ) : null}
-                            </DropdownMenuItem>
-                          ))
-                        ) : (
-                          <DropdownMenuItem {...pill.getItemProps(0)} disabled>
-                            No crawls yet
-                          </DropdownMenuItem>
-                        )
-                      }
-                    </DropdownPillSurface>
-                  </DropdownMenu>
-                  {comparing ? sectionSwitcher(false) : null}
-                </h1>
-                {comparing ? (
-                  <div aria-hidden="true" />
-                ) : (
-                  <div className="hidden min-w-0 items-center justify-center xl:flex">
-                    {sectionSwitcher(true)}
-                  </div>
-                )}
-                <div className="flex min-w-0 items-center justify-end gap-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          className="hidden lg:inline-flex"
-                          disabled={!activeProject}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        />
-                      }
-                    >
-                      <CogIcon aria-hidden="true" />
-                      Settings
-                      <ChevronDownIcon
-                        aria-hidden="true"
-                        className="size-3.5 text-muted-foreground"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownPillSurface
-                      align="end"
-                      className="w-48"
-                      side="bottom"
-                    >
-                      {(pill) => (
-                        <>
-                          {features.auto_crawl ? (
-                            <DropdownMenuItem
-                              {...pill.getItemProps(0)}
-                              disabled={!activeProject || autoCrawl.isSaving}
-                              onClick={() =>
-                                autoCrawl.enabled
-                                  ? void autoCrawl.handleDisable()
-                                  : void autoCrawl.openDialog()
-                              }
-                            >
-                              <SparklesIcon aria-hidden="true" />
-                              {autoCrawl.enabled
-                                ? "Auto crawl on"
-                                : "Auto crawl"}
-                            </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuItem
-                            {...pill.getItemProps(features.auto_crawl ? 1 : 0)}
-                            disabled={!activeProject}
-                            onClick={() =>
-                              activeProject &&
-                              businessProfile.openBusinessProfileDrawer(
-                                activeProject
-                              )
-                            }
-                          >
-                            <Building2Icon aria-hidden="true" />
-                            Business profile
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            {...pill.getItemProps(features.auto_crawl ? 2 : 1)}
-                            disabled={!activeProject}
-                            onClick={() => {
-                              if (activeProject) projectActions.openDeleteProjectDialog(activeProject)
-                            }}
-                            variant="destructive"
-                          >
-                            <TrashIcon aria-hidden="true" />
-                            Delete project
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            {...pill.getItemProps(features.auto_crawl ? 3 : 2)}
-                            disabled={!currentCrawl || currentCrawl.status === "queued" || currentCrawl.status === "running"}
-                            onClick={() => {
-                              if (currentCrawl) projectActions.openDeleteCrawlDialog(currentCrawl)
-                            }}
-                            variant="destructive"
-                          >
-                            <TrashIcon aria-hidden="true" />
-                            Delete crawl
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownPillSurface>
-                  </DropdownMenu>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button
-                          className="hidden md:inline-flex"
-                          disabled={!currentCrawl}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        />
-                      }
-                    >
-                      <DownloadIcon aria-hidden="true" />
-                      {isExportingAudit || isExportingCrawl
-                        ? "Exporting…"
-                        : "Export"}
-                      <ChevronDownIcon
-                        aria-hidden="true"
-                        className="size-3.5 text-muted-foreground"
-                      />
-                    </DropdownMenuTrigger>
-                    <DropdownPillSurface
-                      align="end"
-                      className="w-52"
-                      side="bottom"
-                    >
-                      {(pill) => (
-                        <>
-                          <DropdownMenuItem
-                            {...pill.getItemProps(0)}
-                            disabled={
-                              !currentCrawlCompleted || isExportingAudit
-                            }
-                            onClick={onExportAudit}
-                          >
-                            <FileTextIcon aria-hidden="true" />
-                            {isExportingAudit
-                              ? "Generating audit…"
-                              : "Export PDF audit"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            {...pill.getItemProps(1)}
-                            disabled={
-                              !currentCrawlCompleted || isExportingCrawl
-                            }
-                            onClick={() =>
-                              currentCrawl &&
-                              void projectActions.handleExportCrawl(
-                                currentCrawl,
-                                "xlsx"
-                              )
-                            }
-                          >
-                            <FileSpreadsheetIcon aria-hidden="true" />
-                            Export crawl as XLSX
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            {...pill.getItemProps(2)}
-                            disabled={
-                              !currentCrawlCompleted || isExportingCrawl
-                            }
-                            onClick={() =>
-                              currentCrawl &&
-                              void projectActions.handleExportCrawl(
-                                currentCrawl,
-                                "csv"
-                              )
-                            }
-                          >
-                            <FileSpreadsheetIcon aria-hidden="true" />
-                            Export crawl as CSV
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownPillSurface>
-                  </DropdownMenu>
-                  <Button
-                    disabled={!activeProject || isCrawlRunning}
-                    onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                    size="sm"
-                    type="button"
-                  >
-                    <PlayIcon aria-hidden="true" />
-                    {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                  </Button>
-                </div>
+                  <span className="truncate">
+                    {activeProject?.name ?? "Select a project"}
+                  </span>
+                </button>
               </header>
               <div
                 className={
                   islandState === "maximized"
-                    ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto"
-                    : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto"
+                    ? "pointer-events-none relative z-0 m-2 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto rounded-2xl bg-background shadow-[inset_0_1px_0_0_rgb(255_255_255/0.05),0_16px_40px_-12px_rgb(0_0_0/0.6)]"
+                    : "m-2 min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto rounded-2xl bg-background shadow-[inset_0_1px_0_0_rgb(255_255_255/0.05),0_16px_40px_-12px_rgb(0_0_0/0.6)]"
                 }
               >
                 <AnimatePresence initial={false} mode="wait">
@@ -1375,6 +707,113 @@ export function WorkspaceShellPreview({
                 </AnimatePresence>
               </div>
             </section>
+            </div>
+            <Sidebar
+              collapsible="none"
+              className="fixed bottom-4 left-1/2 z-40 flex h-auto w-auto -translate-x-1/2 flex-row items-center max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1 text-foreground shadow-[0_24px_60px_-16px_rgb(0_0_0/0.75)] backdrop-blur-xl max-md:hidden"
+            >
+              <div className="flex items-center max-md:hidden">
+                <WorkspaceDockNav
+                  activeProjectId={activeProjectId ?? undefined}
+                  auditTab={auditTab}
+                  crawls={activeProjectCrawls}
+                  currentCrawl={currentCrawl}
+                  formatCrawlLabel={formatCrawlDateTime}
+                  gscConnector={features.gsc_connector}
+                  integrations={features.integrations !== false}
+                  maxCompetitors={features.max_competitors}
+                  onCreateProject={() => createProjectDispatch({ type: "OPEN" })}
+                  onDeleteCrawl={(crawl) => projectActions.openDeleteCrawlDialog(crawl)}
+                  onDeleteProject={(project) =>
+                    projectActions.openDeleteProjectDialog(project)
+                  }
+                  onExportCrawl={(crawl, format) =>
+                    void projectActions.handleExportCrawl(crawl, format)
+                  }
+                  onOpenProjectPanel={openProjectPanel}
+                  onSelectCrawl={selectCrawl}
+                  onSelectProject={selectProject}
+                  onSelectWorkspace={selectWorkspace}
+                  projects={projects}
+                  trailing={
+                    <button
+                      className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+                      disabled={!activeProject || isCrawlRunning}
+                      onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                      type="button"
+                    >
+                      <PlayIcon aria-hidden="true" className="size-4" />
+                      {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                    </button>
+                  }
+                  view={view}
+                  actions={[
+                    {
+                      key: "auto-crawl",
+                      icon: <SparklesIcon aria-hidden="true" className="size-4" />,
+                      disabled: !activeProject || autoCrawl.isSaving,
+                      label: autoCrawl.enabled ? "Auto crawl on" : "Auto crawl",
+                      onSelect: () =>
+                        autoCrawl.enabled
+                          ? void autoCrawl.handleDisable()
+                          : void autoCrawl.openDialog(),
+                    },
+                    {
+                      key: "business-profile",
+                      icon: (
+                        <Building2Icon aria-hidden="true" className="size-4" />
+                      ),
+                      disabled: !activeProject,
+                      label: "Business profile",
+                      onSelect: () => {
+                        if (activeProject)
+                          businessProfile.openBusinessProfileDrawer(activeProject)
+                      },
+                    },
+                    { key: "d1", divider: true },
+                    {
+                      key: "export-pdf",
+                      icon: <FileTextIcon aria-hidden="true" className="size-4" />,
+                      disabled: !currentCrawlCompleted || isExportingAudit,
+                      label: isExportingAudit
+                        ? "Generating audit…"
+                        : "Export PDF audit",
+                      onSelect: onExportAudit,
+                    },
+                    {
+                      key: "export-xlsx",
+                      icon: (
+                        <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
+                      ),
+                      disabled: !currentCrawlCompleted || isExportingCrawl,
+                      label: "Export crawl as XLSX",
+                      onSelect: () => {
+                        if (currentCrawl)
+                          void projectActions.handleExportCrawl(
+                            currentCrawl,
+                            "xlsx"
+                          )
+                      },
+                    },
+                    {
+                      key: "export-csv",
+                      icon: (
+                        <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
+                      ),
+                      disabled: !currentCrawlCompleted || isExportingCrawl,
+                      label: "Export crawl as CSV",
+                      onSelect: () => {
+                        if (currentCrawl)
+                          void projectActions.handleExportCrawl(
+                            currentCrawl,
+                            "csv"
+                          )
+                      },
+                    },
+                  ]}
+                />
+              </div>
+            </Sidebar>
             {features.ai_chat ? (
               <LayoutGroup id="ai-island-group">
                 {islandState === "docked" ? (
