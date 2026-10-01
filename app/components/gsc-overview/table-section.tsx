@@ -14,6 +14,18 @@ import { formatNumber, formatPercent, formatPosition } from "./formatters"
 import { dimensionTabLabel, sortIndicator, type TableSortState } from "./table"
 import type { GSCDimensionTab, TableRow, TableSortColumn } from "./types"
 import type { GSCQueryPreset } from "./use-gsc-queries"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
+import {
+  truncateProjectKeywordQueryLabel,
+  useProjectKeywordQueryMatcher,
+  type ProjectKeywordQueryMatch,
+} from "./keyword-query-matching"
+import { QueryMatchBadges, queryMatchRowClassName } from "./query-match-badges"
+import { cn } from "~/lib/utils"
 
 const dimensionTabs: Array<{ key: GSCDimensionTab; label: string }> = [
   { key: "queries", label: "Queries" },
@@ -50,6 +62,7 @@ export function GSCTableSection({
   onToggleTableSort,
   onQueryPresetChange,
   onLoadMoreQueries,
+  projectId,
 }: {
   activeDimensionTab: GSCDimensionTab
   tableSearch: string
@@ -65,8 +78,15 @@ export function GSCTableSection({
   onToggleTableSort: (column: TableSortColumn) => void
   onQueryPresetChange: (value: GSCQueryPreset) => void
   onLoadMoreQueries: () => void
+  projectId: string | null
 }) {
   const isQueriesTab = activeDimensionTab === "queries"
+  const {
+    projectKeywordQueryMatcher,
+    projectKeywordListsReady,
+    projectKeywordListsFailed,
+    retryProjectKeywordLists,
+  } = useProjectKeywordQueryMatcher(projectId)
 
   return (
     <section className="mx-4 rounded-xl border border-border/50 bg-card text-foreground sm:mx-6 lg:mx-4">
@@ -130,6 +150,18 @@ export function GSCTableSection({
               {dimensionTabLabel(tab.key).toLowerCase()}
               {tab.key === "queries" && queriesHasMore ? " so far" : ""}.
             </p>
+            {tab.key === "queries" && projectKeywordListsFailed ? (
+              <p className="text-xs text-muted-foreground">
+                Keyword matching unavailable — could not load keyword lists.{" "}
+                <button
+                  className="underline underline-offset-2"
+                  onClick={() => void retryProjectKeywordLists()}
+                  type="button"
+                >
+                  Retry
+                </button>
+              </p>
+            ) : null}
 
             {tab.key === "queries" && queriesErrorMessage ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -147,6 +179,11 @@ export function GSCTableSection({
               primaryColumnLabel={dimensionTabLabel(tab.key).slice(0, -1)}
               rows={activeTableRows}
               tableSort={tableSort}
+              showMatch={tab.key === "queries"}
+              matchQuery={(label) =>
+                projectKeywordQueryMatcher.matchProjectKeywordQuery(label)
+              }
+              matchReady={projectKeywordListsReady}
             />
 
             {tab.key === "queries" && queriesHasMore ? (
@@ -172,12 +209,18 @@ function RowsTable({
   emptyMessage,
   tableSort,
   onToggleTableSort,
+  showMatch,
+  matchQuery,
+  matchReady,
 }: {
   primaryColumnLabel: string
   rows: TableRow[]
   emptyMessage: string
   tableSort: TableSortState
   onToggleTableSort: (column: TableSortColumn) => void
+  showMatch?: boolean
+  matchQuery?: (label: string) => ProjectKeywordQueryMatch
+  matchReady?: boolean
 }) {
   if (!rows.length) {
     return (
@@ -227,23 +270,66 @@ function RowsTable({
             >
               Position
             </SortableHead>
+            {showMatch ? <TableHead>Match</TableHead> : null}
           </UITableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
-            <UITableRow className="border-border/40" key={row.label}>
-              <TableCell className="max-w-[34rem] truncate text-foreground">
-                {row.label || "Unknown"}
-              </TableCell>
-              <TableCell>{formatNumber(row.clicks)}</TableCell>
-              <TableCell>{formatNumber(row.impressions)}</TableCell>
-              <TableCell>{formatPercent(row.ctr)}</TableCell>
-              <TableCell>{formatPosition(row.position)}</TableCell>
-            </UITableRow>
-          ))}
+          {rows.map((row) => {
+            const match = showMatch ? matchQuery?.(row.label) : undefined
+            return (
+              <UITableRow
+                className={cn(
+                  "border-border/40",
+                  showMatch ? queryMatchRowClassName(match) : undefined
+                )}
+                key={row.label}
+              >
+                <QueryLabelCell label={row.label} withTooltip={showMatch === true} />
+                <TableCell>{formatNumber(row.clicks)}</TableCell>
+                <TableCell>{formatNumber(row.impressions)}</TableCell>
+                <TableCell>{formatPercent(row.ctr)}</TableCell>
+                <TableCell>{formatPosition(row.position)}</TableCell>
+                {showMatch ? (
+                  <TableCell>
+                    <QueryMatchBadges match={match} ready={matchReady === true} />
+                  </TableCell>
+                ) : null}
+              </UITableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
+  )
+}
+
+function QueryLabelCell({
+  label,
+  withTooltip,
+}: {
+  label: string
+  withTooltip: boolean
+}) {
+  const full = label || "Unknown"
+  const display = withTooltip ? truncateProjectKeywordQueryLabel(full) : full
+  if (!withTooltip) {
+    return (
+      <TableCell className="max-w-[34rem] truncate text-foreground">
+        {full}
+      </TableCell>
+    )
+  }
+  return (
+    <TableCell className="max-w-[34rem] text-foreground">
+      <Tooltip>
+        <TooltipTrigger render={<span className="block truncate" tabIndex={0} />}>
+          {display}
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs break-words">
+          {full}
+        </TooltipContent>
+      </Tooltip>
+    </TableCell>
   )
 }
 

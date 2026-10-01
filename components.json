@@ -22,6 +22,7 @@
   "menuColor": "default",
   "menuAccent": "bold",
   "registries": {
-    "@evilcharts": "https://evilcharts.com/r/{name}.json"
+    "@evilcharts": "https://evilcharts.com/r/{name}.json",
+    "@pdfcn": "https://pdfcn.dev/r/{name}.json"
   }
 }

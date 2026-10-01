@@ -1,6 +1,10 @@
 "use client"
 
 import { cn } from "~/lib/utils"
+import type {
+  CombinedProjectKeyword,
+  ProjectKeywordKind,
+} from "~/lib/project-keywords-query"
 
 const SIZE_STEPS = [
   "text-xs",
@@ -11,12 +15,10 @@ const SIZE_STEPS = [
   "text-2xl",
 ] as const
 
-const TONES = [
-  "text-muted-foreground",
-  "text-foreground/60",
-  "text-foreground/80",
-  "text-foreground",
-] as const
+const KIND_TONES: Record<ProjectKeywordKind, string> = {
+  brand: "text-yellow-700 dark:text-yellow-400",
+  non_brand: "text-blue-600 dark:text-blue-400",
+}
 
 function wordWeight(word: string) {
   let hash = 0
@@ -26,22 +28,26 @@ function wordWeight(word: string) {
   return Math.abs(hash)
 }
 
-export function OverviewKeywordCloud({ keywords }: { keywords: string[] }) {
+export function OverviewKeywordCloud({
+  items,
+}: {
+  items: CombinedProjectKeyword[]
+}) {
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-5 pb-5">
-      <div className="flex flex-wrap content-center items-center justify-center gap-x-3 gap-y-2 text-center">
-        {keywords.map((keyword) => {
-          const weight = wordWeight(keyword)
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
+      <div className="m-auto flex min-h-full flex-wrap content-center items-center justify-center gap-x-3 gap-y-2 text-center">
+        {items.map((item) => {
+          const weight = wordWeight(item.keyword)
           return (
             <span
               className={cn(
                 "max-w-full font-medium tracking-tight",
                 SIZE_STEPS[weight % SIZE_STEPS.length],
-                TONES[weight % TONES.length]
+                KIND_TONES[item.kind]
               )}
-              key={keyword}
+              key={`${item.kind}:${item.keyword}`}
             >
-              {keyword}
+              {item.keyword}
             </span>
           )
         })}

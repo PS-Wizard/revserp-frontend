@@ -1,186 +1,75 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Loader2, TagsIcon } from "lucide-react"
 
 import { OverviewKeywordCloud } from "~/components/overview-keyword-cloud"
-import { useRevbotStartPrompt } from "~/components/revbot/revbot-start-prompt-context"
-import { useOrganizationEventsListener } from "~/hooks/use-organization-events"
 import { Button } from "~/components/ui/button"
 import { Card } from "~/components/ui/card"
+import { Separator } from "~/components/ui/separator"
 import { Skeleton } from "~/components/ui/skeleton"
 import { ApiError } from "~/lib/api"
 import {
-  businessProfileQueryKey,
-  fetchBusinessProfile,
-} from "~/lib/business-profile-query"
-import { useFeatures } from "~/lib/features"
-
-const KEYWORD_PROMPT = `Review my GSC data if it's connected. If GSC isn't available, analyze the latest crawl data instead.
-
-Start by calling get_business_profile so you know the brand name, category, location, description, products, audience, and any keywords already saved.
-
-Use the available data to understand what the business currently ranks for and what search terms it should target:
-
-* Prioritize GSC impressions, queries, clicks, and rankings when available.
-* Otherwise, inspect crawled URLs and their page titles to understand the site's services, topics, and target keywords.
-* Read the page content of important pages where necessary for additional context.
-* Identify high-value keywords and queries the business is already getting visibility for or has a realistic opportunity to target.
-
-Then update the business profile in the three keyword lists:
-
-1. branded_keywords: terms that contain the brand name.
-2. non_branded_keywords: terms a customer would search without the brand name.
-3. target_keywords: the phrases the site should actually target, drawn from the non-branded terms and the evidence above.
-
-Keep branded and non-branded disjoint. Never put the same term in both, because the server drops it from branded when it also appears in non-branded.
-
-The keyword lists replace the stored list completely, so merge your findings with the terms already there. Never drop an existing term unless the evidence shows it is wrong.
-
-Also tighten the description, products, audience, category, and wording where the evidence shows they are off.
-
-Base recommendations on actual search/crawl evidence rather than guessing keywords.`
-
-function KeywordsEmptyState({
-  canGenerate,
-  isGenerating,
-  onGenerate,
-}: {
-  canGenerate: boolean
-  isGenerating: boolean
-  onGenerate: () => void
-}) {
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
-      <div className="mb-3 flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted/50 ring-1 ring-border/50">
-        <TagsIcon aria-hidden="true" className="size-5 text-violet-400" />
-      </div>
-      <p className="text-base font-medium text-foreground">
-        No target keywords
-      </p>
-      <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">
-        Add keywords to the business profile, or let Revbot find them from
-        Search Console and crawl data.
-      </p>
-      {canGenerate ? (
-        <Button
-          className="mt-5"
-          disabled={isGenerating}
-          onClick={onGenerate}
-          size="sm"
-          type="button"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2
-                aria-hidden="true"
-                className="size-4 animate-spin motion-reduce:animate-none"
-              />
-              Generating…
-            </>
-          ) : (
-            "Find keywords"
-          )}
-        </Button>
-      ) : null}
-    </div>
-  )
-}
+  normalizeProjectKeywordLists,
+  projectKeywordListsQueryOptions,
+} from "~/lib/project-keywords-query"
 
 export function OverviewTargetKeywordsCard({
   projectId,
 }: {
   projectId: string | null
 }) {
-  const features = useFeatures()
-  const revbotPrompt = useRevbotStartPrompt()
-  const startPrompt = revbotPrompt?.startPrompt
-  const [watching, setWatching] = useState(false)
-
   const query = useQuery({
-    queryKey: projectId
-      ? businessProfileQueryKey(projectId)
-      : ["business-profile-disabled"],
-    queryFn: () => fetchBusinessProfile(projectId!),
+    ...projectKeywordListsQueryOptions(projectId!),
     enabled: Boolean(projectId),
-    placeholderData: (previous) => previous,
   })
-
-  const projectIdRef = useRef(projectId)
-  projectIdRef.current = projectId
-
-  // A business profile update (e.g. from Revbot) is what we were waiting for;
-  // the provider already invalidated the query, so just end the watching state.
-  useOrganizationEventsListener((event) => {
-    if (event.type !== "business_profile.updated") return
-    if (event.project_id && event.project_id !== projectIdRef.current) return
-    setWatching(false)
-  })
-
-  const keywords = useMemo(() => {
-    const values = query.data?.business_profile?.target_keywords ?? []
-    return values.map((keyword) => keyword.trim()).filter(Boolean)
-  }, [query.data])
-
-  useEffect(() => {
-    if (keywords.length > 0) setWatching(false)
-  }, [keywords.length])
-
-  useEffect(() => {
-    if (!watching) return
-    const timeout = window.setTimeout(() => setWatching(false), 5 * 60_000)
-    return () => window.clearTimeout(timeout)
-  }, [watching])
-
-  const canGenerate = Boolean(features.ai_chat && startPrompt && projectId)
-  const isGenerating = watching && keywords.length === 0
-
-  const openKeywordChat = () => {
-    if (!startPrompt) return
-    setWatching(true)
-    startPrompt(KEYWORD_PROMPT, { keepDocked: true })
-  }
-
-  const body = !projectId ? (
-    <div className="flex flex-1 items-center justify-center px-5 py-8 text-sm text-muted-foreground">
-      Select a project to see target keywords.
-    </div>
-  ) : query.isLoading ? (
-    <div className="flex flex-1 flex-col justify-center gap-3 px-5 py-8">
-      <Skeleton className="h-6 w-3/4" />
-      <Skeleton className="h-6 w-1/2" />
-      <Skeleton className="h-6 w-2/3" />
-    </div>
-  ) : query.isError ? (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-8 text-center">
-      <p className="text-sm text-muted-foreground">
-        {query.error instanceof ApiError
-          ? query.error.message
-          : "Could not load target keywords."}
-      </p>
-      <Button onClick={() => void query.refetch()} size="sm" type="button">
-        Try again
-      </Button>
-    </div>
-  ) : keywords.length === 0 ? (
-    <KeywordsEmptyState
-      canGenerate={canGenerate}
-      isGenerating={isGenerating}
-      onGenerate={openKeywordChat}
-    />
-  ) : (
-    <OverviewKeywordCloud keywords={keywords} />
-  )
+  const combined = normalizeProjectKeywordLists(query.data).combined
 
   return (
     <Card className="flex h-full min-h-0 flex-col gap-0 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 py-0">
-      <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-5 pb-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-4">
         <h3 className="truncate font-heading text-base font-semibold tracking-tight">
-          Target keywords
+          Keywords
         </h3>
+        <div className="flex shrink-0 items-center gap-4 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-yellow-700 dark:bg-yellow-400" />
+            Brand
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="size-2 rounded-full bg-blue-600 dark:bg-blue-400" />
+            Non-brand
+          </span>
+        </div>
       </div>
-      {body}
+      <Separator />
+      {!projectId ? (
+        <div className="flex flex-1 items-center justify-center px-5 py-8 text-sm text-muted-foreground">
+          Select a project to see keywords.
+        </div>
+      ) : query.isLoading && !query.data ? (
+        <div className="flex flex-1 flex-col justify-center gap-3 px-5 py-8">
+          <Skeleton className="h-6 w-3/4" />
+          <Skeleton className="h-6 w-1/2" />
+          <Skeleton className="h-6 w-2/3" />
+        </div>
+      ) : query.isError ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-5 py-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            {query.error instanceof ApiError
+              ? query.error.message
+              : "Could not load keywords."}
+          </p>
+          <Button onClick={() => void query.refetch()} size="sm" type="button">
+            Try again
+          </Button>
+        </div>
+      ) : combined.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-5 py-8 text-center text-sm text-muted-foreground">
+          No keywords yet. Open the Keywords tab to add or generate them.
+        </div>
+      ) : (
+        <OverviewKeywordCloud items={combined} />
+      )}
     </Card>
   )
 }

@@ -41,6 +41,7 @@ import { ProjectSetupPanel } from "~/components/project-setup-panel"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { AnalyticsView } from "~/components/analytics-view"
+import { RuneCMSView } from "~/components/rune-cms-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
@@ -180,6 +181,7 @@ const viewLabels: Record<DashboardView, string> = {
   competitors: "Competitors",
   "search-console": "Search Console",
   analytics: "Google Analytics",
+  "rune-cms": "Rune CMS",
   compare: "Compare",
 }
 
@@ -318,6 +320,8 @@ export default function AppPage() {
       me.features?.gsc_connector === false
     )
       return
+    if (target.view === "rune-cms" && me.features?.integrations === false)
+      return
     if (
       target.view === "competitors" &&
       (me.features?.max_competitors ?? 0) === 0
@@ -325,7 +329,12 @@ export default function AppPage() {
       return
     setView(target.view)
     if ("tab" in target) setAuditTab(target.tab)
-  }, [location.hash, me.features?.gsc_connector, me.features?.max_competitors])
+  }, [
+    location.hash,
+    me.features?.gsc_connector,
+    me.features?.integrations,
+    me.features?.max_competitors,
+  ])
 
   useEffect(() => {
     const desired =
@@ -335,11 +344,13 @@ export default function AppPage() {
           ? "#search-console"
           : view === "analytics"
             ? "#analytics"
-            : view === "competitors"
-              ? "#competitors"
-              : view === "keywords"
-                ? "#keywords"
-                : ""
+            : view === "rune-cms"
+              ? "#rune-cms"
+              : view === "competitors"
+                ? "#competitors"
+                : view === "keywords"
+                  ? "#keywords"
+                  : ""
     if (location.hash === desired) return
     lastWrittenHashRef.current = desired
     void navigate(
@@ -834,6 +845,12 @@ export default function AppPage() {
               />
             ) : view === "analytics" && me.features?.gsc_connector !== false ? (
               <AnalyticsView
+                key={activeProject?.id}
+                activeProject={activeProject}
+                isOrganizationOwner={isOrganizationOwner}
+              />
+            ) : view === "rune-cms" && me.features?.integrations !== false ? (
+              <RuneCMSView
                 key={activeProject?.id}
                 activeProject={activeProject}
                 isOrganizationOwner={isOrganizationOwner}

@@ -31,6 +31,7 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
+import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
 import { normalizeToolCallStatus } from "./tool-call-status"
 
 const STORAGE_PREFIX = "revbot-turn:"
@@ -761,6 +762,15 @@ export function useRevbot({
                   const projectId = projectIdRef.current
                   if (projectId) {
                     void invalidateBusinessProfile(queryClient, projectId)
+                  }
+                }
+                if (
+                  payload.name === "update_project_keywords" &&
+                  resultStatus === "completed"
+                ) {
+                  const projectId = projectIdRef.current
+                  if (projectId) {
+                    void invalidateProjectKeywordLists(queryClient, projectId)
                   }
                 }
               } else if (

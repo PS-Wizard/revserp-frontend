@@ -1090,6 +1090,7 @@ export type OrganizationEventType =
   | "maps_visibility.completed"
   | "maps_visibility.failed"
   | "business_profile.updated"
+  | "project_keywords.updated"
   | "project_competitor.created"
   | "project_competitor.deleted"
   | "project_setup.started"
@@ -1109,6 +1110,19 @@ export type OrganizationEventFrame = {
   resource_id: string | null
   payload: Record<string, unknown>
   created_at: string
+}
+
+/** Rune CMS project integration. `tools` is always an array. */
+export type RuneCMSToolResponse = {
+  name: string
+  description: string
+}
+
+export type RuneCMSStatusResponse = {
+  connected: boolean
+  endpoint_url?: string
+  last_checked_at?: string
+  tools: RuneCMSToolResponse[]
 }
 
 /** `payload` of a crawl.* frame. */

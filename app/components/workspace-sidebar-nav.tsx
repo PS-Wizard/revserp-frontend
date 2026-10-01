@@ -4,6 +4,7 @@ import type { ReactElement } from "react"
 
 import {
   ActivityIcon,
+  BlocksIcon,
   ChartNoAxesCombinedIcon,
   CheckIcon,
   EyeIcon,
@@ -123,6 +124,7 @@ function NavItem({
 type WorkspaceSidebarNavProps = {
   auditTab: AuditTab
   gscConnector: boolean
+  integrations: boolean
   maxCompetitors: number
   isSidebarCollapsed: boolean
   onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
@@ -132,6 +134,7 @@ type WorkspaceSidebarNavProps = {
 export function WorkspaceSidebarNav({
   auditTab,
   gscConnector,
+  integrations,
   maxCompetitors,
   isSidebarCollapsed,
   onSelectWorkspace,
@@ -211,6 +214,17 @@ export function WorkspaceSidebarNav({
                 onMouseEnter={() => showPill("analytics")}
               />
             </>
+          ) : null}
+          {integrations ? (
+            <NavItem
+              label="Rune CMS"
+              icon={BlocksIcon}
+              active={view === "rune-cms"}
+              collapsed={isSidebarCollapsed}
+              onClick={() => onSelectWorkspace("rune-cms")}
+              itemRef={setItemRef("rune-cms")}
+              onMouseEnter={() => showPill("rune-cms")}
+            />
           ) : null}
         </SidebarMenu>
       </SidebarGroup>

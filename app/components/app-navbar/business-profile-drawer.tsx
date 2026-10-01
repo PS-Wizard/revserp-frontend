@@ -7,7 +7,6 @@ import {
   RefreshCw,
   Sparkles,
   Swords,
-  Tags,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { useState } from "react"
@@ -26,7 +25,6 @@ import {
 import {
   Field,
   FieldDescription,
-  FieldGroup,
   FieldLabel,
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
@@ -84,11 +82,7 @@ export function BusinessProfileDrawer({
     productDescription,
     targetAudience,
     businessCompetitors,
-    brandedKeywords,
-    nonBrandedKeywords,
-    targetKeywords,
     seedPrompts,
-    duplicateKeywords,
     businessProfileError,
     isLoadingBusinessProfile,
     isSavingBusinessProfile,
@@ -109,12 +103,8 @@ export function BusinessProfileDrawer({
     setProductDescription,
     setTargetAudience,
     setBusinessCompetitors,
-    setBrandedKeywords,
-    setNonBrandedKeywords,
-    setTargetKeywords,
   } = businessProfile
 
-  const [keywordsOpen, setKeywordsOpen] = useState(false)
   const [competitorsOpen, setCompetitorsOpen] = useState(false)
   const [seedPromptsOpen, setSeedPromptsOpen] = useState(false)
 
@@ -123,11 +113,9 @@ export function BusinessProfileDrawer({
     isSavingBusinessProfile ||
     !canManageBusinessProfile
 
-  const hasDuplicateKeywords = duplicateKeywords.length > 0
   const questionCount = aiQuestions?.questions.length ?? 0
 
   function closeNestedDrawers() {
-    setKeywordsOpen(false)
     setCompetitorsOpen(false)
     setSeedPromptsOpen(false)
   }
@@ -185,7 +173,6 @@ export function BusinessProfileDrawer({
                   disabled={
                     !canManageBusinessProfile ||
                     !hasUnsavedChanges ||
-                    hasDuplicateKeywords ||
                     isLoadingBusinessProfile ||
                     isSavingBusinessProfile
                   }
@@ -372,23 +359,11 @@ export function BusinessProfileDrawer({
 
                     <section className="flex flex-col gap-4">
                       <SectionHeading
-                        description="Lists that seed keywords, comparisons, and questions."
-                        icon={Tags}
-                        title="Keywords and context"
+                        description="Businesses you compare against and starting questions for AI audits."
+                        icon={Swords}
+                        title="Competitors and seed prompts"
                       />
                       <div className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60 bg-card">
-                        <SectionRow
-                          description="Branded, non-branded, and target keywords."
-                          icon={Tags}
-                          label="Keywords"
-                          meta={
-                            hasDuplicateKeywords
-                              ? "Duplicate terms"
-                              : `${countList(brandedKeywords)} branded · ${countList(nonBrandedKeywords)} non-branded`
-                          }
-                          onOpen={() => setKeywordsOpen(true)}
-                          warn={hasDuplicateKeywords}
-                        />
                         <SectionRow
                           description="Businesses you compete with."
                           icon={Swords}
@@ -404,6 +379,10 @@ export function BusinessProfileDrawer({
                           onOpen={() => setSeedPromptsOpen(true)}
                         />
                       </div>
+                      <p className={HINT_CLASS}>
+                        Brand and non-brand keywords now live in the Keywords
+                        view, managed separately from this profile.
+                      </p>
                     </section>
 
                     {!canManageBusinessProfile ? (
@@ -438,96 +417,6 @@ export function BusinessProfileDrawer({
             </div>
           </form>
         ) : null}
-
-        <DrawerNested
-          direction="right"
-          onOpenChange={setKeywordsOpen}
-          open={keywordsOpen}
-        >
-          <DrawerContent
-            className={cn(SIDE_DRAWER_WIDTH, SIDE_DRAWER_LAYER)}
-            overlayClassName={SIDE_DRAWER_LAYER}
-          >
-            <DrawerHeader>
-              <DrawerTitle>Keywords</DrawerTitle>
-              <DrawerDescription>
-                Branded and non-branded terms seed the target list. The same
-                term cannot appear in both.
-              </DrawerDescription>
-            </DrawerHeader>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
-              <FieldGroup>
-                <Field data-invalid={hasDuplicateKeywords}>
-                  <FieldLabel htmlFor="business-branded-keywords">
-                    Branded keywords
-                  </FieldLabel>
-                  <Textarea
-                    className="min-h-24 resize-none"
-                    disabled={fieldsDisabled}
-                    id="business-branded-keywords"
-                    onChange={(event) => setBrandedKeywords(event.target.value)}
-                    placeholder={"revserp\nrevserp ai audit"}
-                    value={brandedKeywords}
-                  />
-                  <FieldDescription className={HINT_CLASS}>
-                    Terms that include your brand name.
-                  </FieldDescription>
-                </Field>
-                <Field data-invalid={hasDuplicateKeywords}>
-                  <FieldLabel htmlFor="business-non-branded-keywords">
-                    Non-branded keywords
-                  </FieldLabel>
-                  <Textarea
-                    className="min-h-24 resize-none"
-                    disabled={fieldsDisabled}
-                    id="business-non-branded-keywords"
-                    onChange={(event) =>
-                      setNonBrandedKeywords(event.target.value)
-                    }
-                    placeholder={"seo audit\nsite crawler\nai visibility"}
-                    value={nonBrandedKeywords}
-                  />
-                  <FieldDescription className={HINT_CLASS}>
-                    Terms customers search for without your brand.
-                  </FieldDescription>
-                </Field>
-                {hasDuplicateKeywords ? (
-                  <FieldDescription className="text-destructive">
-                    In both lists: {duplicateKeywords.join(", ")}. Remove these
-                    from one list before saving.
-                  </FieldDescription>
-                ) : null}
-                <Field>
-                  <FieldLabel htmlFor="business-target-keywords">
-                    Target keywords
-                  </FieldLabel>
-                  <Textarea
-                    className="min-h-24 resize-none"
-                    defaultValue={targetKeywords}
-                    disabled={fieldsDisabled}
-                    id="business-target-keywords"
-                    key={targetKeywords}
-                    onChange={(event) => setTargetKeywords(event.target.value)}
-                    placeholder={"seo audit\nsite crawler\nai visibility"}
-                  />
-                  <FieldDescription className={HINT_CLASS}>
-                    Normally written by Revbot from the Keywords tab, with Find
-                    keywords. You can still edit the list here.
-                  </FieldDescription>
-                </Field>
-              </FieldGroup>
-            </div>
-            <DrawerFooter className="flex-row justify-end">
-              <Button
-                onClick={() => setKeywordsOpen(false)}
-                type="button"
-                variant="outline"
-              >
-                Done
-              </Button>
-            </DrawerFooter>
-          </DrawerContent>
-        </DrawerNested>
 
         <DrawerNested
           direction="right"

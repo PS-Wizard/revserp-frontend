@@ -13,6 +13,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { clientApiSSE } from "~/lib/api"
+import { invalidateBusinessProfile } from "~/lib/business-profile-query"
+import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
 import type { OrganizationEventFrame } from "~/lib/api.types"
 
 // Server closes the stream around five minutes; reconnect quietly.
@@ -294,12 +296,14 @@ export function OrganizationEventsProvider({
 
       if (type === "business_profile.updated") {
         if (event.project_id) {
-          void queryClient.invalidateQueries({
-            queryKey: ["business-profile", event.project_id],
-          })
-          void queryClient.invalidateQueries({
-            queryKey: ["project-keywords", event.project_id],
-          })
+          void invalidateBusinessProfile(queryClient, event.project_id)
+        }
+        return
+      }
+
+      if (type === "project_keywords.updated") {
+        if (event.project_id) {
+          void invalidateProjectKeywordLists(queryClient, event.project_id)
         }
         return
       }
@@ -330,12 +334,7 @@ export function OrganizationEventsProvider({
             void queryClient.invalidateQueries({
               queryKey: ["bucket-trends", event.project_id],
             })
-            void queryClient.invalidateQueries({
-              queryKey: ["business-profile", event.project_id],
-            })
-            void queryClient.invalidateQueries({
-              queryKey: ["project-keywords", event.project_id],
-            })
+            void invalidateBusinessProfile(queryClient, event.project_id)
             void queryClient.invalidateQueries({
               queryKey: ["ai-audits-list", event.project_id],
             })

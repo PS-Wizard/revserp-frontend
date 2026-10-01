@@ -11,6 +11,7 @@ export type DashboardView =
   | "competitors"
   | "search-console"
   | "analytics"
+  | "rune-cms"
   | "compare"
 export type AuditTab =
   "overview" | "seo" | "aeo" | "pagespeed" | "pages" | "site-graph"
@@ -27,6 +28,7 @@ export function revbotHashTarget(
   | { view: "revserp-audit"; tab: AuditTab }
   | { view: "search-console" }
   | { view: "analytics" }
+  | { view: "rune-cms" }
   | { view: "competitors" }
   | { view: "keywords" }
   | null {
@@ -47,6 +49,8 @@ export function revbotHashTarget(
       return { view: "search-console" }
     case "analytics":
       return { view: "analytics" }
+    case "rune-cms":
+      return { view: "rune-cms" }
     case "competitors":
       return { view: "competitors" }
     case "keywords":

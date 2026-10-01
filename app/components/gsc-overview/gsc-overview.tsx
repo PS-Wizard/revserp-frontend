@@ -495,6 +495,7 @@ export function GSCOverview({
             isLoadingMoreQueries={searchConsoleQueries.isLoadingMore}
             tableSearch={state.tableSearch}
             tableSort={state.tableSort}
+            projectId={activeProjectID}
           />
         </>
       ) : isLoading ? (

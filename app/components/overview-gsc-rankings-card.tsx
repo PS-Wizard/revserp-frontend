@@ -17,6 +17,20 @@ import { Card } from "~/components/ui/card"
 import { ScrollArea } from "~/components/ui/scroll-area"
 import { Skeleton } from "~/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
+import {
+  truncateProjectKeywordQueryLabel,
+  useProjectKeywordQueryMatcher,
+  type ProjectKeywordQueryMatch,
+} from "~/components/gsc-overview/keyword-query-matching"
+import {
+  QueryMatchBadges,
+  queryMatchRowClassName,
+} from "~/components/gsc-overview/query-match-badges"
 import { ApiError, clientApiFetch } from "~/lib/api"
 import type {
   GSCSearchAnalyticsRowResponse,
@@ -91,29 +105,63 @@ function RankingRow({
   impressions,
   isLast,
   tab,
+  match,
+  matchReady,
 }: {
   index: number
   label: string
   impressions: number
   isLast: boolean
   tab: RankingsTab
+  match?: ProjectKeywordQueryMatch
+  matchReady?: boolean
 }) {
+  const display =
+    tab === "queries" ? truncateProjectKeywordQueryLabel(label) : label
+  const showFullQuery = tab === "queries"
   return (
     <div
       className={cn(
-        "flex min-h-14 items-center gap-3 rounded-md py-4",
-        !isLast && "border-b border-border/40"
+        "flex min-h-14 items-center gap-3 rounded-md px-2 py-4",
+        !isLast && "border-b border-border/40",
+        tab === "queries" ? queryMatchRowClassName(match) : undefined
       )}
     >
       <span className="w-6 shrink-0 text-center text-[13px] text-muted-foreground tabular-nums">
         {index + 1}
       </span>
-      <p
-        className="min-w-0 flex-1 truncate text-[13px] leading-snug font-medium text-foreground/90"
-        title={label}
-      >
-        {tab === "pages" ? <Linkify text={label} /> : label}
-      </p>
+      <div className="min-w-0 flex-1">
+        <p
+          className="truncate text-[13px] leading-snug font-medium text-foreground/90"
+          title={showFullQuery ? undefined : label}
+        >
+          {tab === "pages" ? (
+            <Linkify text={label} />
+          ) : showFullQuery ? (
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="block truncate" tabIndex={0} />}
+              >
+                {display}
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs break-words">
+                {label}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            display
+          )}
+        </p>
+        {tab === "queries" ? (
+          <span className="mt-1 block empty:hidden">
+            <QueryMatchBadges
+              match={match}
+              ready={matchReady === true}
+              hideNoMatch
+            />
+          </span>
+        ) : null}
+      </div>
       <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
         {formatNumber(impressions)}
       </span>
@@ -130,6 +178,9 @@ function RankingsList({
   errorMessage,
   onLoadMore,
   onRetry,
+  matchQuery,
+  matchReady,
+  matchUnavailable,
 }: {
   rows: GSCSearchAnalyticsRowResponse[]
   tab: RankingsTab
@@ -139,6 +190,9 @@ function RankingsList({
   errorMessage: string
   onLoadMore: () => void
   onRetry?: () => void
+  matchQuery?: (label: string) => ProjectKeywordQueryMatch
+  matchReady?: boolean
+  matchUnavailable?: boolean
 }) {
   const scrollRootRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
@@ -204,6 +258,11 @@ function RankingsList({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <RankingsListHeader tab={tab} />
+      {matchUnavailable ? (
+        <p className="shrink-0 pt-1 text-[11px] text-muted-foreground">
+          Keyword matching unavailable.
+        </p>
+      ) : null}
       <div className="min-h-0 flex-1 overflow-hidden" ref={scrollRootRef}>
         <ScrollArea className="h-full">
           <div className="flex flex-col pr-3">
@@ -215,6 +274,8 @@ function RankingsList({
                 key={`${rowLabel(row, tab)}::${index}`}
                 label={rowLabel(row, tab)}
                 tab={tab}
+                match={matchQuery?.(rowLabel(row, tab))}
+                matchReady={matchReady}
               />
             ))}
             {hasMore ? (
@@ -317,6 +378,16 @@ export function OverviewGSCRankingsCard({
   projectId: string | null
 }) {
   const [tab, setTab] = useState<RankingsTab>("queries")
+  const {
+    projectKeywordQueryMatcher,
+    projectKeywordListsReady,
+    projectKeywordListsFailed,
+  } = useProjectKeywordQueryMatcher(projectId)
+  const matchGSCQuery = useCallback(
+    (label: string) =>
+      projectKeywordQueryMatcher.matchProjectKeywordQuery(label),
+    [projectKeywordQueryMatcher]
+  )
 
   const { data: gscStatus, isLoading: isLoadingStatus } = useQuery({
     queryKey: projectId
@@ -371,6 +442,9 @@ export function OverviewGSCRankingsCard({
           onLoadMore={queriesData.loadMore}
           rows={queriesData.rows}
           tab="queries"
+          matchQuery={matchGSCQuery}
+          matchReady={projectKeywordListsReady}
+          matchUnavailable={projectKeywordListsFailed}
         />
       </TabsContent>
 

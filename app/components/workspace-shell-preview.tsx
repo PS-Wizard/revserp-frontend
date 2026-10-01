@@ -12,6 +12,7 @@ import {
 } from "react"
 import { useLocation, useNavigate, useRevalidator } from "react-router"
 import {
+  BlocksIcon,
   Building2Icon,
   ChartNoAxesCombinedIcon,
   CheckIcon,
@@ -114,6 +115,7 @@ import type {
   ProjectResponse,
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
+import { cn } from "~/lib/utils"
 import { useIsMobile } from "~/hooks/use-mobile"
 import { toast } from "sonner"
 import {
@@ -611,6 +613,16 @@ export function WorkspaceShellPreview({
           },
         ]
       : []),
+    ...(features.integrations !== false
+      ? [
+          {
+            icon: BlocksIcon,
+            isActive: view === "rune-cms",
+            label: "Rune CMS",
+            onSelect: () => selectWorkspace("rune-cms"),
+          },
+        ]
+      : []),
   ]
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
@@ -720,9 +732,68 @@ export function WorkspaceShellPreview({
               ? "Search Console"
               : view === "analytics"
                 ? "Google Analytics"
-                : view === "compare"
-                  ? (compareLabel ?? "Compare")
-                  : "Revbot"
+                : view === "rune-cms"
+                  ? "Rune CMS"
+                  : view === "compare"
+                    ? (compareLabel ?? "Compare")
+                    : "Revbot"
+
+  const comparing = insightsNavbarLabel !== null
+
+  // The section switcher sits in the header centre on its own, and joins the
+  // project and crawl switchers on the left only while a comparison is open,
+  // where the centre belongs to the "us vs them" title instead.
+  const sectionSwitcher = (centered: boolean) => (
+    <>
+      {centered ? null : (
+        <CircleIcon
+          aria-hidden="true"
+          className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
+        />
+      )}
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              aria-label="Switch workspace section"
+              className={cn(
+                "inline-flex min-w-0 items-center rounded-md text-foreground hover:bg-accent data-[popup-open]:bg-accent",
+                centered
+                  ? "px-2 py-1 text-base leading-tight font-medium"
+                  : "px-1 py-0.5 font-medium"
+              )}
+              type="button"
+            />
+          }
+        >
+          <span className="truncate">{headerLabel}</span>
+        </DropdownMenuTrigger>
+        <DropdownPillSurface
+          align={centered ? "center" : "start"}
+          className="w-48"
+          side="bottom"
+        >
+          {(pill) =>
+            workspaceNavItems.map((item, index) => {
+              const Icon = item.icon
+              return (
+                <DropdownMenuItem
+                  key={item.label}
+                  {...pill.getItemProps(index)}
+                  onClick={item.onSelect}
+                >
+                  <Icon aria-hidden="true" />
+                  {item.label}
+                  {item.isActive ? (
+                    <CheckIcon className="ml-auto size-4" />
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+        </DropdownPillSurface>
+      </DropdownMenu>
+    </>
+  )
 
   return (
     <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
@@ -872,6 +943,7 @@ export function WorkspaceShellPreview({
                 <WorkspaceSidebarNav
                   auditTab={auditTab}
                   gscConnector={features.gsc_connector}
+                  integrations={features.integrations !== false}
                   maxCompetitors={features.max_competitors}
                   isSidebarCollapsed={isSidebarCollapsed}
                   onSelectWorkspace={selectWorkspace}
@@ -904,8 +976,8 @@ export function WorkspaceShellPreview({
               </SidebarFooter>
             </Sidebar>
             <section className="relative ml-0 flex h-full min-h-0 min-w-0 flex-col overflow-hidden md:ml-16">
-              <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(12rem,20rem)_auto] md:justify-between md:px-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)_auto] xl:justify-normal">
-                {insightsNavbarLabel ? (
+              <header className="relative z-30 grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-border px-4 md:grid-cols-[minmax(12rem,20rem)_auto] md:justify-between md:px-6 xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:justify-normal">
+                {comparing ? (
                   <p className="pointer-events-none absolute inset-x-0 hidden items-center justify-center gap-2 px-4 font-heading text-lg font-medium tracking-tight md:px-6 xl:flex">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span
@@ -913,7 +985,7 @@ export function WorkspaceShellPreview({
                         style={{ backgroundColor: PAINT_A.color }}
                       />
                       <span className="truncate">
-                        {insightsNavbarLabel.you}
+                        {insightsNavbarLabel?.you}
                       </span>
                     </span>
                     <span className="shrink-0 font-normal text-muted-foreground">
@@ -925,10 +997,10 @@ export function WorkspaceShellPreview({
                         style={{ backgroundColor: PAINT_B.color }}
                       />
                       <span className="truncate">
-                        {insightsNavbarLabel.them}
+                        {insightsNavbarLabel?.them}
                       </span>
                     </span>
-                  </p>
+              </p>
                 ) : null}
                 <SidebarTrigger
                   aria-label="Open navigation"
@@ -1050,50 +1122,16 @@ export function WorkspaceShellPreview({
                       }
                     </DropdownPillSurface>
                   </DropdownMenu>
-                  <CircleIcon
-                    aria-hidden="true"
-                    className="size-2 shrink-0 fill-emerald-500 text-emerald-500"
-                  />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <button
-                          aria-label="Switch workspace section"
-                          className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 font-medium text-foreground hover:bg-accent data-[popup-open]:bg-accent"
-                          type="button"
-                        />
-                      }
-                    >
-                      <span className="truncate">{headerLabel}</span>
-                    </DropdownMenuTrigger>
-                    <DropdownPillSurface
-                      align="start"
-                      className="w-48"
-                      side="bottom"
-                    >
-                      {(pill) =>
-                        workspaceNavItems.map((item, index) => {
-                          const Icon = item.icon
-                          return (
-                            <DropdownMenuItem
-                              key={item.label}
-                              {...pill.getItemProps(index)}
-                              onClick={item.onSelect}
-                            >
-                              <Icon aria-hidden="true" />
-                              {item.label}
-                              {item.isActive ? (
-                                <CheckIcon className="ml-auto size-4" />
-                              ) : null}
-                            </DropdownMenuItem>
-                          )
-                        })
-                      }
-                    </DropdownPillSurface>
-                  </DropdownMenu>
+                  {comparing ? sectionSwitcher(false) : null}
                 </h1>
-                <div aria-hidden="true" />
-                <div className="flex items-center justify-end gap-2">
+                {comparing ? (
+                  <div aria-hidden="true" />
+                ) : (
+                  <div className="hidden min-w-0 items-center justify-center xl:flex">
+                    {sectionSwitcher(true)}
+                  </div>
+                )}
+                <div className="flex min-w-0 items-center justify-end gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={
