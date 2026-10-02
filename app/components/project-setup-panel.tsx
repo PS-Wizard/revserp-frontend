@@ -275,7 +275,7 @@ export function ProjectSetupPanel({
   // and scrolls from the top when it does not. justify-center would clip the
   // top of an overflowing panel.
   return (
-    <div className="@container/main flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 lg:px-6">
+    <div className="@container/main flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-6">
       <div className="m-auto flex w-full max-w-lg flex-col items-center text-center">
         <div className="mb-5 flex size-16 shrink-0 items-center justify-center rounded-lg bg-muted/50 ring-1 ring-border/50">
           <StageIcon

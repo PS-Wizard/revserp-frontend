@@ -667,7 +667,7 @@ export function WorkspaceShellPreview({
                           value={openProjectPanel}
                         >
                           {projects.length === 0 ? (
-                            <div className="flex flex-1 items-center justify-center px-4 py-16 lg:px-6">
+                            <div className="flex flex-1 items-center justify-center px-3 py-16">
                               <Empty className="border-0">
                                 <EmptyHeader>
                                   <EmptyMedia

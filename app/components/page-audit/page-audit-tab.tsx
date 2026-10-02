@@ -29,7 +29,7 @@ export const PageAuditTab = memo(function PageAuditTab({
 
   if (!pageAudit || !selectedPage) {
     return (
-      <div className="flex min-h-[calc(100svh_-_7rem)] items-center justify-center px-4 lg:px-6">
+      <div className="flex min-h-[calc(100svh_-_7rem)] items-center justify-center px-3">
         <Empty className="min-h-[320px]">
           <EmptyHeader>
             <EmptyMedia className="size-14" variant="icon">
@@ -56,7 +56,7 @@ export const PageAuditTab = memo(function PageAuditTab({
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      <div className="px-4 lg:px-6">
+      <div className="px-3">
         <PageSearchBar
           crawlId={crawlId}
           disabled={!crawlId}

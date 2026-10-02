@@ -99,7 +99,7 @@ export const BucketScoreHistoryChart = memo(function BucketScoreHistoryChart({
   const latestRow = hasData ? chartRows[chartRows.length - 1] : null
 
   const bucketLegend = hasData ? (
-    <div className="px-6 pt-8 sm:pt-10">
+    <div className="px-3 pt-8 sm:pt-10">
       <div className="flex flex-wrap justify-center lg:flex-nowrap">
         {buckets.map((bucket, index) => {
           const color = getPillarChartColor(pillarId, index)

@@ -154,7 +154,7 @@ export const PageHealthView = memo(function PageHealthView({
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       {isScoresLoading ? (
-        <div className="px-4 lg:px-6">
+        <div className="px-3">
           <div className="grid gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
             <Skeleton className="h-[420px] rounded-xl" />
             <div className="grid auto-rows-fr grid-cols-1 gap-4 @min-[28rem]/buckets:grid-cols-2 @min-[56rem]/buckets:grid-cols-3">
@@ -165,13 +165,13 @@ export const PageHealthView = memo(function PageHealthView({
           </div>
         </div>
       ) : healthQuery.isError ? (
-        <div className="px-4 lg:px-6">
+        <div className="px-3">
           <Card className="bg-gradient-to-br from-card via-card to-muted/30 p-6">
             <p className="text-sm text-destructive">{healthErrorMessage}</p>
           </Card>
         </div>
       ) : hasNoScoreData ? (
-        <div className="px-4 lg:px-6">
+        <div className="px-3">
           <Empty className="min-h-[420px]">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -187,7 +187,7 @@ export const PageHealthView = memo(function PageHealthView({
         </div>
       ) : (
         <>
-          <div className="px-4 lg:px-6">
+          <div className="px-3">
             <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)]">
               <ScoreRadialChart
                 centerValue={overallCenterScore}
@@ -218,7 +218,7 @@ export const PageHealthView = memo(function PageHealthView({
             </div>
           </div>
           {scopedBreakdown ? (
-            <div className="px-4 lg:px-6">
+            <div className="px-3">
               <Card className="bg-gradient-to-br from-card via-card to-muted/30">
                 <IssueTreemap
                   breakdown={scopedBreakdown}

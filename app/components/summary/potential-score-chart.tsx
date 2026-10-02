@@ -229,7 +229,7 @@ export const PotentialScoreChart = memo(function PotentialScoreChart({
       </div>
 
       {hasData && (
-        <div className="px-6 pt-8 sm:pt-10">
+        <div className="px-3 pt-8 sm:pt-10">
           <div className="flex flex-wrap justify-center lg:flex-nowrap">
             {SCORE_SERIES.map((series) => {
               const isDimmed =
