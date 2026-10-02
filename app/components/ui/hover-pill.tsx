@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { DropdownMenuContent } from "~/components/ui/dropdown-menu"
 import { cn } from "~/lib/utils"
@@ -174,4 +174,57 @@ export function TableHoverPill({ pill }: { pill: HoverPillRect }) {
       style={hoverPillMotionStyle(pill)}
     />
   )
+}
+
+/** Opens a Radix dropdown on hover while leaving click and touch intact.
+ * Pointer enter fires on tap too, so hover only arms on devices that report a
+ * real pointer. The open delay keeps a mouse crossing the trigger from
+ * popping the menu; the close delay bridges the gap between trigger and the
+ * portalled content, and the submenu opens off the trigger. */
+export function useHoverMenu({
+  openDelay = 90,
+  closeDelay = 180,
+}: {
+  openDelay?: number
+  closeDelay?: number
+} = {}) {
+  const [open, setOpen] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const canHover = useRef(true)
+
+  if (canHover.current && typeof window !== "undefined") {
+    canHover.current = window.matchMedia("(hover: hover)").matches
+  }
+
+  function cancel() {
+    if (timer.current !== undefined) clearTimeout(timer.current)
+    timer.current = undefined
+  }
+
+  useEffect(() => cancel, [])
+
+  return {
+    onOpenChange: setOpen,
+    open,
+    triggerProps: {
+      onPointerEnter: () => {
+        if (!canHover.current) return
+        cancel()
+        timer.current = setTimeout(() => setOpen(true), openDelay)
+      },
+      onPointerLeave: () => {
+        if (!canHover.current) return
+        cancel()
+        timer.current = setTimeout(() => setOpen(false), closeDelay)
+      },
+    },
+    contentProps: {
+      onPointerEnter: cancel,
+      onPointerLeave: () => {
+        if (!canHover.current) return
+        cancel()
+        timer.current = setTimeout(() => setOpen(false), closeDelay)
+      },
+    },
+  }
 }

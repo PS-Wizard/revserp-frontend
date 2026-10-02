@@ -67,7 +67,7 @@ export const OverviewPillarScoresSection = memo(
     const currentBreakdown = crawlBreakdowns[currentIndex]?.breakdown
 
     return (
-      <div className="px-4 lg:px-6">
+      <div className="px-3">
         <PillarScoresRow
           breakdown={currentBreakdown}
           onSelectPillar={onSelectPillar}

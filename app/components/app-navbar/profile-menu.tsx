@@ -15,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { HoverPill } from "~/components/ui/hover-pill"
+import { HoverPill, useHoverMenu } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 import {
   clearInstallPrompt,
@@ -135,41 +135,47 @@ export function ProfileMenu({
     }
   }
 
+  const hoverMenu = useHoverMenu()
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            aria-label="Open profile and workspace menu"
-            className={cn(
-              "flex items-center transition data-[popup-open]:bg-muted/50",
-              compact
-                ? "size-9 shrink-0 justify-center rounded-md hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                : "gap-3 rounded-md border border-border/60 bg-card px-2 py-1.5 text-left hover:bg-muted/50"
-            )}
-            type="button"
-          />
-        }
-      >
-        <Avatar
-          className={cn("rounded-md after:rounded-md", compact && "size-8")}
+    <DropdownMenu onOpenChange={hoverMenu.onOpenChange} open={hoverMenu.open}>
+      <div {...hoverMenu.triggerProps}>
+        <DropdownMenuTrigger
+          render={
+            <button
+              aria-label="Open profile and workspace menu"
+              className={cn(
+                "flex items-center transition data-[popup-open]:bg-muted/50",
+                compact
+                  ? "size-9 shrink-0 justify-center rounded-md hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  : "gap-3 rounded-md border border-border/60 bg-card px-2 py-1.5 text-left hover:bg-muted/50"
+              )}
+              type="button"
+            />
+          }
         >
-          <AvatarFallback className="rounded-md">
-            {initials || "R"}
-          </AvatarFallback>
-        </Avatar>
-        {compact ? null : (
-          <span className="hidden min-w-0 sm:block">
-            <span className="block truncate text-sm font-medium text-foreground">
-              {userName || "Revserp User"}
+          <Avatar
+            className={cn("rounded-md after:rounded-md", compact && "size-8")}
+          >
+            <AvatarFallback className="rounded-md">
+              {initials || "R"}
+            </AvatarFallback>
+          </Avatar>
+          {compact ? null : (
+            <span className="hidden min-w-0 sm:block">
+              <span className="block truncate text-sm font-medium text-foreground">
+                {userName || "Revserp User"}
+              </span>
             </span>
-          </span>
-        )}
-      </DropdownMenuTrigger>
+          )}
+        </DropdownMenuTrigger>
+      </div>
       <DropdownMenuContent
         align="end"
         className="relative w-64"
         onMouseLeave={() => setProfilePill(null)}
+        onPointerEnter={hoverMenu.contentProps.onPointerEnter}
+        onPointerLeave={hoverMenu.contentProps.onPointerLeave}
         side="bottom"
         sideOffset={10}
       >

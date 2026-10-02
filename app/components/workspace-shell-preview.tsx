@@ -766,7 +766,7 @@ export function WorkspaceShellPreview({
                     projects={projects}
                     trailing={
                       <button
-                        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
                         disabled={!activeProject || isCrawlRunning}
                         onClick={() => runCrawlDispatch({ type: "OPEN" })}
                         type="button"

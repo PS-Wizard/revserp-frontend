@@ -15,6 +15,7 @@ import {
 import {
   DROPDOWN_PILL_ITEM_CLASS,
   HoverPill,
+  useHoverMenu,
   useHoverPill,
 } from "~/components/ui/hover-pill"
 import type { MeResponse } from "~/lib/api.types"
@@ -44,33 +45,38 @@ export function WorkspaceSwitcher({
   onSelectOrganization,
 }: WorkspaceSwitcherProps) {
   const pillMenu = useHoverPill()
+  const hoverMenu = useHoverMenu()
   const switchItemProps = pillMenu.getItemProps(0)
   const workspaceActionItemProps = pillMenu.getItemProps(1)
   const isSwitchingWorkspace = workspaceState === "switching"
   const isLeavingWorkspace = workspaceState === "leaving"
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <button
-            aria-label="Switch workspace"
-            className="flex max-w-56 items-center gap-2 rounded-lg border border-white/12 px-2 py-1.5 text-left text-sm transition-colors duration-150 hover:bg-foreground/10"
-            type="button"
-          />
-        }
-      >
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-semibold">
-          {getWorkspaceInitials(activeOrganizationName ?? "")}
-        </span>
-        <span className="min-w-0 truncate font-medium">
-          {activeOrganizationName || "Select a workspace"}
-        </span>
-      </DropdownMenuTrigger>
+    <DropdownMenu onOpenChange={hoverMenu.onOpenChange} open={hoverMenu.open}>
+      <div {...hoverMenu.triggerProps}>
+        <DropdownMenuTrigger
+          render={
+            <button
+              aria-label="Switch workspace"
+              className="flex max-w-56 items-center gap-2 rounded-lg border border-white/12 px-2 py-1.5 text-left text-sm transition-colors duration-150 hover:bg-foreground/10"
+              type="button"
+            />
+          }
+        >
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-semibold">
+            {getWorkspaceInitials(activeOrganizationName ?? "")}
+          </span>
+          <span className="min-w-0 truncate font-medium">
+            {activeOrganizationName || "Select a workspace"}
+          </span>
+        </DropdownMenuTrigger>
+      </div>
       <DropdownMenuContent
         align="start"
         className="relative w-64"
         onMouseLeave={pillMenu.clearPill}
+        onPointerEnter={hoverMenu.contentProps.onPointerEnter}
+        onPointerLeave={hoverMenu.contentProps.onPointerLeave}
         side="bottom"
         sideOffset={10}
       >

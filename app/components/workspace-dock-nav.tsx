@@ -130,7 +130,8 @@ export function WorkspaceDockNav({
           <NavigationMenuItem value="projects">
             <NavigationMenuTrigger
               className="h-9 max-w-56 cursor-pointer gap-2 rounded-lg px-3 text-sm text-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => {
+              onClick={(event) => {
+                event.currentTarget.blur()
                 setOpenItem(null)
                 onOpenProjectPanel()
               }}
@@ -159,7 +160,10 @@ export function WorkspaceDockNav({
           <NavigationMenuItem value="crawls">
             <NavigationMenuTrigger
               className="h-9 max-w-48 cursor-pointer gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={() => setOpenItem(null)}
+              onClick={(event) => {
+                event.currentTarget.blur()
+                setOpenItem(null)
+              }}
             >
               <span className="truncate">
                 {currentCrawl ? formatCrawlLabel(currentCrawl) : "No crawl yet"}
