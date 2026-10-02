@@ -89,7 +89,7 @@ function GSCConnectEmptyState() {
 
 function RankingsListHeader({ tab }: { tab: RankingsTab }) {
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-border/60 pr-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+    <div className="flex shrink-0 items-center gap-3 border-b border-border/60 pr-3 pb-2 text-micro font-medium tracking-wide text-muted-foreground uppercase">
       <span className="w-6 shrink-0 text-center">#</span>
       <span className="min-w-0 flex-1">
         {tab === "pages" ? "Page" : "Query"}
@@ -127,12 +127,12 @@ function RankingRow({
         tab === "queries" ? queryMatchRowClassName(match) : undefined
       )}
     >
-      <span className="w-6 shrink-0 text-center text-[13px] text-muted-foreground tabular-nums">
+      <span className="w-6 shrink-0 text-center text-sm text-muted-foreground tabular-nums">
         {index + 1}
       </span>
       <div className="min-w-0 flex-1">
         <p
-          className="truncate text-[13px] leading-snug font-medium text-foreground/90"
+          className="truncate text-sm leading-snug font-medium text-foreground/90"
           title={showFullQuery ? undefined : label}
         >
           {tab === "pages" ? (
@@ -259,7 +259,7 @@ function RankingsList({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <RankingsListHeader tab={tab} />
       {matchUnavailable ? (
-        <p className="shrink-0 pt-1 text-[11px] text-muted-foreground">
+        <p className="shrink-0 pt-1 text-micro text-muted-foreground">
           Keyword matching unavailable.
         </p>
       ) : null}

@@ -216,7 +216,7 @@ export function CMSPanel({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-1 basis-64 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-[28px] font-semibold tracking-tight text-balance">
+            <h1 className="text-3xl font-semibold tracking-tight text-balance">
               CMS
             </h1>
             <Badge variant={connected ? "default" : "secondary"}>
@@ -309,7 +309,7 @@ export function CMSPanel({
               </EmptyHeader>
               <EmptyContent>
                 <ul className="flex w-full flex-col gap-2.5 text-left">
-                  <li className="flex items-start gap-2.5 text-[13px] leading-relaxed text-muted-foreground">
+                  <li className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground">
                     <FolderGit2Icon
                       className="mt-0.5 size-4 shrink-0"
                       aria-hidden="true"
@@ -322,7 +322,7 @@ export function CMSPanel({
                       . Only one provider can be active at a time.
                     </span>
                   </li>
-                  <li className="flex items-start gap-2.5 text-[13px] leading-relaxed text-muted-foreground">
+                  <li className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground">
                     <EyeIcon
                       className="mt-0.5 size-4 shrink-0"
                       aria-hidden="true"
@@ -331,7 +331,7 @@ export function CMSPanel({
                       {provider === "wordpress" ? APPROVAL_POLICY : RUNE_POLICY}
                     </span>
                   </li>
-                  <li className="flex items-start gap-2.5 text-[13px] leading-relaxed text-muted-foreground">
+                  <li className="flex items-start gap-2.5 text-sm leading-relaxed text-muted-foreground">
                     <LockIcon
                       className="mt-0.5 size-4 shrink-0"
                       aria-hidden="true"
@@ -431,7 +431,7 @@ export function CMSPanel({
             />
           )}
           {!isOrganizationOwner ? (
-            <p className="flex items-start gap-2 text-[13px] leading-relaxed text-muted-foreground">
+            <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
               <LockIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>
                 You have read-only access. Only the organization owner can check
@@ -498,7 +498,7 @@ export function CMSPanel({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5">
               <p className="text-sm font-medium">Disconnect</p>
-              <p className="text-[13px] leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 Removes the saved endpoint and token.
               </p>
             </div>
@@ -802,7 +802,7 @@ function ToolBrowser({
               >
                 <h2
                   id={`cms-tools-${index}`}
-                  className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                  className="flex items-center gap-2 text-micro font-medium tracking-wide text-muted-foreground uppercase"
                 >
                   <span className="truncate">{section.title}</span>
                   <span className="text-muted-foreground/70 tabular-nums">
@@ -834,7 +834,7 @@ function ToolRow({ row }: { row: CMSToolRow }) {
         className="size-3.5 shrink-0 text-muted-foreground"
         aria-hidden="true"
       />
-      <span className="truncate text-[13px] font-medium">{row.label}</span>
+      <span className="truncate text-sm font-medium">{row.label}</span>
       {row.write ? <Badge variant="outline">Write</Badge> : null}
       {row.description ? (
         <Tooltip>

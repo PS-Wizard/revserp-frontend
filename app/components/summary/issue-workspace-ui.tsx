@@ -48,7 +48,7 @@ export function TaskMark({
 }) {
   const isButton = Boolean(onClick) && !disabled
   const className = cn(
-    "mt-0.5 inline-flex size-[17px] shrink-0 items-center justify-center rounded-[3px] border font-mono text-[10px] leading-none font-bold",
+    "mt-0.5 inline-flex size-[17px] shrink-0 items-center justify-center rounded-[3px] border font-mono text-micro leading-none font-bold",
     state === "open" &&
       "border-muted-foreground/45 bg-transparent text-transparent",
     state === "done" &&
@@ -109,7 +109,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   return (
     <span
       className={cn(
-        "inline-flex h-5 shrink-0 items-center rounded-md border px-1.5 text-[11px] font-medium tracking-wide capitalize",
+        "inline-flex h-5 shrink-0 items-center rounded-md border px-1.5 text-micro font-medium tracking-wide capitalize",
         severityClassName(severity)
       )}
     >
@@ -265,7 +265,7 @@ export function IssueTask({
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
           <p
             className={cn(
-              "text-[15px] leading-6 font-medium text-foreground",
+              "text-sm leading-6 font-medium text-foreground",
               isMuted &&
                 "text-muted-foreground line-through decoration-muted-foreground/40"
             )}
@@ -375,7 +375,7 @@ export function FoldSection({
   const headingClass =
     level === 2
       ? "font-heading text-lg font-semibold tracking-tight text-foreground"
-      : "font-heading text-[15px] font-semibold tracking-tight text-foreground/95"
+      : "font-heading text-sm font-semibold tracking-tight text-foreground/95"
 
   return (
     <details className="group/fold" open>

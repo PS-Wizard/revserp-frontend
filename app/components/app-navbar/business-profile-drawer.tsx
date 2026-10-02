@@ -610,7 +610,7 @@ function AIGeneratedQuestions({
             <p className={cn("flex items-center gap-2", SECTION_TITLE_CLASS)}>
               AI generated questions
               {hasQuestions ? (
-                <Badge className="px-1.5 text-[10px]" variant="secondary">
+                <Badge className="px-1.5 text-micro" variant="secondary">
                   {questionCount}
                 </Badge>
               ) : null}
@@ -661,7 +661,7 @@ function AIGeneratedQuestions({
                 className="flex cursor-text gap-3 rounded-lg border border-border/60 bg-card px-3 py-2.5"
                 key={index}
               >
-                <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular-nums">
+                <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-medium text-muted-foreground tabular-nums">
                   {index + 1}
                 </span>
                 <span className="text-sm leading-relaxed">{question}</span>

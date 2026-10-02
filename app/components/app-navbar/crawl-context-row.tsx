@@ -87,7 +87,7 @@ export function CrawlContextRow({
               </p>
             </div>
             <span
-              className="rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] tracking-wide text-muted-foreground uppercase transition data-[compare=true]:group-hover/crawl:opacity-0"
+              className="rounded-full border border-border/70 px-1.5 py-0.5 text-micro tracking-wide text-muted-foreground uppercase transition data-[compare=true]:group-hover/crawl:opacity-0"
               data-compare={onCompare !== undefined}
             >
               {crawl.status}
@@ -95,7 +95,7 @@ export function CrawlContextRow({
           </button>
           {onCompare ? (
             <button
-              className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-md border border-border/70 bg-popover px-2 py-1 text-[11px] opacity-0 transition group-hover/crawl:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
+              className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-md border border-border/70 bg-popover px-2 py-1 text-micro opacity-0 transition group-hover/crawl:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
               onClick={onCompare}
               type="button"
             >

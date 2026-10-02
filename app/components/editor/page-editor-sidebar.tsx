@@ -256,7 +256,7 @@ export function PageEditorSidebar({
                       >
                         <span className="block w-full truncate">{label}</span>
                         {page.title ? (
-                          <span className="mt-0.5 block w-full truncate text-[10px] leading-4 text-muted-foreground/60">
+                          <span className="mt-0.5 block w-full truncate text-micro leading-4 text-muted-foreground/60">
                             {page.url}
                           </span>
                         ) : null}

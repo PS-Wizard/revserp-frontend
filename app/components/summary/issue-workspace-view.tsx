@@ -110,7 +110,7 @@ function BrowseNavButton({
       />
       <span
         className={cn(
-          "text-[13px] leading-5",
+          "text-sm leading-5",
           active ? "font-semibold" : "font-medium"
         )}
       >
@@ -184,7 +184,7 @@ function UrlList({
           >
             <span
               className={cn(
-                "relative z-10 block truncate text-[13px] leading-5",
+                "relative z-10 block truncate text-sm leading-5",
                 selected
                   ? "font-semibold text-foreground"
                   : "font-medium text-foreground/90"
@@ -193,7 +193,7 @@ function UrlList({
               {primary}
             </span>
             {secondary ? (
-              <span className="relative z-10 mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground/75">
+              <span className="relative z-10 mt-0.5 block truncate text-micro leading-4 text-muted-foreground/75">
                 {secondary}
               </span>
             ) : null}
@@ -492,11 +492,11 @@ export function IssueWorkspaceView({
         >
           <div className="flex min-h-0 w-64 flex-1 flex-col px-2.5 py-3">
             <div className="flex shrink-0 items-center justify-between px-1.5 pb-2">
-              <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <span className="text-micro font-semibold tracking-wide text-muted-foreground uppercase">
                 Browse
               </span>
               {summaryQuery.data ? (
-                <span className="text-[11px] text-muted-foreground/80 tabular-nums">
+                <span className="text-micro text-muted-foreground/80 tabular-nums">
                   {summaryQuery.data.pages.length} URLs
                 </span>
               ) : summaryQuery.isLoading ? (

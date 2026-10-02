@@ -149,7 +149,7 @@ function KeywordText({ keyword }: { keyword: string }) {
       <TooltipTrigger
         render={
           <span
-            className="min-w-0 flex-1 basis-32 truncate text-[13px] leading-snug font-medium text-foreground/90"
+            className="min-w-0 flex-1 basis-32 truncate text-sm leading-snug font-medium text-foreground/90"
             tabIndex={0}
           />
         }

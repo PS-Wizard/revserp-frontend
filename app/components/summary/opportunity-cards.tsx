@@ -75,7 +75,7 @@ export const OpportunityCards = memo(function OpportunityCards({
                   <CardDescription className="truncate">
                     {label}
                   </CardDescription>
-                  <span className="shrink-0 rounded border border-border/70 px-1.5 py-px text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+                  <span className="shrink-0 rounded border border-border/70 px-1.5 py-px text-micro font-medium tracking-wider text-muted-foreground uppercase">
                     {pillarLabel(opportunity.pillar)}
                   </span>
                 </div>

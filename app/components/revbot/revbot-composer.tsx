@@ -826,21 +826,21 @@ export function RevbotComposer({
                 <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
                   {autocomplete.mode === "source" ? "@" : "/"}
                 </span>
-                <span className="shrink-0 text-[12.5px] font-medium">
+                <span className="shrink-0 text-xs font-medium">
                   {option.name}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                   {option.description}
                 </span>
               </button>
             ))
           ) : (
-            <div className="flex h-9 items-center px-2 text-[12px] text-muted-foreground">
+            <div className="flex h-9 items-center px-2 text-xs text-muted-foreground">
               No matching{" "}
               {autocomplete.mode === "source" ? "sources" : "commands"}
             </div>
           )}
-          <div className="mt-1 border-t px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">
+          <div className="mt-1 border-t px-2 pt-1.5 pb-1 text-micro text-muted-foreground">
             {autocomplete.mode === "source"
               ? "Type to search sources"
               : "Type to search commands"}
@@ -887,7 +887,7 @@ export function RevbotComposer({
               }}
               type="button"
             >
-              <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+              <span className="min-w-0 flex-1 truncate text-xs font-medium">
                 {value}
               </span>
               <span
@@ -922,7 +922,7 @@ export function RevbotComposer({
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none invisible absolute text-[13px] leading-[18px] whitespace-pre"
+          className="pointer-events-none invisible absolute text-sm leading-[18px] whitespace-pre"
           ref={measureRef}
         >
           {prompt}
@@ -1047,7 +1047,7 @@ export function RevbotComposer({
           {activity !== "idle" ? (
             <div
               className={cn(
-                "flex min-h-7 min-w-0 items-center gap-2 px-1 py-[5px] text-[12.5px] leading-[18px]",
+                "flex min-h-7 min-w-0 items-center gap-2 px-1 py-[5px] text-xs leading-[18px]",
                 inputColClass,
                 isDark ? "text-zinc-400" : "text-muted-foreground"
               )}
@@ -1094,7 +1094,7 @@ export function RevbotComposer({
                   ))}
                 </span>
               </span>
-              <span className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-muted-foreground tabular-nums">
+              <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground tabular-nums">
                 <span className="size-1.5 animate-pulse rounded-full bg-red-500" />
                 {formatDictationSecs(dictationSecs)}
               </span>
@@ -1129,7 +1129,7 @@ export function RevbotComposer({
               aria-controls={autocomplete ? "revbot-autocomplete" : undefined}
               aria-expanded={Boolean(autocomplete)}
               className={cn(
-                "min-h-7 w-full resize-none border-0 bg-transparent px-1 py-[5px] text-[13px] leading-[18px] shadow-none outline-none focus-visible:border-0 focus-visible:ring-0",
+                "min-h-7 w-full resize-none border-0 bg-transparent px-1 py-[5px] text-sm leading-[18px] shadow-none outline-none focus-visible:border-0 focus-visible:ring-0",
                 inputColClass,
                 isDark
                   ? "!bg-transparent [tap-highlight-color:transparent] selection:bg-white/20 focus:!bg-transparent focus-visible:!bg-transparent active:!bg-transparent"
@@ -1153,7 +1153,7 @@ export function RevbotComposer({
               aria-expanded={effortOpen}
               aria-label="Choose reasoning effort"
               className={cn(
-                "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-[12px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
+                "flex h-7 shrink-0 items-center gap-1 rounded-[8px] px-1.5 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
                 isDark && "hover:bg-white/10",
                 expanded
                   ? showMic

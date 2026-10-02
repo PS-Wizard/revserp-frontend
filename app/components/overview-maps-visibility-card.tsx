@@ -170,7 +170,7 @@ function MapsEmptyState({
 
 function RankingsListHeader() {
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-border/60 pr-3 pb-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+    <div className="flex shrink-0 items-center gap-3 border-b border-border/60 pr-3 pb-2 text-micro font-medium tracking-wide text-muted-foreground uppercase">
       <span className="w-6 shrink-0 text-center">#</span>
       <span className="min-w-0 flex-1">Business</span>
     </div>
@@ -202,7 +202,7 @@ function MapsRankingRow({
     >
       <span
         className={cn(
-          "w-6 shrink-0 text-center text-[13px] tabular-nums",
+          "w-6 shrink-0 text-center text-sm tabular-nums",
           isMatched ? "font-semibold text-emerald-500" : "text-muted-foreground"
         )}
       >
@@ -211,14 +211,14 @@ function MapsRankingRow({
       <div className="min-w-0 flex-1">
         <p
           className={cn(
-            "truncate text-[13px] leading-snug font-medium",
+            "truncate text-sm leading-snug font-medium",
             isMatched ? "text-foreground" : "text-foreground/90"
           )}
           title={item.title}
         >
           {item.title}
           {isMatched ? (
-            <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-500 uppercase">
+            <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-micro font-semibold tracking-wide text-emerald-500 uppercase">
               You
             </span>
           ) : null}

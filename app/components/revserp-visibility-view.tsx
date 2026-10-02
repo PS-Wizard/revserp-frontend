@@ -243,7 +243,7 @@ function ResponseBody({ run }: { run: AIAuditRunResponse }) {
             }`}
           >
             <span
-              className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+              className={`flex size-5 shrink-0 items-center justify-center rounded-full text-micro font-semibold ${
                 isTarget
                   ? "bg-emerald-500 text-white"
                   : "bg-muted text-muted-foreground"
@@ -258,7 +258,7 @@ function ResponseBody({ run }: { run: AIAuditRunResponse }) {
             >
               {item.text}
               {isTarget && (
-                <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-emerald-500 uppercase">
+                <span className="ml-2 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-micro font-semibold tracking-wide text-emerald-500 uppercase">
                   You
                 </span>
               )}
@@ -344,7 +344,7 @@ function QuestionRow({
         type="button"
       >
         <QuestionStatusIcon status={status} />
-        <span className="min-w-0 flex-1 truncate text-[13px] leading-snug font-medium text-foreground/90">
+        <span className="min-w-0 flex-1 truncate text-sm leading-snug font-medium text-foreground/90">
           <span className="mr-1.5 text-muted-foreground">{order}.</span>
           {label}
         </span>
@@ -384,7 +384,7 @@ function QuestionRow({
         >
           <div className="overflow-hidden">
             <div className="flex flex-col gap-3 px-3 pb-5 pl-10">
-              <p className="text-[13px] leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 {label}
               </p>
               {run ? <ResponseBody run={run} /> : null}
@@ -460,7 +460,7 @@ function ModelResponseCards({
               </h3>
               <span
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+                  "rounded-full px-2 py-0.5 text-micro font-semibold tabular-nums",
                   count > 0
                     ? "bg-emerald-500/15 text-emerald-500"
                     : "bg-muted text-muted-foreground"
@@ -621,7 +621,7 @@ function MatrixLegend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
-        <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-semibold text-white">
+        <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500 text-micro font-semibold text-white">
           1
         </span>
         Rank position

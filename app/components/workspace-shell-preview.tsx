@@ -18,6 +18,7 @@ import {
   FolderPlusIcon,
   PlayIcon,
   PlusIcon,
+  SettingsIcon,
   SparklesIcon,
 } from "lucide-react"
 import {
@@ -29,6 +30,8 @@ import {
 
 import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
+import { ProfileMenu } from "~/components/app-navbar/profile-menu"
+import { WorkspaceSwitcher } from "~/components/app-navbar/workspace-switcher"
 import { Button } from "~/components/ui/button"
 import {
   Empty,
@@ -38,11 +41,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty"
-import {
-  Sidebar,
-  SidebarProvider,
-  SidebarTrigger,
-} from "~/components/ui/sidebar"
+import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
@@ -51,6 +50,7 @@ import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actio
 import {
   formatCrawlDateTime,
   getCrawlValidationError,
+  getInitials,
 } from "~/components/app-navbar/utils"
 import { ProjectPanelOpenContext } from "~/components/summary/project-panel-context"
 import { ProjectPanel } from "~/components/command-dock/project-panel"
@@ -237,6 +237,8 @@ export function WorkspaceShellPreview({
   organizationId,
   organizations,
   projects,
+  userEmail,
+  userName,
   view,
   onViewChange,
   revbotConversationId,
@@ -244,6 +246,7 @@ export function WorkspaceShellPreview({
   auditTab,
   onAuditTabChange,
   onExportAudit,
+  isPlatformAdmin,
   isExportingAudit,
 }: WorkspaceShellPreviewProps) {
   const navigate = useNavigate()
@@ -449,6 +452,10 @@ export function WorkspaceShellPreview({
   })
   const autoCrawl = useAutoCrawlSettings(activeProjectId)
   const businessProfile = useBusinessProfile()
+  const initials = useMemo(() => {
+    const source = userName?.trim() || userEmail.split("@")[0] || "R"
+    return getInitials(source, "R")
+  }, [userEmail, userName])
   const mergedProjectCrawls = {
     ...fetchedProjectCrawls.current,
     ...projectCrawls,
@@ -482,6 +489,8 @@ export function WorkspaceShellPreview({
   function selectCrawl(crawlId: string) {
     const params = new URLSearchParams(location.search)
     params.set("crawl", crawlId)
+    onViewChange("revserp-audit")
+    onAuditTabChange("overview")
     void navigate(`${location.pathname}?${params.toString()}`)
   }
 
@@ -513,8 +522,6 @@ export function WorkspaceShellPreview({
     if (nextAuditTab !== undefined) onAuditTabChange(nextAuditTab)
     setIsMobileSidebarOpen(false)
   }
-
-  // The calm overview home hides the project/crawl/action chrome when useful.
 
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -620,7 +627,7 @@ export function WorkspaceShellPreview({
         >
           <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
             <div className="relative flex h-full min-h-0 bg-shell-chrome">
-            <section className="relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+            <section className="relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16">
               <header className="relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden">
                 <SidebarTrigger aria-label="Open navigation" />
                 <button
@@ -636,8 +643,8 @@ export function WorkspaceShellPreview({
               <div
                 className={
                   islandState === "maximized"
-                    ? "pointer-events-none relative z-0 m-2 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto rounded-2xl bg-background shadow-[inset_0_1px_0_0_rgb(255_255_255/0.05),0_16px_40px_-12px_rgb(0_0_0/0.6)]"
-                    : "m-2 min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto rounded-2xl bg-background shadow-[inset_0_1px_0_0_rgb(255_255_255/0.05),0_16px_40px_-12px_rgb(0_0_0/0.6)]"
+? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
+: "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background"
                 }
               >
                 <AnimatePresence initial={false} mode="wait">
@@ -708,112 +715,161 @@ export function WorkspaceShellPreview({
               </div>
             </section>
             </div>
-            <Sidebar
-              collapsible="none"
-              className="fixed bottom-4 left-1/2 z-40 flex h-auto w-auto -translate-x-1/2 flex-row items-center max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1 text-foreground shadow-[0_24px_60px_-16px_rgb(0_0_0/0.75)] backdrop-blur-xl max-md:hidden"
-            >
-              <div className="flex items-center max-md:hidden">
-                <WorkspaceDockNav
-                  activeProjectId={activeProjectId ?? undefined}
-                  auditTab={auditTab}
-                  crawls={activeProjectCrawls}
-                  currentCrawl={currentCrawl}
-                  formatCrawlLabel={formatCrawlDateTime}
-                  gscConnector={features.gsc_connector}
-                  integrations={features.integrations !== false}
-                  maxCompetitors={features.max_competitors}
-                  onCreateProject={() => createProjectDispatch({ type: "OPEN" })}
-                  onDeleteCrawl={(crawl) => projectActions.openDeleteCrawlDialog(crawl)}
-                  onDeleteProject={(project) =>
-                    projectActions.openDeleteProjectDialog(project)
+            <div className="fixed inset-x-0 top-2 z-40 flex h-14 items-center gap-2 bg-shell-chrome px-3 text-foreground backdrop-blur-xl max-md:hidden">
+              <div className="flex min-w-0 flex-1 items-center">
+                <WorkspaceSwitcher
+                  activeOrganizationName={
+                    workspaceActions.activeOrganization?.name
                   }
-                  onExportCrawl={(crawl, format) =>
-                    void projectActions.handleExportCrawl(crawl, format)
+                  isActiveOrganizationOwner={
+                    workspaceActions.isActiveOrganizationOwner
                   }
-                  onOpenProjectPanel={openProjectPanel}
-                  onSelectCrawl={selectCrawl}
-                  onSelectProject={selectProject}
-                  onSelectWorkspace={selectWorkspace}
-                  projects={projects}
-                  trailing={
-                    <button
-                      className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
-                      disabled={!activeProject || isCrawlRunning}
-                      onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                      type="button"
-                    >
-                      <PlayIcon aria-hidden="true" className="size-4" />
-                      {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                    </button>
+                  onInviteOpen={workspaceActions.openInviteDialog}
+                  onLeaveWorkspaceOpen={
+                    workspaceActions.openLeaveWorkspaceDialog
                   }
-                  view={view}
-                  actions={[
-                    {
-                      key: "auto-crawl",
-                      icon: <SparklesIcon aria-hidden="true" className="size-4" />,
-                      disabled: !activeProject || autoCrawl.isSaving,
-                      label: autoCrawl.enabled ? "Auto crawl on" : "Auto crawl",
-                      onSelect: () =>
-                        autoCrawl.enabled
-                          ? void autoCrawl.handleDisable()
-                          : void autoCrawl.openDialog(),
-                    },
-                    {
-                      key: "business-profile",
-                      icon: (
-                        <Building2Icon aria-hidden="true" className="size-4" />
-                      ),
-                      disabled: !activeProject,
-                      label: "Business profile",
-                      onSelect: () => {
-                        if (activeProject)
-                          businessProfile.openBusinessProfileDrawer(activeProject)
-                      },
-                    },
-                    { key: "d1", divider: true },
-                    {
-                      key: "export-pdf",
-                      icon: <FileTextIcon aria-hidden="true" className="size-4" />,
-                      disabled: !currentCrawlCompleted || isExportingAudit,
-                      label: isExportingAudit
-                        ? "Generating audit…"
-                        : "Export PDF audit",
-                      onSelect: onExportAudit,
-                    },
-                    {
-                      key: "export-xlsx",
-                      icon: (
-                        <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
-                      ),
-                      disabled: !currentCrawlCompleted || isExportingCrawl,
-                      label: "Export crawl as XLSX",
-                      onSelect: () => {
-                        if (currentCrawl)
-                          void projectActions.handleExportCrawl(
-                            currentCrawl,
-                            "xlsx"
-                          )
-                      },
-                    },
-                    {
-                      key: "export-csv",
-                      icon: (
-                        <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
-                      ),
-                      disabled: !currentCrawlCompleted || isExportingCrawl,
-                      label: "Export crawl as CSV",
-                      onSelect: () => {
-                        if (currentCrawl)
-                          void projectActions.handleExportCrawl(
-                            currentCrawl,
-                            "csv"
-                          )
-                      },
-                    },
-                  ]}
+                  onSelectOrganization={(id) =>
+                    void workspaceActions.handleSelectOrganization(id)
+                  }
+                  organizationId={organizationId}
+                  organizations={organizations}
+                  workspaceState={workspaceActions.workspaceState}
                 />
               </div>
-            </Sidebar>
+              <div className="flex min-w-0 shrink items-center justify-center">
+                <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1">
+                  <WorkspaceDockNav
+                    activeProjectId={activeProjectId ?? undefined}
+                    auditTab={auditTab}
+                    crawls={activeProjectCrawls}
+                    currentCrawl={currentCrawl}
+                    formatCrawlLabel={formatCrawlDateTime}
+                    gscConnector={features.gsc_connector}
+                    integrations={features.integrations !== false}
+                    maxCompetitors={features.max_competitors}
+                    onCreateProject={() =>
+                      createProjectDispatch({ type: "OPEN" })
+                    }
+                    onDeleteCrawl={(crawl) =>
+                      projectActions.openDeleteCrawlDialog(crawl)
+                    }
+                    onDeleteProject={(project) =>
+                      projectActions.openDeleteProjectDialog(project)
+                    }
+                    onExportCrawl={(crawl, format) =>
+                      void projectActions.handleExportCrawl(crawl, format)
+                    }
+                    onOpenProjectPanel={openProjectPanel}
+                    onSelectCrawl={selectCrawl}
+                    onSelectProject={selectProject}
+                    onSelectWorkspace={selectWorkspace}
+                    projects={projects}
+                    trailing={
+                      <button
+                        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-white/12 px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+                        disabled={!activeProject || isCrawlRunning}
+                        onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                        type="button"
+                      >
+                        <PlayIcon aria-hidden="true" className="size-4" />
+                        {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                      </button>
+                    }
+                    view={view}
+                    actions={[
+                      {
+                        key: "auto-crawl",
+                        icon: <SparklesIcon aria-hidden="true" className="size-4" />,
+                        disabled: !activeProject || autoCrawl.isSaving,
+                        label: autoCrawl.enabled ? "Auto crawl on" : "Auto crawl",
+                        onSelect: () =>
+                          autoCrawl.enabled
+                            ? void autoCrawl.handleDisable()
+                            : void autoCrawl.openDialog(),
+                      },
+                      ...(features.integrations !== false
+                        ? [
+                            {
+                              key: "integrations",
+                              icon: (
+                                <SettingsIcon
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              ),
+                              label: "Integrations",
+                              onSelect: () =>
+                                navigate("/app/settings/integrations"),
+                            },
+                          ]
+                        : []),
+                      {
+                        key: "business-profile",
+                        icon: (
+                          <Building2Icon aria-hidden="true" className="size-4" />
+                        ),
+                        disabled: !activeProject,
+                        label: "Business profile",
+                        onSelect: () => {
+                          if (activeProject)
+                            businessProfile.openBusinessProfileDrawer(activeProject)
+                        },
+                      },
+                      { key: "d1", divider: true },
+                      {
+                        key: "export-pdf",
+                        icon: <FileTextIcon aria-hidden="true" className="size-4" />,
+                        disabled: !currentCrawlCompleted || isExportingAudit,
+                        label: isExportingAudit
+                          ? "Generating audit…"
+                          : "Export PDF audit",
+                        onSelect: onExportAudit,
+                      },
+                      {
+                        key: "export-xlsx",
+                        icon: (
+                          <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
+                        ),
+                        disabled: !currentCrawlCompleted || isExportingCrawl,
+                        label: "Export crawl as XLSX",
+                        onSelect: () => {
+                          if (currentCrawl)
+                            void projectActions.handleExportCrawl(
+                              currentCrawl,
+                              "xlsx"
+                            )
+                        },
+                      },
+                      {
+                        key: "export-csv",
+                        icon: (
+                          <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
+                        ),
+                        disabled: !currentCrawlCompleted || isExportingCrawl,
+                        label: "Export crawl as CSV",
+                        onSelect: () => {
+                          if (currentCrawl)
+                            void projectActions.handleExportCrawl(
+                              currentCrawl,
+                              "csv"
+                            )
+                        },
+                      },
+                    ]}
+                  />
+                </div>
+              </div>
+              <div className="flex min-w-0 flex-1 items-center justify-end">
+                <ProfileMenu
+                  initials={initials}
+                  isPlatformAdmin={isPlatformAdmin}
+                  onLogout={() => void workspaceActions.handleLogout()}
+                  profileActionError={workspaceActions.profileActionError}
+                  userName={userName}
+                  workspaceState={workspaceActions.workspaceState}
+                />
+              </div>
+            </div>
             {features.ai_chat ? (
               <LayoutGroup id="ai-island-group">
                 {islandState === "docked" ? (

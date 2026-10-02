@@ -729,7 +729,7 @@ function UrlWorkCell({
               ) : (
                 <span
                   aria-hidden
-                  className="font-mono text-[11px] leading-none"
+                  className="font-mono text-micro leading-none"
                 >
                   /
                 </span>
@@ -792,7 +792,7 @@ function UrlWorkCell({
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex" />}>
             <Badge className="gap-1 border-amber-400 bg-amber-400 text-amber-950 dark:border-amber-400 dark:bg-amber-400 dark:text-amber-950">
-              <span aria-hidden className="font-mono text-[11px] leading-none">
+              <span aria-hidden className="font-mono text-micro leading-none">
                 ?
               </span>
               <span className="truncate">Could not confirm</span>

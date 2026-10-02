@@ -79,7 +79,7 @@ export function ShimmerLabel({
   return (
     <span
       className={cn(
-        "bg-clip-text text-[13px] font-medium text-transparent motion-reduce:text-zinc-300",
+        "bg-clip-text text-sm font-medium text-transparent motion-reduce:text-zinc-300",
         className
       )}
       style={{
@@ -153,7 +153,7 @@ function ToolOutcomeIcon({ outcome }: { outcome: ToolOutcome }) {
     return (
       <span
         aria-hidden="true"
-        className="inline-flex w-3.5 shrink-0 justify-center text-[13px] leading-none font-medium text-zinc-500"
+        className="inline-flex w-3.5 shrink-0 justify-center text-sm leading-none font-medium text-zinc-500"
       >
         ~
       </span>
@@ -218,24 +218,24 @@ function ToolCallRow({
         type="button"
       >
         <ToolOutcomeIcon outcome={outcome} />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-zinc-200">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-200">
           {formatToolName(call.name)}
         </span>
         {meta && open ? (
-          <span className="min-w-0 truncate text-[12px] text-zinc-500">
+          <span className="min-w-0 truncate text-xs text-zinc-500">
             {meta}
           </span>
         ) : null}
         {outcome === "failed" ? (
-          <span className="shrink-0 text-[11px] font-medium text-red-300/90">
+          <span className="shrink-0 text-micro font-medium text-red-300/90">
             Failed
           </span>
         ) : outcome === "partial" ? (
-          <span className="shrink-0 text-[11px] font-medium text-zinc-500">
+          <span className="shrink-0 text-micro font-medium text-zinc-500">
             No results
           </span>
         ) : outcome === "running" ? (
-          <span className="shrink-0 text-[11px] font-medium text-zinc-500">
+          <span className="shrink-0 text-micro font-medium text-zinc-500">
             Running
           </span>
         ) : null}
@@ -267,16 +267,16 @@ function ToolCallRow({
               {detail ? (
                 <p
                   className={cn(
-                    "text-[12px] leading-relaxed",
+                    "text-xs leading-relaxed",
                     outcome === "failed" ? "text-red-200/90" : "text-zinc-400"
                   )}
                 >
                   {detail}
                 </p>
               ) : outcome === "running" ? (
-                <p className="text-[12px] text-zinc-500">Running tool…</p>
+                <p className="text-xs text-zinc-500">Running tool…</p>
               ) : outcome === "partial" ? (
-                <p className="text-[12px] text-zinc-500">
+                <p className="text-xs text-zinc-500">
                   No results returned.
                 </p>
               ) : null}
@@ -364,7 +364,7 @@ export function RevbotTurnActivity({
             onClick={() => setAccordionOpen((current) => !current)}
             type="button"
           >
-            <span className="min-w-0 flex-1 text-[13px] font-medium text-zinc-400">
+            <span className="min-w-0 flex-1 text-sm font-medium text-zinc-400">
               Thought for {thoughtDuration}
             </span>
             <ChevronDown
@@ -421,7 +421,7 @@ export function RevbotTurnActivity({
         >
           <DriveSpinner />
           <ShimmerLabel>Churning…</ShimmerLabel>
-          <span className="font-mono text-[12px] text-zinc-500 tabular-nums">
+          <span className="font-mono text-xs text-zinc-500 tabular-nums">
             {elapsed}
           </span>
         </button>

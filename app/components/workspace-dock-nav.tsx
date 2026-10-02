@@ -115,14 +115,14 @@ export function WorkspaceDockNav({
     <>
       <NavigationMenu
         align="center"
-        className="max-w-none flex-none"
+        className="max-w-none min-w-0 shrink"
         closeDelay={180}
         delay={0}
         onValueChange={(next: string | null) => {
           if (next === null && contextOpen) return
           setOpenItem(next)
         }}
-        side="top"
+        side="bottom"
         sideOffset={10}
         value={openItem}
       >

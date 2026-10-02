@@ -350,7 +350,7 @@ function RevbotEmptyState({
       </div>
       <p
         className={cn(
-          "text-[15px] font-medium tracking-tight",
+          "text-sm font-medium tracking-tight",
           isDark ? "text-white/90" : "text-foreground"
         )}
       >
@@ -906,7 +906,7 @@ export function RevbotViewContent({
                               </div>
                             ) : null}
                             {message.content ? (
-                              <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap">
                                 {message.content}
                               </p>
                             ) : null}

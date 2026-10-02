@@ -81,7 +81,7 @@ function FixCard({
               <Maximize2Icon aria-hidden="true" className="size-3.5" />
             </Button>
           ) : null}
-          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground tabular-nums">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-micro font-semibold text-muted-foreground tabular-nums">
             {isLoading ? "…" : count}
           </span>
         </div>

@@ -176,7 +176,7 @@ function SetupProgress({ setup }: { setup: ProjectSetupResponse }) {
               </ShimmerLabel>
             </span>
           )}
-          <span className="shrink-0 font-mono text-[13px] text-zinc-500 tabular-nums">
+          <span className="shrink-0 font-mono text-sm text-zinc-500 tabular-nums">
             {progress}%
           </span>
         </div>
@@ -287,7 +287,7 @@ export function ProjectSetupPanel({
           />
         </div>
         <p className="text-xl font-semibold text-foreground">{stage.title}</p>
-        <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
           {stage.description}
         </p>
 

@@ -352,7 +352,7 @@ function CMSStateCard({
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 sm:p-8">
       <div className="flex flex-col gap-2">
-        <h1 className="text-[28px] font-semibold tracking-tight text-balance">
+        <h1 className="text-3xl font-semibold tracking-tight text-balance">
           CMS
         </h1>
         <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">

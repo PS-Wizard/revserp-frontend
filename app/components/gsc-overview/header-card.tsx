@@ -70,7 +70,7 @@ export function GSCHeaderCard({
                       <div className="flex items-center gap-2">
                         <span className="truncate">{site.site_url}</span>
                         {site.site_url === selectedSite?.site_url ? (
-                          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] tracking-[0.18em] text-muted-foreground uppercase">
+                          <span className="rounded-full border border-border px-2 py-0.5 text-micro tracking-[0.18em] text-muted-foreground uppercase">
                             Connected
                           </span>
                         ) : null}

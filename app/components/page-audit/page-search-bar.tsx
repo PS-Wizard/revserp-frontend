@@ -213,11 +213,11 @@ export const PageSearchBar = memo(function PageSearchBar({
                   title={page.url}
                   type="button"
                 >
-                  <span className="block truncate text-[13px] leading-5 font-medium text-foreground">
+                  <span className="block truncate text-sm leading-5 font-medium text-foreground">
                     {primary}
                   </span>
                   {secondary ? (
-                    <span className="mt-0.5 block truncate text-[11px] leading-4 text-muted-foreground">
+                    <span className="mt-0.5 block truncate text-micro leading-4 text-muted-foreground">
                       {secondary}
                     </span>
                   ) : null}
@@ -235,7 +235,7 @@ export const PageSearchBar = memo(function PageSearchBar({
               </div>
             ) : null}
             {total > PAGE_SEARCH_PAGE_SIZE && pages.length > 0 ? (
-              <div className="border-t border-border px-3 py-2 text-center text-[11px] text-muted-foreground">
+              <div className="border-t border-border px-3 py-2 text-center text-micro text-muted-foreground">
                 {pages.length.toLocaleString()} of {total.toLocaleString()}{" "}
                 pages
               </div>

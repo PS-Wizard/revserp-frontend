@@ -289,7 +289,7 @@ function MixScale({
 
   return (
     <div className="shrink-0">
-      <div className="flex text-[10px] text-muted-foreground">
+      <div className="flex text-micro text-muted-foreground">
         {ticks.map((tick) => (
           <span key={tick.id} style={{ flexGrow: tick.value, flexBasis: 0 }}>
             {tick.from.toLocaleString()}

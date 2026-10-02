@@ -241,7 +241,7 @@ function CompetitorCard({
           {cardTitle}
         </span>
         <span
-          className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/50 text-[10px] font-semibold uppercase"
+          className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/50 text-micro font-semibold uppercase"
           style={{ backgroundColor: cover.monogram }}
         >
           {monogram}

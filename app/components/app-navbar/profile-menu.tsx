@@ -1,16 +1,7 @@
 import { useNavigate } from "react-router"
 import { useEffect, useRef, useState } from "react"
 
-import {
-  DoorOpenIcon,
-  DownloadIcon,
-  LogOutIcon,
-  MoonIcon,
-  SendIcon,
-  SettingsIcon,
-  ShieldIcon,
-  UsersIcon,
-} from "lucide-react"
+import { DownloadIcon, LogOutIcon, MoonIcon, ShieldIcon } from "lucide-react"
 
 import { toast } from "sonner"
 import { ThinkingOrb } from "thinking-orbs"
@@ -21,17 +12,9 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import type { MeResponse } from "~/lib/api.types"
-import { useFeatures } from "~/lib/features"
 import { HoverPill } from "~/components/ui/hover-pill"
 import { cn } from "~/lib/utils"
 import {
@@ -41,26 +24,15 @@ import {
   type BeforeInstallPromptEvent,
 } from "~/lib/pwa-install"
 
-import { getWorkspaceInitials } from "./utils"
-
 type ProfileMenuProps = {
-  activeOrganizationName?: string
-  activeProjectId?: string | null
   /** Bare avatar trigger, sized for the command dock's capsule. */
   compact?: boolean
-  currentCrawlId?: string | null
   initials: string
-  isActiveOrganizationOwner: boolean
   workspaceState: "idle" | "switching" | "leaving" | "logging-out"
-  organizationId: string
-  organizations: MeResponse["organizations"]
   profileActionError: string
   userName?: string
   isPlatformAdmin: boolean
-  onInviteOpen: () => void
-  onLeaveWorkspaceOpen: () => void
   onLogout: () => void
-  onSelectOrganization: (organizationId: string) => void
 }
 
 function isStandaloneMode() {
@@ -88,22 +60,13 @@ function isIOSSafari() {
 export function ProfileMenu({
   compact = false,
   initials,
-  isActiveOrganizationOwner,
   workspaceState,
-  organizationId,
-  organizations,
   profileActionError,
   userName,
   isPlatformAdmin,
-  onInviteOpen,
-  onLeaveWorkspaceOpen,
   onLogout,
-  onSelectOrganization,
 }: ProfileMenuProps) {
   const navigate = useNavigate()
-  const features = useFeatures()
-  const isSwitchingWorkspace = workspaceState === "switching"
-  const isLeavingWorkspace = workspaceState === "leaving"
   const isLoggingOut = workspaceState === "logging-out"
   const [isDarkMode, setIsDarkMode] = useState(
     () =>
@@ -246,103 +209,15 @@ export function ProfileMenu({
           </>
         )}
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger
-              className="relative z-10 focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground data-popup-open:bg-transparent data-popup-open:text-current data-open:bg-transparent data-open:text-current"
-              disabled={isSwitchingWorkspace}
-              onMouseEnter={() => showProfilePill(2)}
-              ref={(element) => {
-                profileItemRefs.current[2] = element
-              }}
-            >
-              <UsersIcon />
-              Switch workspace
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-56">
-              <DropdownMenuRadioGroup
-                value={organizationId}
-                onValueChange={onSelectOrganization}
-              >
-                {organizations.map((organization) => (
-                  <DropdownMenuRadioItem
-                    disabled={isSwitchingWorkspace}
-                    key={organization.id}
-                    value={organization.id}
-                  >
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold">
-                      {getWorkspaceInitials(organization.name)}
-                    </span>
-                    <span className="truncate">{organization.name}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-          {isActiveOrganizationOwner ? (
-            <DropdownMenuItem
-              className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-              onClick={onInviteOpen}
-              onMouseEnter={() => showProfilePill(3)}
-              ref={(element) => {
-                profileItemRefs.current[3] = element
-              }}
-              variant="default"
-            >
-              <SendIcon />
-              Invite members
-            </DropdownMenuItem>
-          ) : (
-            <DropdownMenuItem
-              className="focus:bg-transparent focus:text-current focus-visible:bg-destructive/10 focus-visible:text-destructive"
-              disabled={isLeavingWorkspace}
-              onClick={onLeaveWorkspaceOpen}
-              onMouseEnter={() => showProfilePill(3)}
-              ref={(element) => {
-                profileItemRefs.current[3] = element
-              }}
-              variant="destructive"
-            >
-              {isLeavingWorkspace ? (
-                <ThinkingOrb
-                  aria-label="Leaving workspace"
-                  className="shrink-0"
-                  size={20}
-                  state="working"
-                  style={{ width: 16, height: 16 }}
-                />
-              ) : (
-                <DoorOpenIcon />
-              )}
-              Leave workspace
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          {features.integrations !== false ? (
-            <DropdownMenuItem
-              className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-              onClick={() => {
-                navigate("/app/settings/integrations")
-              }}
-              onMouseEnter={() => showProfilePill(4)}
-              ref={(element) => {
-                profileItemRefs.current[4] = element
-              }}
-              variant="default"
-            >
-              <SettingsIcon />
-              Integrations
-            </DropdownMenuItem>
-          ) : null}
           {isPlatformAdmin ? (
             <DropdownMenuItem
               className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
               onClick={() => {
                 navigate("/app/admin")
               }}
-              onMouseEnter={() => showProfilePill(5)}
+              onMouseEnter={() => showProfilePill(2)}
               ref={(element) => {
-                profileItemRefs.current[5] = element
+                profileItemRefs.current[2] = element
               }}
               variant="default"
             >
@@ -356,9 +231,9 @@ export function ProfileMenu({
           className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
           disabled={isLoggingOut}
           onClick={onLogout}
-          onMouseEnter={() => showProfilePill(6)}
+          onMouseEnter={() => showProfilePill(3)}
           ref={(element) => {
-            profileItemRefs.current[6] = element
+            profileItemRefs.current[3] = element
           }}
           variant="default"
         >
