@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useReducedMotion } from "motion/react"
 
 import {
@@ -58,6 +58,9 @@ import { RevbotExportableTable } from "./revbot-exportable-table"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotMessageActions } from "./revbot-message-actions"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
+import { CMSApprovalCard } from "./cms-approval-card"
+import { pendingApprovalsForTurn } from "./cms-approval-copy"
+import { isTurnActiveStatus } from "./use-revbot"
 import type { RevbotHandle } from "./use-revbot"
 
 /** Stick to bottom while content grows; stop when the user scrolls up. */
@@ -567,7 +570,18 @@ export function RevbotViewContent({
         : defaultHistoryOpen
     )
   }, [defaultHistoryOpen])
-  const active = revbot.status === "queued" || revbot.status === "running"
+  const active = isTurnActiveStatus(revbot.status)
+  const pendingApprovals = useMemo(
+    () => pendingApprovalsForTurn(revbot.approvals, active),
+    [active, revbot.approvals]
+  )
+  const approvalsSignature = useMemo(
+    () =>
+      revbot.approvals
+        .map((approval) => `${approval.id}:${approval.status}`)
+        .join(","),
+    [revbot.approvals]
+  )
   const activeAssistantMessageId = active
     ? [...revbot.messages]
         .reverse()
@@ -581,6 +595,7 @@ export function RevbotViewContent({
     revbot.toolCalls.length,
     revbot.phase,
     activeAssistantContent.length,
+    approvalsSignature,
   ].join(":")
   useEffect(() => {
     onActivityChange?.(active)
@@ -677,7 +692,7 @@ export function RevbotViewContent({
             <RevbotScrollFollow followKey={scrollFollowKey} />
             <MessageScrollerViewport aria-label="Conversation">
               <MessageScrollerContent
-                aria-busy={active}
+                aria-busy={active && !revbot.waitingForApproval}
                 className={cn(
                   "w-full gap-5 pt-1",
                   revbot.messages.length > 0 ? "pb-24" : "min-h-full"
@@ -766,12 +781,19 @@ export function RevbotViewContent({
                               >
                                 {showMessageAvatar ? (
                                   <RevbotMessageAvatar
-                                    active={isActiveMessage && active}
+                                    active={
+                                      isActiveMessage &&
+                                      active &&
+                                      !revbot.waitingForApproval
+                                    }
                                     className="sticky top-3 self-start"
                                   />
                                 ) : null}
                                 <div className="min-w-0">
-                                  {showActivity ? (
+                                  {showActivity &&
+                                  !(
+                                    isActiveMessage && revbot.waitingForApproval
+                                  ) ? (
                                     <RevbotTurnActivity
                                       active={isActiveMessage && active}
                                       endedAt={messageActivityEndedAt}
@@ -785,19 +807,48 @@ export function RevbotViewContent({
                                     />
                                   ) : null}
                                   {message.id === activeAssistantMessageId &&
+                                  !revbot.waitingForApproval &&
                                   (message.content ||
                                     revbot.phase === "writing") ? (
                                     <StreamingAssistantMessage
                                       content={message.content}
                                       messageId={message.id}
                                     />
-                                  ) : message.id !==
-                                    activeAssistantMessageId ? (
+                                  ) : message.id !== activeAssistantMessageId ||
+                                    revbot.waitingForApproval ? (
                                     <RevbotMarkdown
                                       components={markdownComponents}
                                     >
                                       {message.content}
                                     </RevbotMarkdown>
+                                  ) : null}
+                                  {isActiveMessage &&
+                                  pendingApprovals.length > 0 ? (
+                                    <div className="flex flex-col gap-3">
+                                      {pendingApprovals.map((approval) => (
+                                        <CMSApprovalCard
+                                          approval={approval}
+                                          deciding={
+                                            revbot.decidingApproval?.id ===
+                                            approval.id
+                                              ? revbot.decidingApproval.decision
+                                              : null
+                                          }
+                                          decisionError={
+                                            revbot.approvalDecisionErrors[
+                                              approval.id
+                                            ] || null
+                                          }
+                                          key={approval.id}
+                                          onDecide={(decision) =>
+                                            void revbot.decideApproval(
+                                              approval.id,
+                                              decision
+                                            )
+                                          }
+                                        />
+                                      ))}
+                                    </div>
                                   ) : null}
                                   <RevbotChartArtifacts
                                     toolCalls={
@@ -897,6 +948,7 @@ export function RevbotViewContent({
           showMic={showMic}
           stopping={revbot.stopping}
           variant={variant}
+          waitingForApproval={revbot.waitingForApproval}
         />
       </div>
     </>

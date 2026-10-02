@@ -4,7 +4,7 @@ import { memo, useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { DataLoadingState } from "~/components/data-loading-state"
-import { RuneCMSPanel } from "~/components/rune-cms/rune-cms-panel"
+import { CMSPanel } from "~/components/cms/cms-panel"
 import { Button } from "~/components/ui/button"
 import { Card, CardContent } from "~/components/ui/card"
 import {
@@ -16,14 +16,18 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
-import type { ProjectResponse, RuneCMSStatusResponse } from "~/lib/api.types"
+import type {
+  CMSProvider,
+  CMSStatusResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 import { FolderGit2Icon, TriangleAlertIcon } from "lucide-react"
 
-export function runeCMSStatusQueryKey(projectId: string) {
-  return ["rune-cms-status", projectId] as const
+export function cmsStatusQueryKey(projectId: string) {
+  return ["cms-status", projectId] as const
 }
 
-type RuneCMSViewProps = {
+type CMSViewProps = {
   activeProject: ProjectResponse | null
   isOrganizationOwner: boolean
 }
@@ -46,10 +50,18 @@ function isValidEndpointUrl(raw: string) {
   }
 }
 
-export const RuneCMSView = memo(function RuneCMSView({
+function normalizeCMSStatus(value: CMSStatusResponse): CMSStatusResponse {
+  return {
+    ...value,
+    provider: value.provider ?? (value.connected ? "rune" : null),
+    tools: Array.isArray(value.tools) ? value.tools : [],
+  }
+}
+
+export const CMSView = memo(function CMSView({
   activeProject,
   isOrganizationOwner,
-}: RuneCMSViewProps) {
+}: CMSViewProps) {
   const queryClient = useQueryClient()
   const projectId = activeProject?.id
   const projectIdRef = useRef(projectId)
@@ -63,18 +75,22 @@ export const RuneCMSView = memo(function RuneCMSView({
     isFetching: isFetchingStatus,
   } = useQuery({
     queryKey: projectId
-      ? runeCMSStatusQueryKey(projectId)
-      : ["rune-cms-status-disabled"],
-    queryFn: () =>
-      clientApiFetch<RuneCMSStatusResponse>(
-        `/projects/${projectId!}/rune/status`
-      ),
+      ? cmsStatusQueryKey(projectId)
+      : ["cms-status-disabled"],
+    queryFn: async () => {
+      const raw = await clientApiFetch<CMSStatusResponse>(
+        `/projects/${projectId!}/cms/status`
+      )
+      return normalizeCMSStatus(raw)
+    },
     enabled: Boolean(projectId),
     retry: false,
   })
 
   const requestSeqRef = useRef(0)
   const mountedRef = useRef(true)
+  const [provider, setProvider] = useState<CMSProvider>("rune")
+  const [providerTouched, setProviderTouched] = useState(false)
   const [endpointUrl, setEndpointUrl] = useState("")
   const [endpointTouched, setEndpointTouched] = useState(false)
   const [bearerToken, setBearerToken] = useState("")
@@ -112,6 +128,8 @@ export const RuneCMSView = memo(function RuneCMSView({
   // Never carry secrets, form input, or results across projects. The parent
   // also remounts this view per project; this is the second layer.
   useEffect(() => {
+    setProvider("rune")
+    setProviderTouched(false)
     setEndpointUrl("")
     setEndpointTouched(false)
     setBearerToken("")
@@ -123,8 +141,13 @@ export const RuneCMSView = memo(function RuneCMSView({
     requestSeqRef.current += 1
   }, [projectId])
 
-  // Seed the endpoint field from the saved status once per project; never
-  // clobber what the user is typing.
+  // Seed the form from the saved status once per project; never clobber what
+  // the user is typing. Picking a provider alone never switches the saved
+  // connection — only a successful connect does.
+  useEffect(() => {
+    if (providerTouched) return
+    if (status?.provider) setProvider(status.provider)
+  }, [status?.provider, providerTouched])
   useEffect(() => {
     if (endpointTouched) return
     setEndpointUrl(status?.endpoint_url ?? "")
@@ -133,12 +156,13 @@ export const RuneCMSView = memo(function RuneCMSView({
   async function applyStatus(
     requestProjectId: string,
     requestSeq: number,
-    next: RuneCMSStatusResponse
+    next: CMSStatusResponse
   ) {
     if (isStaleResponse(requestProjectId, requestSeq)) return
-    queryClient.setQueryData(runeCMSStatusQueryKey(requestProjectId), next)
+    const normalized = normalizeCMSStatus(next)
+    queryClient.setQueryData(cmsStatusQueryKey(requestProjectId), normalized)
     await queryClient.invalidateQueries({
-      queryKey: runeCMSStatusQueryKey(requestProjectId),
+      queryKey: cmsStatusQueryKey(requestProjectId),
     })
   }
 
@@ -152,7 +176,7 @@ export const RuneCMSView = memo(function RuneCMSView({
       return false
     }
     if (!bearerToken) {
-      setFormError("Enter a bearer token to connect.")
+      setFormError("Enter a token to connect.")
       return false
     }
     const requestProjectId = projectId
@@ -161,18 +185,23 @@ export const RuneCMSView = memo(function RuneCMSView({
     setActionError("")
     setIsConnecting(true)
     try {
-      const next = await clientApiPost<RuneCMSStatusResponse>(
-        `/projects/${requestProjectId}/rune/connect`,
-        { endpoint_url: trimmedEndpoint, bearer_token: bearerToken }
+      const next = await clientApiPost<CMSStatusResponse>(
+        `/projects/${requestProjectId}/cms/connect`,
+        {
+          provider,
+          endpoint_url: trimmedEndpoint,
+          bearer_token: bearerToken,
+        }
       )
       if (isStaleResponse(requestProjectId, requestSeq)) return false
       setBearerToken("")
       setEndpointTouched(false)
+      setProviderTouched(false)
       await applyStatus(requestProjectId, requestSeq, next)
       return !isStaleResponse(requestProjectId, requestSeq)
     } catch (error) {
       if (isStaleResponse(requestProjectId, requestSeq)) return false
-      setActionError(safeErrorMessage(error, "Unable to connect Rune CMS."))
+      setActionError(safeErrorMessage(error, "Unable to connect CMS."))
       return false
     } finally {
       if (!isStaleResponse(requestProjectId, requestSeq)) {
@@ -188,15 +217,15 @@ export const RuneCMSView = memo(function RuneCMSView({
     setActionError("")
     setIsChecking(true)
     try {
-      const next = await clientApiPost<RuneCMSStatusResponse>(
-        `/projects/${requestProjectId}/rune/check`,
+      const next = await clientApiPost<CMSStatusResponse>(
+        `/projects/${requestProjectId}/cms/check`,
         {}
       )
       await applyStatus(requestProjectId, requestSeq, next)
     } catch (error) {
       if (isStaleResponse(requestProjectId, requestSeq)) return
       setActionError(
-        safeErrorMessage(error, "Unable to check the Rune CMS connection.")
+        safeErrorMessage(error, "Unable to check the CMS connection.")
       )
     } finally {
       if (!isStaleResponse(requestProjectId, requestSeq)) {
@@ -213,17 +242,18 @@ export const RuneCMSView = memo(function RuneCMSView({
     setFormError("")
     setIsDisconnecting(true)
     try {
-      const next = await clientApiPost<RuneCMSStatusResponse>(
-        `/projects/${requestProjectId}/rune/disconnect`,
+      const next = await clientApiPost<CMSStatusResponse>(
+        `/projects/${requestProjectId}/cms/disconnect`,
         {}
       )
       if (isStaleResponse(requestProjectId, requestSeq)) return
       setBearerToken("")
       setEndpointTouched(false)
+      setProviderTouched(false)
       await applyStatus(requestProjectId, requestSeq, next)
     } catch (error) {
       if (isStaleResponse(requestProjectId, requestSeq)) return
-      setActionError(safeErrorMessage(error, "Unable to disconnect Rune CMS."))
+      setActionError(safeErrorMessage(error, "Unable to disconnect CMS."))
     } finally {
       if (!isStaleResponse(requestProjectId, requestSeq)) {
         setIsDisconnecting(false)
@@ -238,29 +268,29 @@ export const RuneCMSView = memo(function RuneCMSView({
 
   if (!activeProject) {
     return (
-      <RuneCMSStateCard
-        description="Choose a project first to see its Rune CMS connection state."
+      <CMSStateCard
+        description="Choose a project first to see its CMS connection state."
         title="Select a project"
       />
     )
   }
 
   if (isLoadingStatus && !status) {
-    return <DataLoadingState label="Loading Rune CMS..." />
+    return <DataLoadingState label="Loading CMS..." />
   }
 
   const loadErrorMessage = statusError
-    ? safeErrorMessage(statusError, "Unable to load Rune CMS data.")
+    ? safeErrorMessage(statusError, "Unable to load CMS data.")
     : ""
 
   if (loadErrorMessage && !status) {
     return (
-      <RuneCMSStateCard
+      <CMSStateCard
         description={loadErrorMessage}
         error
         onRetry={() => void refetchStatus()}
         retryBusy={isFetchingStatus}
-        title="Unable to load Rune CMS"
+        title="Unable to load CMS"
       />
     )
   }
@@ -268,7 +298,7 @@ export const RuneCMSView = memo(function RuneCMSView({
   if (!status) return null
 
   return (
-    <RuneCMSPanel
+    <CMSPanel
       key={projectId}
       actionError={actionError}
       bearerToken={bearerToken}
@@ -287,16 +317,18 @@ export const RuneCMSView = memo(function RuneCMSView({
         setEndpointUrl(value)
         setEndpointTouched(true)
       }}
+      onProviderChange={(value) => {
+        setProvider(value)
+        setProviderTouched(true)
+      }}
       projectName={activeProject.name}
+      provider={provider}
       status={status}
     />
   )
-}, areRuneCMSViewPropsEqual)
+}, areCMSViewPropsEqual)
 
-function areRuneCMSViewPropsEqual(
-  previous: RuneCMSViewProps,
-  next: RuneCMSViewProps
-) {
+function areCMSViewPropsEqual(previous: CMSViewProps, next: CMSViewProps) {
   return (
     previous.activeProject?.id === next.activeProject?.id &&
     previous.activeProject?.name === next.activeProject?.name &&
@@ -304,7 +336,7 @@ function areRuneCMSViewPropsEqual(
   )
 }
 
-function RuneCMSStateCard({
+function CMSStateCard({
   title,
   description,
   error,
@@ -321,11 +353,11 @@ function RuneCMSStateCard({
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 sm:p-8">
       <div className="flex flex-col gap-2">
         <h1 className="text-[28px] font-semibold tracking-tight text-balance">
-          Rune CMS
+          CMS
         </h1>
         <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Connect this project to Rune CMS so workspace tools can read content
-          and draft preview edits.
+          Connect one content provider per project so workspace tools can read
+          content and propose edits.
         </p>
       </div>
       <Card>

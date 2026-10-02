@@ -28,11 +28,25 @@ import type {
   AITurnMessageResponse,
   AITurnResponse,
   AITurnSubmissionResponse,
+  CMSApproval,
+  CMSApprovalDecisionResponse,
   ProjectResponse,
 } from "~/lib/api.types"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
+import {
+  isTurnActiveStatus,
+  isTurnTerminalStatus,
+  isTurnWaitingStatus,
+  mergeApprovalCard,
+  resolveTurnObserverStart,
+  shouldKeepStreamedAssistantText,
+  turnIdToResyncOnRefocus,
+  type TurnObserver,
+} from "./revbot-replay-state"
 import { normalizeToolCallStatus } from "./tool-call-status"
+
+export { isTurnActiveStatus, isTurnWaitingStatus } from "./revbot-replay-state"
 
 const STORAGE_PREFIX = "revbot-turn:"
 const EFFORT_STORAGE_KEY = "revbot-reasoning-effort"
@@ -74,7 +88,7 @@ type RevbotStatus = AITurnResponse["status"] | "idle"
 type RevbotState = {
   conversationId: string | null
   conversations: AIConversationResponse[]
-  /** Last known turn status per conversation (queued/running while active). */
+  /** Last known turn status per conversation (queued/running/waiting while active). */
   conversationStatus: Record<string, RevbotStatus>
   messages: LocalMessage[]
   status: RevbotStatus
@@ -83,6 +97,9 @@ type RevbotState = {
   activityStartedAt: number | null
   stopping: boolean
   loading: boolean
+  approvals: CMSApproval[]
+  decidingApproval: { id: string; decision: "approve" | "reject" } | null
+  approvalDecisionErrors: Record<string, string>
 }
 
 function storageKey(projectId: string) {
@@ -121,9 +138,9 @@ function clearStoredConversation(projectId: string) {
   }
 }
 
-function isTurnTerminal(status: RevbotStatus) {
-  return status === "completed" || status === "stopped" || status === "failed"
-}
+/** Turn status predicates live in ./revbot-replay-state so the hook and the
+ * replay rules share one source of truth; this alias keeps call sites short. */
+const isTurnTerminal = isTurnTerminalStatus
 
 function assistantMessageForTurn(turn: AITurnResponse) {
   return [...turn.messages]
@@ -390,6 +407,9 @@ export function useRevbot({
     activityStartedAt: null,
     stopping: false,
     loading: false,
+    approvals: [],
+    decidingApproval: null,
+    approvalDecisionErrors: {},
   })
   const mountedRef = useRef(true)
   const projectIdRef = useRef<string | null>(null)
@@ -399,7 +419,9 @@ export function useRevbot({
   const activeRequestRef = useRef(false)
   const generationRef = useRef(0)
   const projectGenerationRef = useRef(0)
-  const observerRef = useRef<AbortController | null>(null)
+  /** The live SSE subscription, if any: aborting it is what a restart does, so
+   * it also records WHICH turn it streams and under which generation. */
+  const observerRef = useRef<TurnObserver | null>(null)
   const lastEventIdRef = useRef(0)
   const seenEventIdsRef = useRef<Set<number>>(new Set())
   const assistantTextRef = useRef("")
@@ -411,6 +433,11 @@ export function useRevbot({
   const maybeAutoRetryTurnRef = useRef<
     (turn: AITurnResponse, generation: number) => boolean
   >(() => false)
+  const decidingApprovalRef = useRef<string | null>(null)
+  /** Latest turn-snapshot sync; assigned after observe (observe calls it via ref). */
+  const syncTurnSnapshotRef = useRef(
+    (_turnId: string, _generation: number) => {}
+  )
   const onConversationChangeRef = useRef(onConversationChange)
   const conversationCacheRef = useRef(
     new Map<string, AIConversationDetailResponse>()
@@ -532,6 +559,18 @@ export function useRevbot({
     [refreshConversations]
   )
 
+  /** Merge one approval card by id, forward-only. SSE frames replay, so a
+   * historical approval_required/approval_decided must never push a card that
+   * already moved on back to pending. Callers scope by turn id first. */
+  const upsertApproval = useCallback((approval: CMSApproval) => {
+    if (!mountedRef.current) return
+    setState((current) => {
+      const approvals = mergeApprovalCard(current.approvals, approval)
+      if (approvals === current.approvals) return current
+      return { ...current, approvals }
+    })
+  }, [])
+
   const applyConversation = useCallback(
     (conversation: AIConversationDetailResponse, loading = false) => {
       conversationCacheRef.current.set(conversation.id, conversation)
@@ -572,6 +611,10 @@ export function useRevbot({
           activityStartedAt: null,
           stopping: false,
           loading,
+          approvals: [],
+
+          decidingApproval: null,
+          approvalDecisionErrors: {},
           conversationStatus: {
             ...current.conversationStatus,
             [conversation.id]: conversationStatus,
@@ -610,7 +653,19 @@ export function useRevbot({
         .reverse()
         .find((message) => message.role === "assistant")
       assistantMessageIdRef.current = assistant?.id ?? null
-      assistantTextRef.current = replay ? "" : (assistant?.content ?? "")
+      // A live same-turn stream owns the text: this snapshot was fetched while
+      // deltas kept arriving, so adopting its lagging content would duplicate the
+      // prefix the stream appends to. A terminal snapshot always wins.
+      const keepStreamedText = shouldKeepStreamedAssistantText({
+        observer: observerRef.current,
+        replay,
+        status: turn.status,
+        turnId: turn.id,
+      })
+        ? assistantTextRef.current
+        : null
+      assistantTextRef.current =
+        keepStreamedText ?? (replay ? "" : (assistant?.content ?? ""))
       const toolCalls = replay ? [] : mapToolCallResponses(turn.tool_calls)
       const turnActivity = turnActivityTimestamps(turn)
 
@@ -619,12 +674,20 @@ export function useRevbot({
           ? current.messages.find((message) => message.id === assistant.id)
           : null
         const mergedMessages = mergeTurnMessages(current.messages, messages)
+        const mergedMessagesWithStreamedText =
+          keepStreamedText === null || !assistant?.id
+            ? mergedMessages
+            : mergedMessages.map((message) =>
+                message.id === assistant.id
+                  ? { ...message, content: keepStreamedText }
+                  : message
+              )
 
         return {
           ...current,
           conversationId: turn.conversation_id,
           messages: attachTurnActivityToAssistant(
-            mergedMessages,
+            mergedMessagesWithStreamedText,
             assistant?.id ?? null,
             {
               activityEndedAt:
@@ -653,7 +716,7 @@ export function useRevbot({
   )
 
   const stopObserver = useCallback(() => {
-    observerRef.current?.abort()
+    observerRef.current?.controller.abort()
     observerRef.current = null
   }, [])
 
@@ -661,8 +724,15 @@ export function useRevbot({
     async (turnId: string, generation: number) => {
       try {
         const turn = await clientApiFetch<AITurnResponse>(`/ai/turns/${turnId}`)
-        if (generation !== generationRef.current || !mountedRef.current) return
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          turnIdRef.current !== turn.id ||
+          turn.conversation_id !== conversationIdRef.current
+        )
+          return
         applyTurn(turn, false)
+
         maybeAutoRetryTurnRef.current(turn, generation)
       } catch {
         // Keep the streamed text if the final refresh is unavailable.
@@ -673,198 +743,361 @@ export function useRevbot({
 
   const observe = useCallback(
     async (turnId: string, generation: number) => {
+      // Historical approval_decided/waiting_for_user frames replay on every
+      // resume and route through the live status sync, so this is the one place
+      // that decides whether a stream starts. A live same-turn observer is left
+      // untouched: restarting it would abort the connection, rewind the cursor
+      // to event 0, and replay the whole turn's deltas into the live text.
+      const start = resolveTurnObserverStart({
+        currentGeneration: generationRef.current,
+        generation,
+        observer: observerRef.current,
+        status: statusRef.current,
+        turnId,
+      })
+      if (start.kind === "skip" || start.kind === "keep") return
+      if (start.kind === "parked") {
+        // A paused turn holds no worker lease and emits nothing more: never
+        // reconnect-poll it. The decision/resume path re-subscribes.
+        return
+      }
+
       stopObserver()
       const controller = new AbortController()
-      observerRef.current = controller
+      observerRef.current = { controller, turnId, generation }
       lastEventIdRef.current = 0
       seenEventIdsRef.current = new Set()
       assistantTextRef.current = ""
-
-      while (
-        generation === generationRef.current &&
-        mountedRef.current &&
-        !isTurnTerminal(statusRef.current)
-      ) {
-        try {
-          const after = lastEventIdRef.current
-          await clientApiSSE(`/ai/turns/${turnId}/events?after=${after}`, {
-            signal: controller.signal,
-            onEvent: (event, payload, eventId) => {
-              if (generation !== generationRef.current || !mountedRef.current)
-                return
-              const numericId = eventId === null ? null : Number(eventId)
-              if (numericId !== null && Number.isFinite(numericId)) {
-                if (seenEventIdsRef.current.has(numericId)) return
-                seenEventIdsRef.current.add(numericId)
-                lastEventIdRef.current = Math.max(
-                  lastEventIdRef.current,
-                  numericId
-                )
-              }
-
-              if (event === "phase" && isPhasePayload(payload)) {
-                setState((current) => ({
-                  ...current,
-                  phase: payload.phase,
-                  activityStartedAt: current.activityStartedAt ?? Date.now(),
-                }))
-              } else if (event === "tool_call" && isToolCallPayload(payload)) {
-                const nextCall: RevbotToolCall = {
-                  callId: payload.id,
-                  name: payload.name,
-                  args: payload.args,
-                  status: "running",
-                  summary: null,
-                  seq: 0,
-                }
-                setState((current) => {
-                  const existing = current.toolCalls.find(
-                    (call) => call.callId === payload.id
-                  )
-                  const toolCalls = existing
-                    ? current.toolCalls.map((call) =>
-                        call.callId === payload.id
-                          ? { ...call, ...nextCall, seq: call.seq }
-                          : call
-                      )
-                    : [
-                        ...current.toolCalls,
-                        { ...nextCall, seq: current.toolCalls.length },
-                      ]
-                  return {
-                    ...current,
-                    phase: "working",
-                    toolCalls,
-                    activityStartedAt: current.activityStartedAt ?? Date.now(),
-                  }
-                })
-              } else if (
-                event === "tool_result" &&
-                isToolResultPayload(payload)
-              ) {
-                const resultStatus = normalizeToolCallStatus(payload.status)
-                setState((current) => ({
-                  ...current,
-                  toolCalls: current.toolCalls.map((call) =>
-                    call.callId === payload.id
-                      ? {
-                          ...call,
-                          status: resultStatus,
-                          summary: payload.summary,
-                        }
-                      : call
-                  ),
-                }))
-                if (
-                  payload.name === "update_business_profile" &&
-                  resultStatus === "completed"
-                ) {
-                  const projectId = projectIdRef.current
-                  if (projectId) {
-                    void invalidateBusinessProfile(queryClient, projectId)
-                  }
-                }
-                if (
-                  payload.name === "update_project_keywords" &&
-                  resultStatus === "completed"
-                ) {
-                  const projectId = projectIdRef.current
-                  if (projectId) {
-                    void invalidateProjectKeywordLists(queryClient, projectId)
-                  }
-                }
-              } else if (
-                event === "text_delta" &&
-                isTextDeltaPayload(payload)
-              ) {
-                const assistantText = assistantTextRef.current + payload.text
-                assistantTextRef.current = assistantText
-                const assistantMessageId = assistantMessageIdRef.current
-                setState((current) => ({
-                  ...current,
-                  messages: current.messages.map((message) =>
-                    message.id === assistantMessageId
-                      ? { ...message, content: assistantText }
-                      : message
-                  ),
-                }))
-              } else if (event === "completed" && isTerminalPayload(payload)) {
-                updateStatus("completed")
-                void refreshTerminalTurn(turnId, generation)
-              } else if (event === "stopped" && isTerminalPayload(payload)) {
-                updateStatus("stopped")
-                void refreshTerminalTurn(turnId, generation)
-              } else if (event === "failed" && isTerminalPayload(payload)) {
-                updateStatus("failed")
-                setState((current) => ({
-                  ...current,
-                  stopping: false,
-                }))
-                void refreshTerminalTurn(turnId, generation)
-              }
-            },
-          })
-        } catch {
-          if (
-            controller.signal.aborted ||
-            generation !== generationRef.current ||
-            !mountedRef.current
-          )
-            return
-        }
-
-        if (
-          generation !== generationRef.current ||
-          controller.signal.aborted ||
-          !mountedRef.current ||
-          isTurnTerminal(statusRef.current)
+      try {
+        while (
+          generation === generationRef.current &&
+          mountedRef.current &&
+          !isTurnTerminal(statusRef.current) &&
+          !isTurnWaitingStatus(statusRef.current)
         ) {
-          return
-        }
-        // The SSE stream closed without a terminal event (e.g. dropped
-        // connection). Fetch the turn once before reconnecting: if the server
-        // already reached a terminal state, apply it instead of reopening a
-        // finished stream.
-        try {
-          const turn = await clientApiFetch<AITurnResponse>(
-            `/ai/turns/${turnId}`
-          )
+          try {
+            const after = lastEventIdRef.current
+            await clientApiSSE(`/ai/turns/${turnId}/events?after=${after}`, {
+              signal: controller.signal,
+              onEvent: (event, payload, eventId) => {
+                if (generation !== generationRef.current || !mountedRef.current)
+                  return
+                const numericId = eventId === null ? null : Number(eventId)
+                if (numericId !== null && Number.isFinite(numericId)) {
+                  if (seenEventIdsRef.current.has(numericId)) return
+                  seenEventIdsRef.current.add(numericId)
+                  lastEventIdRef.current = Math.max(
+                    lastEventIdRef.current,
+                    numericId
+                  )
+                }
+
+                if (event === "phase" && isPhasePayload(payload)) {
+                  setState((current) => ({
+                    ...current,
+                    phase: payload.phase,
+                    activityStartedAt: current.activityStartedAt ?? Date.now(),
+                  }))
+                } else if (
+                  event === "tool_call" &&
+                  isToolCallPayload(payload)
+                ) {
+                  const nextCall: RevbotToolCall = {
+                    callId: payload.id,
+                    name: payload.name,
+                    args: payload.args,
+                    status: "running",
+                    summary: null,
+                    seq: 0,
+                  }
+                  setState((current) => {
+                    const existing = current.toolCalls.find(
+                      (call) => call.callId === payload.id
+                    )
+                    const toolCalls = existing
+                      ? current.toolCalls.map((call) =>
+                          call.callId === payload.id
+                            ? { ...call, ...nextCall, seq: call.seq }
+                            : call
+                        )
+                      : [
+                          ...current.toolCalls,
+                          { ...nextCall, seq: current.toolCalls.length },
+                        ]
+                    return {
+                      ...current,
+                      phase: "working",
+                      toolCalls,
+                      activityStartedAt:
+                        current.activityStartedAt ?? Date.now(),
+                    }
+                  })
+                } else if (
+                  event === "tool_result" &&
+                  isToolResultPayload(payload)
+                ) {
+                  const resultStatus = normalizeToolCallStatus(payload.status)
+                  setState((current) => ({
+                    ...current,
+                    toolCalls: current.toolCalls.map((call) =>
+                      call.callId === payload.id
+                        ? {
+                            ...call,
+                            status: resultStatus,
+                            summary: payload.summary,
+                          }
+                        : call
+                    ),
+                  }))
+                  if (
+                    payload.name === "update_business_profile" &&
+                    resultStatus === "completed"
+                  ) {
+                    const projectId = projectIdRef.current
+                    if (projectId) {
+                      void invalidateBusinessProfile(queryClient, projectId)
+                    }
+                  }
+                  if (
+                    payload.name === "update_project_keywords" &&
+                    resultStatus === "completed"
+                  ) {
+                    const projectId = projectIdRef.current
+                    if (projectId) {
+                      void invalidateProjectKeywordLists(queryClient, projectId)
+                    }
+                  }
+                } else if (
+                  event === "text_delta" &&
+                  isTextDeltaPayload(payload)
+                ) {
+                  const assistantText = assistantTextRef.current + payload.text
+                  assistantTextRef.current = assistantText
+                  const assistantMessageId = assistantMessageIdRef.current
+                  setState((current) => ({
+                    ...current,
+                    messages: current.messages.map((message) =>
+                      message.id === assistantMessageId
+                        ? { ...message, content: assistantText }
+                        : message
+                    ),
+                  }))
+                } else if (event === "approval_required") {
+                  // Cards stay scoped to the observed turn: a historical replay
+                  // for another turn must not touch this stream's cards.
+                  const approval = cmsApprovalFromEventPayload(payload)
+                  if (approval && approval.turn_id === turnId)
+                    upsertApproval(approval)
+                } else if (event === "approval_decided") {
+                  const approval = cmsApprovalFromEventPayload(payload)
+                  if (approval && approval.turn_id === turnId) {
+                    upsertApproval(approval)
+                    // A decision requeues the turn; verify against the live
+                    // snapshot rather than trusting the event alone.
+                    void syncTurnSnapshotRef.current(turnId, generation)
+                  }
+                } else if (event === "waiting_for_user") {
+                  const waitingId = waitingTurnIdFromEventPayload(payload)
+                  if (waitingId === null || waitingId === turnId) {
+                    // Historical waiting frames replay on resume; only the
+                    // current turn snapshot can pause this stream.
+                    void syncTurnSnapshotRef.current(turnId, generation)
+                  }
+                } else if (
+                  event === "completed" &&
+                  isTerminalPayload(payload)
+                ) {
+                  updateStatus("completed")
+                  void refreshTerminalTurn(turnId, generation)
+                } else if (event === "stopped" && isTerminalPayload(payload)) {
+                  updateStatus("stopped")
+                  void refreshTerminalTurn(turnId, generation)
+                } else if (event === "failed" && isTerminalPayload(payload)) {
+                  updateStatus("failed")
+                  setState((current) => ({
+                    ...current,
+                    stopping: false,
+                  }))
+                  void refreshTerminalTurn(turnId, generation)
+                }
+              },
+            })
+          } catch {
+            if (
+              controller.signal.aborted ||
+              generation !== generationRef.current ||
+              !mountedRef.current
+            )
+              return
+          }
+
           if (
             generation !== generationRef.current ||
             controller.signal.aborted ||
-            !mountedRef.current
+            !mountedRef.current ||
+            isTurnTerminal(statusRef.current) ||
+            isTurnWaitingStatus(statusRef.current)
           ) {
             return
           }
-          if (isTurnTerminal(turn.status)) {
-            applyTurn(turn, false)
-            maybeAutoRetryTurnRef.current(turn, generation)
-            return
+          // The SSE stream closed without a terminal event (e.g. dropped
+          // connection). Fetch the turn once before reconnecting: if the server
+          // already reached a terminal state, apply it instead of reopening a
+          // finished stream.
+          try {
+            const turn = await clientApiFetch<AITurnResponse>(
+              `/ai/turns/${turnId}`
+            )
+            if (
+              generation !== generationRef.current ||
+              controller.signal.aborted ||
+              !mountedRef.current
+            ) {
+              return
+            }
+            if (isTurnTerminal(turn.status)) {
+              applyTurn(turn, false)
+              maybeAutoRetryTurnRef.current(turn, generation)
+              return
+            }
+            if (isTurnWaitingStatus(turn.status)) {
+              // The turn paused for approval while the stream was down: park
+              // on waiting and stop reconnecting.
+              applyTurn(turn, false)
+              return
+            }
+          } catch {
+            if (
+              generation !== generationRef.current ||
+              controller.signal.aborted ||
+              !mountedRef.current
+            ) {
+              return
+            }
+            // Fall through to reconnect when the refresh is unavailable.
           }
-        } catch {
-          if (
-            generation !== generationRef.current ||
-            controller.signal.aborted ||
-            !mountedRef.current
-          ) {
-            return
-          }
-          // Fall through to reconnect when the refresh is unavailable.
+          await new Promise<void>((resolve) => {
+            const timer = window.setTimeout(resolve, RECONNECT_DELAY_MS)
+            controller.signal.addEventListener(
+              "abort",
+              () => {
+                window.clearTimeout(timer)
+                resolve()
+              },
+              { once: true }
+            )
+          })
         }
-        await new Promise<void>((resolve) => {
-          const timer = window.setTimeout(resolve, RECONNECT_DELAY_MS)
-          controller.signal.addEventListener(
-            "abort",
-            () => {
-              window.clearTimeout(timer)
-              resolve()
-            },
-            { once: true }
-          )
-        })
+      } finally {
+        // Release the ref only if it is still OURS: a newer observer (different
+        // turn or generation) already owns it, and refocus uses its presence to
+        // tell "streaming" from "lost".
+        if (observerRef.current?.controller === controller) {
+          observerRef.current = null
+        }
       }
     },
-    [applyTurn, queryClient, refreshTerminalTurn, stopObserver, updateStatus]
+    [
+      applyTurn,
+      queryClient,
+      refreshTerminalTurn,
+      stopObserver,
+      updateStatus,
+      upsertApproval,
+    ]
+  )
+
+  /** Authoritative turn sync. Historical SSE frames replay on
+   * resume, so waiting/decision handling always verifies against this live
+   * snapshot and ignores frames for turns the user already left. A paused turn
+   * resumed by a decision is re-subscribed exactly once; an already live
+   * same-turn stream is left running by observe(). */
+  const syncTurnSnapshot = useCallback(
+    async (turnId: string, generation: number) => {
+      try {
+        const turn = await clientApiFetch<AITurnResponse>(`/ai/turns/${turnId}`)
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          turnIdRef.current !== turn.id ||
+          turn.conversation_id !== conversationIdRef.current
+        )
+          return
+        applyTurn(turn, false)
+
+        if (!isTurnTerminal(turn.status) && !isTurnWaitingStatus(turn.status))
+          void observe(turn.id, generation)
+      } catch {
+        // Keep current cards; refocus retries the sync.
+      }
+    },
+    [applyTurn, observe]
+  )
+
+  useEffect(() => {
+    syncTurnSnapshotRef.current = syncTurnSnapshot
+  }, [syncTurnSnapshot])
+
+  /** Approve/reject one CMS approval, then resume the SAME turn stream.
+   * Never sends a fake user message: the decision requeues the paused turn. */
+  const decideApproval = useCallback(
+    async (approvalId: string, decision: "approve" | "reject") => {
+      const conversationId = conversationIdRef.current
+      if (!conversationId || decidingApprovalRef.current) return
+      const generation = generationRef.current
+      decidingApprovalRef.current = approvalId
+      setState((current) => ({
+        ...current,
+        decidingApproval: { id: approvalId, decision },
+        approvalDecisionErrors: {
+          ...current.approvalDecisionErrors,
+          [approvalId]: "",
+        },
+      }))
+      try {
+        const response = await clientApiPost<CMSApprovalDecisionResponse>(
+          `/ai/conversations/${conversationId}/approvals/${approvalId}/decision`,
+          { decision }
+        )
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          conversationIdRef.current !== conversationId
+        )
+          return
+        upsertApproval(response.approval)
+        void syncTurnSnapshotRef.current(response.turn_id, generation)
+      } catch (error) {
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          conversationIdRef.current !== conversationId
+        )
+          return
+        const message =
+          error instanceof ApiError && error.status === 409
+            ? "Already decided — refreshed to the latest state."
+            : error instanceof ApiError && error.status === 404
+              ? "Approval no longer available — refreshed."
+              : error instanceof ApiError && error.status === 403
+                ? "Only the turn initiator can decide."
+                : simpleError(error, "Unable to send the decision.")
+        setState((current) => ({
+          ...current,
+          approvalDecisionErrors: {
+            ...current.approvalDecisionErrors,
+            [approvalId]: message,
+          },
+        }))
+        reportRevbotError(message)
+      } finally {
+        decidingApprovalRef.current = null
+        if (mountedRef.current) {
+          setState((current) => ({ ...current, decidingApproval: null }))
+        }
+      }
+    },
+    [upsertApproval]
   )
 
   useEffect(() => {
@@ -913,6 +1146,10 @@ export function useRevbot({
       activityStartedAt: null,
       stopping: false,
       loading: Boolean(projectId),
+      approvals: [],
+
+      decidingApproval: null,
+      approvalDecisionErrors: {},
     })
     if (!projectId) return
 
@@ -1053,7 +1290,8 @@ export function useRevbot({
         if (
           conversation.turn_id &&
           (conversation.turn_status === "queued" ||
-            conversation.turn_status === "running")
+            conversation.turn_status === "running" ||
+            isTurnWaitingStatus(conversation.turn_status))
         ) {
           saveStoredConversation(projectId, {
             conversationId,
@@ -1118,6 +1356,7 @@ export function useRevbot({
     assistantMessageIdRef.current = null
     clearStoredConversation(projectId)
     notifyConversationChange(null)
+    decidingApprovalRef.current = null
     setState((current) => ({
       ...current,
       conversationId: null,
@@ -1128,6 +1367,10 @@ export function useRevbot({
       activityStartedAt: null,
       stopping: false,
       loading: false,
+      approvals: [],
+
+      decidingApproval: null,
+      approvalDecisionErrors: {},
     }))
   }, [notifyConversationChange, stopObserver])
 
@@ -1149,7 +1392,7 @@ export function useRevbot({
             (conversation) => conversation.id !== conversationId
           ),
           // Drop the deleted conversation's last-known turn status so a stale
-          // queued/running entry cannot keep the background poll alive.
+          // active-turn entry cannot keep the background poll alive.
           conversationStatus: Object.fromEntries(
             Object.entries(current.conversationStatus).filter(
               ([id]) => id !== conversationId
@@ -1424,11 +1667,7 @@ export function useRevbot({
 
   const retry = useCallback(
     (assistantMessageId: string) => {
-      if (
-        activeRequestRef.current ||
-        statusRef.current === "queued" ||
-        statusRef.current === "running"
-      ) {
+      if (activeRequestRef.current || isTurnActiveStatus(statusRef.current)) {
         reportRevbotError("Wait for the current response to finish.")
         return
       }
@@ -1455,11 +1694,7 @@ export function useRevbot({
     const turnId = turnIdRef.current
     const generation = generationRef.current
     const projectId = projectIdRef.current
-    if (
-      !turnId ||
-      (statusRef.current !== "queued" && statusRef.current !== "running")
-    )
-      return
+    if (!turnId || !isTurnActiveStatus(statusRef.current)) return
     userStopRequestedRef.current = true
     clearAutoRetryTimer()
     setState((current) => ({ ...current, stopping: true }))
@@ -1475,6 +1710,7 @@ export function useRevbot({
       )
         return
       applyTurn(turn, false)
+
       if (isTurnTerminal(turn.status)) {
         stopObserver()
       } else {
@@ -1509,8 +1745,7 @@ export function useRevbot({
     state.conversationStatus
   ).some(
     ([conversationId, status]) =>
-      conversationId !== state.conversationId &&
-      (status === "queued" || status === "running")
+      conversationId !== state.conversationId && isTurnActiveStatus(status)
   )
   useEffect(() => {
     if (!anyBackgroundConversationActive) return
@@ -1529,11 +1764,34 @@ export function useRevbot({
     }
   }, [anyBackgroundConversationActive, refreshConversations])
 
+  // Refocus re-verifies a paused turn against its live snapshot instead of
+  // trusting replayed waiting frames. A stream that died with the connection
+  // is restarted here; a stream that is still live is never disturbed.
+  useEffect(() => {
+    const refreshOnVisible = () => {
+      if (document.hidden) return
+      const generation = generationRef.current
+      const resyncTurnId = turnIdToResyncOnRefocus({
+        observer: observerRef.current,
+        status: statusRef.current,
+        turnId: turnIdRef.current,
+      })
+      if (resyncTurnId)
+        void syncTurnSnapshotRef.current(resyncTurnId, generation)
+    }
+    window.addEventListener("focus", refreshOnVisible)
+    document.addEventListener("visibilitychange", refreshOnVisible)
+    return () => {
+      window.removeEventListener("focus", refreshOnVisible)
+      document.removeEventListener("visibilitychange", refreshOnVisible)
+    }
+  }, [])
+
   return {
     activityStartedAt: state.activityStartedAt,
     conversationActive: (conversationId: string) => {
       const status = state.conversationStatus[conversationId]
-      return status === "queued" || status === "running"
+      return isTurnActiveStatus(status)
     },
     conversationId: state.conversationId,
     conversations: state.conversations,
@@ -1551,10 +1809,41 @@ export function useRevbot({
     stopping: state.stopping,
     stop,
     toolCalls: state.toolCalls,
+    approvals: state.approvals,
+
+    decidingApproval: state.decidingApproval,
+    approvalDecisionErrors: state.approvalDecisionErrors,
+    decideApproval,
+
+    waitingForApproval: state.approvals.some(
+      (approval) => approval.status === "pending"
+    ),
   }
 }
 
 export type RevbotHandle = ReturnType<typeof useRevbot>
+
+function cmsApprovalFromEventPayload(payload: unknown): CMSApproval | null {
+  // Contract shape: {approval: ApprovalEntity}. Anything else is ignored.
+  if (!payload || typeof payload !== "object") return null
+  const approval = (payload as { approval?: unknown }).approval
+  if (!approval || typeof approval !== "object") return null
+  const record = approval as Record<string, unknown>
+  if (
+    typeof record.id !== "string" ||
+    typeof record.turn_id !== "string" ||
+    typeof record.status !== "string"
+  )
+    return null
+  return approval as CMSApproval
+}
+
+function waitingTurnIdFromEventPayload(payload: unknown): string | null {
+  // Contract shape: waiting_for_user event with turn_id.
+  if (!payload || typeof payload !== "object") return null
+  const turnId = (payload as { turn_id?: unknown }).turn_id
+  return typeof turnId === "string" && turnId ? turnId : null
+}
 
 function isPhasePayload(payload: unknown): payload is AIStreamPhasePayload {
   return Boolean(

@@ -129,11 +129,11 @@ export function buildWorkspaceNavGroups({
   const content: NavTab[] = []
   if (integrations) {
     content.push({
-      key: "rune-cms",
-      label: "Rune CMS",
-      description: "Draft, publish and sync site content.",
+      key: "cms",
+      label: "CMS",
+      description: "Connect a provider and review site content tools.",
       Icon: BlocksIcon,
-      view: "rune-cms",
+      view: "cms",
     })
   }
 
@@ -161,7 +161,10 @@ export function isWorkspaceTabActive(
   view: DashboardView,
   auditTab: AuditTab
 ): boolean {
-  return tab.view === view && (tab.auditTab === undefined || tab.auditTab === auditTab)
+  return (
+    tab.view === view &&
+    (tab.auditTab === undefined || tab.auditTab === auditTab)
+  )
 }
 
 export function findActiveGroupIndex(
@@ -239,7 +242,12 @@ export function WorkspaceSidebarNav({
                   >
                     <tab.Icon aria-hidden="true" className="size-4 shrink-0" />
                     <span className="truncate">{tab.label}</span>
-                    <span className={cn("ml-auto shrink-0", active ? "" : "invisible")}>
+                    <span
+                      className={cn(
+                        "ml-auto shrink-0",
+                        active ? "" : "invisible"
+                      )}
+                    >
                       <CheckIcon className="size-4" />
                     </span>
                   </SidebarMenuButton>

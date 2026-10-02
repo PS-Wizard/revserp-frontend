@@ -742,7 +742,15 @@ export type AITurnMessageResponse = {
 }
 
 export type AITurnStatus =
-  "queued" | "running" | "completed" | "stopped" | "failed"
+  | "queued"
+  | "running"
+  // "waiting_for_user" is the CMS approval contract status; "waiting" is the
+  // legacy migration46 spelling. Accept both until the backend aligns them.
+  | "waiting"
+  | "waiting_for_user"
+  | "completed"
+  | "stopped"
+  | "failed"
 
 export type AIToolCallStatus = "running" | "completed" | "failed" | "awaiting"
 
@@ -1112,17 +1120,71 @@ export type OrganizationEventFrame = {
   created_at: string
 }
 
-/** Rune CMS project integration. `tools` is always an array. */
+/** CMS provider for the one active per-project connection. */
+export type CMSProvider = "rune" | "wordpress"
+
+/** One advertised CMS content tool. Never carries secrets. */
+export type CMSToolResponse = {
+  name: string
+  description: string
+  group?: string
+  write?: boolean
+}
+
+/** CMS project integration. `tools` is always an array. */
+export type CMSStatusResponse = {
+  connected: boolean
+  provider: CMSProvider | null
+  endpoint_url?: string
+  last_checked_at?: string
+  tools: CMSToolResponse[]
+}
+
+/** @deprecated Use CMSToolResponse. Old /rune wrapper shape without group/write. */
 export type RuneCMSToolResponse = {
   name: string
   description: string
 }
 
+/** @deprecated Use CMSStatusResponse. Old /rune wrapper shape without provider. */
 export type RuneCMSStatusResponse = {
   connected: boolean
   endpoint_url?: string
   last_checked_at?: string
   tools: RuneCMSToolResponse[]
+}
+
+/** Durable CMS tool-call approval status. Decided cards stay visible as history. */
+export type CMSApprovalStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "invalidated"
+  | "executing"
+  | "completed"
+  | "failed"
+
+/** Durable CMS tool-call approval: plain untrusted display text, never HTML-rendered. */
+export type CMSApproval = {
+  id: string
+  turn_id: string
+  tool_call_id: string
+  tool_name: string
+  provider: CMSProvider
+  target: string
+  before: string
+  after: string
+  status: CMSApprovalStatus
+  created_at: string
+  decided_at?: string
+  summary?: string
+  proposed_args?: Record<string, unknown>
+}
+
+/** POST .../approvals/{approvalID}/decision — decision queues the SAME turn. */
+export type CMSApprovalDecisionResponse = {
+  approval: CMSApproval
+  turn_id: string
 }
 
 /** `payload` of a crawl.* frame. */

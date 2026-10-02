@@ -11,7 +11,7 @@ export type DashboardView =
   | "competitors"
   | "search-console"
   | "analytics"
-  | "rune-cms"
+  | "cms"
   | "compare"
 export type AuditTab =
   "overview" | "seo" | "aeo" | "pagespeed" | "pages" | "site-graph"
@@ -28,7 +28,7 @@ export function revbotHashTarget(
   | { view: "revserp-audit"; tab: AuditTab }
   | { view: "search-console" }
   | { view: "analytics" }
-  | { view: "rune-cms" }
+  | { view: "cms" }
   | { view: "competitors" }
   | { view: "keywords" }
   | null {
@@ -49,8 +49,11 @@ export function revbotHashTarget(
       return { view: "search-console" }
     case "analytics":
       return { view: "analytics" }
+    case "cms":
+      return { view: "cms" }
     case "rune-cms":
-      return { view: "rune-cms" }
+      // Legacy hash from before the Rune CMS tab became the CMS tab.
+      return { view: "cms" }
     case "competitors":
       return { view: "competitors" }
     case "keywords":

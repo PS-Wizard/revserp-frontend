@@ -18,7 +18,14 @@ import {
   type ShaderController,
 } from "glimm"
 
-import { ArrowUpIcon, MicIcon, PlusIcon, SquareIcon, XIcon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  Loader2,
+  MicIcon,
+  PlusIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react"
 
 import { Button } from "~/components/ui/button"
 import { Textarea } from "~/components/ui/textarea"
@@ -26,6 +33,11 @@ import type { AIReasoningEffort, AITurnImage } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
 import { compressRevbotImage } from "./compress-revbot-image"
+import {
+  composerActivity,
+  composerActivityAnimated,
+  composerActivityLabel,
+} from "./revbot-composer-status"
 
 const MAX_IMAGES = 4
 const ACCEPTED_IMAGE_TYPES = new Set([
@@ -173,6 +185,7 @@ type RevbotComposerProps = {
   showMic?: boolean
   stopping: boolean
   variant?: "default" | "dark"
+  waitingForApproval?: boolean
 }
 
 export function RevbotComposer({
@@ -186,6 +199,7 @@ export function RevbotComposer({
   showMic = true,
   stopping,
   variant = "default",
+  waitingForApproval = false,
 }: RevbotComposerProps) {
   const [prompt, setPrompt] = useState("")
   const [autocomplete, setAutocomplete] = useState<Autocomplete | null>(null)
@@ -212,6 +226,7 @@ export function RevbotComposer({
   const shaderRef = useRef<ShaderController | null>(null)
   const sweepRef = useRef<ReturnType<typeof playSweep> | null>(null)
   const recognitionRef = useRef<DictationRecognition | null>(null)
+  const statusRef = useRef<HTMLSpanElement>(null)
   const dictationBaseRef = useRef("")
   const dictationCancelRef = useRef(false)
   const dictationStartRef = useRef(0)
@@ -251,6 +266,12 @@ export function RevbotComposer({
     !listening &&
     (prompt.trim().length > 0 || attachments.length > 0)
   const showEffort = allowedEfforts.length > 1
+  const activity = composerActivity(active, stopping, waitingForApproval)
+  const inputColClass = expanded
+    ? "col-span-full col-start-1 row-start-1"
+    : showMic
+      ? "col-start-3 row-start-1 min-w-0"
+      : "col-start-2 row-start-1 min-w-0"
   const actionColCount = (showMic ? 2 : 1) + (showEffort ? 1 : 0)
   const sendColClass = showEffort
     ? expanded
@@ -312,7 +333,7 @@ export function RevbotComposer({
     const textarea = textareaRef.current
     const controls = controlsRef.current
     const measure = measureRef.current
-    if (!textarea || !controls || !measure) return
+    if (!controls || !measure) return
 
     const fixedControlsWidth =
       28 * actionColCount + (effortButtonRef.current?.offsetWidth ?? 0)
@@ -320,9 +341,13 @@ export function RevbotComposer({
     const inlineGaps = 4 * 4
     const inlineInputWidth =
       controls.clientWidth - fixedControlsWidth - inlineGaps
+    const statusWidth = statusRef.current?.scrollWidth ?? 0
     const needsFullWidth =
-      prompt.includes("\n") || measure.offsetWidth + 8 > inlineInputWidth
+      prompt.includes("\n") ||
+      measure.offsetWidth + 8 > inlineInputWidth ||
+      statusWidth + 24 > inlineInputWidth
     if (needsFullWidth !== expanded) setExpanded(needsFullWidth)
+    if (!textarea) return
 
     textarea.style.height = "0px"
     const contentHeight = textarea.scrollHeight
@@ -332,7 +357,7 @@ export function RevbotComposer({
     )}px`
     textarea.style.overflowY =
       contentHeight > maxTextareaHeight ? "auto" : "hidden"
-  }, [actionColCount, expanded, prompt])
+  }, [actionColCount, expanded, prompt, activity])
 
   useEffect(() => {
     const speechWindow = window as SpeechRecognitionWindow
@@ -1019,16 +1044,37 @@ export function RevbotComposer({
               />
             </Button>
           ) : null}
-          {listening ? (
+          {activity !== "idle" ? (
+            <div
+              className={cn(
+                "flex min-h-7 min-w-0 items-center gap-2 px-1 py-[5px] text-[12.5px] leading-[18px]",
+                inputColClass,
+                isDark ? "text-zinc-400" : "text-muted-foreground"
+              )}
+              role="status"
+            >
+              {composerActivityAnimated(activity) ? (
+                <Loader2
+                  aria-hidden="true"
+                  className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none"
+                  strokeWidth={2.25}
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 shrink-0 rounded-full bg-current opacity-70"
+                />
+              )}
+              <span className="min-w-0 truncate" ref={statusRef}>
+                {composerActivityLabel(activity)}
+              </span>
+            </div>
+          ) : listening ? (
             <div
               aria-label="Recording voice"
               className={cn(
                 "flex min-h-7 min-w-0 items-center gap-1.5 rounded-[8px] px-1 py-[5px]",
-                expanded
-                  ? "col-span-full col-start-1 row-start-1"
-                  : showMic
-                    ? "col-start-3 row-start-1"
-                    : "col-start-2 row-start-1",
+                inputColClass,
                 isDark ? "bg-white/5" : "bg-accent/50"
               )}
               role="status"
@@ -1084,11 +1130,7 @@ export function RevbotComposer({
               aria-expanded={Boolean(autocomplete)}
               className={cn(
                 "min-h-7 w-full resize-none border-0 bg-transparent px-1 py-[5px] text-[13px] leading-[18px] shadow-none outline-none focus-visible:border-0 focus-visible:ring-0",
-                expanded
-                  ? "col-span-full col-start-1 row-start-1"
-                  : showMic
-                    ? "col-start-3 row-start-1 min-w-0"
-                    : "col-start-2 row-start-1 min-w-0",
+                inputColClass,
                 isDark
                   ? "!bg-transparent [tap-highlight-color:transparent] selection:bg-white/20 focus:!bg-transparent focus-visible:!bg-transparent active:!bg-transparent"
                   : "dark:bg-transparent"
@@ -1139,13 +1181,16 @@ export function RevbotComposer({
           ) : null}
           {active ? (
             <Button
-              aria-label="Stop Revbot"
-              className={cn("size-7 rounded-[8px]", sendColClass)}
+              aria-label={stopping ? "Stopping Revbot" : "Stop Revbot"}
+              className={cn(
+                "size-7 rounded-[8px] text-foreground",
+                sendColClass
+              )}
               disabled={stopping}
               onClick={onStop}
               size="icon-sm"
               type="button"
-              variant="destructive"
+              variant="outline"
             >
               <SquareIcon aria-hidden="true" />
             </Button>

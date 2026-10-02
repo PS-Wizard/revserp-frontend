@@ -195,7 +195,7 @@ export function WorkspaceDockNav({
                 <NavigationMenuTrigger
                   // Clicking the group name goes to that group's landing tab. The
                   // groups are built in landing order, so the first tab is the one
-                  // to land on: Overview, Search Console, Competitors, Rune CMS.
+                  // to land on: Overview, Search Console, Competitors, CMS.
                   onClick={() => {
                     const landing = group.tabs[0]
                     if (landing)
@@ -315,8 +315,8 @@ function DockPanel({
                 <tab.Icon aria-hidden="true" className="size-4" />
               </span>
               <span className="min-w-0">
-                <span className="block font-medium text-sm">{tab.label}</span>
-                <span className="mt-0.5 block text-muted-foreground text-xs">
+                <span className="block text-sm font-medium">{tab.label}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
                   {tab.description}
                 </span>
               </span>
@@ -407,10 +407,13 @@ function ProjectPanelList({
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] text-muted-foreground ring-1 ring-white/[0.06] ring-inset">
             <PlusIcon aria-hidden="true" className="size-4" />
           </span>
-          <span className="font-medium text-sm">New project</span>
+          <span className="text-sm font-medium">New project</span>
         </button>
       </li>
-      <li aria-hidden="true" className="col-span-full my-0.5 h-px bg-white/10" />
+      <li
+        aria-hidden="true"
+        className="col-span-full my-0.5 h-px bg-white/10"
+      />
       {projects.map((project) => {
         const active = project.id === activeProjectId
         return (
@@ -437,10 +440,10 @@ function ProjectPanelList({
                   {project.name.slice(0, 1).toUpperCase()}
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-sm">
+                  <span className="block truncate text-sm font-medium">
                     {project.name}
                   </span>
-                  <span className="mt-0.5 block truncate text-muted-foreground text-xs">
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                     {project.base_url}
                   </span>
                 </span>
@@ -483,7 +486,7 @@ function CrawlPanelList({
 
   if (crawls.length === 0) {
     return (
-      <p className="px-2 py-3 text-muted-foreground text-sm">
+      <p className="px-2 py-3 text-sm text-muted-foreground">
         This project has no crawls yet.
       </p>
     )
@@ -521,10 +524,10 @@ function CrawlPanelList({
                   <HistoryIcon aria-hidden="true" className="size-4" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-sm">
+                  <span className="block truncate text-sm font-medium">
                     {formatLabel(crawl)}
                   </span>
-                  <span className="mt-0.5 block truncate text-muted-foreground text-xs">
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                     {crawl.urls_crawled}/{crawl.page_count ?? 0} · Discovered:{" "}
                     {crawl.urls_discovered} · Crawled: {crawl.urls_crawled}
                   </span>
@@ -535,9 +538,7 @@ function CrawlPanelList({
               </button>
             </ContextMenuTrigger>
             <ContextMenuContent>
-              <ContextMenuItem
-                onClick={() => onExportCrawl(crawl, "xlsx")}
-              >
+              <ContextMenuItem onClick={() => onExportCrawl(crawl, "xlsx")}>
                 <FileSpreadsheetIcon aria-hidden="true" />
                 Export crawl as XLSX
               </ContextMenuItem>

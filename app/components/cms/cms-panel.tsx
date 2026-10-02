@@ -55,20 +55,24 @@ import {
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import { Separator } from "~/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip"
-import type {
-  RuneCMSStatusResponse,
-  RuneCMSToolResponse,
-} from "~/lib/api.types"
+import type { CMSProvider, CMSStatusResponse } from "~/lib/api.types"
+import {
+  groupCMSTools,
+  type CMSToolRow,
+  type CMSToolSection,
+} from "./cms-tool-groups"
 
-export type RuneCMSPanelProps = {
+export type CMSPanelProps = {
   projectName: string
-  status: RuneCMSStatusResponse
+  status: CMSStatusResponse
   isOrganizationOwner: boolean
+  provider: CMSProvider
   endpointUrl: string
   bearerToken: string
   formError: string
@@ -76,6 +80,7 @@ export type RuneCMSPanelProps = {
   isConnecting: boolean
   isChecking: boolean
   isDisconnecting: boolean
+  onProviderChange: (provider: CMSProvider) => void
   onEndpointChange: (value: string) => void
   onBearerTokenChange: (value: string) => void
   onConnect: () => Promise<boolean>
@@ -84,13 +89,24 @@ export type RuneCMSPanelProps = {
   onDismissCredentials: () => void
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  list_collections: "List collections",
-  get_collection_schema: "View collection fields",
-  list_records: "Browse records",
-  read_record: "Read a record",
-  create_record: "Create a record",
-  update_record: "Update a record",
+const PROVIDER_LABEL: Record<CMSProvider, string> = {
+  rune: "Rune CMS",
+  wordpress: "WordPress",
+}
+
+const PROVIDER_ENDPOINT_PLACEHOLDER: Record<CMSProvider, string> = {
+  rune: "https://cms.example.com/mcp",
+  wordpress: "https://example.com/wp-json/wp-mcp/v1/mcp",
+}
+
+const PROVIDER_ENDPOINT_HINT: Record<CMSProvider, string> = {
+  rune: "The full MCP endpoint URL of the Rune CMS.",
+  wordpress: "The full WordPress MCP endpoint URL, not just /wp-json.",
+}
+
+const PROVIDER_TOKEN_LABEL: Record<CMSProvider, string> = {
+  rune: "Bearer token",
+  wordpress: "Bearer token",
 }
 
 const TOOL_ICONS: Record<string, LucideIcon> = {
@@ -102,14 +118,17 @@ const TOOL_ICONS: Record<string, LucideIcon> = {
   update_record: PencilLineIcon,
 }
 
-const EXPLORE_TOOLS = new Set([
-  "list_collections",
-  "get_collection_schema",
-  "list_records",
-  "read_record",
-])
+/** Approval truth: listed sensitive tools pause; unlisted tools run directly. */
+const APPROVAL_POLICY =
+  "Reads and new drafts run directly. Listed sensitive tools — publishing, edits to published content, deletes, settings — pause for your approval in chat. Tools outside that list run directly."
 
-const EDIT_TOOLS = new Set(["create_record", "update_record"])
+/** Rune edits write records; the published site still depends on its static build. */
+const RUNE_POLICY =
+  "Reads and drafts run directly. Record edits pause for your approval in chat and write CMS records; the published site changes only after a static build."
+
+function policyNote(provider: CMSProvider | null) {
+  return provider === "rune" ? RUNE_POLICY : APPROVAL_POLICY
+}
 
 function endpointHost(raw?: string) {
   if (!raw) return ""
@@ -127,10 +146,11 @@ function formatCheckedAt(value?: string) {
   return date.toLocaleString()
 }
 
-export function RuneCMSPanel({
+export function CMSPanel({
   projectName,
   status,
   isOrganizationOwner,
+  provider,
   endpointUrl,
   bearerToken,
   formError,
@@ -138,39 +158,56 @@ export function RuneCMSPanel({
   isConnecting,
   isChecking,
   isDisconnecting,
+  onProviderChange,
   onEndpointChange,
   onBearerTokenChange,
   onConnect,
   onCheck,
   onDisconnect,
   onDismissCredentials,
-}: RuneCMSPanelProps) {
+}: CMSPanelProps) {
   const [manageOpen, setManageOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [replaceOpen, setReplaceOpen] = useState(false)
   const isBusy = isConnecting || isChecking || isDisconnecting
 
   const tools = Array.isArray(status.tools) ? status.tools : []
   const connected = status.connected
+  const connectedProvider = status.provider
+  const needsReplacement =
+    connected && connectedProvider !== null && provider !== connectedProvider
   const host = endpointHost(status.endpoint_url)
-  const exploreTools = tools.filter((tool) => EXPLORE_TOOLS.has(tool.name))
-  const editTools = tools.filter((tool) => EDIT_TOOLS.has(tool.name))
-  const otherTools = tools.filter(
-    (tool) => !EXPLORE_TOOLS.has(tool.name) && !EDIT_TOOLS.has(tool.name),
-  )
+  const sections = groupCMSTools(tools)
+  const totalTools = tools.length
 
   function handleManageOpenChange(open: boolean) {
     setManageOpen(open)
     if (!open) {
       setConfirmOpen(false)
+      setReplaceOpen(false)
       onDismissCredentials()
     }
   }
 
   async function handleManageSubmit() {
+    if (needsReplacement) {
+      setReplaceOpen(true)
+      return
+    }
     const ok = await onConnect()
     if (ok) {
       setManageOpen(false)
       setConfirmOpen(false)
+      setReplaceOpen(false)
+    }
+  }
+
+  async function handleReplaceConfirm() {
+    const ok = await onConnect()
+    if (ok) {
+      setManageOpen(false)
+      setConfirmOpen(false)
+      setReplaceOpen(false)
     }
   }
 
@@ -180,15 +217,17 @@ export function RuneCMSPanel({
         <div className="flex min-w-0 flex-1 basis-64 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-[28px] font-semibold tracking-tight text-balance">
-              Rune CMS
+              CMS
             </h1>
             <Badge variant={connected ? "default" : "secondary"}>
-              {connected ? "Connected" : "Not connected"}
+              {connected && connectedProvider
+                ? `Connected · ${PROVIDER_LABEL[connectedProvider]}`
+                : "Not connected"}
             </Badge>
           </div>
           <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Connect this project to Rune CMS so workspace tools can read
-            content and draft preview edits.
+            Connect one content provider per project so workspace tools can read
+            content and propose edits.
           </p>
           {connected ? (
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
@@ -219,7 +258,11 @@ export function RuneCMSPanel({
               variant="outline"
             >
               {isChecking ? (
-                <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+                <Loader2Icon
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                  className="animate-spin"
+                />
               ) : (
                 <RefreshCwIcon data-icon="inline-start" aria-hidden="true" />
               )}
@@ -259,8 +302,9 @@ export function RuneCMSPanel({
                 </EmptyMedia>
                 <EmptyTitle>Connect your CMS</EmptyTitle>
                 <EmptyDescription>
-                  Link this project to its Rune CMS endpoint once. Revserp
-                  checks the connection before saving anything.
+                  {provider === "wordpress"
+                    ? "Link this project to its WordPress site once. Revserp checks the connection before saving anything."
+                    : "Link this project to its Rune CMS endpoint once. Revserp checks the connection before saving anything."}
                 </EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
@@ -275,7 +319,7 @@ export function RuneCMSPanel({
                       <span className="font-medium text-foreground">
                         {projectName}
                       </span>
-                      .
+                      . Only one provider can be active at a time.
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5 text-[13px] leading-relaxed text-muted-foreground">
@@ -284,8 +328,7 @@ export function RuneCMSPanel({
                       aria-hidden="true"
                     />
                     <span>
-                      Reads content and drafts preview edits. Nothing is
-                      published.
+                      {provider === "wordpress" ? APPROVAL_POLICY : RUNE_POLICY}
                     </span>
                   </li>
                   <li className="flex items-start gap-2.5 text-[13px] leading-relaxed text-muted-foreground">
@@ -302,9 +345,9 @@ export function RuneCMSPanel({
             </Empty>
             <Card className="order-1 lg:order-2">
               <CardHeader>
-                <CardTitle>Connect Rune CMS</CardTitle>
+                <CardTitle>Connect CMS</CardTitle>
                 <CardDescription>
-                  Save the MCP endpoint and bearer token for {projectName}.
+                  Save the endpoint and token for {projectName}.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -313,15 +356,16 @@ export function RuneCMSPanel({
                   disabled={isBusy}
                   endpointUrl={endpointUrl}
                   formError={formError}
-                  idPrefix="rune-cms-connect"
+                  idPrefix="cms-connect"
                   onBearerTokenChange={onBearerTokenChange}
                   onEndpointChange={onEndpointChange}
+                  onProviderChange={onProviderChange}
                   onSubmit={() => void onConnect()}
                   pending={isConnecting}
                   pendingLabel="Connecting…"
+                  provider={provider}
                   submitLabel="Connect CMS"
                   tokenDescription="The connection is checked before the token is stored encrypted. It is never displayed again."
-                  tokenLabel="Bearer token"
                 />
               </CardContent>
             </Card>
@@ -332,18 +376,17 @@ export function RuneCMSPanel({
               <EmptyMedia variant="icon">
                 <LockIcon aria-hidden="true" />
               </EmptyMedia>
-              <EmptyTitle>Rune CMS is not connected</EmptyTitle>
+              <EmptyTitle>CMS is not connected</EmptyTitle>
               <EmptyDescription>
-                Only the organization owner can connect Rune CMS for{" "}
-                {projectName}. Ask them to connect it before this view becomes
-                available.
+                Only the organization owner can connect a CMS for {projectName}.
+                Ask them to connect it before this view becomes available.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
         )
       ) : (
         <section aria-label="Content catalog" className="flex flex-col gap-6">
-          {tools.length === 0 ? (
+          {sections.length === 0 ? (
             <Empty className="border p-8">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
@@ -380,68 +423,38 @@ export function RuneCMSPanel({
                 </EmptyContent>
               ) : null}
             </Empty>
-          ) : exploreTools.length > 0 && editTools.length > 0 ? (
-            <>
-              <div className="grid items-start gap-6 lg:grid-cols-[3fr_2fr]">
-                <ToolGroupCard
-                  description="Look up collections, fields and records."
-                  title="Explore content"
-                  tools={exploreTools}
-                />
-                <ToolGroupCard
-                  description="Draft changes against preview content."
-                  footer="Edits apply to preview content only — they do not publish the site."
-                  title="Preview edits"
-                  tools={editTools}
-                />
-              </div>
-              {otherTools.length > 0 ? (
-                <ToolGroupCard
-                  description="Reported by the endpoint outside the standard set."
-                  title="Other tools"
-                  tools={otherTools}
-                />
-              ) : null}
-            </>
           ) : (
-            <>
-              <ToolGroupCard
-                description="Look up collections, fields and records."
-                title="Explore content"
-                tools={exploreTools}
-              />
-              <ToolGroupCard
-                description="Draft changes against preview content."
-                footer="Edits apply to preview content only — they do not publish the site."
-                title="Preview edits"
-                tools={editTools}
-              />
-              <ToolGroupCard
-                description="Reported by the endpoint outside the standard set."
-                title="Other tools"
-                tools={otherTools}
-              />
-            </>
+            <ToolBrowser
+              policyNote={policyNote(connectedProvider)}
+              sections={sections}
+              totalTools={totalTools}
+            />
           )}
           {!isOrganizationOwner ? (
             <p className="flex items-start gap-2 text-[13px] leading-relaxed text-muted-foreground">
               <LockIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>
-                You have read-only access. Only the organization owner can
-                check or change this connection.
+                You have read-only access. Only the organization owner can check
+                or change this connection.
               </span>
             </p>
           ) : null}
         </section>
       )}
 
-      <Dialog open={isOrganizationOwner && connected && manageOpen} onOpenChange={handleManageOpenChange}>
+      <Dialog
+        open={isOrganizationOwner && connected && manageOpen}
+        onOpenChange={handleManageOpenChange}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Manage connection</DialogTitle>
             <DialogDescription>
               Replace the endpoint and token for {projectName}, or disconnect
-              Rune CMS.
+              {connectedProvider
+                ? ` ${PROVIDER_LABEL[connectedProvider]}`
+                : " the CMS"}
+              .
             </DialogDescription>
           </DialogHeader>
           <CredentialsForm
@@ -449,18 +462,35 @@ export function RuneCMSPanel({
             disabled={isBusy}
             endpointUrl={endpointUrl}
             formError={formError}
-            idPrefix="rune-cms-manage"
+            idPrefix="cms-manage"
             onBearerTokenChange={onBearerTokenChange}
             onEndpointChange={onEndpointChange}
+            onProviderChange={onProviderChange}
             onSubmit={() => void handleManageSubmit()}
             pending={isConnecting}
             pendingLabel="Saving…"
+            provider={provider}
             submitLabel="Save and re-check"
             tokenDescription="Replacing the endpoint or token requires entering a new token. The saved token is never shown."
             tokenLabel="New bearer token"
           />
+          {needsReplacement ? (
+            <p
+              className="text-sm leading-relaxed text-muted-foreground"
+              role="note"
+            >
+              Saving with {PROVIDER_LABEL[provider]} replaces the{" "}
+              {connectedProvider
+                ? PROVIDER_LABEL[connectedProvider]
+                : "current"}{" "}
+              connection after confirmation. Pending approvals are invalidated.
+            </p>
+          ) : null}
           {actionError ? (
-            <p className="text-sm leading-relaxed text-destructive" role="alert">
+            <p
+              className="text-sm leading-relaxed text-destructive"
+              role="alert"
+            >
               {actionError}
             </p>
           ) : null}
@@ -492,7 +522,13 @@ export function RuneCMSPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Disconnect Rune CMS?</DialogTitle>
+            <DialogTitle>
+              Disconnect
+              {connectedProvider
+                ? ` ${PROVIDER_LABEL[connectedProvider]}`
+                : " CMS"}
+              ?
+            </DialogTitle>
             <DialogDescription>
               This removes the saved endpoint and token for {projectName}. You
               can reconnect at any time.
@@ -519,9 +555,64 @@ export function RuneCMSPanel({
               variant="destructive"
             >
               {isDisconnecting ? (
-                <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+                <Loader2Icon
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                  className="animate-spin"
+                />
               ) : null}
               {isDisconnecting ? "Disconnecting…" : "Disconnect"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isOrganizationOwner && connected && replaceOpen}
+        onOpenChange={(open) => {
+          if (!isConnecting) setReplaceOpen(open)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Replace
+              {connectedProvider ? ` ${PROVIDER_LABEL[connectedProvider]}` : ""}
+              {connectedProvider
+                ? ` with ${PROVIDER_LABEL[provider]}`
+                : " connection"}
+              ?
+            </DialogTitle>
+            <DialogDescription>
+              Revserp validates the new {PROVIDER_LABEL[provider]} endpoint
+              before saving anything — a failed check keeps the current
+              connection untouched. Replacing rotates the connection and
+              invalidates pending approvals. Only one provider stays active.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              disabled={isConnecting}
+              onClick={() => setReplaceOpen(false)}
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isBusy}
+              onClick={() => void handleReplaceConfirm()}
+              type="button"
+              variant="destructive"
+            >
+              {isConnecting ? (
+                <Loader2Icon
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                  className="animate-spin"
+                />
+              ) : null}
+              {isConnecting ? "Replacing…" : "Replace and connect"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -530,8 +621,44 @@ export function RuneCMSPanel({
   )
 }
 
+function ProviderSelector({
+  idPrefix,
+  provider,
+  disabled,
+  onProviderChange,
+}: {
+  idPrefix: string
+  provider: CMSProvider
+  disabled: boolean
+  onProviderChange: (provider: CMSProvider) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span id={`${idPrefix}-provider-label`} className="text-sm font-medium">
+        Provider
+      </span>
+      <Tabs
+        value={provider}
+        onValueChange={(value) => {
+          if (value === "rune" || value === "wordpress") onProviderChange(value)
+        }}
+      >
+        <TabsList aria-labelledby={`${idPrefix}-provider-label`}>
+          <TabsTrigger value="rune" disabled={disabled}>
+            Rune CMS
+          </TabsTrigger>
+          <TabsTrigger value="wordpress" disabled={disabled}>
+            WordPress
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
+  )
+}
+
 function CredentialsForm({
   idPrefix,
+  provider,
   endpointUrl,
   bearerToken,
   formError,
@@ -541,11 +668,13 @@ function CredentialsForm({
   submitLabel,
   tokenLabel,
   tokenDescription,
+  onProviderChange,
   onEndpointChange,
   onBearerTokenChange,
   onSubmit,
 }: {
   idPrefix: string
+  provider: CMSProvider
   endpointUrl: string
   bearerToken: string
   formError: string
@@ -553,8 +682,9 @@ function CredentialsForm({
   pending: boolean
   pendingLabel: string
   submitLabel: string
-  tokenLabel: string
+  tokenLabel?: string
   tokenDescription: string
+  onProviderChange: (provider: CMSProvider) => void
   onEndpointChange: (value: string) => void
   onBearerTokenChange: (value: string) => void
   onSubmit: () => void
@@ -568,11 +698,15 @@ function CredentialsForm({
         onSubmit()
       }}
     >
+      <ProviderSelector
+        disabled={disabled}
+        idPrefix={idPrefix}
+        onProviderChange={onProviderChange}
+        provider={provider}
+      />
       <FieldGroup>
         <Field data-invalid={hasError || undefined}>
-          <FieldLabel htmlFor={`${idPrefix}-endpoint`}>
-            CMS endpoint
-          </FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-endpoint`}>CMS endpoint</FieldLabel>
           <Input
             aria-invalid={hasError || undefined}
             autoComplete="off"
@@ -580,15 +714,17 @@ function CredentialsForm({
             id={`${idPrefix}-endpoint`}
             inputMode="url"
             onChange={(event) => onEndpointChange(event.target.value)}
-            placeholder="https://cms.example.com/mcp"
+            placeholder={PROVIDER_ENDPOINT_PLACEHOLDER[provider]}
             value={endpointUrl}
           />
           <FieldDescription>
-            The full MCP endpoint URL of the CMS.
+            {PROVIDER_ENDPOINT_HINT[provider]}
           </FieldDescription>
         </Field>
         <Field data-invalid={hasError || undefined}>
-          <FieldLabel htmlFor={`${idPrefix}-token`}>{tokenLabel}</FieldLabel>
+          <FieldLabel htmlFor={`${idPrefix}-token`}>
+            {tokenLabel ?? PROVIDER_TOKEN_LABEL[provider]}
+          </FieldLabel>
           <Input
             aria-invalid={hasError || undefined}
             autoComplete="off"
@@ -596,9 +732,11 @@ function CredentialsForm({
             id={`${idPrefix}-token`}
             onChange={(event) => onBearerTokenChange(event.target.value)}
             placeholder={
-              idPrefix === "rune-cms-manage"
+              idPrefix === "cms-manage"
                 ? "Enter a new token to replace the saved one"
-                : "Paste the CMS bearer token"
+                : provider === "wordpress"
+                  ? "Paste the WordPress MCP bearer token"
+                  : "Paste the CMS bearer token"
             }
             type="password"
             value={bearerToken}
@@ -610,7 +748,11 @@ function CredentialsForm({
       <div>
         <Button disabled={disabled} type="submit">
           {pending ? (
-            <Loader2Icon data-icon="inline-start" aria-hidden="true" className="animate-spin" />
+            <Loader2Icon
+              data-icon="inline-start"
+              aria-hidden="true"
+              className="animate-spin"
+            />
           ) : null}
           {pending ? pendingLabel : submitLabel}
         </Button>
@@ -619,80 +761,99 @@ function CredentialsForm({
   )
 }
 
-function ToolGroupCard({
-  title,
-  description,
-  tools,
-  footer,
+/** One bounded scroll region for the whole catalog; sections stack inside it. */
+function ToolBrowser({
+  sections,
+  totalTools,
+  policyNote,
 }: {
-  title: string
-  description: string
-  tools: RuneCMSToolResponse[]
-  footer?: string
+  sections: CMSToolSection[]
+  totalTools: number
+  policyNote: string
 }) {
-  if (tools.length === 0) return null
   return (
-    <Card>
+    <Card size="sm">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <h2 className="font-heading text-base leading-normal font-medium">{title}</h2>
-          <Badge variant="secondary" aria-label={`${tools.length} tools`}>
-            {tools.length}
+          <CardTitle className="font-heading text-sm font-medium">
+            Tools
+          </CardTitle>
+          <Badge variant="secondary" aria-label={`${totalTools} tools`}>
+            {totalTools}
           </Badge>
         </div>
-        <CardDescription>{description}</CardDescription>
+        <CardDescription>
+          Tools grouped by category. Hover or focus the info icon for details.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        <ul className="flex flex-col divide-y divide-border">
-          {tools.map((tool) => {
-            const Icon = TOOL_ICONS[tool.name] ?? WrenchIcon
-            const label = TOOL_LABELS[tool.name] ?? tool.name
-            return (
-              <li key={tool.name} className="flex items-start gap-3 py-3.5">
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/60 text-muted-foreground">
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="flex items-center gap-1.5 text-sm font-medium">
-                    {label}
-                    {tool.description ? (
-                      <Tooltip>
-                        <TooltipTrigger
-                          render={
-                            <span
-                              className="inline-flex cursor-help items-center rounded-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                              tabIndex={0}
-                              aria-label={`About ${label}`}
-                            />
-                          }
-                        >
-                          <InfoIcon
-                            className="size-3.5"
-                            aria-hidden="true"
-                          />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs break-words">
-                          {tool.description}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null}
+      <CardContent>
+        <div
+          aria-label="CMS tools"
+          className="max-h-[min(60vh,32rem)] overflow-y-auto overscroll-contain pr-1"
+          role="region"
+          tabIndex={0}
+        >
+          <div className="flex flex-col gap-5">
+            {sections.map((section, index) => (
+              <section
+                key={section.key}
+                aria-labelledby={`cms-tools-${index}`}
+                className="flex flex-col gap-1.5"
+              >
+                <h2
+                  id={`cms-tools-${index}`}
+                  className="flex items-center gap-2 text-[11px] font-medium tracking-wide text-muted-foreground uppercase"
+                >
+                  <span className="truncate">{section.title}</span>
+                  <span className="text-muted-foreground/70 tabular-nums">
+                    {section.rows.length}
                   </span>
-                  {tool.description ? (
-                    <span className="text-sm leading-relaxed text-muted-foreground">
-                      {tool.description}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-        {footer ? (
-          <p className="border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
-            {footer}
-          </p>
-        ) : null}
+                </h2>
+                <ul className="grid grid-cols-1 gap-x-4 md:grid-cols-2">
+                  {section.rows.map((row) => (
+                    <ToolRow key={row.name} row={row} />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+        </div>
+        <p className="mt-3 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
+          {policyNote}
+        </p>
       </CardContent>
     </Card>
+  )
+}
+
+function ToolRow({ row }: { row: CMSToolRow }) {
+  const Icon = TOOL_ICONS[row.name] ?? WrenchIcon
+  return (
+    <li className="flex min-w-0 items-center gap-2 py-1">
+      <Icon
+        className="size-3.5 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <span className="truncate text-[13px] font-medium">{row.label}</span>
+      {row.write ? <Badge variant="outline">Write</Badge> : null}
+      {row.description ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                aria-label={`${row.label}: ${row.description}`}
+                className="-mr-1 shrink-0 cursor-help rounded-sm p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                type="button"
+              />
+            }
+          >
+            <InfoIcon className="size-3.5" aria-hidden="true" />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs break-words">
+            {row.description}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </li>
   )
 }
