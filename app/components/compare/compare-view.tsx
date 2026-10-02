@@ -113,7 +113,7 @@ export const CompareView = memo(function CompareView({
   if (error) {
     return (
       <Shell a={a} b={b} onExit={onExit}>
-        <div className="px-3">
+<div>
           <Card>
             <CardContent className="py-12 text-center text-sm">
               Could not load one of these crawls.
@@ -127,7 +127,7 @@ export const CompareView = memo(function CompareView({
   if (isPending || !breakdownA || !breakdownB) {
     return (
       <Shell a={a} b={b} onExit={onExit}>
-        <div className="grid gap-6 px-3 lg:grid-cols-2">
+        <div className="grid gap-6 lg:grid-cols-2">
           {[0, 1].map((i) => (
             <div
               key={i}
@@ -142,7 +142,7 @@ export const CompareView = memo(function CompareView({
   return (
     <Shell a={a} b={b} onExit={onExit}>
       {/* headline scores — two tiles plus one grouped bar chart */}
-      <div className="grid gap-6 px-3 lg:grid-cols-[minmax(0,0.32fr)_minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.32fr)_minmax(0,1fr)]">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
           <ScoreTile
             side={b}
@@ -171,7 +171,7 @@ export const CompareView = memo(function CompareView({
       </div>
 
       {/* buckets — profile and ranked gaps, two cards like the audit summary */}
-      <div className="grid gap-6 px-3 lg:grid-cols-[minmax(280px,0.32fr)_minmax(0,0.68fr)]">
+<div className="grid gap-6 lg:grid-cols-[minmax(280px,0.32fr)_minmax(0,0.68fr)]">
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>{PILLAR_LABEL[pillar]} profile</CardTitle>
@@ -226,7 +226,7 @@ export const CompareView = memo(function CompareView({
       </div>
 
       {/* prevalence — balance panel beside the ranked spread */}
-      <div className="grid gap-6 px-3 lg:grid-cols-[minmax(280px,0.32fr)_minmax(0,0.68fr)]">
+<div className="grid gap-6 lg:grid-cols-[minmax(280px,0.32fr)_minmax(0,0.68fr)]">
         <Card className="flex flex-col">
           <CardHeader>
             <CardTitle>Issue balance</CardTitle>
@@ -355,7 +355,7 @@ export const CompareView = memo(function CompareView({
 
       {/* distribution */}
       {sharesA && sharesB ? (
-        <div className="px-3">
+<div>
           <Card>
             <CardHeader>
               <CardTitle>Page health</CardTitle>
@@ -386,7 +386,7 @@ function Shell({
 }: CompareViewProps & { children: React.ReactNode }) {
   return (
     <div className="@container/main relative flex flex-1 flex-col gap-6 py-6">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h1 className="font-heading text-lg font-medium">
           {b.projectName} <span className="text-muted-foreground">vs</span>{" "}
           {a.projectName}

@@ -177,7 +177,7 @@ export function OverviewWorkFixesCards({
 
   if (!crawlId) {
     return (
-      <div className="px-3">
+      <div>
         <p className="text-sm text-muted-foreground">
           Complete a crawl to see work fixes.
         </p>
@@ -186,7 +186,7 @@ export function OverviewWorkFixesCards({
   }
 
   return (
-    <div className="grid min-w-0 gap-5 px-3 max-lg:auto-rows-[32rem] lg:h-[36rem] lg:grid-cols-3 lg:grid-rows-1">
+    <div className="grid min-w-0 gap-5 max-lg:auto-rows-[32rem] lg:h-[36rem] lg:grid-cols-3 lg:grid-rows-1">
       <FixCard
         count={unlogged.total}
         emptyVariant="unlogged"

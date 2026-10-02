@@ -1024,7 +1024,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   }
 
   return (
-    <div className="px-3">
+    <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <Breadcrumb>
           <BreadcrumbList>

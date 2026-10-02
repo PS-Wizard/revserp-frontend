@@ -178,7 +178,7 @@ export const SummaryView = memo(function SummaryView({
 
   return (
     <div className="flex min-w-0 flex-col gap-6 md:gap-8">
-      <header className="px-3">
+      <header>
         <h1 className="font-heading text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
           <span className="text-muted-foreground">
             Hello {firstName}, here&apos;s the rundown for{" "}
@@ -212,7 +212,7 @@ export const SummaryView = memo(function SummaryView({
 
       {latestCompletedCrawl && !isNotFound ? (
         <>
-          <section className="px-3">
+          <section>
             <Card className="bg-gradient-to-br from-card via-card to-muted/30">
               <CardHeader>
                 <CardTitle>Score potential</CardTitle>
@@ -233,7 +233,7 @@ export const SummaryView = memo(function SummaryView({
           </section>
 
           {unavailableReason ? (
-            <p className="px-3 text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Score history is pending the next crawl
               {unavailableReason === "scoring_config_changed"
                 ? " — the scoring configuration changed since the last crawl."
@@ -241,7 +241,7 @@ export const SummaryView = memo(function SummaryView({
             </p>
           ) : available && opportunities.length > 0 ? (
             <section className="flex min-w-0 flex-col gap-4 md:gap-5">
-              <header className="flex items-end justify-between gap-4 px-3">
+              <header className="flex items-end justify-between gap-4">
                 <div className="min-w-0">
                   <h2 className="font-heading text-lg font-semibold tracking-tight">
                     Highest-impact next steps

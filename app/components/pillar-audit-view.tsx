@@ -107,10 +107,10 @@ export const PillarAuditView = memo(function PillarAuditView({
         title={title}
       />
       <div className="mt-6 md:mt-8">
-        <div className="px-3">
+<div>
           <div className="border-t border-border" />
         </div>
-        <div className="grid items-stretch gap-3 px-3 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:pt-4">
+<div className="grid items-stretch gap-3 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:pt-4">
           <ScoreRadialChart
             centerLabel={title}
             centerValue={currentPillar?.score}
@@ -134,7 +134,7 @@ export const PillarAuditView = memo(function PillarAuditView({
           />
         </div>
       </div>
-      <div className="px-3">
+<div>
         <Card className="bg-gradient-to-br from-card via-card to-muted/30">
           <IssueTreemap
             breakdown={currentBreakdown}
@@ -278,7 +278,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
                   <CardDescription>{bucketLabel}</CardDescription>
                   {delta !== null && <TrendBadge delta={delta} />}
                 </CardHeader>
-                <div className="flex flex-1 items-center justify-center px-3 py-4">
+<div className="flex flex-1 items-center justify-center py-4">
                   <span className="font-heading text-4xl leading-none font-semibold tabular-nums">
                     {bucket.score === undefined ? (
                       "—"

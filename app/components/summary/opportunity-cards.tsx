@@ -47,7 +47,7 @@ export const OpportunityCards = memo(function OpportunityCards({
   labels: Record<string, string>
 }) {
   return (
-    <div className="@container/cards w-full min-w-0 px-3">
+    <div className="@container/cards w-full min-w-0">
       <div className="grid auto-rows-fr grid-cols-1 gap-4 @min-[30rem]/cards:grid-cols-2 @min-[58rem]/cards:grid-cols-3">
         {opportunities.map((opportunity) => {
           const label =

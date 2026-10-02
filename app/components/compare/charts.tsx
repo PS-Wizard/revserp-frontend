@@ -484,7 +484,7 @@ export function HealthRidge({
           ))}
         </EChartsAreaChart>
       </div>
-      <div className="px-3 pt-8 sm:pt-10">
+      <div className="pt-8 sm:pt-10">
         <div className="flex flex-wrap justify-center lg:flex-nowrap">
           {series.map((item, index) => {
             const isSelected = selectedKey === item.key

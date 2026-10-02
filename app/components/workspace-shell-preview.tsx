@@ -644,7 +644,7 @@ export function WorkspaceShellPreview({
                 className={
                   islandState === "maximized"
 ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
-: "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background"
+: "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3"
                 }
               >
                 <AnimatePresence initial={false} mode="wait">
@@ -667,7 +667,7 @@ export function WorkspaceShellPreview({
                           value={openProjectPanel}
                         >
                           {projects.length === 0 ? (
-                            <div className="flex flex-1 items-center justify-center px-3 py-16">
+                            <div className="flex flex-1 items-center justify-center py-16">
                               <Empty className="border-0">
                                 <EmptyHeader>
                                   <EmptyMedia

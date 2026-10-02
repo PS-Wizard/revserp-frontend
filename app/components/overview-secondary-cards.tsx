@@ -13,7 +13,7 @@ export function OverviewSecondaryCards({
   const showRankings = features.gsc_connector !== false
 
   return (
-    <div className="grid min-w-0 gap-5 px-3 max-lg:auto-rows-[32rem] lg:h-[36rem] lg:grid-cols-3 lg:grid-rows-1">
+    <div className="grid min-w-0 gap-5 max-lg:auto-rows-[32rem] lg:h-[36rem] lg:grid-cols-3 lg:grid-rows-1">
       {showRankings ? (
         <div className="min-h-0 lg:col-span-2">
           <OverviewGSCRankingsCard projectId={projectId} />

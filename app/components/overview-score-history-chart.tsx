@@ -84,7 +84,7 @@ export const OverviewScoreHistoryChart = memo(
     const latestRow = hasData ? chartRows[chartRows.length - 1] : null
 
     const scoreLegend = hasData ? (
-      <div className="px-3 pt-8 sm:pt-10">
+      <div className="pt-8 sm:pt-10">
         <div className="flex flex-wrap justify-center lg:flex-nowrap">
           {SCORE_SERIES.map((series, index) => {
             const isDimmed =

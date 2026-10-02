@@ -93,7 +93,7 @@ function InsightsShell({
 }) {
   return (
     <div className="@container/main relative flex flex-1 flex-col gap-4 py-6">
-<div className="flex flex-wrap items-center justify-end gap-3 px-3">
+<div className="flex flex-wrap items-center justify-end gap-3">
         {subtitle ? <div className="mr-auto min-w-0">{subtitle}</div> : null}
         <Button onClick={onClose} size="sm" type="button" variant="outline">
           <XIcon data-icon="inline-start" />
@@ -107,7 +107,7 @@ function InsightsShell({
 
 function InsightsLoading() {
   return (
-<div className="flex flex-col gap-4 px-3">
+<div className="flex flex-col gap-4">
       <Skeleton className="h-5 w-80" />
       <Skeleton className="h-48 rounded-xl" />
       <Skeleton className="h-72 rounded-xl" />
@@ -136,7 +136,7 @@ function InsightsBody({
   const sharesThem = gapHealthShares(report.page_health?.them)
 
   return (
-<div className="flex flex-col gap-4 px-3">
+<div className="flex flex-col gap-4">
       <PillarScoresCompare them={themBreakdown} you={youBreakdown} />
 
       <IssueBucketPies
@@ -186,7 +186,7 @@ export const CompetitorInsightsView = memo(function CompetitorInsightsView({
   if (query.isError) {
     return (
       <InsightsShell onClose={onClose}>
-        <div className="px-3">
+        <div>
           <Empty className="border-0 py-12">
             <EmptyHeader>
               <EmptyMedia variant="icon">
