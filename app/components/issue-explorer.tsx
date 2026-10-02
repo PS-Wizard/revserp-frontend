@@ -1177,7 +1177,7 @@ export const IssueExplorer = memo(function IssueExplorer({
         ) : null}
       </div>
 
-      <div>
+<div className="px-(--card-spacing)">
         {drilledBucket && drilledIssueType ? (
           <UrlIssueTable
             checkedKeys={checkedUrlKeys}
@@ -1227,7 +1227,7 @@ export const IssueExplorer = memo(function IssueExplorer({
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3">
+      <div className="mt-4 flex items-center justify-between gap-3 px-(--card-spacing)">
         <Button
           disabled={!canAct}
           onClick={onExport}
