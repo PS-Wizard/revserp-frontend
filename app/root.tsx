@@ -75,7 +75,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <body>
         <div aria-hidden="true" className="app-noise" />
         <TooltipProvider>{children}</TooltipProvider>
-        <Toaster offset={{ left: 86 }} position="bottom-left" />
+        <Toaster offset={24} position="bottom-left" />
         <ScrollRestoration />
         <Scripts />
       </body>
