@@ -178,6 +178,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     "This workspace reached its monthly message limit.",
   provider_timeout: "Revbot took too long to respond. Try again.",
   provider_unavailable: "Revbot is temporarily unavailable. Try again.",
+  provider_invalid_request: "The AI provider rejected this request. Please report this error.",
   rate_limited: "Revbot is busy. Try again shortly.",
   reasoning_not_allowed:
     "That reasoning effort is not allowed for this workspace.",
