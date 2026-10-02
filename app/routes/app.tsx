@@ -24,6 +24,7 @@ import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspace-floating-panel"
 import { OverviewPillarScoresSection } from "~/components/overview-pillar-scores-section"
+import { OverviewCrawlProgress } from "~/components/overview-crawl-progress"
 import { OverviewScoreHistoryChart } from "~/components/overview-score-history-chart"
 import { OverviewWorkFixesCards } from "~/components/overview-work-fixes-cards"
 import { PageAuditTab } from "~/components/page-audit/page-audit-tab"
@@ -216,6 +217,7 @@ function RevserpAuditPanel({
           currentCrawlId={completedCrawlId ?? undefined}
           onSelectPillar={onAuditTabChange}
         />
+        <OverviewCrawlProgress crawls={sortedCompletedCrawls} />
         <OverviewScoreHistoryChart crawls={sortedCompletedCrawls} />
         <OverviewWorkFixesCards
           crawlId={completedCrawlId}
