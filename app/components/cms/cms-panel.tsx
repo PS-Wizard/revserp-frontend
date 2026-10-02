@@ -212,7 +212,7 @@ export function CMSPanel({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 sm:p-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-3 py-6 sm:py-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-1 basis-64 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2.5">

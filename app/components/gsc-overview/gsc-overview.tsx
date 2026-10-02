@@ -438,7 +438,7 @@ export function GSCOverview({
   }
 
   return (
-    <div className="space-y-4 py-6">
+    <div className="space-y-4 px-3 py-6">
       <GSCHeaderCard
         availableSites={status.available_sites}
         gscProjectSelectionErrorMessage={state.gscProjectSelectionErrorMessage}

@@ -105,6 +105,7 @@ export function WorkspaceDockNav({
   // The context menu renders inside the panel, so a close unmounts it mid-gesture.
   // The panel stays put until the context menu reports itself closed.
   const [contextOpen, setContextOpen] = useState(false)
+  const [clickLocked, setClickLocked] = useState(false)
   const groups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
@@ -119,6 +120,7 @@ export function WorkspaceDockNav({
         closeDelay={180}
         delay={0}
         onValueChange={(next: string | null) => {
+          if (clickLocked) return
           if (next === null && contextOpen) return
           setOpenItem(next)
         }}
@@ -126,12 +128,13 @@ export function WorkspaceDockNav({
         sideOffset={10}
         value={openItem}
       >
-        <NavigationMenuList>
+        <NavigationMenuList onPointerLeave={() => setClickLocked(false)}>
           <NavigationMenuItem value="projects">
             <NavigationMenuTrigger
               className="h-9 max-w-56 cursor-pointer gap-2 rounded-lg px-3 text-sm text-foreground hover:bg-accent hover:text-foreground"
               onClick={(event) => {
                 event.currentTarget.blur()
+                setClickLocked(true)
                 setOpenItem(null)
                 onOpenProjectPanel()
               }}

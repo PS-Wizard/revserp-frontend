@@ -158,7 +158,7 @@ export function AnalyticsOverview({
   }
 
   return (
-    <div className="flex flex-col gap-4 py-6">
+    <div className="flex flex-col gap-4 px-3 py-6">
       <AnalyticsHeaderCard
         accountEmail={status.google_account_email}
         accountName={status.selected_property?.account_display_name}

@@ -510,7 +510,7 @@ export const CompetitorsView = memo(function CompetitorsView({
   if (!projectId || !activeProject) {
     return (
       <div className="@container/main flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
-        <div className="flex flex-1 flex-col px-4 lg:px-6">
+        <div className="flex flex-1 flex-col px-3">
           <Empty className="min-h-64 border-0">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -540,7 +540,7 @@ export const CompetitorsView = memo(function CompetitorsView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 lg:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3">
         <h1 className="font-heading text-2xl font-medium tracking-tight">
           Competitors
         </h1>
@@ -587,13 +587,13 @@ export const CompetitorsView = memo(function CompetitorsView({
       </div>
 
       {isLoading ? (
-        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 px-4 lg:px-6">
+        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 px-3">
           {[0, 1, 2].map((index) => (
             <CompetitorCardSkeleton key={index} />
           ))}
         </div>
       ) : competitors.length === 0 ? (
-        <div className="flex flex-1 flex-col px-4 lg:px-6">
+        <div className="flex flex-1 flex-col px-3">
           <Empty className="min-h-64 border-0">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -617,7 +617,7 @@ export const CompetitorsView = memo(function CompetitorsView({
           </Empty>
         </div>
       ) : (
-        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 px-4 lg:px-6">
+        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 px-3">
           {competitors.map((competitor, index) => (
             <CompetitorCard
               key={competitor.id}

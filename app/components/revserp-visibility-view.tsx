@@ -135,7 +135,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
   )[0]
 
   return (
-    <div className="grid min-w-0 gap-5 px-6 lg:grid-cols-4 lg:px-8">
+    <div className="grid min-w-0 gap-5 px-3 lg:grid-cols-4">
       <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Visibility Rate</CardDescription>
@@ -431,7 +431,7 @@ function ModelResponseCards({
   if (models.length === 0) {
     if (!isRunning) return null
     return (
-      <div className="h-[38rem] px-6 lg:h-[40rem] lg:px-8">
+      <div className="h-[38rem] px-3 lg:h-[40rem]">
         <Card className="flex h-full items-center border-border/50">
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
             <RefreshCwIcon className="size-4 animate-spin" />
@@ -443,7 +443,7 @@ function ModelResponseCards({
   }
 
   return (
-    <div className="grid min-w-0 gap-5 px-6 max-lg:auto-rows-[38rem] lg:h-[40rem] lg:grid-cols-4 lg:grid-rows-1 lg:px-8">
+    <div className="grid min-w-0 gap-5 px-3 max-lg:auto-rows-[38rem] lg:h-[40rem] lg:grid-cols-4 lg:grid-rows-1">
       {models.map((model) => {
         const count = mentionCount(model)
         return (
@@ -525,7 +525,7 @@ function VisibilityGrid({
   const cols = models.length > 0 ? models : skeletonModels
 
   return (
-    <div className="flex min-w-0 flex-col gap-3 px-6 lg:px-8">
+    <div className="flex min-w-0 flex-col gap-3 px-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h3 className="font-heading text-base font-semibold tracking-tight">
@@ -777,7 +777,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   return (
     <div className="@container/main flex max-w-full min-w-0 flex-1 flex-col gap-10 overflow-x-hidden py-10">
       {/* Header */}
-      <div className="flex items-start justify-between gap-6 px-6 lg:px-8">
+      <div className="flex items-start justify-between gap-6 px-3">
         <div className="space-y-2">
           <h2 className="font-heading text-[1.75rem] leading-tight font-semibold tracking-tight text-foreground sm:text-[2rem]">
             LLM Visibility
@@ -825,7 +825,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
 
       {/* Empty state */}
       {!hasResults && !isLoadingList && (
-        <div className="flex flex-1 items-center justify-center px-6">
+        <div className="flex flex-1 items-center justify-center px-3">
           <Card className="w-full max-w-md border-dashed border-border/50">
             <CardContent className="flex flex-col items-center gap-4 py-14 text-center">
               <div className="flex size-12 items-center justify-center rounded-full bg-muted">
