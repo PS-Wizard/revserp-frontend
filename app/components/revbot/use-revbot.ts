@@ -158,6 +158,9 @@ function isRetryableCutoff(turn: AITurnResponse) {
   const assistant = assistantMessageForTurn(turn)
   if (assistant?.status === "complete") return false
 
+  // A tool may already have changed remote state; resending could repeat the change.
+  if ((turn.tool_calls?.length ?? 0) > 0) return false
+
   if (turn.status === "failed") {
     if (turn.error_code && RETRYABLE_ERROR_CODES.has(turn.error_code)) {
       return true

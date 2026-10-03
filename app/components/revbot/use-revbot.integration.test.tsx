@@ -194,6 +194,10 @@ function installFetch() {
   }
 }
 
+function postCalls() {
+  return fetchCalls.filter((call) => call.method === "POST")
+}
+
 function eventsCalls(turnId: string) {
   return fetchCalls.filter((call) => call.url.includes(`/ai/turns/${turnId}/events`))
 }
@@ -442,6 +446,63 @@ describe("useRevbot snapshot and stream lifecycle", () => {
       )
     } finally {
       await unmountHook(root)
+    }
+  })
+
+  test("auto-retry resends a tool-less timeout but never one that ran tools", async () => {
+    const failed = {
+      status: "failed" as const,
+      error_code: "provider_timeout",
+      completed_at: T,
+    }
+
+    // Without tool records the transient error still auto-resends.
+    const first = await mountHook({ conversationId: "c-1", turnId: "t-1" })
+    try {
+      turnFixture = { ...turnFixture, ...failed }
+      await act(async () => {
+        sseStreams[0]?.push(sseFrame(30, "failed", failed))
+        await flushRevbot()
+        await flushRevbot()
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        await flushRevbot()
+      })
+      expect(postCalls().length).toBe(1)
+    } finally {
+      await unmountHook(first.root)
+    }
+
+    // A recorded tool call must never be resent, whatever the tool.
+    resetFixtures()
+    fetchCalls.length = 0
+    const second = await mountHook({ conversationId: "c-1", turnId: "t-1" })
+    try {
+      expect(sseStreams.length).toBe(1)
+      turnFixture = {
+        ...turnFixture,
+        ...failed,
+        tool_calls: [
+          {
+            call_id: "call-1",
+            name: "mcp_abc_update_post",
+            args: { id: 1 },
+            status: "completed",
+            summary: "Updated post 1",
+            seq: 1,
+            created_at: T,
+          },
+        ],
+      }
+      await act(async () => {
+        sseStreams[0]?.push(sseFrame(31, "failed", failed))
+        await flushRevbot()
+        await flushRevbot()
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        await flushRevbot()
+      })
+      expect(postCalls().length).toBe(0)
+    } finally {
+      await unmountHook(second.root)
     }
   })
 })
