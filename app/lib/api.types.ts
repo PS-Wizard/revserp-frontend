@@ -785,6 +785,10 @@ export type AITurnResponse = {
   updated_at: string
   messages: AITurnMessageResponse[]
   tool_calls: AIToolCallResponse[]
+  /** MAX event id from the same snapshot read. Subscribe after it. Missing on older responses. */
+  event_cursor?: number
+  /** Turn-scoped approval cards from the same snapshot read. Missing on older responses. */
+  approvals?: CMSApproval[]
 }
 
 export type AITurnSubmissionResponse = {
@@ -1120,10 +1124,85 @@ export type OrganizationEventFrame = {
   created_at: string
 }
 
-/** CMS provider for the one active per-project connection. */
+/** MCP connection adapter. wordpress enables the reviewed content adapter, custom stays generic. */
+export type MCPService = "wordpress" | "custom"
+
+/** Per-tool policy. Absence of a row means ask. */
+export type MCPToolPermission = "ask" | "allow" | "deny"
+
+/** One discovered MCP tool with the saved project policy applied. */
+export type MCPToolInfo = {
+  name: string
+  description: string
+  group?: string
+  permission: MCPToolPermission
+  available: boolean
+  /** Platform restriction text, sent only when available is false. */
+  unavailable_reason?: string
+}
+
+/** One saved project MCP connection. Credentials are write-only, never returned. */
+export type MCPConnection = {
+  id: string
+  project_id: string
+  name: string
+  service: MCPService
+  endpoint_url: string
+  revision: string
+  last_checked_at?: string
+  tools: MCPToolInfo[]
+  created_at: string
+  updated_at: string
+}
+
+/** Shipped catalogue entry. WordPress is the only server-owned entry today. */
+export type MCPCatalogItem = {
+  id: string
+  title: string
+  description: string
+  /** Stable brand asset path. Locally shipped marks are used when absent. */
+  logo?: string
+  /** Adapter for connections created from this entry. Defaults by id. */
+  service?: MCPService
+  /** Canonical remote endpoint for branded presets. Prefilled, still editable. */
+  endpoint_url?: string
+  /** True when the remote service rejects unauthenticated discovery. */
+  auth_required?: boolean
+  /**
+   * False when this connector cannot create new connections for the entry
+   * (OAuth-only providers). Absent means supported.
+   */
+  connection_supported?: boolean
+  /** Brief note shown on the catalogue row and in the connect form. */
+  setup_note?: string
+}
+
+export type MCPCatalogResponse = { items: MCPCatalogItem[] }
+export type MCPConnectionsResponse = { connections: MCPConnection[] }
+export type MCPConnectionResponse = { connection: MCPConnection }
+export type MCPConnectionCreateBody = {
+  name: string
+  service: MCPService
+  endpoint_url: string
+  bearer_token: string
+}
+export type MCPConnectionPatchBody = {
+  name?: string
+  endpoint_url?: string
+  bearer_token?: string
+}
+export type MCPToolPermissionEdit = {
+  tool_name: string
+  permission: MCPToolPermission
+}
+export type MCPToolPermissionsBody = {
+  permissions: MCPToolPermissionEdit[]
+}
+
+/** @deprecated Use MCPService. Old single-connection CMS provider. */
 export type CMSProvider = "rune" | "wordpress"
 
-/** One advertised CMS content tool. Never carries secrets. */
+/** @deprecated Use MCPToolInfo. Old CMS tool shape without policy. */
 export type CMSToolResponse = {
   name: string
   description: string
@@ -1131,7 +1210,7 @@ export type CMSToolResponse = {
   write?: boolean
 }
 
-/** CMS project integration. `tools` is always an array. */
+/** @deprecated Use MCPConnection. Old single-connection CMS status. */
 export type CMSStatusResponse = {
   connected: boolean
   provider: CMSProvider | null
@@ -1164,13 +1243,17 @@ export type CMSApprovalStatus =
   | "completed"
   | "failed"
 
-/** Durable CMS tool-call approval: plain untrusted display text, never HTML-rendered. */
+/** Durable MCP tool-call approval: plain untrusted display text, never HTML-rendered. */
 export type CMSApproval = {
   id: string
   turn_id: string
   tool_call_id: string
   tool_name: string
-  provider: CMSProvider
+  connection_id?: string
+  connection_name?: string
+  remote_tool_name?: string
+  service?: string
+  provider?: CMSProvider
   target: string
   before: string
   after: string
@@ -1181,7 +1264,11 @@ export type CMSApproval = {
   proposed_args?: Record<string, unknown>
 }
 
-/** POST .../approvals/{approvalID}/decision — decision queues the SAME turn. */
+/** POST .../approvals/{approvalID}/decision — decision resumes the SAME turn. */
+export type CMSApprovalDecisionBody = {
+  decision: "approve" | "reject"
+  always_allow?: boolean
+}
 export type CMSApprovalDecisionResponse = {
   approval: CMSApproval
   turn_id: string

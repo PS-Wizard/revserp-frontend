@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import type { CMSApproval, CMSApprovalStatus } from "~/lib/api.types"
 import {
+  isActiveAssistantMessage,
+  isSameTurnMessage,
   mergeApprovalCard,
+  resolveStreamResume,
   resolveTurnObserverStart,
-  shouldKeepStreamedAssistantText,
   shouldReplaceApprovalCard,
   turnIdToResyncOnRefocus,
   type TurnObserver,
@@ -174,57 +176,6 @@ describe("resolveTurnObserverStart", () => {
   })
 })
 
-describe("shouldKeepStreamedAssistantText", () => {
-  test("keeps streamed text while the same turn is streaming", () => {
-    expect(
-      shouldKeepStreamedAssistantText({
-        observer: observer("turn-1"),
-        replay: false,
-        status: "running",
-        turnId: "turn-1",
-      })
-    ).toBe(true)
-  })
-
-  test("adopts the snapshot for other turns, replays, and idle state", () => {
-    expect(
-      shouldKeepStreamedAssistantText({
-        observer: observer("turn-9"),
-        replay: false,
-        status: "running",
-        turnId: "turn-1",
-      })
-    ).toBe(false)
-    expect(
-      shouldKeepStreamedAssistantText({
-        observer: observer("turn-1"),
-        replay: true,
-        status: "running",
-        turnId: "turn-1",
-      })
-    ).toBe(false)
-    expect(
-      shouldKeepStreamedAssistantText({
-        observer: null,
-        replay: false,
-        status: "running",
-        turnId: "turn-1",
-      })
-    ).toBe(false)
-  })
-
-  test("a terminal snapshot always wins over the streamed text", () => {
-    expect(
-      shouldKeepStreamedAssistantText({
-        observer: observer("turn-1"),
-        replay: false,
-        status: "completed",
-        turnId: "turn-1",
-      })
-    ).toBe(false)
-  })
-})
-
 describe("turnIdToResyncOnRefocus", () => {
   test("restarts a lost stream", () => {
     expect(
@@ -268,5 +219,86 @@ describe("turnIdToResyncOnRefocus", () => {
         turnId: null,
       })
     ).toBeNull()
+  })
+})
+
+describe("approval renderer lifecycle", () => {
+  const renderer = (messageId: string, activeId: string | null) =>
+    isActiveAssistantMessage(messageId, activeId) ? "streaming" : "markdown"
+
+  test("waiting for approval never swaps the live message renderer", () => {
+    expect(renderer("m-1", "m-1")).toBe("streaming")
+    expect(renderer("m-9", "m-1")).toBe("markdown")
+    expect(renderer("m-1", null)).toBe("markdown")
+  })
+
+  test("one turn keeps one renderer until it completes", () => {
+    const activeIds: Array<string | null> = ["m-1", "m-1", "m-1", "m-1", null]
+    const renderers = activeIds.map((activeId) => renderer("m-1", activeId))
+    expect(renderers).toEqual([
+      "streaming",
+      "streaming",
+      "streaming",
+      "streaming",
+      "markdown",
+    ])
+  })
+})
+
+describe("stream resume", () => {
+  test("same-turn reconnect resumes, a new turn restarts", () => {
+    expect(
+      resolveStreamResume({ lastObservedTurnId: "turn-1", turnId: "turn-1" })
+    ).toEqual({ kind: "resume" })
+    expect(
+      resolveStreamResume({ lastObservedTurnId: "turn-1", turnId: "turn-2" })
+    ).toEqual({ kind: "restart" })
+    expect(
+      resolveStreamResume({ lastObservedTurnId: null, turnId: "turn-1" })
+    ).toEqual({ kind: "restart" })
+  })
+
+  test("unchanged snapshots keep message identity", () => {
+    const current = {
+      id: "m-1",
+      role: "assistant" as const,
+      status: "complete" as const,
+      content: "Hello",
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:01Z",
+    }
+    expect(isSameTurnMessage(current, { ...current })).toBe(true)
+    expect(
+      isSameTurnMessage(current, { ...current, content: "Hello!" })
+    ).toBe(false)
+    expect(
+      isSameTurnMessage(current, {
+        ...current,
+        tool_calls: [
+          {
+            call_id: "c-1",
+            name: "search",
+            args: {},
+            status: "completed" as const,
+            summary: "done",
+            seq: 0,
+            created_at: "2024-01-01T00:00:01Z",
+          },
+        ],
+      })
+    ).toBe(false)
+  })
+})
+
+describe("approval turn lifecycle", () => {
+  test("waiting, deciding, and completing keep one renderer", () => {
+    const renderer = (activeId: string | null) =>
+      isActiveAssistantMessage("m-1", activeId) ? "streaming" : "markdown"
+    expect(renderer("m-1")).toBe("streaming")
+    expect(
+      resolveStreamResume({ lastObservedTurnId: "turn-1", turnId: "turn-1" })
+    ).toEqual({ kind: "resume" })
+    expect(renderer("m-1")).toBe("streaming")
+    expect(renderer(null)).toBe("markdown")
   })
 })

@@ -58,9 +58,10 @@ import { RevbotExportableTable } from "./revbot-exportable-table"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotMessageActions } from "./revbot-message-actions"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
-import { CMSApprovalCard } from "./cms-approval-card"
-import { pendingApprovalsForTurn } from "./cms-approval-copy"
+import { MCPApprovalCard } from "./mcp-approval-card"
+import { pendingApprovalsForTurn } from "./mcp-approval-copy"
 import { isTurnActiveStatus } from "./use-revbot"
+import { isActiveAssistantMessage } from "./revbot-replay-state"
 import type { RevbotHandle } from "./use-revbot"
 
 /** Stick to bottom while content grows; stop when the user scrolls up. */
@@ -206,53 +207,26 @@ function StreamingAssistantMessage({
     const prevId = prevMessageIdRef.current
     const prevContent = prevContentRef.current
 
-    // message switch
+    // Mount, remount, or approval resume with a loaded backlog shows it
+    // immediately. Only genuinely new appended words animate.
     if (prevId !== messageId) {
       prevMessageIdRef.current = messageId
       prevContentRef.current = content
       cancelPending()
-      if (isReduced || document.hidden) {
+      if (displayedRef.current !== totalWords) {
         setDisplayedWords(totalWords)
-        return
       }
-      if (totalWords === 0) {
-        setDisplayedWords(0)
-        return
-      }
-      const initial = 1
-      setDisplayedWords(initial)
-      if (initial < totalWords) schedule(initial, totalWords)
       return
     }
 
     if (content === prevContent) {
-      if (isReduced) {
-        if (displayedRef.current !== totalWords) {
-          cancelPending()
-          setDisplayedWords(totalWords)
-        }
-        return
-      }
-      if (document.hidden) {
-        if (displayedRef.current !== totalWords) {
-          cancelPending()
-          setDisplayedWords(totalWords)
-        }
-        return
-      }
       if (
-        displayedRef.current < totalWords &&
+        displayedRef.current !== totalWords &&
         pendingRef.current === null &&
         totalWords > 0
       ) {
-        // mount with backlog
-        if (displayedRef.current === 0) {
-          const nxt = 1
-          setDisplayedWords(nxt)
-          if (nxt < totalWords) schedule(nxt, totalWords)
-        } else {
-          schedule(displayedRef.current, totalWords)
-        }
+        cancelPending()
+        setDisplayedWords(totalWords)
       }
       return
     }
@@ -470,6 +444,7 @@ export function RevbotViewContent({
   defaultHistoryOpen,
   hideCompactHeader,
   hideHistory,
+  isOrganizationOwner,
   onActivityChange,
   onEditorLink,
   onInternalLink,
@@ -485,6 +460,7 @@ export function RevbotViewContent({
   defaultHistoryOpen: boolean
   hideCompactHeader: boolean
   hideHistory: boolean
+  isOrganizationOwner: boolean
   onActivityChange?: (active: boolean) => void
   onEditorLink?: (url: string) => void
   onInternalLink?: (hash: string) => void
@@ -806,28 +782,30 @@ export function RevbotViewContent({
                                       variant={variant}
                                     />
                                   ) : null}
-                                  {message.id === activeAssistantMessageId &&
-                                  !revbot.waitingForApproval &&
-                                  (message.content ||
-                                    revbot.phase === "writing") ? (
+                                  {isActiveAssistantMessage(
+                                    message.id,
+                                    activeAssistantMessageId
+                                  ) ? (
                                     <StreamingAssistantMessage
                                       content={message.content}
                                       messageId={message.id}
                                     />
-                                  ) : message.id !== activeAssistantMessageId ||
-                                    revbot.waitingForApproval ? (
+                                  ) : (
                                     <RevbotMarkdown
                                       components={markdownComponents}
                                     >
                                       {message.content}
                                     </RevbotMarkdown>
-                                  ) : null}
+                                  )}
                                   {isActiveMessage &&
                                   pendingApprovals.length > 0 ? (
                                     <div className="flex flex-col gap-3">
                                       {pendingApprovals.map((approval) => (
-                                        <CMSApprovalCard
+                                        <MCPApprovalCard
                                           approval={approval}
+                                          isOrganizationOwner={
+                                            isOrganizationOwner
+                                          }
                                           deciding={
                                             revbot.decidingApproval?.id ===
                                             approval.id

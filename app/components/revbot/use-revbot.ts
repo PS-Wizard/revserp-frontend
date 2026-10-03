@@ -29,22 +29,26 @@ import type {
   AITurnResponse,
   AITurnSubmissionResponse,
   CMSApproval,
+  CMSApprovalDecisionBody,
   CMSApprovalDecisionResponse,
   ProjectResponse,
 } from "~/lib/api.types"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
+import { mcpConnectionsQueryKey } from "~/components/marketplace/marketplace-api"
 import {
+  isSameTurnMessage,
   isTurnActiveStatus,
   isTurnTerminalStatus,
   isTurnWaitingStatus,
   mergeApprovalCard,
+  resolveStreamResume,
   resolveTurnObserverStart,
-  shouldKeepStreamedAssistantText,
   turnIdToResyncOnRefocus,
   type TurnObserver,
 } from "./revbot-replay-state"
 import { normalizeToolCallStatus } from "./tool-call-status"
+import type { MCPApprovalDecision } from "./mcp-approval-copy"
 
 export { isTurnActiveStatus, isTurnWaitingStatus } from "./revbot-replay-state"
 
@@ -98,7 +102,7 @@ type RevbotState = {
   stopping: boolean
   loading: boolean
   approvals: CMSApproval[]
-  decidingApproval: { id: string; decision: "approve" | "reject" } | null
+  decidingApproval: { id: string; decision: MCPApprovalDecision } | null
   approvalDecisionErrors: Record<string, string>
 }
 
@@ -133,13 +137,11 @@ function saveStoredConversation(projectId: string, value: StoredConversation) {
 function clearStoredConversation(projectId: string) {
   try {
     localStorage.removeItem(storageKey(projectId))
-  } catch {
-    // Storage is an optional reload convenience.
-  }
+  } catch {}
 }
 
 /** Turn status predicates live in ./revbot-replay-state so the hook and the
- * replay rules share one source of truth; this alias keeps call sites short. */
+ * replay rules share one source of truth. */
 const isTurnTerminal = isTurnTerminalStatus
 
 function assistantMessageForTurn(turn: AITurnResponse) {
@@ -178,7 +180,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "This workspace reached its monthly message limit.",
   provider_timeout: "Revbot took too long to respond. Try again.",
   provider_unavailable: "Revbot is temporarily unavailable. Try again.",
-  provider_invalid_request: "The AI provider rejected this request. Please report this error.",
+  provider_invalid_request:
+    "The AI provider rejected this request. Please report this error.",
   rate_limited: "Revbot is busy. Try again shortly.",
   reasoning_not_allowed:
     "That reasoning effort is not allowed for this workspace.",
@@ -233,9 +236,7 @@ function readStoredEffort(): AIReasoningEffort | null {
 function saveStoredEffort(effort: AIReasoningEffort) {
   try {
     localStorage.setItem(EFFORT_STORAGE_KEY, effort)
-  } catch {
-    // Storage is an optional preference convenience.
-  }
+  } catch {}
 }
 
 function resolveEffort(allowedEfforts: AIReasoningEffort[]) {
@@ -361,7 +362,11 @@ function mergeTurnMessages(
   )
   const messages = currentMessages
     .filter((message) => !message.local)
-    .map((message) => turnMessagesById.get(message.id) ?? message)
+    .map((message) => {
+      const incoming = turnMessagesById.get(message.id)
+      if (!incoming) return message
+      return isSameTurnMessage(message, incoming) ? message : incoming
+    })
   const messageIds = new Set(messages.map((message) => message.id))
   return [
     ...messages,
@@ -423,6 +428,7 @@ export function useRevbot({
   /** The live SSE subscription, if any: aborting it is what a restart does, so
    * it also records WHICH turn it streams and under which generation. */
   const observerRef = useRef<TurnObserver | null>(null)
+  const lastObservedTurnRef = useRef<string | null>(null)
   const lastEventIdRef = useRef(0)
   const seenEventIdsRef = useRef<Set<number>>(new Set())
   const assistantTextRef = useRef("")
@@ -580,6 +586,7 @@ export function useRevbot({
       turnIdRef.current = null
       statusRef.current = "idle"
       activeRequestRef.current = false
+      lastObservedTurnRef.current = null
       lastEventIdRef.current = 0
       seenEventIdsRef.current = new Set()
       const messages = conversation.messages.map((message) => {
@@ -627,48 +634,46 @@ export function useRevbot({
   )
 
   const applyTurn = useCallback(
-    (turn: AITurnResponse, replay: boolean) => {
+    (turn: AITurnResponse) => {
       conversationIdRef.current = turn.conversation_id
       notifyConversationChange(turn.conversation_id)
       turnIdRef.current = turn.id
-      activeRequestRef.current = !isTurnTerminal(turn.status)
+      const terminal = isTurnTerminal(turn.status)
+      activeRequestRef.current = !terminal
       updateStatus(turn.status)
       if (!mountedRef.current) return
 
-      let messages = turn.messages.map((message) => ({ ...message }))
-      if (replay) {
-        const assistantIndex = messages.findIndex(
-          (message) => message.role === "assistant"
-        )
-        if (assistantIndex === -1) {
-          messages.push(assistantMessage())
-        } else {
-          messages[assistantIndex] = {
-            ...messages[assistantIndex],
-            content: "",
-            status: "pending",
-          }
-        }
-      }
+      const messages = turn.messages.map((message) => ({ ...message }))
       const assistant = [...messages]
         .reverse()
         .find((message) => message.role === "assistant")
       assistantMessageIdRef.current = assistant?.id ?? null
-      // A live same-turn stream owns the text: this snapshot was fetched while
-      // deltas kept arriving, so adopting its lagging content would duplicate the
-      // prefix the stream appends to. A terminal snapshot always wins.
-      const keepStreamedText = shouldKeepStreamedAssistantText({
-        observer: observerRef.current,
-        replay,
-        status: turn.status,
-        turnId: turn.id,
-      })
-        ? assistantTextRef.current
-        : null
-      assistantTextRef.current =
-        keepStreamedText ?? (replay ? "" : (assistant?.content ?? ""))
-      const toolCalls = replay ? [] : mapToolCallResponses(turn.tool_calls)
+      const snapshotText = assistant?.content ?? ""
+      const liveSameTurn = !terminal && observerRef.current?.turnId === turn.id
+      let nextText: string
+      if (terminal) {
+        assistantTextRef.current = snapshotText
+        nextText = snapshotText
+      } else if (liveSameTurn) {
+        nextText = assistantTextRef.current
+      } else if (typeof turn.event_cursor === "number") {
+        assistantTextRef.current = snapshotText
+        lastEventIdRef.current = turn.event_cursor
+        seenEventIdsRef.current = new Set()
+        lastObservedTurnRef.current = turn.id
+        nextText = snapshotText
+      } else {
+        assistantTextRef.current = ""
+        lastEventIdRef.current = 0
+        seenEventIdsRef.current = new Set()
+        lastObservedTurnRef.current = turn.id
+        nextText = ""
+      }
+      const toolCalls = mapToolCallResponses(turn.tool_calls)
       const turnActivity = turnActivityTimestamps(turn)
+      const snapshotApprovals = Array.isArray(turn.approvals)
+        ? turn.approvals.filter((approval) => approval.turn_id === turn.id)
+        : []
 
       setState((current) => {
         const existingClientAssistant = assistant?.id
@@ -676,13 +681,20 @@ export function useRevbot({
           : null
         const mergedMessages = mergeTurnMessages(current.messages, messages)
         const mergedMessagesWithStreamedText =
-          keepStreamedText === null || !assistant?.id
+          !assistant?.id || nextText === snapshotText
             ? mergedMessages
             : mergedMessages.map((message) =>
                 message.id === assistant.id
-                  ? { ...message, content: keepStreamedText }
+                  ? { ...message, content: nextText }
                   : message
               )
+        const mergedApprovals = snapshotApprovals.reduce(
+          (acc, approval) => mergeApprovalCard(acc, approval),
+          current.approvals.filter(
+            (approval) =>
+              approval.status !== "pending" || approval.turn_id === turn.id
+          )
+        )
 
         return {
           ...current,
@@ -710,6 +722,7 @@ export function useRevbot({
             : (current.activityStartedAt ?? Date.now()),
           stopping: turn.cancel_requested && !isTurnTerminal(turn.status),
           loading: false,
+          approvals: mergedApprovals,
         }
       })
     },
@@ -732,7 +745,7 @@ export function useRevbot({
           turn.conversation_id !== conversationIdRef.current
         )
           return
-        applyTurn(turn, false)
+        applyTurn(turn)
 
         maybeAutoRetryTurnRef.current(turn, generation)
       } catch {
@@ -744,11 +757,8 @@ export function useRevbot({
 
   const observe = useCallback(
     async (turnId: string, generation: number) => {
-      // Historical approval_decided/waiting_for_user frames replay on every
-      // resume and route through the live status sync, so this is the one place
-      // that decides whether a stream starts. A live same-turn observer is left
-      // untouched: restarting it would abort the connection, rewind the cursor
-      // to event 0, and replay the whole turn's deltas into the live text.
+      // A live same-turn observer is never restarted; anything else goes
+      // through the snapshot seed in applyTurn before subscribing here.
       const start = resolveTurnObserverStart({
         currentGeneration: generationRef.current,
         generation,
@@ -757,18 +767,23 @@ export function useRevbot({
         turnId,
       })
       if (start.kind === "skip" || start.kind === "keep") return
-      if (start.kind === "parked") {
-        // A paused turn holds no worker lease and emits nothing more: never
-        // reconnect-poll it. The decision/resume path re-subscribes.
-        return
-      }
+      if (start.kind === "parked") return
 
       stopObserver()
       const controller = new AbortController()
       observerRef.current = { controller, turnId, generation }
-      lastEventIdRef.current = 0
-      seenEventIdsRef.current = new Set()
-      assistantTextRef.current = ""
+      // Same-turn reconnect keeps the seeded cursor and text; only a new
+      // turn restarts from event 0 with a blank backlog.
+      const resume = resolveStreamResume({
+        lastObservedTurnId: lastObservedTurnRef.current,
+        turnId,
+      })
+      lastObservedTurnRef.current = turnId
+      if (resume.kind === "restart") {
+        lastEventIdRef.current = 0
+        seenEventIdsRef.current = new Set()
+        assistantTextRef.current = ""
+      }
       try {
         while (
           generation === generationRef.current &&
@@ -785,7 +800,11 @@ export function useRevbot({
                   return
                 const numericId = eventId === null ? null : Number(eventId)
                 if (numericId !== null && Number.isFinite(numericId)) {
-                  if (seenEventIdsRef.current.has(numericId)) return
+                  if (
+                    numericId <= lastEventIdRef.current ||
+                    seenEventIdsRef.current.has(numericId)
+                  )
+                    return
                   seenEventIdsRef.current.add(numericId)
                   lastEventIdRef.current = Math.max(
                     lastEventIdRef.current,
@@ -893,8 +912,6 @@ export function useRevbot({
                   const approval = cmsApprovalFromEventPayload(payload)
                   if (approval && approval.turn_id === turnId) {
                     upsertApproval(approval)
-                    // A decision requeues the turn; verify against the live
-                    // snapshot rather than trusting the event alone.
                     void syncTurnSnapshotRef.current(turnId, generation)
                   }
                 } else if (event === "waiting_for_user") {
@@ -957,14 +974,14 @@ export function useRevbot({
               return
             }
             if (isTurnTerminal(turn.status)) {
-              applyTurn(turn, false)
+              applyTurn(turn)
               maybeAutoRetryTurnRef.current(turn, generation)
               return
             }
             if (isTurnWaitingStatus(turn.status)) {
               // The turn paused for approval while the stream was down: park
               // on waiting and stop reconnecting.
-              applyTurn(turn, false)
+              applyTurn(turn)
               return
             }
           } catch {
@@ -1024,7 +1041,7 @@ export function useRevbot({
           turn.conversation_id !== conversationIdRef.current
         )
           return
-        applyTurn(turn, false)
+        applyTurn(turn)
 
         if (!isTurnTerminal(turn.status) && !isTurnWaitingStatus(turn.status))
           void observe(turn.id, generation)
@@ -1039,10 +1056,11 @@ export function useRevbot({
     syncTurnSnapshotRef.current = syncTurnSnapshot
   }, [syncTurnSnapshot])
 
-  /** Approve/reject one CMS approval, then resume the SAME turn stream.
-   * Never sends a fake user message: the decision requeues the paused turn. */
+  /** Decide one MCP approval; the worker resumes the same run. always_allow
+   * also saves the exact connection/tool rule and refetches the Marketplace
+   * preferences for that project. */
   const decideApproval = useCallback(
-    async (approvalId: string, decision: "approve" | "reject") => {
+    async (approvalId: string, decision: MCPApprovalDecision) => {
       const conversationId = conversationIdRef.current
       if (!conversationId || decidingApprovalRef.current) return
       const generation = generationRef.current
@@ -1056,9 +1074,13 @@ export function useRevbot({
         },
       }))
       try {
+        const body: CMSApprovalDecisionBody =
+          decision === "always_allow"
+            ? { decision: "approve", always_allow: true }
+            : { decision }
         const response = await clientApiPost<CMSApprovalDecisionResponse>(
           `/ai/conversations/${conversationId}/approvals/${approvalId}/decision`,
-          { decision }
+          body
         )
         if (
           generation !== generationRef.current ||
@@ -1067,6 +1089,14 @@ export function useRevbot({
         )
           return
         upsertApproval(response.approval)
+        if (decision === "always_allow") {
+          const projectId = projectIdRef.current
+          if (projectId) {
+            void queryClient.invalidateQueries({
+              queryKey: mcpConnectionsQueryKey(projectId),
+            })
+          }
+        }
         void syncTurnSnapshotRef.current(response.turn_id, generation)
       } catch (error) {
         if (
@@ -1098,7 +1128,7 @@ export function useRevbot({
         }
       }
     },
-    [upsertApproval]
+    [queryClient, upsertApproval]
   )
 
   useEffect(() => {
@@ -1131,6 +1161,7 @@ export function useRevbot({
     turnIdRef.current = null
     statusRef.current = "idle"
     activeRequestRef.current = false
+    lastObservedTurnRef.current = null
     lastEventIdRef.current = 0
     seenEventIdsRef.current = new Set()
     assistantTextRef.current = ""
@@ -1186,7 +1217,7 @@ export function useRevbot({
             projectId !== projectIdRef.current
           )
             return
-          applyTurn(turn, !isTurnTerminal(turn.status))
+          applyTurn(turn)
           if (!isTurnTerminal(turn.status)) void observe(turn.id, generation)
         } catch (error) {
           if (
@@ -1258,6 +1289,9 @@ export function useRevbot({
       turnIdRef.current = null
       statusRef.current = "idle"
       activeRequestRef.current = false
+      lastObservedTurnRef.current = null
+      lastEventIdRef.current = 0
+      seenEventIdsRef.current = new Set()
       assistantTextRef.current = ""
       assistantMessageIdRef.current = null
       const cachedConversation =
@@ -1308,7 +1342,7 @@ export function useRevbot({
               projectId !== projectIdRef.current
             )
               return
-            applyTurn(turn, !isTurnTerminal(turn.status))
+            applyTurn(turn)
             if (!isTurnTerminal(turn.status)) void observe(turn.id, generation)
           } catch (error) {
             if (
@@ -1351,6 +1385,7 @@ export function useRevbot({
     turnIdRef.current = null
     statusRef.current = "idle"
     activeRequestRef.current = false
+    lastObservedTurnRef.current = null
     lastEventIdRef.current = 0
     seenEventIdsRef.current = new Set()
     assistantTextRef.current = ""
@@ -1710,7 +1745,7 @@ export function useRevbot({
         projectId !== projectIdRef.current
       )
         return
-      applyTurn(turn, false)
+      applyTurn(turn)
 
       if (isTurnTerminal(turn.status)) {
         stopObserver()
@@ -1840,7 +1875,6 @@ function cmsApprovalFromEventPayload(payload: unknown): CMSApproval | null {
 }
 
 function waitingTurnIdFromEventPayload(payload: unknown): string | null {
-  // Contract shape: waiting_for_user event with turn_id.
   if (!payload || typeof payload !== "object") return null
   const turnId = (payload as { turn_id?: unknown }).turn_id
   return typeof turnId === "string" && turnId ? turnId : null

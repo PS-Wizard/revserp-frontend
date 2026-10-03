@@ -42,7 +42,7 @@ import { ProjectSetupPanel } from "~/components/project-setup-panel"
 import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { AnalyticsView } from "~/components/analytics-view"
-import { CMSView } from "~/components/cms-view"
+import { MarketplaceView } from "~/components/marketplace/marketplace-view"
 import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
@@ -182,7 +182,7 @@ const viewLabels: Record<DashboardView, string> = {
   competitors: "Competitors",
   "search-console": "Search Console",
   analytics: "Google Analytics",
-  cms: "CMS",
+  marketplace: "Marketplace",
   compare: "Compare",
 }
 
@@ -322,7 +322,7 @@ export default function AppPage() {
       me.features?.gsc_connector === false
     )
       return
-    if (target.view === "cms" && me.features?.integrations === false) return
+    if (target.view === "marketplace" && me.features?.integrations === false) return
     if (
       target.view === "competitors" &&
       (me.features?.max_competitors ?? 0) === 0
@@ -345,8 +345,8 @@ export default function AppPage() {
           ? "#search-console"
           : view === "analytics"
             ? "#analytics"
-            : view === "cms"
-              ? "#cms"
+            : view === "marketplace"
+              ? "#marketplace"
               : view === "competitors"
                 ? "#competitors"
                 : view === "keywords"
@@ -850,8 +850,8 @@ export default function AppPage() {
                 activeProject={activeProject}
                 isOrganizationOwner={isOrganizationOwner}
               />
-            ) : view === "cms" && me.features?.integrations !== false ? (
-              <CMSView
+            ) : view === "marketplace" && me.features?.integrations !== false ? (
+              <MarketplaceView
                 key={activeProject?.id}
                 activeProject={activeProject}
                 isOrganizationOwner={isOrganizationOwner}

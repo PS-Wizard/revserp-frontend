@@ -627,93 +627,93 @@ export function WorkspaceShellPreview({
         >
           <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
             <div className="relative flex h-full min-h-0 bg-shell-chrome">
-            <section className="relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16">
-              <header className="relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden">
-                <SidebarTrigger aria-label="Open navigation" />
-                <button
-                  className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
-                  onClick={openProjectPanel}
-                  type="button"
-                >
-                  <span className="truncate">
-                    {activeProject?.name ?? "Select a project"}
-                  </span>
-                </button>
-              </header>
-              <div
-                className={
-                  islandState === "maximized"
-? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
-: "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3"
-                }
-              >
-                <AnimatePresence initial={false} mode="wait">
-                  <motion.div
-                    animate={{ opacity: 1 }}
-                    className="flex min-h-full flex-col"
-                    exit={{ opacity: 0 }}
-                    initial={{ opacity: 0 }}
-                    key={workspaceContentKey}
-                    transition={{
-                      duration: shouldReduceMotion ? 0 : 0.15,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
+              <section className="relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16">
+                <header className="relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden">
+                  <SidebarTrigger aria-label="Open navigation" />
+                  <button
+                    className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
+                    onClick={openProjectPanel}
+                    type="button"
                   >
-                    <RevbotStartPromptContext.Provider
-                      value={features.ai_chat ? revbotStartPromptValue : null}
+                    <span className="truncate">
+                      {activeProject?.name ?? "Select a project"}
+                    </span>
+                  </button>
+                </header>
+                <div
+                  className={
+                    islandState === "maximized"
+                      ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
+                      : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3"
+                  }
+                >
+                  <AnimatePresence initial={false} mode="wait">
+                    <motion.div
+                      animate={{ opacity: 1 }}
+                      className="flex min-h-full flex-col"
+                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0 }}
+                      key={workspaceContentKey}
+                      transition={{
+                        duration: shouldReduceMotion ? 0 : 0.15,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
                     >
-                      <PageAuditContext.Provider value={pageAuditValue}>
-                        <ProjectPanelOpenContext.Provider
-                          value={openProjectPanel}
-                        >
-                          {projects.length === 0 ? (
-                            <div className="flex flex-1 items-center justify-center py-16">
-                              <Empty className="border-0">
-                                <EmptyHeader>
-                                  <EmptyMedia
-                                    className="size-16 rounded-2xl bg-primary/10 text-primary [&_svg:not([class*='size-'])]:size-8"
-                                    variant="icon"
-                                  >
-                                    <FolderPlusIcon aria-hidden="true" />
-                                  </EmptyMedia>
-                                  <EmptyTitle
-                                    aria-level={2}
-                                    className="text-2xl"
-                                    role="heading"
-                                  >
-                                    Start with a project
-                                  </EmptyTitle>
-                                  <EmptyDescription>
-                                    Add a website. Then set up its crawl and
-                                    business profile.
-                                  </EmptyDescription>
-                                </EmptyHeader>
-                                <EmptyContent>
-                                  <Button
-                                    onClick={() =>
-                                      createProjectDispatch({ type: "OPEN" })
-                                    }
-                                    type="button"
-                                  >
-                                    <PlusIcon
-                                      aria-hidden="true"
-                                      data-icon="inline-start"
-                                    />
-                                    Create project
-                                  </Button>
-                                </EmptyContent>
-                              </Empty>
-                            </div>
-                          ) : (
-                            children
-                          )}
-                        </ProjectPanelOpenContext.Provider>
-                      </PageAuditContext.Provider>
-                    </RevbotStartPromptContext.Provider>
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-            </section>
+                      <RevbotStartPromptContext.Provider
+                        value={features.ai_chat ? revbotStartPromptValue : null}
+                      >
+                        <PageAuditContext.Provider value={pageAuditValue}>
+                          <ProjectPanelOpenContext.Provider
+                            value={openProjectPanel}
+                          >
+                            {projects.length === 0 ? (
+                              <div className="flex flex-1 items-center justify-center py-16">
+                                <Empty className="border-0">
+                                  <EmptyHeader>
+                                    <EmptyMedia
+                                      className="size-16 rounded-2xl bg-primary/10 text-primary [&_svg:not([class*='size-'])]:size-8"
+                                      variant="icon"
+                                    >
+                                      <FolderPlusIcon aria-hidden="true" />
+                                    </EmptyMedia>
+                                    <EmptyTitle
+                                      aria-level={2}
+                                      className="text-2xl"
+                                      role="heading"
+                                    >
+                                      Start with a project
+                                    </EmptyTitle>
+                                    <EmptyDescription>
+                                      Add a website. Then set up its crawl and
+                                      business profile.
+                                    </EmptyDescription>
+                                  </EmptyHeader>
+                                  <EmptyContent>
+                                    <Button
+                                      onClick={() =>
+                                        createProjectDispatch({ type: "OPEN" })
+                                      }
+                                      type="button"
+                                    >
+                                      <PlusIcon
+                                        aria-hidden="true"
+                                        data-icon="inline-start"
+                                      />
+                                      Create project
+                                    </Button>
+                                  </EmptyContent>
+                                </Empty>
+                              </div>
+                            ) : (
+                              children
+                            )}
+                          </ProjectPanelOpenContext.Provider>
+                        </PageAuditContext.Provider>
+                      </RevbotStartPromptContext.Provider>
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </section>
             </div>
             <div className="fixed inset-x-0 top-2 z-40 flex h-14 items-center gap-2 bg-shell-chrome px-3 text-foreground backdrop-blur-xl max-md:hidden">
               <div className="flex min-w-0 flex-1 items-center">
@@ -766,7 +766,7 @@ export function WorkspaceShellPreview({
                     projects={projects}
                     trailing={
                       <button
-className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+                        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
                         disabled={!activeProject || isCrawlRunning}
                         onClick={() => runCrawlDispatch({ type: "OPEN" })}
                         type="button"
@@ -779,9 +779,13 @@ className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm 
                     actions={[
                       {
                         key: "auto-crawl",
-                        icon: <SparklesIcon aria-hidden="true" className="size-4" />,
+                        icon: (
+                          <SparklesIcon aria-hidden="true" className="size-4" />
+                        ),
                         disabled: !activeProject || autoCrawl.isSaving,
-                        label: autoCrawl.enabled ? "Auto crawl on" : "Auto crawl",
+                        label: autoCrawl.enabled
+                          ? "Auto crawl on"
+                          : "Auto crawl",
                         onSelect: () =>
                           autoCrawl.enabled
                             ? void autoCrawl.handleDisable()
@@ -806,19 +810,26 @@ className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm 
                       {
                         key: "business-profile",
                         icon: (
-                          <Building2Icon aria-hidden="true" className="size-4" />
+                          <Building2Icon
+                            aria-hidden="true"
+                            className="size-4"
+                          />
                         ),
                         disabled: !activeProject,
                         label: "Business profile",
                         onSelect: () => {
                           if (activeProject)
-                            businessProfile.openBusinessProfileDrawer(activeProject)
+                            businessProfile.openBusinessProfileDrawer(
+                              activeProject
+                            )
                         },
                       },
                       { key: "d1", divider: true },
                       {
                         key: "export-pdf",
-                        icon: <FileTextIcon aria-hidden="true" className="size-4" />,
+                        icon: (
+                          <FileTextIcon aria-hidden="true" className="size-4" />
+                        ),
                         disabled: !currentCrawlCompleted || isExportingAudit,
                         label: isExportingAudit
                           ? "Generating audit…"
@@ -828,7 +839,10 @@ className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm 
                       {
                         key: "export-xlsx",
                         icon: (
-                          <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
+                          <FileSpreadsheetIcon
+                            aria-hidden="true"
+                            className="size-4"
+                          />
                         ),
                         disabled: !currentCrawlCompleted || isExportingCrawl,
                         label: "Export crawl as XLSX",
@@ -843,7 +857,10 @@ className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm 
                       {
                         key: "export-csv",
                         icon: (
-                          <FileSpreadsheetIcon aria-hidden="true" className="size-4" />
+                          <FileSpreadsheetIcon
+                            aria-hidden="true"
+                            className="size-4"
+                          />
                         ),
                         disabled: !currentCrawlCompleted || isExportingCrawl,
                         label: "Export crawl as CSV",
@@ -908,6 +925,9 @@ className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm 
                         defaultHistoryOpen={false}
                         hideCompactHeader
                         hideHistory={islandState !== "maximized"}
+                        isOrganizationOwner={
+                          workspaceActions.isActiveOrganizationOwner
+                        }
                         onActivityChange={setIsIslandThinking}
                         onEditorLink={handleRevbotEditorLink}
                         onInternalLink={handleRevbotInternalLink}

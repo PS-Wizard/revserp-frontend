@@ -3,7 +3,6 @@
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
 import {
   ActivityIcon,
-  BlocksIcon,
   ChartNoAxesCombinedIcon,
   CheckIcon,
   EyeIcon,
@@ -13,6 +12,7 @@ import {
   SearchCheckIcon,
   SearchIcon,
   SparklesIcon,
+  StoreIcon,
   SwordsIcon,
   TagsIcon,
 } from "lucide-react"
@@ -129,11 +129,11 @@ export function buildWorkspaceNavGroups({
   const content: NavTab[] = []
   if (integrations) {
     content.push({
-      key: "cms",
-      label: "CMS",
-      description: "Connect a provider and review site content tools.",
-      Icon: BlocksIcon,
-      view: "cms",
+      key: "marketplace",
+      label: "Marketplace",
+      description: "Connect MCP servers and review their tools.",
+      Icon: StoreIcon,
+      view: "marketplace",
     })
   }
 
@@ -152,7 +152,7 @@ export function buildWorkspaceNavGroups({
     },
     { key: "visibility", label: "Visibility", tabs: visibility },
     { key: "compare", label: "Compare", tabs: compare },
-    { key: "content", label: "Content", tabs: content },
+    { key: "marketplace", label: "Marketplace", tabs: content },
   ].filter((group) => group.tabs.length > 0)
 }
 
