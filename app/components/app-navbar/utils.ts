@@ -1,4 +1,5 @@
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
+import type { AuditTab, DashboardView } from "./types"
 import { getCrawlReferenceTimestamp } from "~/lib/crawl"
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -6,6 +7,19 @@ const crawlDateTimeFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
   timeStyle: "short",
 })
+
+export function getCrawlSelectionTarget(
+  location: { pathname: string; search: string },
+  crawlId: string
+) {
+  const params = new URLSearchParams(location.search)
+  params.set("crawl", crawlId)
+  return {
+    pathname: location.pathname,
+    search: params.toString(),
+    hash: "#overview-tab",
+  }
+}
 
 export function getInitials(source: string, fallback: string) {
   return (
@@ -150,4 +164,18 @@ export function downloadBlob(blob: Blob, filename: string) {
   link.click()
   link.remove()
   URL.revokeObjectURL(downloadUrl)
+}
+
+export function getWorkspaceNavigationTarget(
+  location: { pathname: string; search: string },
+  view: DashboardView,
+  auditTab: AuditTab
+) {
+  const hash =
+    view === "revserp-audit"
+      ? `#${auditTab}-tab`
+      : view === "compare" || view === "revserp-visibility"
+        ? ""
+        : `#${view}`
+  return { pathname: location.pathname, search: location.search, hash }
 }

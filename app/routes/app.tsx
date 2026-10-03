@@ -11,6 +11,7 @@ import {
   useLoaderData,
   useLocation,
   useNavigate,
+  useNavigation,
   useRevalidator,
 } from "react-router"
 import { redirect } from "react-router"
@@ -20,6 +21,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import type { DashboardView } from "~/components/app-navbar/types"
 import type { AuditTab } from "~/components/app-navbar/types"
 import { revbotHashTarget } from "~/components/app-navbar/types"
+import { getWorkspaceNavigationTarget } from "~/components/app-navbar/utils"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspace-floating-panel"
@@ -217,7 +219,7 @@ function RevserpAuditPanel({
           currentCrawlId={completedCrawlId ?? undefined}
           onSelectPillar={onAuditTabChange}
         />
-        
+
         <OverviewScoreHistoryChart crawls={sortedCompletedCrawls} />
         <OverviewWorkFixesCards
           crawlId={completedCrawlId}
@@ -294,6 +296,8 @@ export default function AppPage() {
   const revalidator = useRevalidator()
   const location = useLocation()
   const navigate = useNavigate()
+  const navigation = useNavigation()
+  const navigationLocation = navigation.location ?? location
   useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<AuditTab>("overview")
@@ -308,13 +312,7 @@ export default function AppPage() {
     baseUrl: string
   } | null>(null)
 
-  // Hash-based workspace navigation: `/#seo-tab`, `/#aeo-tab`, … and
-  // `/#search-console` switch the workspace. The app also mirrors the current
-  // tab back into the hash so these URLs are shareable.
-  const lastWrittenHashRef = useRef("")
-
   useEffect(() => {
-    if (location.hash === lastWrittenHashRef.current) return
     const target = revbotHashTarget(location.hash.replace(/^#/, ""))
     if (!target) return
     if (
@@ -322,7 +320,8 @@ export default function AppPage() {
       me.features?.gsc_connector === false
     )
       return
-    if (target.view === "marketplace" && me.features?.integrations === false) return
+    if (target.view === "marketplace" && me.features?.integrations === false)
+      return
     if (
       target.view === "competitors" &&
       (me.features?.max_competitors ?? 0) === 0
@@ -337,28 +336,31 @@ export default function AppPage() {
     me.features?.max_competitors,
   ])
 
-  useEffect(() => {
-    const desired =
-      view === "revserp-audit"
-        ? `#${auditTab}-tab`
-        : view === "search-console"
-          ? "#search-console"
-          : view === "analytics"
-            ? "#analytics"
-            : view === "marketplace"
-              ? "#marketplace"
-              : view === "competitors"
-                ? "#competitors"
-                : view === "keywords"
-                  ? "#keywords"
-                  : ""
-    if (location.hash === desired) return
-    lastWrittenHashRef.current = desired
-    void navigate(
-      { pathname: location.pathname, search: location.search, hash: desired },
-      { replace: true }
-    )
-  }, [view, auditTab, location.hash, navigate])
+  const handleViewChange = useCallback(
+    (nextView: DashboardView) => {
+      setView(nextView)
+      void navigate(
+        getWorkspaceNavigationTarget(navigationLocation, nextView, auditTab),
+        { replace: true }
+      )
+    },
+    [navigationLocation.pathname, navigationLocation.search, auditTab, navigate]
+  )
+
+  const handleAuditTabChange = useCallback(
+    (nextTab: AuditTab) => {
+      setAuditTab(nextTab)
+      void navigate(
+        getWorkspaceNavigationTarget(
+          navigationLocation,
+          "revserp-audit",
+          nextTab
+        ),
+        { replace: true }
+      )
+    },
+    [navigationLocation.pathname, navigationLocation.search, navigate]
+  )
 
   const sortedCrawls = useMemo(
     () =>
@@ -437,15 +439,24 @@ export default function AppPage() {
 
   const goToVisibility = useCallback(
     (projectId: string | null) => {
+      if (!projectId || projectId === activeProject?.id) {
+        handleViewChange("revserp-visibility")
+        return
+      }
       setView("revserp-visibility")
-      if (!projectId || projectId === activeProject?.id) return
       const params = new URLSearchParams(location.search)
       params.set("project", projectId)
       params.delete("crawl")
       params.delete("revbotConversation")
       void navigate(`${location.pathname}?${params.toString()}`)
     },
-    [activeProject?.id, navigate, location.pathname, location.search]
+    [
+      activeProject?.id,
+      handleViewChange,
+      navigate,
+      location.pathname,
+      location.search,
+    ]
   )
 
   const projectNameById = useMemo(() => {
@@ -691,15 +702,15 @@ export default function AppPage() {
         projectName: project.name,
         baseUrl: project.base_url,
       })
-      setView("compare")
+      handleViewChange("compare")
     },
-    [projects]
+    [projects, handleViewChange]
   )
 
   const handleExitCompare = useCallback(() => {
     setCompareTarget(null)
-    setView("revserp-audit")
-  }, [])
+    handleViewChange("revserp-audit")
+  }, [handleViewChange])
 
   // Drop a stale comparison rather than leaving an empty tab selected.
   useEffect(() => {
@@ -737,12 +748,12 @@ export default function AppPage() {
             isCrawlRunning={isCrawlRunning}
             isExportingAudit={isExporting}
             isPlatformAdmin={me.is_platform_admin}
-            onAuditTabChange={setAuditTab}
+            onAuditTabChange={handleAuditTabChange}
             onCompareCrawl={handleCompareCrawl}
             onCrawlStart={handleCrawlStart}
             onExportAudit={handleExportAudit}
             onRevbotConversationChange={handleRevbotConversationChange}
-            onViewChange={setView}
+            onViewChange={handleViewChange}
             organizationId={me.active_org_id}
             organizations={me.organizations}
             projectCrawls={projectCrawls}
@@ -777,7 +788,7 @@ export default function AppPage() {
                     currentBreakdown={stableCurrentBreakdown}
                     currentUserId={me.user.id}
                     isViewingRunningCrawl={isViewingRunningCrawl}
-                    onAuditTabChange={setAuditTab}
+                    onAuditTabChange={handleAuditTabChange}
                     shouldReduceMotion={shouldReduceMotion}
                     sortedCompletedCrawls={stableSortedCompletedCrawls}
                   />
@@ -850,7 +861,8 @@ export default function AppPage() {
                 activeProject={activeProject}
                 isOrganizationOwner={isOrganizationOwner}
               />
-            ) : view === "marketplace" && me.features?.integrations !== false ? (
+            ) : view === "marketplace" &&
+              me.features?.integrations !== false ? (
               <MarketplaceView
                 key={activeProject?.id}
                 activeProject={activeProject}

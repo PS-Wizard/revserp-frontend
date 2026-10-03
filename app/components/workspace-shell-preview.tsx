@@ -49,6 +49,7 @@ import { useProjectActions } from "~/components/app-navbar/use-project-actions"
 import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actions"
 import {
   formatCrawlDateTime,
+  getCrawlSelectionTarget,
   getCrawlValidationError,
   getInitials,
 } from "~/components/app-navbar/utils"
@@ -487,11 +488,7 @@ export function WorkspaceShellPreview({
   }
 
   function selectCrawl(crawlId: string) {
-    const params = new URLSearchParams(location.search)
-    params.set("crawl", crawlId)
-    onViewChange("revserp-audit")
-    onAuditTabChange("overview")
-    void navigate(`${location.pathname}?${params.toString()}`)
+    void navigate(getCrawlSelectionTarget(location, crawlId))
   }
 
   function hoverProject(projectId: string | null) {
