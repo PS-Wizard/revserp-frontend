@@ -1,6 +1,14 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import {
+  Fragment,
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { useReducedMotion } from "motion/react"
 
 import {
@@ -97,6 +105,42 @@ function citationColor(seed: string) {
   return `hsl(${hash % 360} 60% 42%)`
 }
 
+const STREAM_WORD_BLOCK_SIZE = 64
+
+const StreamingWordBlock = memo(function StreamingWordBlock({
+  text,
+  messageId,
+  blockIndex,
+}: {
+  text: string
+  messageId: string
+  blockIndex: number
+}) {
+  const parts = text.split(/(\s+)/)
+  return (
+    <>
+      {parts.map((part, index) => {
+        if (part === "") return null
+        if (/^\s+$/.test(part)) {
+          return (
+            <Fragment key={`${messageId}-${blockIndex}-ws-${index}`}>
+              {part}
+            </Fragment>
+          )
+        }
+        return (
+          <span
+            key={`${messageId}-${blockIndex}-${index}`}
+            className="inline-block animate-[revbot-stream-word_150ms_ease-out_both] motion-reduce:animate-none"
+          >
+            {part}
+          </span>
+        )
+      })}
+    </>
+  )
+})
+
 function StreamingAssistantMessage({
   content,
   messageId,
@@ -107,12 +151,52 @@ function StreamingAssistantMessage({
   const shouldReduceMotion = useReducedMotion() ?? false
   const isReduced = shouldReduceMotion
 
-  const tokens = content.split(/(\s+)/)
-  const totalWords = (() => {
-    let c = 0
-    for (const t of tokens) if (t.length > 0 && !/^\s+$/.test(t)) c += 1
-    return c
-  })()
+  const parsed = useMemo(() => {
+    const tokens = content.split(/(\s+)/)
+    const wordTokenEnds: number[] = []
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index]!
+      if (token.length > 0 && !/^\s+$/.test(token))
+        wordTokenEnds.push(index + 1)
+    }
+    const totalWords = wordTokenEnds.length
+    const blockTexts: string[] = []
+    const blockTokenStarts: number[] = []
+    const blockWordCounts: number[] = []
+    for (
+      let startWord = 0;
+      startWord < totalWords;
+      startWord += STREAM_WORD_BLOCK_SIZE
+    ) {
+      const endWord = Math.min(startWord + STREAM_WORD_BLOCK_SIZE, totalWords)
+      const tokenStart = startWord === 0 ? 0 : wordTokenEnds[startWord - 1]!
+      blockTokenStarts.push(tokenStart)
+      blockWordCounts.push(endWord - startWord)
+      blockTexts.push(
+        tokens.slice(tokenStart, wordTokenEnds[endWord - 1]!).join("")
+      )
+    }
+    return {
+      tokens,
+      totalWords,
+      wordTokenEnds,
+      blockTexts,
+      blockTokenStarts,
+      blockWordCounts,
+      trailingWhitespace: tokens
+        .slice(wordTokenEnds[totalWords - 1] ?? tokens.length)
+        .join(""),
+    }
+  }, [content])
+  const {
+    tokens,
+    totalWords,
+    wordTokenEnds,
+    blockTexts,
+    blockTokenStarts,
+    blockWordCounts,
+    trailingWhitespace,
+  } = parsed
   const totalWordsRef = useRef(totalWords)
 
   const [displayedWords, setDisplayedWords] = useState(0)
@@ -262,39 +346,39 @@ function StreamingAssistantMessage({
     }
   }, [content, isReduced, messageId, totalWords])
 
-  // compute visible slice
-  const getDisplayedTokenCount = () => {
-    if (displayedWords >= totalWords) return tokens.length
-    if (displayedWords <= 0) return 0
-    let seen = 0
-    for (let i = 0; i < tokens.length; i += 1) {
-      const t = tokens[i]!
-      if (t.length > 0 && !/^\s+$/.test(t)) {
-        seen += 1
-        if (seen === displayedWords) return i + 1
+  const shownWords = isReduced ? totalWords : displayedWords
+  const revealedBlocks: string[] = []
+  if (blockTexts.length === 0) {
+    if (content) revealedBlocks.push(content)
+  } else {
+    for (let block = 0; block < blockTexts.length; block += 1) {
+      const startWord = block * STREAM_WORD_BLOCK_SIZE
+      const wordCount = blockWordCounts[block]!
+      if (shownWords >= startWord + wordCount) {
+        revealedBlocks.push(blockTexts[block]!)
+      } else if (shownWords > startWord) {
+        const tokenStart = blockTokenStarts[block]!
+        revealedBlocks.push(
+          tokens.slice(tokenStart, wordTokenEnds[shownWords - 1]!).join("")
+        )
+        break
+      } else {
+        break
       }
     }
-    return tokens.length
   }
-  const displayedTokenCount = isReduced
-    ? tokens.length
-    : getDisplayedTokenCount()
-  const visibleTokens = tokens.slice(0, displayedTokenCount)
 
   return (
     <div className="typeset typeset-docs w-full whitespace-pre-wrap">
-      {visibleTokens.map((tok, index) => {
-        if (tok === "") return null
-        if (/^\s+$/.test(tok)) return tok
-        return (
-          <span
-            key={`${messageId}-${index}`}
-            className="inline-block animate-[revbot-stream-word_150ms_ease-out_both] motion-reduce:animate-none"
-          >
-            {tok}
-          </span>
-        )
-      })}
+      {revealedBlocks.map((blockText, block) => (
+        <StreamingWordBlock
+          key={`${messageId}-${block}`}
+          blockIndex={block}
+          messageId={messageId}
+          text={blockText}
+        />
+      ))}
+      {shownWords >= totalWords ? trailingWhitespace : null}
       <span
         aria-hidden="true"
         className="ml-0.5 inline-block h-[1.1em] w-px animate-pulse bg-current align-[-0.15em]"
@@ -471,73 +555,76 @@ export function RevbotViewContent({
 }) {
   const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
   const [historySearch, setHistorySearch] = useState("")
-  const markdownComponents: Components = {
-    a: ({ href, node: _node, title, children, ...props }) => {
-      if (!href) return <a {...props}>{children}</a>
-      if (title === "revserp-editor") {
-        return (
-          <span className="editor-link-row">
+  const markdownComponents = useMemo<Components>(
+    () => ({
+      a: ({ href, node: _node, title, children, ...props }) => {
+        if (!href) return <a {...props}>{children}</a>
+        if (title === "revserp-editor") {
+          return (
+            <span className="editor-link-row">
+              <a
+                {...props}
+                className="citation-link editor-link"
+                href={href}
+                onClick={(event) => {
+                  if (!onEditorLink) return
+                  event.preventDefault()
+                  onEditorLink(href)
+                }}
+                rel="noopener noreferrer"
+              >
+                <span
+                  aria-hidden="true"
+                  className="citation-avatar"
+                  style={{ backgroundColor: citationColor(href) }}
+                >
+                  <FilePenLineIcon className="size-3" />
+                </span>
+                <span className="citation-text">{children}</span>
+              </a>
+            </span>
+          )
+        }
+        // Citation chip only for known internal targets (#seo, #aeo-tab, …).
+        // Everything else keeps the default markdown link.
+        if (revbotHashTarget(href.replace(/^#/, "")) === null) {
+          return (
             <a
               {...props}
-              className="citation-link editor-link"
               href={href}
-              onClick={(event) => {
-                if (!onEditorLink) return
-                event.preventDefault()
-                onEditorLink(href)
-              }}
               rel="noopener noreferrer"
+              target="_blank"
+              title={title}
             >
-              <span
-                aria-hidden="true"
-                className="citation-avatar"
-                style={{ backgroundColor: citationColor(href) }}
-              >
-                <FilePenLineIcon className="size-3" />
-              </span>
-              <span className="citation-text">{children}</span>
+              {children}
             </a>
-          </span>
-        )
-      }
-      // Citation chip only for known internal targets (#seo, #aeo-tab, …).
-      // Everything else keeps the default markdown link.
-      if (revbotHashTarget(href.replace(/^#/, "")) === null) {
+          )
+        }
         return (
           <a
             {...props}
+            className="citation-link"
             href={href}
-            rel="noopener noreferrer"
-            target="_blank"
-            title={title}
+            onClick={(event) => {
+              event.preventDefault()
+              onInternalLink?.(href.slice(1))
+            }}
           >
-            {children}
+            <span
+              aria-hidden="true"
+              className="citation-avatar"
+              style={{ backgroundColor: citationColor(href) }}
+            >
+              {citationLetter(href)}
+            </span>
+            <span className="citation-text">{children}</span>
           </a>
         )
-      }
-      return (
-        <a
-          {...props}
-          className="citation-link"
-          href={href}
-          onClick={(event) => {
-            event.preventDefault()
-            onInternalLink?.(href.slice(1))
-          }}
-        >
-          <span
-            aria-hidden="true"
-            className="citation-avatar"
-            style={{ backgroundColor: citationColor(href) }}
-          >
-            {citationLetter(href)}
-          </span>
-          <span className="citation-text">{children}</span>
-        </a>
-      )
-    },
-    table: RevbotExportableTable,
-  }
+      },
+      table: RevbotExportableTable,
+    }),
+    [onEditorLink, onInternalLink]
+  )
 
   useEffect(() => {
     setHistoryOpen(

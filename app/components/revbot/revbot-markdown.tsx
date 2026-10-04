@@ -1,3 +1,4 @@
+import { memo } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -5,7 +6,7 @@ import { cn } from "~/lib/utils"
 
 export const revbotRemarkPlugins = [remarkGfm]
 
-export function RevbotMarkdown({
+export const RevbotMarkdown = memo(function RevbotMarkdown({
   children,
   className,
   components,
@@ -24,4 +25,4 @@ export function RevbotMarkdown({
       </ReactMarkdown>
     </div>
   )
-}
+})

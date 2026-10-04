@@ -22,31 +22,28 @@ function formatDuration(ms: number) {
   return `${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`
 }
 
-function useElapsed(startedAt: number | null, active: boolean) {
-  const [elapsed, setElapsed] = useState("0.0s")
+function TurnElapsedTime({ startedAt }: { startedAt: number | null }) {
+  const [elapsed, setElapsed] = useState(() =>
+    startedAt === null ? "0.0s" : formatDuration(Date.now() - startedAt)
+  )
 
   useEffect(() => {
-    if (!startedAt) {
+    if (startedAt === null) {
       setElapsed("0.0s")
       return
     }
-
-    const tick = () => {
-      const total = (Date.now() - startedAt) / 1000
-      if (total < 60) {
-        setElapsed(`${total.toFixed(1)}s`)
-        return
-      }
-      setElapsed(`${Math.floor(total / 60)}m ${(total % 60).toFixed(1)}s`)
-    }
-
-    tick()
-    if (!active) return
-    const timer = window.setInterval(tick, 100)
+    setElapsed(formatDuration(Date.now() - startedAt))
+    const timer = window.setInterval(() => {
+      setElapsed(formatDuration(Date.now() - startedAt))
+    }, 100)
     return () => window.clearInterval(timer)
-  }, [active, startedAt])
+  }, [startedAt])
 
-  return elapsed
+  return (
+    <span className="font-mono text-xs text-zinc-500 tabular-nums">
+      {elapsed}
+    </span>
+  )
 }
 
 export function DriveSpinner({ className }: { className?: string }) {
@@ -222,9 +219,7 @@ function ToolCallRow({
           {formatToolName(call.name)}
         </span>
         {meta && open ? (
-          <span className="min-w-0 truncate text-xs text-zinc-500">
-            {meta}
-          </span>
+          <span className="min-w-0 truncate text-xs text-zinc-500">{meta}</span>
         ) : null}
         {outcome === "failed" ? (
           <span className="shrink-0 text-micro font-medium text-red-300/90">
@@ -276,9 +271,7 @@ function ToolCallRow({
               ) : outcome === "running" ? (
                 <p className="text-xs text-zinc-500">Running tool…</p>
               ) : outcome === "partial" ? (
-                <p className="text-xs text-zinc-500">
-                  No results returned.
-                </p>
+                <p className="text-xs text-zinc-500">No results returned.</p>
               ) : null}
             </div>
           </div>
@@ -338,7 +331,6 @@ export function RevbotTurnActivity({
   variant?: "default" | "dark"
 }) {
   const isDark = variant === "dark"
-  const elapsed = useElapsed(startedAt, active)
   const hasTools = toolCalls.length > 0
   const isComplete =
     !active && startedAt !== null && endedAt !== null && endedAt >= startedAt
@@ -421,9 +413,7 @@ export function RevbotTurnActivity({
         >
           <DriveSpinner />
           <ShimmerLabel>Churning…</ShimmerLabel>
-          <span className="font-mono text-xs text-zinc-500 tabular-nums">
-            {elapsed}
-          </span>
+          <TurnElapsedTime startedAt={startedAt} />
         </button>
       ) : null}
 

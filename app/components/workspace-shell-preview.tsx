@@ -329,29 +329,41 @@ export function WorkspaceShellPreview({
     setIslandState("docked")
   }
 
-  function handleRevbotInternalLink(hash: string) {
-    navigate(
-      {
-        pathname: location.pathname,
-        search: location.search,
-        hash,
-      },
-      { replace: true }
-    )
-  }
+  const handleRevbotInternalLink = useCallback(
+    (hash: string) => {
+      navigate(
+        {
+          pathname: location.pathname,
+          search: location.search,
+          hash,
+        },
+        { replace: true }
+      )
+    },
+    [location.pathname, location.search, navigate]
+  )
 
-  function handleRevbotEditorLink(url: string) {
-    const params = new URLSearchParams(location.search)
-    params.set("editorUrl", url)
-    if (!params.has("crawl") && currentCrawl?.id) {
-      params.set("crawl", currentCrawl.id)
-    }
-    navigate({
-      pathname: location.pathname,
-      search: params.toString(),
-      hash: location.hash,
-    })
-  }
+  const handleRevbotEditorLink = useCallback(
+    (url: string) => {
+      const params = new URLSearchParams(location.search)
+      params.set("editorUrl", url)
+      if (!params.has("crawl") && currentCrawl?.id) {
+        params.set("crawl", currentCrawl.id)
+      }
+      navigate({
+        pathname: location.pathname,
+        search: params.toString(),
+        hash: location.hash,
+      })
+    },
+    [
+      currentCrawl?.id,
+      location.hash,
+      location.pathname,
+      location.search,
+      navigate,
+    ]
+  )
 
   useEffect(() => {
     if (!features.ai_chat) return
