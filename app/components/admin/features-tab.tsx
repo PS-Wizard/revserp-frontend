@@ -32,6 +32,7 @@ import type {
   AIReasoningEffort,
   AIToolInfo,
 } from "~/lib/api.types"
+import { MapsCreditBudgetControl } from "~/components/admin/maps-credit-budget-control"
 
 const FEATURE_COLUMNS = [
   {
@@ -422,6 +423,7 @@ export function FeaturesTab() {
           </Button>
         </div>
       </div>
+      <MapsCreditBudgetControl scope={{ kind: "platform" }} />
 
       <div className="overflow-hidden rounded-lg border">
         {visible.length === 0 ? (
@@ -743,6 +745,11 @@ export function FeaturesTab() {
                     ) : null}
                   </FieldSet>
                 </FieldGroup>
+                <Separator />
+                <MapsCreditBudgetControl
+                  key={openWorkspace.org_id}
+                  scope={{ kind: "org", orgId: openWorkspace.org_id }}
+                />
               </div>
 
               <DrawerFooter className="flex-row justify-end gap-2">

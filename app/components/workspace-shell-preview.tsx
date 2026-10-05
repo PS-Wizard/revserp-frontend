@@ -30,6 +30,7 @@ import {
 
 import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
+import { LocationsNavLink } from "~/components/app-navbar/locations-nav-link"
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { WorkspaceSwitcher } from "~/components/app-navbar/workspace-switcher"
 import { Button } from "~/components/ui/button"
@@ -648,6 +649,9 @@ export function WorkspaceShellPreview({
                       {activeProject?.name ?? "Select a project"}
                     </span>
                   </button>
+                  <span className="ml-auto">
+                    <LocationsNavLink projectId={activeProject?.id} />
+                  </span>
                 </header>
                 <div
                   className={
@@ -774,15 +778,20 @@ export function WorkspaceShellPreview({
                     onSelectWorkspace={selectWorkspace}
                     projects={projects}
                     trailing={
-                      <button
-                        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
-                        disabled={!activeProject || isCrawlRunning}
-                        onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                        type="button"
-                      >
-                        <PlayIcon aria-hidden="true" className="size-4" />
-                        {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                      </button>
+                      <>
+                        <LocationsNavLink
+                          projectId={activeProject?.id}
+                        />
+                        <button
+                          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+                          disabled={!activeProject || isCrawlRunning}
+                          onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                          type="button"
+                        >
+                          <PlayIcon aria-hidden="true" className="size-4" />
+                          {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                        </button>
+                      </>
                     }
                     view={view}
                     actions={[
