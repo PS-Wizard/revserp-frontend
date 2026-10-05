@@ -29,5 +29,9 @@ export default defineConfig({
       "clsx",
       "tailwind-merge",
     ],
+    // maplibre-gl spawns a Web Worker. Pre-bundling it makes Vite serve that
+    // worker from .vite/deps with an empty MIME type, the browser refuses it,
+    // and the map renders as a black box with no error the app can catch.
+    exclude: ["maplibre-gl"],
   },
 })

@@ -166,6 +166,15 @@ export function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(downloadUrl)
 }
 
+export function isLocationsPath(pathname: string) {
+  return /^\/app\/projects\/[^/]+\/locations(\/|$)/.test(pathname)
+}
+
+export function getProjectIdFromLocationsPath(pathname: string) {
+  const match = pathname.match(/^\/app\/projects\/([^/]+)\/locations(\/|$)/)
+  return match?.[1] ?? null
+}
+
 export function getWorkspaceNavigationTarget(
   location: { pathname: string; search: string },
   view: DashboardView,
@@ -177,5 +186,12 @@ export function getWorkspaceNavigationTarget(
       : view === "compare" || view === "revserp-visibility"
         ? ""
         : `#${view}`
+  if (isLocationsPath(location.pathname)) {
+    const projectId = getProjectIdFromLocationsPath(location.pathname)
+    const params = new URLSearchParams(location.search)
+    if (projectId) params.set("project", projectId)
+    const search = params.toString()
+    return { pathname: "/app", search: search ? `?${search}` : "", hash }
+  }
   return { pathname: location.pathname, search: location.search, hash }
 }

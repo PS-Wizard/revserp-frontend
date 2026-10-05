@@ -9,17 +9,15 @@ export default [
   route("oauth/consent", "routes/oauth-consent.tsx"),
   route("invite/:token", "routes/invite.tsx"),
   route("account-suspended", "routes/account-suspended.tsx"),
-  route("app", "routes/app.tsx"),
-  route("app/internal/scoring", "routes/app/internal/scoring.tsx"),
-  route("app/admin", "routes/app/admin.tsx"),
-  route("app/settings/integrations", "routes/app/settings/integrations.tsx"),
-  route(
-    "app/projects/:projectID/locations",
-    "routes/app/project-locations.tsx"
-  ),
-  route(
-    "app/projects/:projectID/locations/:locationID/grid",
-    "routes/app/project-location-grid.tsx"
-  ),
+  route("app", "routes/app.tsx", [
+    route(
+      "projects/:projectID/locations",
+      "routes/app/project-locations.tsx"
+    ),
+    route(
+      "projects/:projectID/locations/:locationID/grid",
+      "routes/app/project-location-grid.tsx"
+    ),
+  ]),
   route("dev/audit-pdf", "routes/dev.audit-pdf.tsx"),
 ] satisfies RouteConfig

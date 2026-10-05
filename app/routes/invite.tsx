@@ -159,6 +159,7 @@ export default function InvitePage() {
             <div className="grid gap-3 sm:grid-cols-2">
               {!invite || invite.status !== "active" ? (
                 <Button
+                  nativeButton={false}
                   className="sm:col-span-2"
                   render={
                     <Link
@@ -173,6 +174,7 @@ export default function InvitePage() {
               ) : !isAuthenticated ? (
                 <>
                   <Button
+                    nativeButton={false}
                     render={
                       <Link to={loginPath} prefetch="intent">
                         Log in first
@@ -181,6 +183,7 @@ export default function InvitePage() {
                     variant="outline"
                   />
                   <Button
+                    nativeButton={false}
                     render={
                       <Link to={signupPath} prefetch="intent">
                         Create account
@@ -200,6 +203,7 @@ export default function InvitePage() {
                       : "Accept invite"}
                   </Button>
                   <Button
+                    nativeButton={false}
                     render={
                       <Link to="/app" prefetch="intent">
                         Reject / maybe later

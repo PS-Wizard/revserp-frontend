@@ -1,9 +1,6 @@
 import { useMemo, useState } from "react"
 
-import type {
-  LocalSeoCell,
-  LocalSeoSector,
-} from "~/lib/local-seo-api"
+import type { LocalSeoCell, LocalSeoSector } from "~/lib/local-seo-api"
 import {
   formatLocalSeoEmptyMeanRank,
   formatLocalSeoMeanRank,
@@ -35,7 +32,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group"
 import { cn } from "~/lib/utils"
 
-const LOCAL_SEO_BOARD_ORDER: LocalSeoSector[] = [
+export const LOCAL_SEO_BOARD_ORDER: LocalSeoSector[] = [
   "NW",
   "N",
   "NE",
@@ -47,7 +44,7 @@ const LOCAL_SEO_BOARD_ORDER: LocalSeoSector[] = [
   "SE",
 ]
 
-const LOCAL_SEO_SECTOR_NAMES: Record<LocalSeoSector, string> = {
+export const LOCAL_SEO_SECTOR_NAMES: Record<LocalSeoSector, string> = {
   centre: "Business centre",
   N: "North",
   NE: "North-east",
@@ -62,7 +59,7 @@ const LOCAL_SEO_SECTOR_NAMES: Record<LocalSeoSector, string> = {
 function describeLocalSeoCounts(
   foundCount: number,
   absentCount: number,
-  unknownCount: number,
+  unknownCount: number
 ) {
   return `${foundCount} found, ${absentCount} absent, ${unknownCount} unknown`
 }
@@ -77,7 +74,7 @@ function describeLocalSeoDirectionNames(sectors: LocalSeoSector[]): string {
 function describeLocalSeoExtremeDirections(
   label: "Strongest" | "Weakest",
   directions: LocalSeoSector[],
-  meanRank: number | null,
+  meanRank: number | null
 ): string {
   return (
     `${label} sampled direction (found-only mean): ` +
@@ -87,7 +84,7 @@ function describeLocalSeoExtremeDirections(
 
 function describeLocalSeoRankComparison(
   comparison: LocalSeoDirectionComparison,
-  meanBySector: Map<LocalSeoSector, number | null>,
+  meanBySector: Map<LocalSeoSector, number | null>
 ): string[] {
   switch (comparison.kind) {
     case "none":
@@ -109,12 +106,12 @@ function describeLocalSeoRankComparison(
         describeLocalSeoExtremeDirections(
           "Strongest",
           comparison.strongest,
-          meanBySector.get(comparison.strongest[0]) ?? null,
+          meanBySector.get(comparison.strongest[0]) ?? null
         ),
         describeLocalSeoExtremeDirections(
           "Weakest",
           comparison.weakest,
-          meanBySector.get(comparison.weakest[0]) ?? null,
+          meanBySector.get(comparison.weakest[0]) ?? null
         ),
       ]
   }
@@ -135,9 +132,9 @@ export function LocalSeoGrid({
     () =>
       summarizeLocalSeoGridCells(
         cells,
-        Number.isNaN(selectedQueryIndex) ? null : selectedQueryIndex,
+        Number.isNaN(selectedQueryIndex) ? null : selectedQueryIndex
       ),
-    [cells, selectedQueryIndex],
+    [cells, selectedQueryIndex]
   )
 
   if (cells.length === 0) {
@@ -155,22 +152,20 @@ export function LocalSeoGrid({
   }
 
   const pointBySector = new Map(
-    summary.points.map((point) => [point.sector, point]),
+    summary.points.map((point) => [point.sector, point])
   )
-  const centrePoint = summary.points.find(
-    (point) => point.sector === "centre",
-  )
+  const centrePoint = summary.points.find((point) => point.sector === "centre")
   const centerHeadline =
     summary.centerMeanRank !== null
       ? `mean ${formatLocalSeoMeanRank(summary.centerMeanRank)}`
-      : (centrePoint
+      : centrePoint
         ? formatLocalSeoEmptyMeanRank(
             centrePoint.absentCount,
-            centrePoint.unknownCount,
+            centrePoint.unknownCount
           )
-        : "—")
+        : "—"
   const sectorMeanRank = new Map(
-    summary.sectors.map((entry) => [entry.sector, entry.meanRank]),
+    summary.sectors.map((entry) => [entry.sector, entry.meanRank])
   )
 
   return (
@@ -201,7 +196,8 @@ export function LocalSeoGrid({
         </ToggleGroup>
         {selectedQueryIndex !== null && !Number.isNaN(selectedQueryIndex) ? (
           <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-            Showing {queries[selectedQueryIndex] ?? `query ${selectedQueryIndex + 1}`}
+            Showing{" "}
+            {queries[selectedQueryIndex] ?? `query ${selectedQueryIndex + 1}`}
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -214,8 +210,8 @@ export function LocalSeoGrid({
         <CardHeader>
           <CardTitle>Visibility board</CardTitle>
           <CardDescription>
-            Nine sampled points around the business. Means use found ranks
-            only; absent and unknown samples never move the mean.
+            Nine sampled points around the business. Means use found ranks only;
+            absent and unknown samples never move the mean.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -227,8 +223,7 @@ export function LocalSeoGrid({
               const point = pointBySector.get(sector)
               const isCentre = sector === "centre"
               const isAllScope =
-                selectedQueryIndex === null ||
-                Number.isNaN(selectedQueryIndex)
+                selectedQueryIndex === null || Number.isNaN(selectedQueryIndex)
               const headline = !point
                 ? "—"
                 : isAllScope
@@ -236,7 +231,7 @@ export function LocalSeoGrid({
                     ? formatLocalSeoMeanRank(point.meanRank)
                     : formatLocalSeoEmptyMeanRank(
                         point.absentCount,
-                        point.unknownCount,
+                        point.unknownCount
                       )
                   : point.focusedRank !== null &&
                       point.focusedRank !== undefined
@@ -257,7 +252,7 @@ export function LocalSeoGrid({
                   }
                   className={cn(
                     "flex min-h-24 flex-col items-center justify-center gap-1 rounded-lg border border-border px-2 py-3 text-center sm:min-h-28",
-                    isCentre && "border-primary/40 bg-muted/60",
+                    isCentre && "border-primary/40 bg-muted/60"
                   )}
                 >
                   <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -272,7 +267,7 @@ export function LocalSeoGrid({
                         ? describeLocalSeoCounts(
                             point.foundCount,
                             point.absentCount,
-                            point.unknownCount,
+                            point.unknownCount
                           )
                         : `match: ${point.focusedMatchStatus ?? "unknown"}`}
                     </span>
@@ -330,7 +325,7 @@ export function LocalSeoGrid({
                         ? formatLocalSeoMeanRank(ring.meanRank)
                         : formatLocalSeoEmptyMeanRank(
                             ring.absentCount,
-                            ring.unknownCount,
+                            ring.unknownCount
                           )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
@@ -390,7 +385,7 @@ export function LocalSeoGrid({
                         ? formatLocalSeoMeanRank(sector.meanRank)
                         : formatLocalSeoEmptyMeanRank(
                             sector.absentCount,
-                            sector.unknownCount,
+                            sector.unknownCount
                           )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
@@ -425,7 +420,7 @@ export function LocalSeoGrid({
           </p>
           {describeLocalSeoRankComparison(
             summary.rankComparison,
-            sectorMeanRank,
+            sectorMeanRank
           ).map((sentence) => (
             <p key={sentence}>{sentence}</p>
           ))}

@@ -8,6 +8,7 @@ import {
 } from "~/lib/local-seo-api"
 import type { LocalSeoCell, LocalSeoSector } from "~/lib/local-seo-api"
 import {
+  findLocalSeoCentreCell,
   formatLocalSeoEmptyMeanRank,
   formatLocalSeoMeanRank,
   summarizeLocalSeoGridCells,
@@ -44,11 +45,12 @@ const LOCAL_SEO_TEST_BOARD_SECTORS: LocalSeoSector[] = [
   "SE",
 ]
 
-const LOCAL_SEO_TIE_DIRECTION_RANKS: Partial<Record<LocalSeoSector, number[]>> = {
-  W: [1, 1, 1, 1, 3],
-  E: [1, 1, 1, 1, 3],
-  centre: [1, 1, 1, 2, 3],
-}
+const LOCAL_SEO_TIE_DIRECTION_RANKS: Partial<Record<LocalSeoSector, number[]>> =
+  {
+    W: [1, 1, 1, 1, 3],
+    E: [1, 1, 1, 1, 3],
+    centre: [1, 1, 1, 2, 3],
+  }
 
 /** Nepal fixture: two tied found directions, six clean misses, no unknowns. */
 function makeLocalSeoTieCells(): LocalSeoCell[] {
@@ -66,7 +68,7 @@ function makeLocalSeoTieCells(): LocalSeoCell[] {
           sector,
           match_status: rank === null ? "absent" : "found",
           rank,
-        }),
+        })
       )
     }
   })
@@ -83,23 +85,25 @@ describe("derived grid cost", () => {
 describe("validateLocalSeoQueries", () => {
   test("rejects duplicates ignoring case and surrounding spaces", () => {
     expect(
-      validateLocalSeoQueries(["Coffee", " coffee ", "tea", "bistro", "diner"]),
-    ).toBe("Queries must all be distinct, ignoring case and surrounding spaces.")
+      validateLocalSeoQueries(["Coffee", " coffee ", "tea", "bistro", "diner"])
+    ).toBe(
+      "Queries must all be distinct, ignoring case and surrounding spaces."
+    )
   })
 
   test("rejects queries over 500 UTF-8 bytes", () => {
     expect(validateLocalSeoQueries(["a".repeat(501), "b", "c", "d", "e"])).toBe(
-      "Queries must each fit within 500 bytes.",
+      "Queries must each fit within 500 bytes."
     )
     expect(validateLocalSeoQueries(["é".repeat(251), "b", "c", "d", "e"])).toBe(
-      "Queries must each fit within 500 bytes.",
+      "Queries must each fit within 500 bytes."
     )
   })
 
   test("accepts five distinct queries within the byte limit", () => {
     expect(validateLocalSeoQueries(["a", "b", "c", "d", "e"])).toBeNull()
     expect(
-      validateLocalSeoQueries(["a".repeat(500), "b", "c", "d", "e"]),
+      validateLocalSeoQueries(["a".repeat(500), "b", "c", "d", "e"])
     ).toBeNull()
   })
 })
@@ -107,7 +111,7 @@ describe("validateLocalSeoQueries", () => {
 describe("validateLocalSeoRadiusM", () => {
   test("rejects non-integers", () => {
     expect(validateLocalSeoRadiusM(5000.5)).toBe(
-      "Radius must be a whole number of metres.",
+      "Radius must be a whole number of metres."
     )
     expect(validateLocalSeoRadiusM(5000)).toBeNull()
   })
@@ -189,8 +193,18 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
 
   test("different means name the sampled extremes, centre excluded", () => {
     const cells = [
-      makeLocalSeoCell({ point_index: 4, ring: "centre", sector: "centre", rank: 1 }),
-      makeLocalSeoCell({ point_index: 0, ring: "corner", sector: "NE", rank: 2 }),
+      makeLocalSeoCell({
+        point_index: 4,
+        ring: "centre",
+        sector: "centre",
+        rank: 1,
+      }),
+      makeLocalSeoCell({
+        point_index: 0,
+        ring: "corner",
+        sector: "NE",
+        rank: 2,
+      }),
       makeLocalSeoCell({ point_index: 1, ring: "edge", sector: "S", rank: 8 }),
     ]
     const summary = summarizeLocalSeoGridCells(cells, null)
@@ -207,14 +221,22 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
     expect(summary.points).toHaveLength(0)
     expect(summary.centerMeanRank).toBeNull()
     expect(summary.rankComparison).toEqual({ kind: "none" })
-    expect(summary.directionCounts).toEqual({ present: 0, absent: 0, unknown: 8 })
+    expect(summary.directionCounts).toEqual({
+      present: 0,
+      absent: 0,
+      unknown: 8,
+    })
     expect(summary.sectors).toHaveLength(8)
     expect(summary.rings).toHaveLength(3)
   })
 
   test("tied found means name every tied direction and no extremes", () => {
     const summary = summarizeLocalSeoGridCells(makeLocalSeoTieCells(), null)
-    expect(summary.directionCounts).toEqual({ present: 2, absent: 6, unknown: 0 })
+    expect(summary.directionCounts).toEqual({
+      present: 2,
+      absent: 6,
+      unknown: 0,
+    })
     expect(summary.rankComparison).toEqual({
       kind: "tie",
       directions: ["E", "W"],
@@ -226,13 +248,31 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
   test("different means name every tied extreme direction", () => {
     const cells = [
       ...[1, 1, 1, 1, 3].map((rank, query) =>
-        makeLocalSeoCell({ point_index: 5, sector: "E", ring: "edge", query_index: query, rank }),
+        makeLocalSeoCell({
+          point_index: 5,
+          sector: "E",
+          ring: "edge",
+          query_index: query,
+          rank,
+        })
       ),
       ...[1, 1, 1, 1, 3].map((rank, query) =>
-        makeLocalSeoCell({ point_index: 3, sector: "W", ring: "edge", query_index: query, rank }),
+        makeLocalSeoCell({
+          point_index: 3,
+          sector: "W",
+          ring: "edge",
+          query_index: query,
+          rank,
+        })
       ),
       ...[5, 5, 5, 5, 5].map((rank, query) =>
-        makeLocalSeoCell({ point_index: 1, sector: "N", ring: "edge", query_index: query, rank }),
+        makeLocalSeoCell({
+          point_index: 1,
+          sector: "N",
+          ring: "edge",
+          query_index: query,
+          rank,
+        })
       ),
     ]
     const summary = summarizeLocalSeoGridCells(cells, null)
@@ -248,8 +288,16 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
       makeLocalSeoCell({ point_index: 5, sector: "E", ring: "edge", rank: 2 }),
     ]
     const summary = summarizeLocalSeoGridCells(cells, null)
-    expect(summary.rankComparison).toEqual({ kind: "single", direction: "E", meanRank: 2 })
-    expect(summary.directionCounts).toEqual({ present: 1, absent: 0, unknown: 7 })
+    expect(summary.rankComparison).toEqual({
+      kind: "single",
+      direction: "E",
+      meanRank: 2,
+    })
+    expect(summary.directionCounts).toEqual({
+      present: 1,
+      absent: 0,
+      unknown: 7,
+    })
   })
 
   test("failed and pending calls are unknown and never add a rank", () => {
@@ -281,13 +329,23 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
     expect(east?.foundCount).toBe(1)
     expect(east?.unknownCount).toBe(2)
     expect(east?.totalCount).toBe(3)
-    expect(summary.rankComparison).toEqual({ kind: "single", direction: "E", meanRank: 1 })
+    expect(summary.rankComparison).toEqual({
+      kind: "single",
+      direction: "E",
+      meanRank: 1,
+    })
   })
 
   test("direction counts separate clean misses from unresolved samples", () => {
     const cells = [
       makeLocalSeoCell({ point_index: 5, sector: "E", ring: "edge", rank: 2 }),
-      makeLocalSeoCell({ point_index: 3, sector: "W", ring: "edge", match_status: "absent", rank: null }),
+      makeLocalSeoCell({
+        point_index: 3,
+        sector: "W",
+        ring: "edge",
+        match_status: "absent",
+        rank: null,
+      }),
       makeLocalSeoCell({
         point_index: 1,
         sector: "N",
@@ -298,13 +356,23 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
       }),
     ]
     const summary = summarizeLocalSeoGridCells(cells, null)
-    expect(summary.directionCounts).toEqual({ present: 1, absent: 1, unknown: 6 })
+    expect(summary.directionCounts).toEqual({
+      present: 1,
+      absent: 1,
+      unknown: 6,
+    })
   })
 
   test("a found rank that is not finite and positive is unknown", () => {
     const cells = [
       makeLocalSeoCell({ point_index: 1, sector: "N", ring: "edge", rank: 0 }),
-      makeLocalSeoCell({ point_index: 1, sector: "N", ring: "edge", query_index: 1, rank: -2 }),
+      makeLocalSeoCell({
+        point_index: 1,
+        sector: "N",
+        ring: "edge",
+        query_index: 1,
+        rank: -2,
+      }),
       makeLocalSeoCell({
         point_index: 1,
         sector: "N",
@@ -324,10 +392,22 @@ describe("summarizeLocalSeoGridCells mean ranks", () => {
   test("raw means are compared, so values that format alike stay different", () => {
     const cells = [
       ...[1, 1, 1, 1, 3].map((rank, query) =>
-        makeLocalSeoCell({ point_index: 3, sector: "W", ring: "edge", query_index: query, rank }),
+        makeLocalSeoCell({
+          point_index: 3,
+          sector: "W",
+          ring: "edge",
+          query_index: query,
+          rank,
+        })
       ),
       ...[1, 1, 1, 1, 1, 1, 1, 4].map((rank, query) =>
-        makeLocalSeoCell({ point_index: 5, sector: "E", ring: "edge", query_index: query, rank }),
+        makeLocalSeoCell({
+          point_index: 5,
+          sector: "E",
+          ring: "edge",
+          query_index: query,
+          rank,
+        })
       ),
     ]
     const summary = summarizeLocalSeoGridCells(cells, null)
@@ -352,5 +432,111 @@ describe("formatLocalSeoEmptyMeanRank", () => {
     expect(formatLocalSeoEmptyMeanRank(0, 5)).toBe("—")
     expect(formatLocalSeoEmptyMeanRank(3, 2)).toBe("—")
     expect(formatLocalSeoEmptyMeanRank(0, 0)).toBe("—")
+  })
+})
+
+describe("focused query rank honesty", () => {
+  test("failed or pending calls never expose a focused rank or found/absent status", () => {
+    const cells = [
+      makeLocalSeoCell({
+        point_index: 0,
+        ring: "edge",
+        sector: "N",
+        query_index: 2,
+        call_status: "request_failed",
+        match_status: "found",
+        rank: 2,
+        error: "timeout",
+      }),
+      makeLocalSeoCell({
+        point_index: 1,
+        ring: "edge",
+        sector: "S",
+        query_index: 2,
+        call_status: "pending",
+        match_status: "found",
+        rank: 3,
+      }),
+      makeLocalSeoCell({
+        point_index: 2,
+        ring: "corner",
+        sector: "NE",
+        query_index: 2,
+        call_status: "request_failed",
+        match_status: "absent",
+        rank: null,
+        error: "timeout",
+      }),
+      makeLocalSeoCell({
+        point_index: 3,
+        ring: "edge",
+        sector: "W",
+        query_index: 2,
+        rank: 4,
+      }),
+    ]
+    const summary = summarizeLocalSeoGridCells(cells, 2)
+    const bySector = new Map(
+      summary.points.map((point) => [point.sector, point])
+    )
+    expect(bySector.get("N")?.focusedRank).toBeNull()
+    expect(bySector.get("N")?.focusedMatchStatus).toBe("unknown")
+    expect(bySector.get("S")?.focusedRank).toBeNull()
+    expect(bySector.get("S")?.focusedMatchStatus).toBe("unknown")
+    expect(bySector.get("NE")?.focusedRank).toBeNull()
+    expect(bySector.get("NE")?.focusedMatchStatus).toBe("unknown")
+    expect(bySector.get("W")?.focusedRank).toBe(4)
+    expect(bySector.get("W")?.focusedMatchStatus).toBe("found")
+  })
+
+  test("malformed successful focused cells hide the rank but keep their status", () => {
+    const cells = [
+      makeLocalSeoCell({
+        point_index: 0,
+        ring: "edge",
+        sector: "N",
+        query_index: 1,
+        rank: null,
+      }),
+      makeLocalSeoCell({
+        point_index: 1,
+        ring: "edge",
+        sector: "S",
+        query_index: 1,
+        rank: 0,
+      }),
+    ]
+    const summary = summarizeLocalSeoGridCells(cells, 1)
+    const bySector = new Map(
+      summary.points.map((point) => [point.sector, point])
+    )
+    expect(bySector.get("N")?.focusedRank).toBeNull()
+    expect(bySector.get("N")?.focusedMatchStatus).toBe("found")
+    expect(bySector.get("S")?.focusedRank).toBeNull()
+    expect(bySector.get("S")?.focusedMatchStatus).toBe("found")
+  })
+})
+
+describe("findLocalSeoCentreCell", () => {
+  test("returns the centre cell for a normal run", () => {
+    const centre = makeLocalSeoCell({ point_index: 4, ring: "centre" })
+    const cells = [
+      makeLocalSeoCell({ point_index: 0, ring: "corner", sector: "NW" }),
+      centre,
+      makeLocalSeoCell({ point_index: 8, ring: "corner", sector: "SE" }),
+    ]
+    expect(findLocalSeoCentreCell(cells)).toBe(centre)
+  })
+
+  test("returns null when only non-centre cells exist", () => {
+    const cells = [
+      makeLocalSeoCell({ point_index: 4, ring: "corner", sector: "NW" }),
+      makeLocalSeoCell({ point_index: 0, ring: "centre", sector: "centre" }),
+    ]
+    expect(findLocalSeoCentreCell(cells)).toBeNull()
+  })
+
+  test("returns null for an empty list", () => {
+    expect(findLocalSeoCentreCell([])).toBeNull()
   })
 })

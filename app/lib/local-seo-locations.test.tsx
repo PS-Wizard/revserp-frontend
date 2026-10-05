@@ -1,8 +1,13 @@
 import { describe, expect, test, afterEach } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
-import { StaticRouter } from "react-router"
+import { Route, Routes, StaticRouter } from "react-router"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { LocationsNavLink } from "~/components/app-navbar/locations-nav-link"
+import {
+  buildWorkspaceNavGroups,
+  findActiveTabKey,
+  isWorkspaceTabActive,
+} from "~/components/workspace-sidebar-nav"
 import {
   bindLocalSeoListing,
   canRunLocalSeoGrid,
@@ -20,7 +25,9 @@ import {
   type LocalSeoListingLookup,
   type LocalSeoLocation,
 } from "~/lib/local-seo-api"
-import { ListingLookupEvidence } from "~/routes/app/project-locations"
+import ProjectLocationsRoute, {
+  ListingLookupEvidence,
+} from "~/routes/app/project-locations"
 
 function makeLocation(overrides: Partial<LocalSeoLocation>): LocalSeoLocation {
   return {
@@ -291,20 +298,68 @@ describe("listing lookup evidence", () => {
   })
 })
 
-describe("locations nav link", () => {
-  test("links to the selected project locations, nothing when unselected", () => {
-    const html = renderToStaticMarkup(
-      <StaticRouter location="/app">
-        <LocationsNavLink projectId="proj-1" />
-      </StaticRouter>,
-    )
-    expect(html).toContain("/app/projects/proj-1/locations")
+describe("locations nav group", () => {
+  const base = { gscConnector: false, integrations: false, maxCompetitors: 0 }
 
-    const empty = renderToStaticMarkup(
-      <StaticRouter location="/app">
-        <LocationsNavLink projectId={null} />
-      </StaticRouter>,
-    )
-    expect(empty).toBe("")
+  test("locations tab exists only with a project, as a route href", () => {
+    const withProject = buildWorkspaceNavGroups({ ...base, projectId: "proj-1" })
+    const group = withProject.find((entry) => entry.key === "locations")
+    expect(group?.tabs).toHaveLength(1)
+    expect(group?.tabs[0].href).toBe("/app/projects/proj-1/locations")
+
+    const withoutProject = buildWorkspaceNavGroups(base)
+    expect(
+      withoutProject.some((entry) => entry.key === "locations")
+    ).toBe(false)
+  })
+
+  test("locations pathname never marks an audit tab active", () => {
+    const groups = buildWorkspaceNavGroups({ ...base, projectId: "proj-1" })
+    const locations = groups
+      .flatMap((entry) => entry.tabs)
+      .find((tab) => tab.key === "locations")!
+    expect(
+      isWorkspaceTabActive(locations, "revserp-audit", "overview")
+    ).toBe(false)
+    expect(
+      isWorkspaceTabActive(
+        locations,
+        "revserp-audit",
+        "overview",
+        "/app/projects/proj-1/locations"
+      )
+    ).toBe(true)
+    expect(
+      findActiveTabKey(
+        groups,
+        "revserp-audit",
+        "overview",
+        "/app/projects/proj-1/locations"
+      )
+    ).toBe("locations")
+  })
+})
+
+describe("create location query editor", () => {
+  test("manual editor renders before generation with an add affordance", () => {
+    const client = new QueryClient()
+    try {
+      const html = renderToStaticMarkup(
+        <QueryClientProvider client={client}>
+          <StaticRouter location="/app/projects/proj-1/locations?view=list">
+            <Routes>
+              <Route
+                path="/app/projects/:projectID/locations"
+                element={<ProjectLocationsRoute />}
+              />
+            </Routes>
+          </StaticRouter>
+        </QueryClientProvider>,
+      )
+      expect(html).toContain("Add query")
+      expect(html).toContain("Create unbound location")
+    } finally {
+      client.clear()
+    }
   })
 })

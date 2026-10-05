@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Link, useNavigate } from "react-router"
 
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
 import type { ExportFormat } from "~/components/app-navbar/types"
@@ -17,7 +18,7 @@ import {
 
 import {
   buildWorkspaceNavGroups,
-  isWorkspaceTabActive,
+  isNavTabActive,
 } from "~/components/workspace-sidebar-nav"
 import { HoverPill, useKeyedHoverPill } from "~/components/ui/hover-pill"
 import {
@@ -69,6 +70,10 @@ type WorkspaceDockNavProps = {
   integrations: boolean
   maxCompetitors: number
   onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  /** Active route for link tabs; view tabs keep matching on view. */
+  pathname?: string
+  /** Project-scoped route tabs (Locations) render only when set. */
+  projectId?: string | null
   view: DashboardView
 }
 
@@ -95,10 +100,13 @@ export function WorkspaceDockNav({
   onSelectCrawl,
   onSelectProject,
   onSelectWorkspace,
+  pathname,
+  projectId,
   projects,
   trailing,
   view,
 }: WorkspaceDockNavProps) {
+  const navigate = useNavigate()
   // Controlled so a click can dismiss the mega menu before the project panel
   // opens. Otherwise the portalled menu paints above it and the two fight.
   const [openItem, setOpenItem] = useState<string | null>(null)
@@ -110,6 +118,7 @@ export function WorkspaceDockNav({
     gscConnector,
     integrations,
     maxCompetitors,
+    projectId,
   })
 
   return (
@@ -195,7 +204,7 @@ export function WorkspaceDockNav({
           />
           {groups.map((group) => {
             const activeTab = group.tabs.find((tab) =>
-              isWorkspaceTabActive(tab, view, auditTab)
+              isNavTabActive(groups, tab, view, auditTab, pathname)
             )
             return (
               <NavigationMenuItem key={group.key} value={group.key}>
@@ -205,8 +214,12 @@ export function WorkspaceDockNav({
                   // to land on: Overview, Search Console, Competitors, CMS.
                   onClick={() => {
                     const landing = group.tabs[0]
-                    if (landing)
-                      onSelectWorkspace(landing.view, landing.auditTab)
+                    if (!landing) return
+                    if (landing.href !== undefined) {
+                      void navigate(landing.href)
+                      return
+                    }
+                    onSelectWorkspace(landing.view, landing.auditTab)
                   }}
                   className={cn(
                     "relative z-10 h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-sm",
@@ -234,8 +247,10 @@ export function WorkspaceDockNav({
                 >
                   <DockPanel
                     group={group}
+                    groups={groups}
                     auditTab={auditTab}
                     onSelectWorkspace={onSelectWorkspace}
+                    pathname={pathname}
                     view={view}
                   />
                 </NavigationMenuContent>
@@ -275,7 +290,9 @@ export function WorkspaceDockNav({
 function DockPanel({
   auditTab,
   group,
+  groups,
   onSelectWorkspace,
+  pathname,
   view,
 }: {
   auditTab: AuditTab
@@ -284,7 +301,9 @@ function DockPanel({
     label: string
     tabs: ReturnType<typeof buildWorkspaceNavGroups>[number]["tabs"]
   }
+  groups: ReturnType<typeof buildWorkspaceNavGroups>
   onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  pathname?: string
   view: DashboardView
 }) {
   const { clearPill, pill, setItemRef, showPill } = useKeyedHoverPill()
@@ -299,10 +318,46 @@ function DockPanel({
     >
       <HoverPill className="rounded-lg" pill={pill} />
       {group.tabs.map((tab) => {
-        const active = isWorkspaceTabActive(tab, view, auditTab)
+        const active = isNavTabActive(groups, tab, view, auditTab, pathname)
+        if (tab.href !== undefined) {
+          return (
+            <li key={tab.key}>
+              <NavigationMenuLink
+                active={active}
+                className={cn(
+                  "relative z-10 h-auto cursor-pointer items-start gap-2.5 bg-transparent p-2 hover:bg-transparent focus:bg-transparent",
+                  active
+                    ? "text-foreground"
+                    : "text-foreground/80 hover:text-foreground"
+                )}
+                onMouseEnter={() => showPill(tab.key)}
+                ref={setItemRef(tab.key)}
+                render={
+                  <Link to={tab.href}>
+                    <span
+                      className={cn(
+                        "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] ring-1 ring-white/[0.06] ring-inset",
+                        active ? "text-foreground" : "text-muted-foreground"
+                      )}
+                    >
+                      <tab.Icon aria-hidden="true" className="size-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{tab.label}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {tab.description}
+                      </span>
+                    </span>
+                  </Link>
+                }
+              />
+            </li>
+          )
+        }
         return (
           <li key={tab.key}>
             <NavigationMenuLink
+              active={active}
               className={cn(
                 "relative z-10 h-auto cursor-pointer items-start gap-2.5 bg-transparent p-2 hover:bg-transparent focus:bg-transparent",
                 active

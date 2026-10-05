@@ -1,6 +1,7 @@
 "use client"
 
 import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
+import { Link } from "react-router"
 import {
   ActivityIcon,
   ChartNoAxesCombinedIcon,
@@ -8,6 +9,7 @@ import {
   EyeIcon,
   FileSearchIcon,
   GaugeIcon,
+  MapPinIcon,
   NetworkIcon,
   SearchCheckIcon,
   SearchIcon,
@@ -47,15 +49,27 @@ const AUDIT_TAB_DESCRIPTIONS: Record<AuditTab, string> = {
   "site-graph": "How the pages link to one another.",
 }
 
-export type NavTab = {
-  key: string
-  label: string
-  /** Shown in the dock panel; the mobile drawer lists labels only. */
-  description: string
-  Icon: typeof GaugeIcon
-  view: DashboardView
-  auditTab?: AuditTab
-}
+export type NavTab =
+  | {
+      key: string
+      label: string
+      /** Shown in the dock panel; the mobile drawer lists labels only. */
+      description: string
+      Icon: typeof GaugeIcon
+      view: DashboardView
+      auditTab?: AuditTab
+      href?: never
+    }
+  | {
+      key: string
+      label: string
+      /** Shown in the dock panel; the mobile drawer lists labels only. */
+      description: string
+      Icon: typeof GaugeIcon
+      href: string
+      view?: never
+      auditTab?: never
+    }
 
 export type NavGroup = {
   key: string
@@ -67,6 +81,8 @@ type BuildGroupsInput = {
   gscConnector: boolean
   integrations: boolean
   maxCompetitors: number
+  /** Project-scoped route tabs (Locations) render only when set. */
+  projectId?: string | null
 }
 
 /**
@@ -78,6 +94,7 @@ export function buildWorkspaceNavGroups({
   gscConnector,
   integrations,
   maxCompetitors,
+  projectId,
 }: BuildGroupsInput): NavGroup[] {
   const visibility: NavTab[] = []
   if (gscConnector) {
@@ -153,27 +170,89 @@ export function buildWorkspaceNavGroups({
     { key: "visibility", label: "Visibility", tabs: visibility },
     { key: "compare", label: "Compare", tabs: compare },
     { key: "marketplace", label: "Marketplace", tabs: content },
+    ...(projectId
+      ? [
+          {
+            key: "locations",
+            label: "Locations",
+            tabs: [
+              {
+                key: "locations",
+                label: "Locations",
+                description: "Physical locations for grid sampling.",
+                Icon: MapPinIcon,
+                href: `/app/projects/${projectId}/locations`,
+              } satisfies NavTab,
+            ],
+          } satisfies NavGroup,
+        ]
+      : []),
   ].filter((group) => group.tabs.length > 0)
 }
 
 export function isWorkspaceTabActive(
   tab: NavTab,
   view: DashboardView,
-  auditTab: AuditTab
+  auditTab: AuditTab,
+  pathname?: string
 ): boolean {
+  if (tab.href !== undefined) {
+    if (!pathname) return false
+    return pathname === tab.href || pathname.startsWith(`${tab.href}/`)
+  }
   return (
     tab.view === view &&
     (tab.auditTab === undefined || tab.auditTab === auditTab)
   )
 }
 
+export function findRouteTab(
+  groups: NavGroup[],
+  pathname?: string
+): NavTab | null {
+  if (!pathname) return null
+  for (const group of groups) {
+    for (const tab of group.tabs) {
+      if (
+        tab.href !== undefined &&
+        (pathname === tab.href || pathname.startsWith(`${tab.href}/`))
+      )
+        return tab
+    }
+  }
+  return null
+}
+
+/**
+ * Route tabs win over view tabs: on a locations pathname no Audit row
+ * lights up, even though the workspace view state still points at it.
+ */
+export function isNavTabActive(
+  groups: NavGroup[],
+  tab: NavTab,
+  view: DashboardView,
+  auditTab: AuditTab,
+  pathname?: string
+): boolean {
+  if (tab.href !== undefined)
+    return isWorkspaceTabActive(tab, view, auditTab, pathname)
+  if (findRouteTab(groups, pathname)) return false
+  return isWorkspaceTabActive(tab, view, auditTab, pathname)
+}
+
 export function findActiveGroupIndex(
   groups: NavGroup[],
   view: DashboardView,
-  auditTab: AuditTab
+  auditTab: AuditTab,
+  pathname?: string
 ): number {
+  const routeTab = findRouteTab(groups, pathname)
   const index = groups.findIndex((group) =>
-    group.tabs.some((tab) => isWorkspaceTabActive(tab, view, auditTab))
+    group.tabs.some((tab) =>
+      routeTab
+        ? tab.key === routeTab.key
+        : isWorkspaceTabActive(tab, view, auditTab, pathname)
+    )
   )
   return index === -1 ? 0 : index
 }
@@ -181,11 +260,14 @@ export function findActiveGroupIndex(
 export function findActiveTabKey(
   groups: NavGroup[],
   view: DashboardView,
-  auditTab: AuditTab
+  auditTab: AuditTab,
+  pathname?: string
 ): string | null {
+  const routeTab = findRouteTab(groups, pathname)
+  if (routeTab) return routeTab.key
   for (const group of groups) {
     for (const tab of group.tabs) {
-      if (isWorkspaceTabActive(tab, view, auditTab)) return tab.key
+      if (isWorkspaceTabActive(tab, view, auditTab, pathname)) return tab.key
     }
   }
   return null
@@ -201,20 +283,28 @@ export function WorkspaceSidebarNav({
   gscConnector,
   integrations,
   maxCompetitors,
+  onNavigate,
   onSelectWorkspace,
+  pathname,
+  projectId,
   view,
 }: {
   auditTab: AuditTab
   gscConnector: boolean
   integrations: boolean
   maxCompetitors: number
+  /** Closes the mobile drawer after a route link navigates. */
+  onNavigate?: () => void
   onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  pathname?: string
+  projectId?: string | null
   view: DashboardView
 }) {
   const groups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
     maxCompetitors,
+    projectId,
   })
 
   return (
@@ -226,7 +316,37 @@ export function WorkspaceSidebarNav({
           </SidebarGroupLabel>
           <SidebarMenu>
             {group.tabs.map((tab) => {
-              const active = isWorkspaceTabActive(tab, view, auditTab)
+              const active = isNavTabActive(groups, tab, view, auditTab, pathname)
+              if (tab.href !== undefined) {
+                return (
+                  <SidebarMenuItem key={tab.key}>
+                    <SidebarMenuButton
+                      className={cn(
+                        "!h-auto gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-200",
+                        active
+                          ? "bg-foreground/10 font-medium text-foreground"
+                          : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
+                      )}
+                      isActive={active}
+                      onClick={onNavigate}
+                      render={
+                        <Link to={tab.href}>
+                          <tab.Icon aria-hidden="true" className="size-4 shrink-0" />
+                          <span className="truncate">{tab.label}</span>
+                          <span
+                            className={cn(
+                              "ml-auto shrink-0",
+                              active ? "" : "invisible"
+                            )}
+                          >
+                            <CheckIcon className="size-4" />
+                          </span>
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                )
+              }
               return (
                 <SidebarMenuItem key={tab.key}>
                   <SidebarMenuButton

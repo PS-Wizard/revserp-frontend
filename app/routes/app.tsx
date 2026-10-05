@@ -12,6 +12,7 @@ import {
   useLocation,
   useNavigate,
   useNavigation,
+  useOutlet,
   useRevalidator,
 } from "react-router"
 import { redirect } from "react-router"
@@ -78,9 +79,16 @@ const SiteGraphView = lazy(() =>
   }))
 )
 
-export async function loader({ request }: { request: Request }) {
+export async function loader({
+  request,
+  params,
+}: {
+  request: Request
+  params: Record<string, string | undefined>
+}) {
   const requestUrl = new URL(request.url)
-  const requestedProjectId = requestUrl.searchParams.get("project")
+  const requestedProjectId =
+    params.projectID ?? requestUrl.searchParams.get("project")
   const requestedCrawlId = requestUrl.searchParams.get("crawl")
 
   const qs = new URLSearchParams()
@@ -298,6 +306,13 @@ export default function AppPage() {
   const navigate = useNavigate()
   const navigation = useNavigation()
   const navigationLocation = navigation.location ?? location
+  const outlet = useOutlet()
+  const fullBleed = useMemo(() => {
+    if (!outlet) return false
+    if (!/^\/app\/projects\/[^/]+\/locations\/?$/.test(location.pathname))
+      return false
+    return new URLSearchParams(location.search).get("view") !== "list"
+  }, [outlet, location.pathname, location.search])
   useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<AuditTab>("overview")
@@ -762,10 +777,11 @@ export default function AppPage() {
             userEmail={me.user.email}
             userName={me.user.name}
             view={view}
+            fullBleed={fullBleed}
           >
             {cancelDialog}
 
-            {view === "revserp-audit" ? (
+            {outlet ?? (view === "revserp-audit" ? (
               showProjectSetup ? (
                 <ProjectSetupPanel
                   canStart={isOrganizationOwner}
@@ -882,7 +898,7 @@ export default function AppPage() {
                   </CardContent>
                 </Card>
               </div>
-            )}
+            ))}
             {showPrintSections && (
               <PdfPrintSections
                 coverRef={coverRef}

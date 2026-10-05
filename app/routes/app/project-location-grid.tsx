@@ -1,8 +1,9 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link, useParams } from "react-router"
+import { Link, useParams, useSearchParams } from "react-router"
 
 import { LocalSeoGrid } from "~/components/local-seo-grid"
+import { LocalSeoRecordedMap } from "~/components/local-seo-recorded-map"
 import { ApiError } from "~/lib/api"
 import {
   LOCAL_SEO_BASE_EXPECTED_CREDITS,
@@ -71,9 +72,12 @@ export default function ProjectLocationGridRoute() {
   const queryClient = useQueryClient()
 
   const [queryDrafts, setQueryDrafts] = useState<string[] | null>(null)
-  const [radiusInput, setRadiusInput] = useState(
-    String(LOCAL_SEO_DEFAULT_RADIUS_M),
-  )
+  const [searchParams] = useSearchParams()
+  const [radiusInput, setRadiusInput] = useState(() => {
+    const requested = searchParams.get("radius_m")
+    const radius = requested ? Number(requested) : LOCAL_SEO_DEFAULT_RADIUS_M
+    return String(validateLocalSeoRadiusM(radius) === null ? radius : LOCAL_SEO_DEFAULT_RADIUS_M)
+  })
   const [costConfirmed, setCostConfirmed] = useState(false)
 
   const locationQuery = useQuery({
@@ -154,11 +158,13 @@ export default function ProjectLocationGridRoute() {
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6">
       <nav aria-label="Breadcrumb" className="flex flex-wrap gap-1">
         <Button
+          nativeButton={false}
           size="sm"
           variant="ghost"
           render={<Link to="/app">Back to workspace</Link>}
         />
         <Button
+          nativeButton={false}
           size="sm"
           variant="ghost"
           render={
@@ -235,7 +241,8 @@ export default function ProjectLocationGridRoute() {
           <CardDescription>
             Zero to five distinct queries. Saving replaces them for future
             runs; existing run snapshots keep their frozen queries. A run
-            needs exactly five saved queries and a bound listing.
+            needs between one and {LOCAL_SEO_QUERY_COUNT} saved queries and a
+            bound listing; cost follows the number you keep.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -513,6 +520,7 @@ export default function ProjectLocationGridRoute() {
               </CardContent>
             </Card>
             <Separator />
+            <LocalSeoRecordedMap run={latestRun} />
             <LocalSeoGrid cells={latestRun.cells} queries={latestRun.queries} />
           </>
         )}

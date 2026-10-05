@@ -30,7 +30,6 @@ import {
 
 import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
-import { LocationsNavLink } from "~/components/app-navbar/locations-nav-link"
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { WorkspaceSwitcher } from "~/components/app-navbar/workspace-switcher"
 import { Button } from "~/components/ui/button"
@@ -42,7 +41,12 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty"
-import { SidebarProvider, SidebarTrigger } from "~/components/ui/sidebar"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarProvider,
+  SidebarTrigger,
+} from "~/components/ui/sidebar"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
@@ -83,6 +87,7 @@ import type {
 import { useFeatures } from "~/lib/features"
 import { toast } from "sonner"
 import { WorkspaceDockNav } from "~/components/workspace-dock-nav"
+import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 
 type CreateProjectState = {
   isOpen: boolean
@@ -225,6 +230,7 @@ export type WorkspaceShellPreviewProps = AppNavbarProps & {
   children: ReactNode
   revbotConversationId: string | null
   onRevbotConversationChange: (conversationId: string | null) => void
+  fullBleed?: boolean
 }
 
 export function WorkspaceShellPreview({
@@ -250,6 +256,7 @@ export function WorkspaceShellPreview({
   onExportAudit,
   isPlatformAdmin,
   isExportingAudit,
+  fullBleed = false,
 }: WorkspaceShellPreviewProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -492,6 +499,12 @@ export function WorkspaceShellPreview({
   const isExportingCrawl = projectActions.exportingCrawlId !== null
 
   function selectProject(projectId: string, crawlId?: string) {
+    const isLocationsActive =
+      /^\/app\/projects\/[^/]+\/locations(\/|$)/.test(location.pathname)
+    if (isLocationsActive) {
+      void navigate(`/app/projects/${projectId}/locations`)
+      return
+    }
     const params = new URLSearchParams(location.search)
     params.set("project", projectId)
     if (projectId !== activeProjectId) params.delete("revbotConversation")
@@ -635,35 +648,69 @@ export function WorkspaceShellPreview({
           onOpenMobileChange={setIsMobileSidebarOpen}
           style={{ "--sidebar-width": "4rem" } as CSSProperties}
         >
+          <div className="md:hidden">
+          <Sidebar>
+            <SidebarContent className="p-2">
+              <WorkspaceSidebarNav
+                auditTab={auditTab}
+                gscConnector={features.gsc_connector}
+                integrations={features.integrations !== false}
+                maxCompetitors={features.max_competitors}
+                onNavigate={() => setIsMobileSidebarOpen(false)}
+                onSelectWorkspace={selectWorkspace}
+                pathname={location.pathname}
+                projectId={activeProject?.id}
+                view={view}
+              />
+            </SidebarContent>
+          </Sidebar>
+          </div>
           <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
             <div className="relative flex h-full min-h-0 bg-shell-chrome">
-              <section className="relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16">
-                <header className="relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden">
-                  <SidebarTrigger aria-label="Open navigation" />
-                  <button
-                    className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
-                    onClick={openProjectPanel}
-                    type="button"
+              <section
+                className={
+                  fullBleed
+                    ? "relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+                    : "relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16"
+                }
+              >
+                {fullBleed ? null : (
+                  <header
+                    className={
+                      fullBleed
+                        ? "absolute inset-x-0 top-0 z-30 flex h-14 items-center gap-3 bg-transparent px-4 md:hidden"
+                        : "relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden"
+                    }
                   >
-                    <span className="truncate">
-                      {activeProject?.name ?? "Select a project"}
-                    </span>
-                  </button>
-                  <span className="ml-auto">
-                    <LocationsNavLink projectId={activeProject?.id} />
-                  </span>
-                </header>
+                    <SidebarTrigger aria-label="Open navigation" />
+                    <button
+                      className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
+                      onClick={openProjectPanel}
+                      type="button"
+                    >
+                      <span className="truncate">
+                        {activeProject?.name ?? "Select a project"}
+                      </span>
+                    </button>
+                  </header>
+                )}
                 <div
                   className={
-                    islandState === "maximized"
-                      ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
-                      : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3"
+                    fullBleed
+                      ? "flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+                      : islandState === "maximized"
+                        ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
+                        : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3"
                   }
                 >
                   <AnimatePresence initial={false} mode="wait">
                     <motion.div
                       animate={{ opacity: 1 }}
-                      className="flex min-h-full flex-col"
+                      className={
+                        fullBleed
+                          ? "flex h-full min-h-0 flex-col"
+                          : "flex min-h-full flex-col"
+                      }
                       exit={{ opacity: 0 }}
                       initial={{ opacity: 0 }}
                       key={workspaceContentKey}
@@ -728,28 +775,36 @@ export function WorkspaceShellPreview({
                 </div>
               </section>
             </div>
-            <div className="fixed inset-x-0 top-2 z-40 flex h-14 items-center gap-2 bg-shell-chrome px-3 text-foreground backdrop-blur-xl max-md:hidden">
-              <div className="flex min-w-0 flex-1 items-center">
-                <WorkspaceSwitcher
-                  activeOrganizationName={
-                    workspaceActions.activeOrganization?.name
-                  }
-                  isActiveOrganizationOwner={
-                    workspaceActions.isActiveOrganizationOwner
-                  }
-                  onInviteOpen={workspaceActions.openInviteDialog}
-                  onLeaveWorkspaceOpen={
-                    workspaceActions.openLeaveWorkspaceDialog
-                  }
-                  onSelectOrganization={(id) =>
-                    void workspaceActions.handleSelectOrganization(id)
-                  }
-                  organizationId={organizationId}
-                  organizations={organizations}
-                  workspaceState={workspaceActions.workspaceState}
-                />
-              </div>
-              <div className="flex min-w-0 shrink items-center justify-center">
+            <div
+              className={
+                fullBleed
+                  ? "pointer-events-none fixed inset-x-0 top-2 z-40 flex h-14 items-center justify-end gap-2 bg-transparent px-3 text-foreground max-md:hidden"
+                  : "fixed inset-x-0 top-2 z-40 flex h-14 items-center gap-2 bg-shell-chrome px-3 text-foreground backdrop-blur-xl max-md:hidden"
+              }
+            >
+              {fullBleed ? null : (
+                <div className="flex min-w-0 flex-1 items-center">
+                  <WorkspaceSwitcher
+                    activeOrganizationName={
+                      workspaceActions.activeOrganization?.name
+                    }
+                    isActiveOrganizationOwner={
+                      workspaceActions.isActiveOrganizationOwner
+                    }
+                    onInviteOpen={workspaceActions.openInviteDialog}
+                    onLeaveWorkspaceOpen={
+                      workspaceActions.openLeaveWorkspaceDialog
+                    }
+                    onSelectOrganization={(id) =>
+                      void workspaceActions.handleSelectOrganization(id)
+                    }
+                    organizationId={organizationId}
+                    organizations={organizations}
+                    workspaceState={workspaceActions.workspaceState}
+                  />
+                </div>
+              )}
+              <div className="pointer-events-auto flex min-w-0 shrink items-center justify-center">
                 <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1">
                   <WorkspaceDockNav
                     activeProjectId={activeProjectId ?? undefined}
@@ -776,22 +831,19 @@ export function WorkspaceShellPreview({
                     onSelectCrawl={selectCrawl}
                     onSelectProject={selectProject}
                     onSelectWorkspace={selectWorkspace}
+                    pathname={location.pathname}
+                    projectId={activeProject?.id}
                     projects={projects}
                     trailing={
-                      <>
-                        <LocationsNavLink
-                          projectId={activeProject?.id}
-                        />
-                        <button
-                          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
-                          disabled={!activeProject || isCrawlRunning}
-                          onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                          type="button"
-                        >
-                          <PlayIcon aria-hidden="true" className="size-4" />
-                          {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                        </button>
-                      </>
+                      <button
+                        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+                        disabled={!activeProject || isCrawlRunning}
+                        onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                        type="button"
+                      >
+                        <PlayIcon aria-hidden="true" className="size-4" />
+                        {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                      </button>
                     }
                     view={view}
                     actions={[
@@ -894,18 +946,20 @@ export function WorkspaceShellPreview({
                   />
                 </div>
               </div>
-              <div className="flex min-w-0 flex-1 items-center justify-end">
-                <ProfileMenu
-                  initials={initials}
-                  isPlatformAdmin={isPlatformAdmin}
-                  onLogout={() => void workspaceActions.handleLogout()}
-                  profileActionError={workspaceActions.profileActionError}
-                  userName={userName}
-                  workspaceState={workspaceActions.workspaceState}
-                />
-              </div>
+              {fullBleed ? null : (
+                <div className="flex min-w-0 flex-1 items-center justify-end">
+                  <ProfileMenu
+                    initials={initials}
+                    isPlatformAdmin={isPlatformAdmin}
+                    onLogout={() => void workspaceActions.handleLogout()}
+                    profileActionError={workspaceActions.profileActionError}
+                    userName={userName}
+                    workspaceState={workspaceActions.workspaceState}
+                  />
+                </div>
+              )}
             </div>
-            {features.ai_chat ? (
+            {features.ai_chat && !fullBleed ? (
               <LayoutGroup id="ai-island-group">
                 {islandState === "docked" ? (
                   <DynamicIslandDockedChrome

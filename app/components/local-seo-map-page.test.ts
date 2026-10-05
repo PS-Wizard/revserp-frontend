@@ -1,0 +1,336 @@
+import { describe, expect, test } from "bun:test"
+
+import {
+  localSeoMapFitPadding,
+  describeLocalSeoPinStatus,
+  describeLocalSeoUnresolvedMarker,
+  frozenLocalSeoRunCenter,
+  selectLocalSeoOverlayCells,
+  selectLocalSeoOverlayCenter,
+  selectLocalSeoReportCenter,
+  selectLocalSeoInitialReportLocation,
+  selectPendingLocalSeoDrafts,
+  upsertLocalSeoLocationInList,
+} from "~/components/local-seo-map-page"
+import { localSeoLocationsBounds } from "~/components/local-seo-map-position"
+import type { LocalSeoLocation, LocalSeoRun } from "~/lib/local-seo-api"
+
+function makeRun(status: LocalSeoRun["status"]): LocalSeoRun {
+  return {
+    id: "run-1",
+    location_id: "loc-1",
+    status,
+    radius_m: 5000,
+    expected_credits: 135,
+    credits_used: 0,
+    retry_credits: 0,
+    queries: ["coffee"],
+    cells: [],
+  }
+}
+
+function makeCell(overrides: Record<string, unknown> = {}) {
+  return {
+    query_index: 0,
+    point_index: 0,
+    latitude: 1,
+    longitude: 2,
+    distance_m: 0,
+    ring: "corner",
+    sector: "NW",
+    call_status: "success_nonempty",
+    match_status: "found",
+    rank: 3,
+    credits: 3,
+    credit_known: true,
+    error: null,
+    ...overrides,
+  } as LocalSeoRun["cells"][number]
+}
+
+function makeLocation(
+  overrides: Partial<LocalSeoLocation> = {}
+): LocalSeoLocation {
+  return {
+    id: "loc-1",
+    project_id: "proj-1",
+    name: "Roastery",
+    place_id: null,
+    address: "Main St",
+    locality: "Downtown",
+    query_service: "coffee",
+    latitude: 27.7,
+    longitude: 85.3,
+    queries: [],
+    ...overrides,
+  }
+}
+
+describe("bound pin status", () => {
+  test("unrun pins read as none, never failed", () => {
+    expect(describeLocalSeoPinStatus(null).status).toBe("none")
+  })
+
+  test("each run status maps to its own colour and label", () => {
+    expect(describeLocalSeoPinStatus(makeRun("completed")).color).toBe(
+      "#2ee6a8"
+    )
+    expect(describeLocalSeoPinStatus(makeRun("failed")).label).toBe("Failed")
+    expect(describeLocalSeoPinStatus(makeRun("running")).color).toBe("#38bdf8")
+  })
+})
+
+describe("frozen run centre", () => {
+  test("point 4 centre anchors the snapshot, not current edits", () => {
+    const run = makeRun("completed")
+    run.cells = [
+      makeCell({ point_index: 0, ring: "corner", latitude: 1, longitude: 2 }),
+      makeCell({
+        point_index: 4,
+        ring: "centre",
+        sector: "centre",
+        latitude: 27.7,
+        longitude: 85.3,
+        rank: 1,
+      }),
+    ]
+    expect(frozenLocalSeoRunCenter(run)).toEqual([85.3, 27.7])
+  })
+
+  test("returns null when the stored centre is absent, never a substitute", () => {
+    const run = makeRun("completed")
+    run.cells = [
+      makeCell({ point_index: 0, ring: "corner", latitude: 1, longitude: 2 }),
+    ]
+    expect(frozenLocalSeoRunCenter(run)).toBeNull()
+  })
+
+  test("point 4 with the wrong ring is not a centre", () => {
+    const run = makeRun("completed")
+    run.cells = [
+      makeCell({
+        point_index: 4,
+        ring: "corner",
+        latitude: 27.7,
+        longitude: 85.3,
+      }),
+    ]
+    expect(frozenLocalSeoRunCenter(run)).toBeNull()
+  })
+
+  test("non-finite stored centre returns null", () => {
+    const run = makeRun("completed")
+    run.cells = [
+      makeCell({
+        point_index: 4,
+        ring: "centre",
+        latitude: Number.NaN,
+        longitude: 85.3,
+      }),
+    ]
+    expect(frozenLocalSeoRunCenter(run)).toBeNull()
+  })
+
+  test("report centre matches the frozen overlay centre", () => {
+    const run = makeRun("completed")
+    run.cells = [
+      makeCell({
+        point_index: 4,
+        ring: "centre",
+        sector: "centre",
+        latitude: 27.7,
+        longitude: 85.3,
+      }),
+    ]
+    const reportCenter = selectLocalSeoReportCenter(run)
+    const overlayCenter = selectLocalSeoOverlayCenter({
+      setupLocation: null,
+      reportRun: run,
+    })
+    expect(reportCenter).toEqual([85.3, 27.7])
+    expect(overlayCenter).toEqual(reportCenter)
+  })
+
+  test("missing frozen centre yields null overlay centre, not live coords", () => {
+    const run = makeRun("completed")
+    run.cells = []
+    expect(
+      selectLocalSeoOverlayCenter({ setupLocation: null, reportRun: run })
+    ).toBeNull()
+  })
+})
+
+describe("setup preview", () => {
+  test("never reuses old run cells; previews from empty results", () => {
+    const oldCells = [makeCell({ point_index: 0 })]
+    expect(
+      selectLocalSeoOverlayCells({ setupActive: true, reportCells: oldCells })
+    ).toEqual([])
+  })
+
+  test("report keeps frozen cells", () => {
+    const oldCells = [makeCell({ point_index: 0 })]
+    expect(
+      selectLocalSeoOverlayCells({ setupActive: false, reportCells: oldCells })
+    ).toBe(oldCells)
+  })
+})
+
+describe("pending drafts and unresolved markers", () => {
+  test("pending drafts are unbound locations only", () => {
+    const bound = makeLocation({ id: "b", place_id: "ChIJ1" })
+    const draft = makeLocation({ id: "d", place_id: null })
+    expect(selectPendingLocalSeoDrafts([bound, draft])).toEqual([draft])
+  })
+
+  test("unresolved marker is distinct from every bound pin", () => {
+    const draft = makeLocation({ name: "Corner Shop" })
+    const unresolved = describeLocalSeoUnresolvedMarker(draft)
+    expect(unresolved.status).toBe("unresolved")
+    expect(unresolved.label).toBe("Unresolved search area")
+    expect(unresolved.ariaLabel).toContain("Unresolved search area")
+    expect(unresolved.ariaLabel).toContain("not a business location")
+    const boundColors = new Set(
+      (["completed", "partial", "failed", "queued", "running"] as const).map(
+        (status) => describeLocalSeoPinStatus(makeRun(status)).color
+      )
+    )
+    expect(boundColors.has(unresolved.color)).toBe(false)
+    for (const status of [
+      "completed",
+      "partial",
+      "failed",
+      "queued",
+      "running",
+    ] as const) {
+      expect(
+        (describeLocalSeoPinStatus(makeRun(status)).status as string) ===
+          "unresolved"
+      ).toBe(false)
+    }
+  })
+})
+
+describe("bind cache sync", () => {
+  test("upserts the bound location into the list cache", () => {
+    const stale = makeLocation({ id: "loc-1", latitude: 0, longitude: 0 })
+    const fresh = makeLocation({ id: "loc-1", latitude: 27.7, longitude: 85.3 })
+    expect(upsertLocalSeoLocationInList([stale], fresh)).toEqual([fresh])
+  })
+
+  test("appends unknown locations without dropping others", () => {
+    const first = makeLocation({ id: "a" })
+    const fresh = makeLocation({ id: "b" })
+    expect(upsertLocalSeoLocationInList([first], fresh)).toEqual([first, fresh])
+  })
+})
+
+describe("initial viewport fit", () => {
+  test("fits actual locations, not the default viewport", () => {
+    const bounds = localSeoLocationsBounds([
+      makeLocation({ latitude: 27.7, longitude: 85.3 }),
+      makeLocation({ latitude: 27.8, longitude: 85.4 }),
+    ])
+    expect(bounds === null).toBe(false)
+    const [[west, south], [east, north]] = bounds!
+    expect(west <= 85.3).toBe(true)
+    expect(east >= 85.4).toBe(true)
+    expect(south <= 27.7).toBe(true)
+    expect(north >= 27.8).toBe(true)
+  })
+
+  test("empty locations yield no bounds", () => {
+    expect(localSeoLocationsBounds([])).toBeNull()
+  })
+})
+
+describe("full-bleed map viewport fit padding", () => {
+  test("collapsed, the panel needs no left inset beyond 40px", () => {
+    expect(localSeoMapFitPadding({ collapsed: true, panelWidth: 340 })).toEqual(
+      {
+        top: 96,
+        bottom: 40,
+        left: 40,
+        right: 40,
+      }
+    )
+  })
+
+  test("expanded, the left inset clears the measured panel plus a gap", () => {
+    expect(
+      localSeoMapFitPadding({ collapsed: false, panelWidth: 340 })
+    ).toEqual({
+      top: 96,
+      bottom: 40,
+      left: 364,
+      right: 40,
+    })
+    expect(
+      localSeoMapFitPadding({ collapsed: false, panelWidth: 380 })
+    ).toEqual({
+      top: 96,
+      bottom: 40,
+      left: 404,
+      right: 40,
+    })
+  })
+
+  test("never grows a right inset from the removed sheet", () => {
+    for (const collapsed of [true, false]) {
+      expect(localSeoMapFitPadding({ collapsed, panelWidth: 340 }).right).toBe(
+        40
+      )
+    }
+  })
+})
+
+describe("no paid requests on mount", () => {
+  test("viewport and preview helpers are pure and never fetch", async () => {
+    const calls: string[] = []
+    const originalFetch = globalThis.fetch
+    ;(globalThis as Record<string, unknown>).fetch = (...args: unknown[]) => {
+      calls.push(String(args[0]))
+      throw new Error("network must stay idle")
+    }
+    try {
+      localSeoLocationsBounds([makeLocation()])
+      selectPendingLocalSeoDrafts([makeLocation()])
+      selectLocalSeoOverlayCells({ setupActive: true, reportCells: [] })
+      frozenLocalSeoRunCenter(makeRun("completed"))
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+    expect(calls).toEqual([])
+  })
+})
+
+describe("initial recorded grid", () => {
+  test("selects a saved bound location with frozen samples without a click", () => {
+    const draft = makeLocation({ id: "draft" })
+    const empty = makeLocation({ id: "empty", place_id: "google-empty" })
+    const bound = makeLocation({
+      place_id: "google-bound",
+      latitude: 30,
+      longitude: 90,
+    })
+    const recorded = makeRun("completed")
+    recorded.cells = [
+      makeCell({
+        point_index: 4,
+        ring: "centre",
+        latitude: 27.7,
+        longitude: 85.3,
+      }),
+    ]
+    const runs = new Map([
+      [draft.id, recorded],
+      [empty.id, makeRun("queued")],
+      [bound.id, recorded],
+    ])
+    expect(
+      selectLocalSeoInitialReportLocation([draft, empty, bound], runs)
+    ).toBe(bound)
+    expect(frozenLocalSeoRunCenter(recorded)).toEqual([85.3, 27.7])
+    expect(selectLocalSeoInitialReportLocation([draft, empty], runs)).toBeNull()
+  })
+})

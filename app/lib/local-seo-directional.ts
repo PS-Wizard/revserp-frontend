@@ -71,9 +71,27 @@ export type LocalSeoDirectionComparison =
   | { kind: "none" }
   | { kind: "single"; direction: LocalSeoSector; meanRank: number }
   | { kind: "tie"; directions: LocalSeoSector[]; meanRank: number }
-  | { kind: "different"; strongest: LocalSeoSector[]; weakest: LocalSeoSector[] }
+  | {
+      kind: "different"
+      strongest: LocalSeoSector[]
+      weakest: LocalSeoSector[]
+    }
 
 const LOCAL_SEO_RINGS: LocalSeoRing[] = ["centre", "edge", "corner"]
+
+export const LOCAL_SEO_CENTRE_POINT_INDEX = 4
+
+export function findLocalSeoCentreCell(
+  cells: LocalSeoCell[]
+): LocalSeoCell | null {
+  return (
+    cells.find(
+      (cell) =>
+        cell.point_index === LOCAL_SEO_CENTRE_POINT_INDEX &&
+        cell.ring === "centre"
+    ) ?? null
+  )
+}
 
 type LocalSeoRankAccumulator = {
   sum: number
@@ -93,13 +111,12 @@ function isValidLocalSeoRank(rank: number | null): rank is number {
 
 function addLocalSeoCellToAccumulator(
   accumulator: LocalSeoRankAccumulator,
-  cell: LocalSeoCell,
+  cell: LocalSeoCell
 ) {
   if (
     cell.call_status !== "success_empty" &&
     cell.call_status !== "success_nonempty"
   ) {
-    // A pending or failed call observed nothing: unknown, never a rank.
     accumulator.unknownCount += 1
     return
   }
@@ -109,14 +126,12 @@ function addLocalSeoCellToAccumulator(
   } else if (cell.match_status === "absent") {
     accumulator.absentCount += 1
   } else {
-    // A found match without a usable rank is evidence of nothing, so it
-    // counts as unknown rather than inventing a rank.
     accumulator.unknownCount += 1
   }
 }
 
 function meanOfLocalSeoAccumulator(
-  accumulator: LocalSeoRankAccumulator,
+  accumulator: LocalSeoRankAccumulator
 ): number | null {
   if (accumulator.foundCount === 0) return null
   return accumulator.sum / accumulator.foundCount
@@ -130,11 +145,11 @@ function meanOfLocalSeoAccumulator(
 const LOCAL_SEO_MEAN_TOLERANCE = 1e-9
 
 function compareLocalSeoDirectionMeans(
-  sectors: LocalSeoSectorSummary[],
+  sectors: LocalSeoSectorSummary[]
 ): LocalSeoDirectionComparison {
   const found = sectors.filter(
     (sector): sector is LocalSeoSectorSummary & { meanRank: number } =>
-      sector.meanRank !== null,
+      sector.meanRank !== null
   )
   if (found.length === 0) return { kind: "none" }
   if (found.length === 1) {
@@ -169,7 +184,7 @@ function compareLocalSeoDirectionMeans(
 /** Means always use found numeric ranks only. */
 export function summarizeLocalSeoGridCells(
   cells: LocalSeoCell[],
-  selectedQueryIndex: number | null,
+  selectedQueryIndex: number | null
 ): LocalSeoDirectionalSummary {
   const scoped =
     selectedQueryIndex === null
@@ -192,6 +207,9 @@ export function summarizeLocalSeoGridCells(
         selectedQueryIndex === null
           ? undefined
           : group.find((cell) => cell.query_index === selectedQueryIndex)
+      const focusedCallSucceeded =
+        focusedCell?.call_status === "success_empty" ||
+        focusedCell?.call_status === "success_nonempty"
       return {
         pointIndex,
         ring: group[0].ring,
@@ -202,12 +220,17 @@ export function summarizeLocalSeoGridCells(
         unknownCount: accumulator.unknownCount,
         totalCount: group.length,
         focusedRank:
-          focusedCell !== undefined &&
-          focusedCell.match_status === "found" &&
+          focusedCallSucceeded &&
+          focusedCell?.match_status === "found" &&
           isValidLocalSeoRank(focusedCell.rank)
             ? focusedCell.rank
             : null,
-        focusedMatchStatus: focusedCell ? focusedCell.match_status : null,
+        focusedMatchStatus:
+          focusedCell === undefined
+            ? null
+            : focusedCallSucceeded
+              ? focusedCell.match_status
+              : "unknown",
       }
     })
 
@@ -259,7 +282,7 @@ export function summarizeLocalSeoGridCells(
           accumulator.absentCount +
           accumulator.unknownCount,
       }
-    },
+    }
   )
 
   const centrePoint = points.find((point) => point.sector === "centre")
@@ -298,7 +321,7 @@ export function formatLocalSeoMeanRank(meanRank: number | null): string {
  */
 export function formatLocalSeoEmptyMeanRank(
   absentCount: number,
-  unknownCount: number,
+  unknownCount: number
 ): string {
   return absentCount > 0 && unknownCount === 0 ? "Absent" : "—"
 }

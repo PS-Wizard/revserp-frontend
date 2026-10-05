@@ -5,7 +5,7 @@ export class ApiError extends Error {
   details: unknown
 
   constructor(status: number, message: string, details: unknown) {
-    super(message)
+    super(status === 401 && message.toLowerCase() === "unauthorized" ? "Sign in to continue." : message)
     this.name = "ApiError"
     this.status = status
     this.details = details

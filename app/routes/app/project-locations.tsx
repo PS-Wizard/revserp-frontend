@@ -1,9 +1,10 @@
 import { useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link, useParams } from "react-router"
+import { Link, useParams, useSearchParams } from "react-router"
 import { MapPinIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react"
 
 import { ApiError } from "~/lib/api"
+import { LocalSeoMapPage } from "~/components/local-seo-map-page"
 import {
   LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS,
   LOCAL_SEO_QUERY_COUNT,
@@ -43,8 +44,14 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "~/components/ui/empty"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
-import { Label } from "~/components/ui/label"
 import { Separator } from "~/components/ui/separator"
 import { Skeleton } from "~/components/ui/skeleton"
 
@@ -74,7 +81,7 @@ export function ListingLookupEvidence({
   lookup: LocalSeoListingLookup
 }) {
   return (
-    <dl className="flex flex-col gap-1 text-sm">
+    <dl className="flex flex-col gap-2 text-sm">
       <div className="flex gap-2">
         <dt className="text-muted-foreground">Status</dt>
         <dd className="font-medium">{lookupStatusLabel(lookup.status)}</dd>
@@ -94,16 +101,9 @@ export function ListingLookupEvidence({
         </div>
       ) : null}
       {!lookup.credit_known ? (
-        <p role="alert" className="text-sm text-destructive">
-          Charge unconfirmed — confirmed spend may still settle. Kept reserved;
-          nothing was retried automatically.
-        </p>
+        <FieldError>Charge unconfirmed. The reservation stays held. No automatic retry or recovery is available.</FieldError>
       ) : null}
-      {lookup.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {lookup.error}
-        </p>
-      ) : null}
+      {lookup.error ? <FieldError>{lookup.error}</FieldError> : null}
     </dl>
   )
 }
@@ -118,16 +118,15 @@ function QueryDraftEditor({
   idPrefix: string
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <FieldGroup className="gap-4">
       {drafts.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No queries. An empty list stays empty; a run needs exactly{" "}
-          {LOCAL_SEO_QUERY_COUNT}.
-        </p>
+        <FieldDescription>
+          No queries. An empty list stays empty; a run needs between one and {LOCAL_SEO_QUERY_COUNT}.
+        </FieldDescription>
       ) : null}
       {drafts.map((query, index) => (
-        <div key={index} className="flex flex-col gap-1.5">
-          <Label htmlFor={`${idPrefix}-${index}`}>Query {index + 1}</Label>
+        <Field key={index}>
+          <FieldLabel htmlFor={`${idPrefix}-${index}`}>Query {index + 1}</FieldLabel>
           <div className="flex gap-2">
             <Input
               id={`${idPrefix}-${index}`}
@@ -147,7 +146,7 @@ function QueryDraftEditor({
               Remove
             </Button>
           </div>
-        </div>
+        </Field>
       ))}
       {drafts.length < LOCAL_SEO_QUERY_COUNT ? (
         <div>
@@ -156,7 +155,7 @@ function QueryDraftEditor({
           </Button>
         </div>
       ) : null}
-    </div>
+    </FieldGroup>
   )
 }
 
@@ -238,7 +237,6 @@ function CreateLocationCard({
     service.trim() !== "" &&
     selected !== null &&
     locality.trim() !== "" &&
-    queryDrafts !== null &&
     draftsError === null &&
     coordsError === null &&
     !createMutation.isPending
@@ -255,68 +253,60 @@ function CreateLocationCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="location-name">Business name</Label>
-            <Input
-              id="location-name"
-              value={name}
-              autoComplete="off"
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="location-service">Service text</Label>
-            <Input
-              id="location-service"
-              value={service}
-              autoComplete="off"
-              placeholder="e.g. life insurance, car repair"
-              onChange={(event) => setService(event.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="location-address">Street address</Label>
-          <div className="flex gap-2">
-            <Input
-              id="location-address"
-              value={address}
-              autoComplete="off"
-              onChange={(event) => setAddress(event.target.value)}
-            />
-            <Button
-              variant="outline"
-              disabled={address.trim() === "" || searchMutation.isPending}
-              onClick={() => searchMutation.mutate()}
-            >
-              <SearchIcon
-                aria-hidden="true"
-                className="size-4"
-                data-icon="inline-start"
+        <FieldGroup className="gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="location-name">Business name</FieldLabel>
+              <Input
+                id="location-name"
+                value={name}
+                autoComplete="off"
+                onChange={(event) => setName(event.target.value)}
               />
-              {searchMutation.isPending ? "Searching…" : "Search address · Free"}
-            </Button>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="location-service">Service text</FieldLabel>
+              <Input
+                id="location-service"
+                value={service}
+                autoComplete="off"
+                placeholder="e.g. life insurance, car repair"
+                onChange={(event) => setService(event.target.value)}
+              />
+            </Field>
           </div>
-          <div className="flex items-start gap-2">
-            <Checkbox
-              checked={bypassCache}
-              onCheckedChange={(checked) =>
-                setBypassCache(checked === true)
-              }
-              aria-label="Bypass cached geography"
-            />
-            <span className="text-xs text-muted-foreground">
-              Bypass cached geography for the next search. Searches never run
-              while typing.
-            </span>
-          </div>
-          {searchMutation.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {errorMessageOf(searchMutation.error, "Address search failed")}
-            </p>
-          ) : null}
-        </div>
+          <Field>
+            <FieldLabel htmlFor="location-address">Street address</FieldLabel>
+            <div className="flex gap-2">
+              <Input
+                id="location-address"
+                value={address}
+                autoComplete="off"
+                onChange={(event) => setAddress(event.target.value)}
+              />
+              <Button
+                variant="outline"
+                disabled={address.trim() === "" || searchMutation.isPending}
+                onClick={() => searchMutation.mutate()}
+              >
+                <SearchIcon aria-hidden="true" data-icon="inline-start" />
+                {searchMutation.isPending ? "Searching…" : "Search address · Free"}
+              </Button>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                checked={bypassCache}
+                onCheckedChange={(checked) => setBypassCache(checked === true)}
+                aria-label="Bypass cached geography"
+              />
+              <FieldDescription>
+                Bypass cached geography for the next search. Searches never run while typing.
+              </FieldDescription>
+            </div>
+            {searchMutation.isError ? (
+              <FieldError>{errorMessageOf(searchMutation.error, "Address search failed")}</FieldError>
+            ) : null}
+          </Field>
 
         {envelope ? (
           <div className="flex flex-col gap-2">
@@ -327,9 +317,7 @@ function CreateLocationCard({
               </Badge>
             </div>
             {envelope.refresh_error ? (
-              <p role="alert" className="text-sm text-destructive">
-                Refresh failed, showing cached results: {envelope.refresh_error}
-              </p>
+              <FieldError>Refresh failed, showing cached results: {envelope.refresh_error}</FieldError>
             ) : null}
             {envelope.results.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -377,44 +365,39 @@ function CreateLocationCard({
           </div>
         ) : null}
 
-        {selected ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
-            <p className="text-sm">
-              Accepted coordinates:{" "}
-              <span className="font-medium tabular-nums">
-                {selected.latitude.toFixed(5)}, {selected.longitude.toFixed(5)}
-              </span>
-            </p>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="location-locality">Locality</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="location-locality"
-                  value={locality}
-                  autoComplete="off"
-                  onChange={(event) => setLocality(event.target.value)}
-                />
-                <Button
-                  variant="outline"
-                  disabled={reverseMutation.isPending}
-                  onClick={() => reverseMutation.mutate()}
-                >
-                  {reverseMutation.isPending
-                    ? "Confirming…"
-                    : "Confirm locality · Free"}
-                </Button>
-              </div>
-              {reverseMutation.isError ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {errorMessageOf(
-                    reverseMutation.error,
-                    "Could not confirm the locality",
-                  )}
-                </p>
-              ) : null}
+          {selected ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <p className="text-sm">
+                Accepted coordinates:{" "}
+                <span className="font-medium tabular-nums">
+                  {selected.latitude.toFixed(5)}, {selected.longitude.toFixed(5)}
+                </span>
+              </p>
+              <Field>
+                <FieldLabel htmlFor="location-locality">Locality</FieldLabel>
+                <div className="flex gap-2">
+                  <Input
+                    id="location-locality"
+                    value={locality}
+                    autoComplete="off"
+                    onChange={(event) => setLocality(event.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={reverseMutation.isPending}
+                    onClick={() => reverseMutation.mutate()}
+                  >
+                    {reverseMutation.isPending ? "Confirming…" : "Confirm locality · Free"}
+                  </Button>
+                </div>
+                {reverseMutation.isError ? (
+                  <FieldError>
+                    {errorMessageOf(reverseMutation.error, "Could not confirm the locality")}
+                  </FieldError>
+                ) : null}
+              </Field>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
         <Separator />
 
@@ -436,53 +419,30 @@ function CreateLocationCard({
                 : "Generate five queries · Free"}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Generation applies only when you click — it never replaces manual
-            edits on its own. Generate first, then edit, add or remove rows.
-          </p>
+          <FieldDescription>
+            Generation applies only when you click — it never replaces manual edits on its own. Generate first, then
+            edit, add or remove rows.
+          </FieldDescription>
           {generateMutation.isError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {errorMessageOf(
-                generateMutation.error,
-                "Could not generate queries",
-              )}
-            </p>
+            <FieldError>
+              {errorMessageOf(generateMutation.error, "Could not generate queries")}
+            </FieldError>
           ) : null}
-          {queryDrafts !== null ? (
-            <>
-              <QueryDraftEditor
-                drafts={drafts}
-                onChange={setQueryDrafts}
-                idPrefix="new-location-query"
-              />
-              {draftsError ? (
-                <p role="alert" className="text-sm text-destructive">
-                  {draftsError}
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No queries yet. Generate the five defaults, or add rows manually.
-            </p>
-          )}
+          <QueryDraftEditor
+            drafts={drafts}
+            onChange={setQueryDrafts}
+            idPrefix="new-location-query"
+          />
+          {draftsError ? <FieldError>{draftsError}</FieldError> : null}
         </div>
-
+        </FieldGroup>
         {createMutation.isError ? (
-          <p role="alert" className="text-sm text-destructive">
-            {errorMessageOf(createMutation.error, "Could not create location")}
-          </p>
+          <FieldError>{errorMessageOf(createMutation.error, "Could not create location")}</FieldError>
         ) : null}
-        <div>
-          <Button disabled={!canCreate} onClick={() => createMutation.mutate()}>
-            <PlusIcon
-              aria-hidden="true"
-              className="size-4"
-              data-icon="inline-start"
-            />
-            {createMutation.isPending ? "Creating…" : "Create unbound location"}
-          </Button>
-        </div>
+        <Button disabled={!canCreate} onClick={() => createMutation.mutate()}>
+          <PlusIcon aria-hidden="true" data-icon="inline-start" />
+          {createMutation.isPending ? "Creating…" : "Create unbound location"}
+        </Button>
       </CardContent>
     </Card>
   )
@@ -644,11 +604,7 @@ function ResolveListingCard({
             disabled={lookupMutation.isPending}
             onClick={() => lookupMutation.mutate()}
           >
-            <SearchIcon
-              aria-hidden="true"
-              className="size-4"
-              data-icon="inline-start"
-            />
+            <SearchIcon aria-hidden="true" data-icon="inline-start" />
             {lookupMutation.isPending
               ? "Searching…"
               : `Find Google listing · ${LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS} credit`}
@@ -672,10 +628,9 @@ function ResolveListingCard({
           ) : null}
           <Button
             variant="ghost"
+            nativeButton={false}
             render={
-              <Link
-                to={`/app/projects/${projectId}/locations/${location.id}/grid`}
-              >
+              <Link to={`/app/projects/${projectId}/locations/${location.id}/grid`}>
                 Open grid
               </Link>
             }
@@ -686,7 +641,7 @@ function ResolveListingCard({
   )
 }
 
-export default function ProjectLocationsRoute() {
+function ProjectLocationsList() {
   const params = useParams()
   const projectId = params.projectID ?? params.projectId ?? ""
   const queryClient = useQueryClient()
@@ -739,6 +694,7 @@ export default function ProjectLocationsRoute() {
         <Button
           size="sm"
           variant="ghost"
+          nativeButton={false}
           render={<Link to="/app">Back to workspace</Link>}
         />
       </nav>
@@ -839,6 +795,7 @@ export default function ProjectLocationsRoute() {
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <Button
+                        nativeButton={false}
                         size="sm"
                         variant="outline"
                         render={
@@ -928,6 +885,18 @@ export default function ProjectLocationsRoute() {
           setResolveId(location.id)
         }}
       />
+    </main>
+  )
+}
+
+export default function ProjectLocationsRoute() {
+  const params = useParams()
+  const projectId = params.projectID ?? params.projectId ?? ""
+  const [searchParams] = useSearchParams()
+  if (!projectId || searchParams.get("view") === "list") return <ProjectLocationsList />
+  return (
+    <main aria-label="Locations map" className="h-full min-h-0 w-full">
+      <LocalSeoMapPage projectId={projectId} />
     </main>
   )
 }

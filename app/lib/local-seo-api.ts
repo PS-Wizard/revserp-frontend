@@ -27,6 +27,7 @@ export type LocalSeoGeocodedAddress = {
   longitude: number
   locality: string
   country_code: string
+  localities?: string[]
 }
 
 export type LocalSeoGeographyEnvelope = {
@@ -58,6 +59,8 @@ export type LocalSeoListingLookup = {
   credit_known: boolean
   error: string | null
   candidates: LocalSeoListingCandidate[]
+  deduplicated?: boolean
+  source_candidate?: Pick<LocalSeoGeocodedAddress, "display_name" | "latitude" | "longitude">
 }
 
 export type LocalSeoRing = "centre" | "edge" | "corner"
@@ -138,8 +141,8 @@ export const LOCAL_SEO_PER_CALL_CREDITS = 3
 /** Five queries times nine points: every run plans 45 cells. */
 export const LOCAL_SEO_CELL_COUNT =
   LOCAL_SEO_QUERY_COUNT * LOCAL_SEO_POINT_COUNT
-/** One deliberate listing search costs a single credit. */
-export const LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS = 1
+/** Each deliberate Maps listing resolution attempt costs three credits. */
+export const LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS = 3
 /** 45 cells at three credits each: every run reserves 135 credits. */
 export const LOCAL_SEO_BASE_EXPECTED_CREDITS =
   LOCAL_SEO_CELL_COUNT * LOCAL_SEO_PER_CALL_CREDITS
@@ -399,7 +402,7 @@ export function splitLocalSeoServices(serviceText: string): string[] {
 
 export function generateLocalSeoQueries(
   projectId: string,
-  input: { service: string; services?: string[]; locality: string },
+  input: { service: string; services?: string[]; locality: string; localities?: string[] },
 ) {
   return clientApiPost<{ queries: string[] }>(
     `/projects/${projectId}/locations/queries/generate`,
@@ -429,14 +432,15 @@ export function reverseLocalSeoAddress(
   )
 }
 
-/**
- * One deliberate paid search using the saved name/address. Never auto-call
- * when opening a page; every call is an explicit cost-labelled action.
- */
-export function createLocalSeoListingLookup(projectId: string, locationId: string) {
+/** One explicit paid Maps search; repeating the same search and viewport is free. */
+export function createLocalSeoListingLookup(
+  projectId: string,
+  locationId: string,
+  input: { search_query: string; latitude: number; longitude: number } | Record<string, never> = {},
+) {
   return clientApiPost<LocalSeoListingLookup>(
     `/projects/${projectId}/locations/${locationId}/listing-lookups`,
-    {},
+    input,
   )
 }
 
@@ -455,10 +459,7 @@ export async function fetchLocalSeoLatestListingLookup(
   }
 }
 
-/**
- * Binds a candidate from that location's own recorded lookup. Free, and it
- * never changes the accepted sample-centre coordinates.
- */
+/** Free candidate confirmation. New Maps evidence supplies authoritative coordinates. */
 export function bindLocalSeoListing(
   projectId: string,
   locationId: string,
@@ -467,5 +468,12 @@ export function bindLocalSeoListing(
   return clientApiPost<LocalSeoLocation>(
     `/projects/${projectId}/locations/${locationId}/listing`,
     input,
+  )
+}
+
+/** Free explicit unbinding; historical runs keep their frozen identity and coordinates. */
+export function unbindLocalSeoListing(projectId: string, locationId: string) {
+  return clientApiDelete<LocalSeoLocation>(
+    `/projects/${projectId}/locations/${locationId}/listing`,
   )
 }
