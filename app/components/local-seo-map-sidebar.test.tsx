@@ -5,8 +5,12 @@ import {
   LocalSeoMapSidebar,
   describeLocalSeoRadiusLabel,
   describeLocalSeoSidebarRow,
+  filterLocalSeoSidebarLocations,
+  type LocalSeoMapSidebarProps,
 } from "~/components/local-seo-map-sidebar"
+import { LocalSeoMapDetailPanel } from "~/components/local-seo-map-detail-panel"
 import type { LocalSeoLocation, LocalSeoRun } from "~/lib/local-seo-api"
+import type { ReactNode } from "react"
 
 function makeLocation(
   overrides: Partial<LocalSeoLocation> = {}
@@ -42,17 +46,13 @@ function makeRun(status: LocalSeoRun["status"]): LocalSeoRun {
 
 const noop = () => {}
 
-function renderSidebar(
-  overrides: Partial<Parameters<typeof LocalSeoMapSidebar>[0]> = {}
-) {
+function renderSidebar(overrides: Partial<LocalSeoMapSidebarProps> = {}) {
   return renderToStaticMarkup(
     <LocalSeoMapSidebar
       collapsed={false}
       locations={[]}
       runByLocation={new Map()}
       selectedId={null}
-      selectedRadiusM={5000}
-      searchActive={false}
       locationsPending={false}
       locationsError={null}
       onSelectLocation={noop}
@@ -60,6 +60,25 @@ function renderSidebar(
       onToggleCollapsed={noop}
       {...overrides}
     />
+  )
+}
+
+function renderDetail(
+  overrides: Partial<Parameters<typeof LocalSeoMapDetailPanel>[0]> = {},
+  children: ReactNode = <p>Overview content</p>
+) {
+  return renderToStaticMarkup(
+    <LocalSeoMapDetailPanel
+      title="Baneshwor"
+      meta="Main St"
+      pill="5 km radius"
+      onClose={noop}
+      activeTab="overview"
+      onTabChange={noop}
+      {...overrides}
+    >
+      {children}
+    </LocalSeoMapDetailPanel>
   )
 }
 
@@ -111,6 +130,43 @@ describe("sidebar row state", () => {
   })
 })
 
+describe("sidebar search filter", () => {
+  const roastery = makeLocation({
+    name: "Roastery",
+    address: "Main St",
+    locality: "Downtown",
+  })
+  const other = makeLocation({
+    id: "loc-2",
+    name: "Bakery",
+    address: "Side Rd",
+    locality: "Uptown",
+  })
+
+  test("an empty query keeps every saved location", () => {
+    expect(filterLocalSeoSidebarLocations([roastery, other], "  ")).toEqual([
+      roastery,
+      other,
+    ])
+  })
+
+  test("matches on name, address, and locality, ignoring case", () => {
+    expect(filterLocalSeoSidebarLocations([roastery, other], "ROAST")).toEqual([
+      roastery,
+    ])
+    expect(filterLocalSeoSidebarLocations([roastery, other], "main")).toEqual([
+      roastery,
+    ])
+    expect(filterLocalSeoSidebarLocations([roastery, other], "uptown")).toEqual(
+      [other]
+    )
+  })
+
+  test("an unmatched query returns nothing", () => {
+    expect(filterLocalSeoSidebarLocations([roastery, other], "zzz")).toEqual([])
+  })
+})
+
 describe("sidebar rendering", () => {
   test("lists bound and unresolved saved locations with the add action", () => {
     const bound = makeLocation({
@@ -128,73 +184,110 @@ describe("sidebar rendering", () => {
       runByLocation: new Map([[bound.id, makeRun("completed")]]),
     })
     expect(html).toContain("Locations")
-    expect(html).toContain("Add location")
+    expect(html).toContain("New location")
     expect(html).toContain("Baneshwor")
     expect(html).toContain("Corner Shop")
     expect(html).toContain("Unresolved search area")
     expect(html).toContain("Run completed")
+    expect(html).toContain("5 km radius")
   })
 
-  test("selected bound details carry the kilometre radius and tabs frame", () => {
-    const bound = makeLocation({
-      id: "bound",
-      name: "Baneshwor",
-      place_id: "ChIJ1",
-    })
+  test("the panel is list-only: a search field, never the tab detail", () => {
     const html = renderSidebar({
-      locations: [bound],
-      selectedId: bound.id,
-      selectedRadiusM: 10000,
-      children: <p>Overview content</p>,
+      locations: [makeLocation({ place_id: "ChIJ1" })],
+      selectedId: "loc-1",
     })
-    expect(html).toContain("10 km radius")
-    expect(html).toContain("Overview content")
+    expect(html).toContain('aria-label="Search saved locations"')
+    expect(html.includes("Overview")).toBe(false)
+    expect(html.includes("Queries")).toBe(false)
+    expect(html.includes("Close details")).toBe(false)
+  })
+
+  test("a selected row is marked current without a nested detail section", () => {
+    const bound = makeLocation({ place_id: "ChIJ1" })
+    const html = renderSidebar({ locations: [bound], selectedId: bound.id })
     expect(html).toContain('aria-current="true"')
+    expect(html.includes('aria-label="Roastery details"')).toBe(false)
   })
 
-  test("search mode swaps the list for the in-panel form", () => {
-    const bound = makeLocation({
-      id: "bound",
-      name: "Baneshwor",
-      place_id: "ChIJ1",
-    })
-    const html = renderSidebar({
-      locations: [bound],
-      searchActive: true,
-      searchForm: <p>Add a location form</p>,
-    })
-    expect(html).toContain("Add a location form")
-    expect(html.includes("Add location</button>")).toBe(false)
-    expect(html.includes("Baneshwor")).toBe(false)
+  test("the expanded header keeps only the collapse control", () => {
+    const html = renderSidebar()
+    expect(html).toContain('aria-label="Collapse locations"')
+    expect(html).toContain("w-[clamp(18rem,22vw,22rem)]")
+    expect(html.includes("Add location")).toBe(false)
   })
 
-  test("the expanded header carries the collapse control", () => {
-    expect(renderSidebar()).toContain('aria-label="Collapse locations"')
+  test("New location is a pinned footer row, not a header button", () => {
+    const html = renderSidebar()
+    expect(html).toContain("New location")
+    expect(html.includes("border-t")).toBe(true)
+    expect(html.includes("<header")).toBe(true)
+    const headerEnd = html.indexOf("</header>")
+    const footerStart = html.indexOf("New location")
+    expect(footerStart > headerEnd).toBe(true)
   })
 
   test("a collapsed panel shrinks to the expand button container", () => {
     const html = renderSidebar({ collapsed: true })
     expect(html).toContain('aria-label="Expand locations panel"')
     expect(html.includes("<header")).toBe(false)
-    expect(html.includes("Add location")).toBe(false)
+    expect(html.includes("New location")).toBe(false)
+    expect(html.includes("Search saved locations")).toBe(false)
     expect(html.includes("No locations yet")).toBe(false)
-  })
-
-  test("top surface aligns to the navbar dock, not the outer row", () => {
-    const html = renderSidebar()
-    expect(html.includes("top-[13px]")).toBe(true)
-    expect(html.includes("top-2")).toBe(false)
-  })
-
-  test("collapsed is a compact square, expanded spans near full height", () => {
-    const collapsed = renderSidebar({ collapsed: true })
-    const expanded = renderSidebar()
-    expect(collapsed.includes("w-11")).toBe(true)
-    expect(collapsed.includes("bottom-3")).toBe(false)
-    expect(expanded.includes("bottom-3")).toBe(true)
   })
 
   test("an empty list teaches the next step", () => {
     expect(renderSidebar()).toContain("No locations yet")
+  })
+
+  test("a filtered-out list explains the empty result", () => {
+    const html = renderSidebar({ locations: [makeLocation()] })
+    expect(html).toContain("Roastery")
+    expect(html.includes("No saved locations match this search.")).toBe(false)
+  })
+})
+
+describe("detail panel", () => {
+  test("carries the name, meta line, radius pill, and close control", () => {
+    const html = renderDetail()
+    expect(html).toContain("Baneshwor")
+    expect(html).toContain("Main St")
+    expect(html).toContain("5 km radius")
+    expect(html).toContain('aria-label="Close details"')
+    expect(html).toContain('aria-label="Baneshwor details"')
+  })
+
+  test("pins the tabs and renders the active content", () => {
+    const html = renderDetail()
+    expect(html).toContain("Overview")
+    expect(html).toContain("Queries")
+    expect(html).toContain("Listing")
+    expect(html).toContain("Run")
+    expect(html).toContain("Overview content")
+    expect(html).toContain('data-slot="tabs"')
+  })
+
+  test("the add/search flow drops the tabs and shows the back control", () => {
+    const html = renderDetail(
+      {
+        title: "Add location",
+        meta: undefined,
+        pill: undefined,
+        activeTab: undefined,
+        onTabChange: undefined,
+        onBack: noop,
+      },
+      <p>Search form</p>
+    )
+    expect(html).toContain("Add location")
+    expect(html).toContain("Search form")
+    expect(html.includes("Overview")).toBe(false)
+    expect(html).toContain('aria-label="Back to locations"')
+  })
+
+  test("the below-lg back control is hidden on wide screens", () => {
+    const html = renderDetail({ onBack: noop, backClassName: "lg:hidden" })
+    expect(html).toContain('aria-label="Back to locations"')
+    expect(html).toContain("lg:hidden")
   })
 })

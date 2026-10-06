@@ -136,6 +136,22 @@ export type LocalSeoCreateRunResponse = {
 
 export const LOCAL_SEO_QUERY_COUNT = 5
 export const LOCAL_SEO_POINT_COUNT = 9
+/** Row-major point letters A to I: A is north-west, E is the centre, I is south-east. */
+export const LOCAL_SEO_POINT_LETTERS = [
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H",
+  "I",
+] as const
+
+export function localSeoPointLetter(pointIndex: number): string {
+  return LOCAL_SEO_POINT_LETTERS[pointIndex] ?? "?"
+}
 /** Every provider call costs three credits. */
 export const LOCAL_SEO_PER_CALL_CREDITS = 3
 /** Five queries times nine points: every run plans 45 cells. */

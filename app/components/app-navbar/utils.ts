@@ -167,11 +167,11 @@ export function downloadBlob(blob: Blob, filename: string) {
 }
 
 export function isLocationsPath(pathname: string) {
-  return /^\/app\/projects\/[^/]+\/locations(\/|$)/.test(pathname)
+  return /^\/app\/projects\/[^/]+\/locations\/?$/.test(pathname)
 }
 
 export function getProjectIdFromLocationsPath(pathname: string) {
-  const match = pathname.match(/^\/app\/projects\/([^/]+)\/locations(\/|$)/)
+  const match = pathname.match(/^\/app\/projects\/([^/]+)\/locations\/?$/)
   return match?.[1] ?? null
 }
 

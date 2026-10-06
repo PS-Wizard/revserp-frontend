@@ -15,8 +15,12 @@ import "maplibre-gl/dist/maplibre-gl.css"
 import type { FeatureCollection, Point, Polygon } from "geojson"
 
 import {
+  gridMeasurementFeatureCollection,
+  gridMeasurementLabelCollection,
   samplingRadiusPolygon,
   type GridGeoCellProperties,
+  type GridMeasurementFeatureCollection,
+  type GridMeasurementLabelFeatureCollection,
 } from "~/lib/local-seo-grid-geo"
 import { cn } from "~/lib/utils"
 
@@ -31,6 +35,12 @@ const OVERLAY_HATCH_LAYER_ID = "local-seo-overlay-hatch"
 const OVERLAY_LINE_LAYER_ID = "local-seo-overlay-line"
 const OVERLAY_LABEL_LAYER_ID = "local-seo-overlay-label"
 const OVERLAY_LABEL_SOURCE_ID = "local-seo-overlay-labels"
+const MEASUREMENT_SOURCE_ID = "local-seo-measurement"
+const MEASUREMENT_CASING_LAYER_ID = "local-seo-measurement-casing"
+const MEASUREMENT_LINE_LAYER_ID = "local-seo-measurement-line"
+const MEASUREMENT_LABEL_SOURCE_ID = "local-seo-measurement-labels"
+const MEASUREMENT_LABEL_LAYER_ID = "local-seo-measurement-label"
+const OVERLAY_LABEL_FONT_STACK = ["Noto Sans Regular", "Open Sans Regular"]
 const HATCH_PATTERN_ID = "local-seo-hatch"
 
 /** A blank canvas with no error event is the failure that ships, so the style must
@@ -57,6 +67,30 @@ function emptyRadiusCollection(): FeatureCollection<Polygon> {
 
 function emptyOverlayCollection(): LocalSeoOverlayData {
   return { type: "FeatureCollection", features: [] }
+}
+
+function emptyMeasurementCollection(): GridMeasurementFeatureCollection {
+  return { type: "FeatureCollection", features: [] }
+}
+
+function emptyMeasurementLabelCollection(): GridMeasurementLabelFeatureCollection {
+  return { type: "FeatureCollection", features: [] }
+}
+
+function measurementFeatureCollection(
+  center: MapLibreLngLat,
+  radiusM: number | null
+): GridMeasurementFeatureCollection {
+  if (radiusM === null) return emptyMeasurementCollection()
+  return gridMeasurementFeatureCollection(center, radiusM)
+}
+
+function measurementLabelCollection(
+  center: MapLibreLngLat,
+  radiusM: number | null
+): GridMeasurementLabelFeatureCollection {
+  if (radiusM === null) return emptyMeasurementLabelCollection()
+  return gridMeasurementLabelCollection(center, radiusM)
 }
 
 function radiusFeatureCollection(
@@ -142,6 +176,65 @@ function installLocalSeoSources(map: MapLibreMap): void {
       },
     })
   }
+  if (!map.getSource(MEASUREMENT_SOURCE_ID)) {
+    map.addSource(MEASUREMENT_SOURCE_ID, {
+      type: "geojson",
+      data: emptyMeasurementCollection(),
+    })
+    map.addSource(MEASUREMENT_LABEL_SOURCE_ID, {
+      type: "geojson",
+      data: emptyMeasurementLabelCollection(),
+    })
+    map.addLayer(
+      {
+        id: MEASUREMENT_CASING_LAYER_ID,
+        type: "line",
+        source: MEASUREMENT_SOURCE_ID,
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 3,
+          "line-opacity": 0.85,
+        },
+      },
+      RADIUS_FILL_LAYER_ID
+    )
+    map.addLayer(
+      {
+        id: MEASUREMENT_LINE_LAYER_ID,
+        type: "line",
+        source: MEASUREMENT_SOURCE_ID,
+        layout: { "line-cap": "round" },
+        paint: {
+          "line-color": "#334155",
+          "line-width": 1.5,
+          "line-opacity": 0.85,
+          "line-dasharray": [2, 3],
+        },
+      },
+      RADIUS_FILL_LAYER_ID
+    )
+    map.addLayer(
+      {
+        id: MEASUREMENT_LABEL_LAYER_ID,
+        type: "symbol",
+        source: MEASUREMENT_LABEL_SOURCE_ID,
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": 12,
+          "text-font": OVERLAY_LABEL_FONT_STACK,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "text-optional": false,
+        },
+        paint: {
+          "text-color": "#1e293b",
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 3,
+        },
+      },
+      RADIUS_FILL_LAYER_ID
+    )
+  }
   if (!map.getSource(OVERLAY_SOURCE_ID)) {
     map.addSource(OVERLAY_SOURCE_ID, {
       type: "geojson",
@@ -186,10 +279,17 @@ function installLocalSeoSources(map: MapLibreMap): void {
       type: "symbol",
       source: OVERLAY_LABEL_SOURCE_ID,
       layout: {
-        "text-field": ["get", "label"],
+        "text-field": [
+          "concat",
+          ["get", "pointLetter"],
+          "\n",
+          ["get", "gridValue"],
+        ],
         "text-size": 12,
-        "text-font": ["Noto Sans Regular", "Open Sans Regular"],
+        "text-line-height": 1.15,
+        "text-font": OVERLAY_LABEL_FONT_STACK,
         "text-allow-overlap": true,
+        "text-offset": [0, -1.1],
       },
       paint: {
         "text-color": "#0f172a",
@@ -204,6 +304,14 @@ function applyRadius(map: MapLibreMap, target: MapLibreRadiusTarget) {
   const source = map.getSource(RADIUS_SOURCE_ID) as GeoJSONSource | undefined
   if (!source) return
   source.setData(radiusFeatureCollection(target.center, target.radiusM))
+  const measurements = map.getSource(MEASUREMENT_SOURCE_ID) as
+    GeoJSONSource | undefined
+  measurements?.setData(
+    measurementFeatureCollection(target.center, target.radiusM)
+  )
+  const labels = map.getSource(MEASUREMENT_LABEL_SOURCE_ID) as
+    GeoJSONSource | undefined
+  labels?.setData(measurementLabelCollection(target.center, target.radiusM))
 }
 
 function applyOverlay(map: MapLibreMap, data: LocalSeoOverlayData) {

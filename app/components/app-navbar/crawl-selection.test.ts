@@ -129,24 +129,14 @@ describe("crawl selection navigation", () => {
     }
   })
 
-  test("nested locations routes navigate back to /app with the project retained", () => {
+  test("locations route navigates back to /app with the project retained", () => {
     const mapLocation = {
       pathname: "/app/projects/p-9/locations",
-      search: "?view=list",
+      search: "",
     }
     const target = getWorkspaceNavigationTarget(mapLocation, "keywords", "seo")
     expect(target.pathname).toBe("/app")
     expect(target.hash).toBe("#keywords")
     expect(new URLSearchParams(target.search).get("project")).toBe("p-9")
-    expect(new URLSearchParams(target.search).get("view")).toBe("list")
-
-    const gridLocation = {
-      pathname: "/app/projects/p-9/locations/loc-1/grid",
-      search: "",
-    }
-    const auditTarget = getWorkspaceNavigationTarget(gridLocation, "revserp-audit", "aeo")
-    expect(auditTarget.pathname).toBe("/app")
-    expect(auditTarget.hash).toBe("#aeo-tab")
-    expect(new URLSearchParams(auditTarget.search).get("project")).toBe("p-9")
   })
 })

@@ -309,10 +309,8 @@ export default function AppPage() {
   const outlet = useOutlet()
   const fullBleed = useMemo(() => {
     if (!outlet) return false
-    if (!/^\/app\/projects\/[^/]+\/locations\/?$/.test(location.pathname))
-      return false
-    return new URLSearchParams(location.search).get("view") !== "list"
-  }, [outlet, location.pathname, location.search])
+    return /^\/app\/projects\/[^/]+\/locations\/?$/.test(location.pathname)
+  }, [outlet, location.pathname])
   useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
   const [view, setView] = useState<DashboardView>("revserp-audit")
   const [auditTab, setAuditTab] = useState<AuditTab>("overview")

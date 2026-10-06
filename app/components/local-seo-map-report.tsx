@@ -1,37 +1,161 @@
+import { XIcon } from "lucide-react"
+
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Link } from "react-router"
 
 import { ApiError } from "~/lib/api"
 import {
   isLocalSeoLocationBound,
   localSeoLocationQueryKey,
   localSeoLocationsQueryKey,
+  localSeoPointLetter,
   unbindLocalSeoListing,
-  validateLocalSeoRadiusM,
+  type LocalSeoCell,
   type LocalSeoListingLookup,
   type LocalSeoLocation,
   type LocalSeoRun,
+  type LocalSeoSector,
 } from "~/lib/local-seo-api"
 import {
   formatLocalSeoEmptyMeanRank,
   formatLocalSeoMeanRank,
   summarizeLocalSeoGridCells,
 } from "~/lib/local-seo-directional"
-import {
-  LOCAL_SEO_BOARD_ORDER,
-  LOCAL_SEO_SECTOR_NAMES,
-} from "~/components/local-seo-grid"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
+import { Separator } from "~/components/ui/separator"
 import { Skeleton } from "~/components/ui/skeleton"
 import { cn } from "~/lib/utils"
+
+const LOCAL_SEO_BOARD_ORDER: LocalSeoSector[] = [
+  "NW",
+  "N",
+  "NE",
+  "W",
+  "centre",
+  "E",
+  "SW",
+  "S",
+  "SE",
+]
+
+const LOCAL_SEO_SECTOR_NAMES: Record<LocalSeoSector, string> = {
+  centre: "Business centre",
+  N: "North",
+  NE: "North-east",
+  E: "East",
+  SE: "South-east",
+  S: "South",
+  SW: "South-west",
+  W: "West",
+  NW: "North-west",
+}
+
+function localSeoSectorCaption(sector: LocalSeoSector): string {
+  return sector === "centre" ? "Centre" : sector
+}
+
+function describeLocalSeoPointCellResult(
+  cell: LocalSeoCell | undefined
+): string {
+  if (!cell) return "Unknown"
+  const succeeded =
+    cell.call_status === "success_empty" ||
+    cell.call_status === "success_nonempty"
+  if (!succeeded) return cell.call_status === "pending" ? "Unknown" : "Failed"
+  if (
+    cell.match_status === "found" &&
+    typeof cell.rank === "number" &&
+    Number.isFinite(cell.rank) &&
+    cell.rank > 0
+  ) {
+    return `#${Number.isInteger(cell.rank) ? cell.rank : cell.rank.toFixed(1)}`
+  }
+  if (cell.match_status === "absent") return "Not found"
+  return "Unknown"
+}
+
+function LocalSeoPointCard({
+  run,
+  pointIndex,
+  onClear,
+}: {
+  run: LocalSeoRun
+  pointIndex: number
+  onClear?: () => void
+}) {
+  const letter = localSeoPointLetter(pointIndex)
+  const sector = LOCAL_SEO_BOARD_ORDER[pointIndex]
+  const caption =
+    sector === "centre"
+      ? localSeoSectorCaption(sector)
+      : LOCAL_SEO_SECTOR_NAMES[sector]
+  const pointCells = run.cells.filter((cell) => cell.point_index === pointIndex)
+  const summary = summarizeLocalSeoGridCells(run.cells, null).points.find(
+    (point) => point.pointIndex === pointIndex
+  )
+  const failedCount = pointCells.filter(
+    (cell) => cell.call_status === "request_failed"
+  ).length
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-sm">{`Point ${letter} · ${caption}`}</CardTitle>
+        <CardDescription className="tabular-nums">
+          Found-only mean rank{" "}
+          {formatLocalSeoMeanRank(summary?.meanRank ?? null)} ·{" "}
+          {summary?.foundCount ?? 0} found · {summary?.absentCount ?? 0} absent
+          · {failedCount} failed
+        </CardDescription>
+        {onClear ? (
+          <CardAction>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label={`Clear point ${letter}`}
+              className="-mt-1 -mr-2 size-7"
+              onClick={onClear}
+            >
+              <XIcon aria-hidden="true" />
+            </Button>
+          </CardAction>
+        ) : null}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <Separator />
+        {pointCells.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No samples recorded for this point in the frozen run.
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-1">
+            {run.queries.map((query, index) => (
+              <li
+                key={`${index}-${query}`}
+                className="flex items-baseline justify-between gap-3 text-sm"
+              >
+                <span className="truncate text-muted-foreground">{query}</span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {describeLocalSeoPointCellResult(
+                    pointCells.find((cell) => cell.query_index === index)
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function errorMessageOf(error: unknown, fallback: string) {
   if (error instanceof ApiError) return error.message || fallback
@@ -80,17 +204,6 @@ export function describeLocalSeoReportRunState(args: {
   return "ready"
 }
 
-export function localSeoReportGridHref(args: {
-  projectId: string
-  locationId: string
-  radiusM: number | null
-}): string {
-  const base = `/app/projects/${args.projectId}/locations/${args.locationId}/grid`
-  if (args.radiusM === null) return base
-  if (validateLocalSeoRadiusM(args.radiusM) !== null) return base
-  return `${base}?radius_m=${args.radiusM}`
-}
-
 function summarizeLocalSeoRunOverview(run: LocalSeoRun) {
   const summary = summarizeLocalSeoGridCells(run.cells, null)
   let foundCount = 0
@@ -111,7 +224,15 @@ function summarizeLocalSeoRunOverview(run: LocalSeoRun) {
   }
 }
 
-function LocalSeoRunOverview({ run }: { run: LocalSeoRun }) {
+function LocalSeoRunOverview({
+  run,
+  focusedPointIndex,
+  onClearPointFocus,
+}: {
+  run: LocalSeoRun
+  focusedPointIndex?: number | null
+  onClearPointFocus?: () => void
+}) {
   const overview = summarizeLocalSeoRunOverview(run)
   const summary = summarizeLocalSeoGridCells(run.cells, null)
   const pointBySector = new Map(
@@ -119,6 +240,13 @@ function LocalSeoRunOverview({ run }: { run: LocalSeoRun }) {
   )
   return (
     <>
+      {focusedPointIndex !== null && focusedPointIndex !== undefined ? (
+        <LocalSeoPointCard
+          run={run}
+          pointIndex={focusedPointIndex}
+          onClear={onClearPointFocus}
+        />
+      ) : null}
       <Card size="sm">
         <CardHeader>
           <CardDescription>
@@ -144,7 +272,7 @@ function LocalSeoRunOverview({ run }: { run: LocalSeoRun }) {
         aria-label="Nine-point visibility board"
         className="grid grid-cols-3 gap-1.5"
       >
-        {LOCAL_SEO_BOARD_ORDER.map((sector) => {
+        {LOCAL_SEO_BOARD_ORDER.map((sector, index) => {
           const point = pointBySector.get(sector)
           const headline = !point
             ? "—"
@@ -167,8 +295,8 @@ function LocalSeoRunOverview({ run }: { run: LocalSeoRun }) {
                 sector === "centre" && "border-primary/40 bg-muted/60"
               )}
             >
-              <span className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
-                {sector === "centre" ? "Business" : sector}
+              <span className="text-[10px] font-medium tracking-wide text-muted-foreground">
+                {`${localSeoPointLetter(index)} · ${localSeoSectorCaption(sector)}`}
               </span>
               <span className="text-base leading-none font-semibold tabular-nums">
                 {headline}
@@ -182,6 +310,12 @@ function LocalSeoRunOverview({ run }: { run: LocalSeoRun }) {
           )
         })}
       </ul>
+      <p className="text-[10px] text-muted-foreground">
+        {LOCAL_SEO_BOARD_ORDER.map(
+          (sector, index) =>
+            `${localSeoPointLetter(index)} ${localSeoSectorCaption(sector)}`
+        ).join(" · ")}
+      </p>
     </>
   )
 }
@@ -223,7 +357,8 @@ export function LocalSeoMapReportContent({
   lookupPending,
   onUnbound,
   tab,
-  setupRadiusM,
+  focusedPointIndex,
+  onClearPointFocus,
 }: {
   projectId: string
   location: LocalSeoLocation
@@ -234,7 +369,8 @@ export function LocalSeoMapReportContent({
   lookupPending: boolean
   onUnbound?: (location: LocalSeoLocation) => void
   tab: LocalSeoMapReportTab
-  setupRadiusM?: number
+  focusedPointIndex?: number | null
+  onClearPointFocus?: () => void
 }) {
   const queryClient = useQueryClient()
   const bound = isLocalSeoLocationBound(location)
@@ -256,23 +392,17 @@ export function LocalSeoMapReportContent({
     runError,
     latestRun,
   })
-  const draftRadiusM =
-    setupRadiusM !== undefined && validateLocalSeoRadiusM(setupRadiusM) === null
-      ? setupRadiusM
-      : null
-  const gridHref = localSeoReportGridHref({
-    projectId,
-    locationId: location.id,
-    radiusM: draftRadiusM ?? latestRun?.radius_m ?? null,
-  })
-
   if (tab === "overview") {
     return (
       <section aria-label="Run overview" className="flex flex-col gap-3">
         <h2 className="text-sm font-medium">Latest run</h2>
         <LocalSeoReportRunStateNotice runState={runState} runError={runError} />
         {runState === "ready" && latestRun !== null ? (
-          <LocalSeoRunOverview run={latestRun} />
+          <LocalSeoRunOverview
+            run={latestRun}
+            focusedPointIndex={focusedPointIndex}
+            onClearPointFocus={onClearPointFocus}
+          />
         ) : null}
       </section>
     )
@@ -374,12 +504,6 @@ export function LocalSeoMapReportContent({
           ) : null}
         </div>
       ) : null}
-      <Button
-        nativeButton={false}
-        size="sm"
-        variant="outline"
-        render={<Link to={gridHref}>Open grid</Link>}
-      />
     </section>
   )
 }

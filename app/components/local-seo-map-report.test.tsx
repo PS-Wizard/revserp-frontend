@@ -7,7 +7,6 @@ import {
   describeLocalSeoReportRunState,
   LocalSeoMapLookupEvidence,
   LocalSeoMapReportContent,
-  localSeoReportGridHref,
   type LocalSeoMapReportTab,
 } from "~/components/local-seo-map-report"
 import type {
@@ -77,7 +76,8 @@ function renderReport({
   runError = null,
   lookup = null,
   lookupPending = false,
-  setupRadiusM,
+  focusedPointIndex = null,
+  onClearPointFocus,
 }: {
   tab: LocalSeoMapReportTab
   location?: LocalSeoLocation
@@ -86,7 +86,8 @@ function renderReport({
   runError?: string | null
   lookup?: LocalSeoListingLookup | null
   lookupPending?: boolean
-  setupRadiusM?: number
+  focusedPointIndex?: number | null
+  onClearPointFocus?: () => void
 }) {
   const client = new QueryClient()
   const html = renderToStaticMarkup(
@@ -100,8 +101,9 @@ function renderReport({
           runError={runError}
           lookup={lookup}
           lookupPending={lookupPending}
+          focusedPointIndex={focusedPointIndex}
+          onClearPointFocus={onClearPointFocus}
           tab={tab}
-          setupRadiusM={setupRadiusM}
         />
       </StaticRouter>
     </QueryClientProvider>
@@ -211,28 +213,6 @@ describe("report run state", () => {
   })
 })
 
-describe("grid handoff", () => {
-  test("preserves the frozen radius in the grid link", () => {
-    expect(
-      localSeoReportGridHref({
-        projectId: "proj-1",
-        locationId: "loc-1",
-        radiusM: 5000,
-      })
-    ).toBe("/app/projects/proj-1/locations/loc-1/grid?radius_m=5000")
-  })
-
-  test("omits invalid radius values", () => {
-    expect(
-      localSeoReportGridHref({
-        projectId: "proj-1",
-        locationId: "loc-1",
-        radiusM: null,
-      })
-    ).toBe("/app/projects/proj-1/locations/loc-1/grid")
-  })
-})
-
 describe("report content overview", () => {
   const cells = [
     makeCell({ point_index: 4, ring: "centre", sector: "centre", rank: 1 }),
@@ -270,6 +250,11 @@ describe("report content overview", () => {
     expect(html).toContain("North-west sampled point: mean rank 3.0")
     expect(html).toContain("Business centre sampled point: mean rank 1.0")
     expect(html).toContain("North sampled point: mean rank Absent")
+    expect(html).toContain("A · NW")
+    expect(html).toContain("E · Centre")
+    expect(html).toContain(
+      "A NW · B N · C NE · D W · E Centre · F E · G SW · H S · I SE"
+    )
     expect(html.includes("Recorded sampling map")).toBe(false)
     expect(html.includes("reconstructed visual guides")).toBe(false)
   })
@@ -294,6 +279,7 @@ describe("report content overview", () => {
     })
     expect(html.includes('role="dialog"')).toBe(false)
     expect(html.includes("backdrop")).toBe(false)
+    expect(html.includes('data-slot="sheet-content"')).toBe(false)
   })
 })
 
@@ -343,32 +329,12 @@ describe("report content run", () => {
         target_place_id: "ChIJ-other",
         unconfirmed_calls: 2,
       }),
-      setupRadiusM: 7000,
     })
     expect(html).toContain("Frozen queries: coffee · tea")
     expect(html).toContain("Radius: 5000 m")
     expect(html).toContain("Expected 135 · confirmed 135 · 20 held credits")
     expect(html).toContain("different listing")
     expect(html).toContain("2 unresolved charges")
-    // The explicit handoff carries the live draft radius.
-    expect(html).toContain("radius_m=7000")
-  })
-
-  test("falls back to the frozen radius with no valid draft", () => {
-    const html = renderReport({
-      tab: "run",
-      latestRun: makeRun({ radius_m: 5000 }),
-    })
-    expect(html).toContain("radius_m=5000")
-  })
-
-  test("an invalid draft radius never reaches the grid link", () => {
-    const html = renderReport({
-      tab: "run",
-      latestRun: makeRun({ radius_m: 5000 }),
-      setupRadiusM: 50,
-    })
-    expect(html).toContain("radius_m=5000")
   })
 })
 
@@ -399,5 +365,76 @@ describe("unknown status stays free", () => {
       globalThis.fetch = originalFetch
     }
     expect(calls).toEqual([])
+  })
+})
+
+describe("report content focused point", () => {
+  const cells = [
+    makeCell({ query_index: 0, point_index: 0, sector: "NW", rank: 4 }),
+    makeCell({
+      query_index: 1,
+      point_index: 0,
+      sector: "NW",
+      call_status: "success_empty",
+      match_status: "absent",
+      rank: null,
+    }),
+    makeCell({
+      query_index: 2,
+      point_index: 0,
+      sector: "NW",
+      call_status: "request_failed",
+      match_status: "unknown",
+      rank: null,
+    }),
+    makeCell({
+      query_index: 3,
+      point_index: 0,
+      sector: "NW",
+      call_status: "pending",
+      match_status: "unknown",
+      rank: null,
+    }),
+  ]
+
+  test("lists each saved query's result at the focused point from the frozen run", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({
+        queries: ["coffee", "tea", "matcha", "cocoa"],
+        cells,
+      }),
+      location: makeLocation({ queries: ["live-only"] }),
+      focusedPointIndex: 0,
+      onClearPointFocus: () => {},
+    })
+    expect(html).toContain("Point A · North-west")
+    expect(html).toContain("coffee")
+    expect(html).toContain("matcha")
+    expect(html).toContain("#4")
+    expect(html).toContain("Not found")
+    expect(html).toContain("Failed")
+    expect(html).toContain("Unknown")
+    expect(html).toContain('aria-label="Clear point A"')
+    expect(html.includes("live-only")).toBe(false)
+  })
+
+  test("says so plainly when the frozen run has no cell for the point", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({ queries: ["coffee"], cells: [] }),
+      focusedPointIndex: 4,
+      onClearPointFocus: () => {},
+    })
+    expect(html).toContain("Point E · Centre")
+    expect(html).toContain("No samples recorded for this point")
+  })
+
+  test("no point card is rendered without a focus", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({ queries: ["coffee"], cells }),
+    })
+    expect(html.includes("Point A · North-west")).toBe(false)
   })
 })

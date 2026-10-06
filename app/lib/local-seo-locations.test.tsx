@@ -1,7 +1,4 @@
 import { describe, expect, test, afterEach } from "bun:test"
-import { renderToStaticMarkup } from "react-dom/server"
-import { Route, Routes, StaticRouter } from "react-router"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import {
   buildWorkspaceNavGroups,
@@ -25,9 +22,6 @@ import {
   type LocalSeoListingLookup,
   type LocalSeoLocation,
 } from "~/lib/local-seo-api"
-import ProjectLocationsRoute, {
-  ListingLookupEvidence,
-} from "~/routes/app/project-locations"
 
 function makeLocation(overrides: Partial<LocalSeoLocation>): LocalSeoLocation {
   return {
@@ -46,7 +40,7 @@ function makeLocation(overrides: Partial<LocalSeoLocation>): LocalSeoLocation {
 }
 
 function makeLookup(
-  overrides: Partial<LocalSeoListingLookup>,
+  overrides: Partial<LocalSeoListingLookup>
 ): LocalSeoListingLookup {
   return {
     id: "lookup-1",
@@ -68,27 +62,29 @@ describe("validateEditableLocalSeoQueries", () => {
 
   test("accepts one to five distinct queries", () => {
     expect(validateEditableLocalSeoQueries(["a"])).toBeNull()
-    expect(validateEditableLocalSeoQueries(["a", "b", "c", "d", "e"])).toBeNull()
+    expect(
+      validateEditableLocalSeoQueries(["a", "b", "c", "d", "e"])
+    ).toBeNull()
   })
 
   test("rejects more than five without padding", () => {
     expect(
-      validateEditableLocalSeoQueries(["a", "b", "c", "d", "e", "f"]),
+      validateEditableLocalSeoQueries(["a", "b", "c", "d", "e", "f"])
     ).toBe("At most 5 queries are allowed.")
   })
 
   test("rejects blank rows instead of keeping them", () => {
     expect(validateEditableLocalSeoQueries(["a", "  "])).toBe(
-      "Queries must all be non-empty; remove the empty row instead.",
+      "Queries must all be non-empty; remove the empty row instead."
     )
   })
 
   test("rejects duplicates and oversized queries like the run validator", () => {
     expect(validateEditableLocalSeoQueries(["Coffee", " coffee "])).toBe(
-      "Queries must all be distinct, ignoring case and surrounding spaces.",
+      "Queries must all be distinct, ignoring case and surrounding spaces."
     )
     expect(validateEditableLocalSeoQueries(["a".repeat(501)])).toBe(
-      "Queries must each fit within 500 bytes.",
+      "Queries must each fit within 500 bytes."
     )
   })
 })
@@ -100,13 +96,13 @@ describe("validateLocalSeoCoordinates", () => {
 
   test("rejects non-finite and out-of-range values", () => {
     expect(validateLocalSeoCoordinates(Number.NaN, 0)).toBe(
-      "Coordinates must be finite numbers.",
+      "Coordinates must be finite numbers."
     )
     expect(validateLocalSeoCoordinates(91, 0)).toBe(
-      "Latitude must be between -90 and 90.",
+      "Latitude must be between -90 and 90."
     )
     expect(validateLocalSeoCoordinates(0, 181)).toBe(
-      "Longitude must be between -180 and 180.",
+      "Longitude must be between -180 and 180."
     )
   })
 })
@@ -115,9 +111,7 @@ describe("bound identity run gate", () => {
   test("unbound locations never run, even with five queries", () => {
     expect(isLocalSeoLocationBound(makeLocation({}))).toBe(false)
     expect(
-      canRunLocalSeoGrid(
-        makeLocation({ queries: ["a", "b", "c", "d", "e"] }),
-      ),
+      canRunLocalSeoGrid(makeLocation({ queries: ["a", "b", "c", "d", "e"] }))
     ).toBe(false)
   })
 
@@ -127,23 +121,23 @@ describe("bound identity run gate", () => {
 
   test("bound locations run with between one and five saved queries", () => {
     expect(
-      canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: [] })),
+      canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: [] }))
     ).toBe(false)
     expect(
-      canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: ["a"] })),
+      canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: ["a"] }))
     ).toBe(true)
     expect(
       canRunLocalSeoGrid(
-        makeLocation({ place_id: "ChIJ1", queries: ["a", "b", "c", "d", "e"] }),
-      ),
+        makeLocation({ place_id: "ChIJ1", queries: ["a", "b", "c", "d", "e"] })
+      )
     ).toBe(true)
     expect(
       canRunLocalSeoGrid(
         makeLocation({
           place_id: "ChIJ1",
           queries: ["a", "b", "c", "d", "e", "f"],
-        }),
-      ),
+        })
+      )
     ).toBe(false)
   })
 })
@@ -153,7 +147,10 @@ describe("location setup API module", () => {
   const realFetch = globalThis.fetch
 
   function mockFetchOnce(status: number, payload: unknown) {
-    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit
+    ) => {
       const url = typeof input === "string" ? input : input.toString()
       let body: unknown = null
       const raw = (init as { body?: unknown } | undefined)?.body
@@ -211,7 +208,7 @@ describe("location setup API module", () => {
     expect(data.queries).toHaveLength(5)
     expect(seen[0].url).toContain("/locations/queries/generate")
     expect((seen[0].body as Record<string, unknown>)["service"]).toBe(
-      "coffee roastery",
+      "coffee roastery"
     )
   })
 
@@ -264,53 +261,22 @@ describe("location setup API module", () => {
   })
 })
 
-describe("listing lookup evidence", () => {
-  test("completed empty lookup reads as no-match, not failure", () => {
-    const html = renderToStaticMarkup(
-      <ListingLookupEvidence lookup={makeLookup({})} />,
-    )
-    expect(html).toContain("Completed")
-    expect(html).toContain("1 credit")
-    expect(html.includes("unconfirmed")).toBe(false)
-  })
-
-  test("failed and uncertain states show cost evidence distinctly", () => {
-    const failed = renderToStaticMarkup(
-      <ListingLookupEvidence
-        lookup={makeLookup({
-          status: "failed",
-          credits_used: 0,
-          reserved_credits: 1,
-          error: "provider timeout",
-        })}
-      />,
-    )
-    expect(failed).toContain("Failed")
-    expect(failed).toContain("provider timeout")
-
-    const uncertain = renderToStaticMarkup(
-      <ListingLookupEvidence
-        lookup={makeLookup({ status: "uncertain", credit_known: false })}
-      />,
-    )
-    expect(uncertain).toContain("Uncertain charge")
-    expect(uncertain).toContain("unconfirmed")
-  })
-})
-
 describe("locations nav group", () => {
   const base = { gscConnector: false, integrations: false, maxCompetitors: 0 }
 
   test("locations tab exists only with a project, as a route href", () => {
-    const withProject = buildWorkspaceNavGroups({ ...base, projectId: "proj-1" })
+    const withProject = buildWorkspaceNavGroups({
+      ...base,
+      projectId: "proj-1",
+    })
     const group = withProject.find((entry) => entry.key === "locations")
     expect(group?.tabs).toHaveLength(1)
     expect(group?.tabs[0].href).toBe("/app/projects/proj-1/locations")
 
     const withoutProject = buildWorkspaceNavGroups(base)
-    expect(
-      withoutProject.some((entry) => entry.key === "locations")
-    ).toBe(false)
+    expect(withoutProject.some((entry) => entry.key === "locations")).toBe(
+      false
+    )
   })
 
   test("locations pathname never marks an audit tab active", () => {
@@ -318,9 +284,9 @@ describe("locations nav group", () => {
     const locations = groups
       .flatMap((entry) => entry.tabs)
       .find((tab) => tab.key === "locations")!
-    expect(
-      isWorkspaceTabActive(locations, "revserp-audit", "overview")
-    ).toBe(false)
+    expect(isWorkspaceTabActive(locations, "revserp-audit", "overview")).toBe(
+      false
+    )
     expect(
       isWorkspaceTabActive(
         locations,
@@ -337,29 +303,5 @@ describe("locations nav group", () => {
         "/app/projects/proj-1/locations"
       )
     ).toBe("locations")
-  })
-})
-
-describe("create location query editor", () => {
-  test("manual editor renders before generation with an add affordance", () => {
-    const client = new QueryClient()
-    try {
-      const html = renderToStaticMarkup(
-        <QueryClientProvider client={client}>
-          <StaticRouter location="/app/projects/proj-1/locations?view=list">
-            <Routes>
-              <Route
-                path="/app/projects/:projectID/locations"
-                element={<ProjectLocationsRoute />}
-              />
-            </Routes>
-          </StaticRouter>
-        </QueryClientProvider>,
-      )
-      expect(html).toContain("Add query")
-      expect(html).toContain("Create unbound location")
-    } finally {
-      client.clear()
-    }
   })
 })

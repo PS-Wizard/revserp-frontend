@@ -246,40 +246,54 @@ describe("initial viewport fit", () => {
 
 describe("full-bleed map viewport fit padding", () => {
   test("collapsed, the panel needs no left inset beyond 40px", () => {
-    expect(localSeoMapFitPadding({ collapsed: true, panelWidth: 340 })).toEqual(
-      {
-        top: 96,
-        bottom: 40,
-        left: 40,
-        right: 40,
-      }
-    )
-  })
-
-  test("expanded, the left inset clears the measured panel plus a gap", () => {
     expect(
-      localSeoMapFitPadding({ collapsed: false, panelWidth: 340 })
+      localSeoMapFitPadding({ collapsed: true, containerWidth: 340 })
     ).toEqual({
       top: 96,
       bottom: 40,
-      left: 364,
+      left: 40,
       right: 40,
     })
+  })
+
+  test("open with nothing measured falls back to 40px", () => {
     expect(
-      localSeoMapFitPadding({ collapsed: false, panelWidth: 380 })
+      localSeoMapFitPadding({ collapsed: false, containerWidth: 0 })
     ).toEqual({
       top: 96,
       bottom: 40,
-      left: 404,
+      left: 40,
+      right: 40,
+    })
+  })
+
+  test("list panel only, the left inset clears it plus a gap", () => {
+    expect(
+      localSeoMapFitPadding({ collapsed: false, containerWidth: 320 })
+    ).toEqual({
+      top: 96,
+      bottom: 40,
+      left: 344,
+      right: 40,
+    })
+  })
+
+  test("with the detail panel open, the left inset clears both panels", () => {
+    expect(
+      localSeoMapFitPadding({ collapsed: false, containerWidth: 688 })
+    ).toEqual({
+      top: 96,
+      bottom: 40,
+      left: 712,
       right: 40,
     })
   })
 
   test("never grows a right inset from the removed sheet", () => {
-    for (const collapsed of [true, false]) {
-      expect(localSeoMapFitPadding({ collapsed, panelWidth: 340 }).right).toBe(
-        40
-      )
+    for (const containerWidth of [320, 688]) {
+      expect(
+        localSeoMapFitPadding({ collapsed: false, containerWidth }).right
+      ).toBe(40)
     }
   })
 })

@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 import { Marker, type Map as MapLibreMap } from "maplibre-gl"
+import { useReducedMotion } from "motion/react"
 
 import { ApiError } from "~/lib/api"
 import {
@@ -34,16 +35,15 @@ import {
   localSeoLocationsBounds,
   localSeoSetupGeodesicBounds,
 } from "~/components/local-seo-map-position"
+import { LocalSeoMapDetailPanel } from "~/components/local-seo-map-detail-panel"
 import { LocalSeoMapSearchCard } from "~/components/local-seo-map-search"
 import { LocalSeoMapReportContent } from "~/components/local-seo-map-report"
 import { LocalSeoMapSetupContent } from "~/components/local-seo-map-setup"
 import {
-  LOCAL_SEO_MAP_SIDEBAR_TABS,
   LocalSeoMapSidebar,
   describeLocalSeoRadiusLabel,
   type LocalSeoMapSidebarTab,
 } from "~/components/local-seo-map-sidebar"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 
 function errorMessageOf(error: unknown, fallback: string) {
   if (error instanceof ApiError) return error.message || fallback
@@ -164,12 +164,13 @@ export function selectLocalSeoInitialReportLocation(
 
 export function localSeoMapFitPadding(args: {
   collapsed: boolean
-  panelWidth: number
+  containerWidth: number
 }): { top: number; bottom: number; left: number; right: number } {
+  const open = !args.collapsed && args.containerWidth > 0
   return {
     top: 96,
     bottom: 40,
-    left: args.collapsed ? 40 : Math.max(0, Math.round(args.panelWidth)) + 24,
+    left: open ? Math.max(0, Math.round(args.containerWidth)) + 24 : 40,
     right: 40,
   }
 }
@@ -179,6 +180,10 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
   const [map, setMap] = useState<MapLibreMap | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [detailRequested, setDetailRequested] = useState(false)
+  const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(
+    null
+  )
   const [adding, setAdding] = useState(false)
   const [activeTab, setActiveTab] = useState<LocalSeoMapSidebarTab>("overview")
   const [radiusDrafts, setRadiusDrafts] = useState<Record<string, number>>({})
@@ -189,10 +194,11 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     null
   )
   const [viewportWidth, setViewportWidth] = useState(0)
-  const [panelWidth, setPanelWidth] = useState(0)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const shouldReduceMotion = useReducedMotion() ?? false
   const markersRef = useRef<Marker[]>([])
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
-  const panelRef = useRef<HTMLElement | null>(null)
+  const panelsRef = useRef<HTMLDivElement | null>(null)
   const initialSelectionDoneRef = useRef(false)
   const initialFitDoneRef = useRef(false)
   const fitKeyRef = useRef<string | null>(null)
@@ -232,6 +238,17 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     ? (runByLocation.get(selectedLocation.id) ?? null)
     : null
   const searchActive = adding || (selectedLocation !== null && !selectedBound)
+  const detailOpen = adding || (selectedLocation !== null && detailRequested)
+  const detailSubtitle =
+    adding || !selectedLocation
+      ? undefined
+      : selectedBound
+        ? selectedLocation.address || selectedLocation.locality || undefined
+        : "Unresolved search area"
+  const detailRadiusLabel =
+    !adding && selectedBound && selectedRun
+      ? describeLocalSeoRadiusLabel(selectedRun.radius_m)
+      : undefined
 
   const selectedIndex = selectedLocation
     ? locations.findIndex((location) => location.id === selectedLocation.id)
@@ -334,7 +351,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
       element.title = `${location.name} · ${pin.label}`
       const label = document.createElement("span")
       label.className =
-        "pointer-events-none absolute top-1/2 left-8 -translate-y-1/2 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm"
+        "pointer-events-none absolute top-1/2 left-8 max-w-40 -translate-y-1/2 truncate rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 shadow-sm"
       label.textContent = location.name
       element.append(label)
       element.style.width = "28px"
@@ -420,11 +437,11 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
   }, [])
 
   useEffect(() => {
-    const element = panelRef.current
+    const element = panelsRef.current
     if (!element) return
     const update = () => {
       const width = Math.round(element.getBoundingClientRect().width)
-      setPanelWidth((current) => (current === width ? current : width))
+      setContainerWidth((current) => (current === width ? current : width))
     }
     update()
     const observer = new ResizeObserver(update)
@@ -476,7 +493,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     if (validateLocalSeoRadiusM(activeRadiusM) !== null) return
     const bounds = localSeoSetupGeodesicBounds(overlayCenter, activeRadiusM)
     if (!bounds) return
-    if (!collapsed && panelWidth === 0) return
+    if (!collapsed && containerWidth === 0) return
     const key = [
       selectedId ?? "none",
       searchActive ? "search" : activeTab,
@@ -484,7 +501,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
       overlayCenter[1],
       activeRadiusM,
       collapsed ? "collapsed" : "open",
-      panelWidth,
+      containerWidth,
       viewportWidth,
     ].join(":")
     if (fitKeyRef.current === key) return
@@ -492,7 +509,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     try {
       map.resize()
       map.fitBounds(bounds, {
-        padding: localSeoMapFitPadding({ collapsed, panelWidth }),
+        padding: localSeoMapFitPadding({ collapsed, containerWidth }),
         maxZoom: 14,
         duration: 0,
       })
@@ -508,7 +525,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     overlayCenter?.[1],
     activeRadiusM,
     collapsed,
-    panelWidth,
+    containerWidth,
     viewportWidth,
   ])
 
@@ -557,6 +574,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
       map.flyTo({
         center: [location.longitude, location.latitude],
         zoom: Math.max(map.getZoom(), 13),
+        duration: shouldReduceMotion ? 0 : 900,
       })
     } catch {
       return
@@ -567,6 +585,8 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     initialSelectionDoneRef.current = true
     setAdding(false)
     setSelectedId(location.id)
+    setFocusedPointIndex(null)
+    setDetailRequested(true)
     setActiveTab("overview")
     const run = runByLocation.get(location.id) ?? null
     if (
@@ -580,12 +600,44 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
   function openAddLocation() {
     initialSelectionDoneRef.current = true
     setAdding(true)
+    setDetailRequested(true)
     setSelectedId(null)
+    setFocusedPointIndex(null)
   }
 
   function closeSearch() {
     setAdding(false)
+    setDetailRequested(false)
     if (selectedLocation && !selectedBound) setSelectedId(null)
+  }
+
+  function closeDetail() {
+    setDetailRequested(false)
+  }
+
+  function clearSelection() {
+    setSelectedId(null)
+    setDetailRequested(false)
+    setFocusedPointIndex(null)
+  }
+
+  function handleBound(location: LocalSeoLocation) {
+    queryClient.setQueryData(
+      localSeoLocationQueryKey(projectId, location.id),
+      location
+    )
+    queryClient.setQueryData(
+      localSeoLocationsQueryKey(projectId),
+      (old: LocalSeoLocation[] | undefined) =>
+        upsertLocalSeoLocationInList(old ?? [], location)
+    )
+    seededLocationIdRef.current = null
+    setAdding(false)
+    setSelectedId(location.id)
+    setFocusedPointIndex(null)
+    setDetailRequested(true)
+    setActiveTab("queries")
+    flyToLocation(location)
   }
 
   function renderActiveTab() {
@@ -645,7 +697,8 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
         lookup={lookupQuery.data ?? null}
         lookupPending={lookupQuery.isPending}
         tab={activeTab}
-        setupRadiusM={selectedRadiusM}
+        focusedPointIndex={focusedPointIndex}
+        onClearPointFocus={() => setFocusedPointIndex(null)}
       />
     )
   }
@@ -662,78 +715,68 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
               : null
           }
           overlayData={overlayData}
+          onMapClick={() => setFocusedPointIndex(null)}
+          onFeatureClick={(feature) => {
+            const pointIndex = feature.properties?.pointIndex
+            if (typeof pointIndex !== "number") return
+            setFocusedPointIndex(pointIndex)
+            setDetailRequested(true)
+            setActiveTab("overview")
+          }}
           onReady={setMap}
-          fallbackHref={`/app/projects/${projectId}/locations?view=list`}
         />
       </div>
 
-      <LocalSeoMapSidebar
-        collapsed={collapsed}
-        panelRef={panelRef}
-        onToggleCollapsed={() => setCollapsed((value) => !value)}
-        locations={locations}
-        runByLocation={runByLocation}
-        selectedId={selectedId}
-        selectedRadiusM={
-          activeTab === "queries"
-            ? selectedRadiusM
-            : (selectedRun?.radius_m ?? selectedRadiusM)
-        }
-        searchActive={searchActive}
-        locationsPending={locationsQuery.isPending}
-        locationsError={
-          locationsQuery.isError
-            ? errorMessageOf(locationsQuery.error, "Could not load locations")
-            : null
-        }
-        onSelectLocation={selectLocation}
-        onAddLocation={openAddLocation}
-        searchForm={
-          <LocalSeoMapSearchCard
-            key={adding ? "new" : (selectedLocation?.id ?? "new")}
-            projectId={projectId}
-            initialLocation={
-              adding ? undefined : (selectedLocation ?? undefined)
-            }
-            searchCenter={searchCenter ?? undefined}
-            onBound={(location) => {
-              queryClient.setQueryData(
-                localSeoLocationQueryKey(projectId, location.id),
-                location
-              )
-              queryClient.setQueryData(
-                localSeoLocationsQueryKey(projectId),
-                (old: LocalSeoLocation[] | undefined) =>
-                  upsertLocalSeoLocationInList(old ?? [], location)
-              )
-              seededLocationIdRef.current = null
-              setAdding(false)
-              setSelectedId(location.id)
-              setActiveTab("queries")
-              flyToLocation(location)
-            }}
-            onClose={closeSearch}
-          />
-        }
+      <div
+        ref={panelsRef}
+        className="pointer-events-none absolute top-[13px] bottom-3 left-3 flex items-stretch gap-2"
       >
-        {selectedBound && selectedLocation ? (
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) =>
-              setActiveTab(value as LocalSeoMapSidebarTab)
-            }
+        <LocalSeoMapSidebar
+          collapsed={collapsed}
+          locations={locations}
+          runByLocation={runByLocation}
+          selectedId={selectedId}
+          locationsPending={locationsQuery.isPending}
+          locationsError={
+            locationsQuery.isError
+              ? errorMessageOf(locationsQuery.error, "Could not load locations")
+              : null
+          }
+          onSelectLocation={selectLocation}
+          onAddLocation={openAddLocation}
+          onToggleCollapsed={() => setCollapsed((value) => !value)}
+          className={detailOpen ? "max-lg:hidden" : undefined}
+        />
+
+        {detailOpen ? (
+          <LocalSeoMapDetailPanel
+            key={adding ? "add" : "detail"}
+            title={adding ? "Add location" : (selectedLocation?.name ?? "")}
+            meta={adding ? undefined : detailSubtitle}
+            pill={adding ? undefined : detailRadiusLabel}
+            onClose={searchActive ? closeSearch : closeDetail}
+            onBack={searchActive ? closeSearch : clearSelection}
+            backClassName={searchActive ? undefined : "lg:hidden"}
+            activeTab={searchActive ? undefined : activeTab}
+            onTabChange={searchActive ? undefined : setActiveTab}
           >
-            <TabsList className="w-full">
-              {LOCAL_SEO_MAP_SIDEBAR_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value}>
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <TabsContent value={activeTab}>{renderActiveTab()}</TabsContent>
-          </Tabs>
+            {searchActive ? (
+              <LocalSeoMapSearchCard
+                key={adding ? "new" : (selectedLocation?.id ?? "new")}
+                projectId={projectId}
+                initialLocation={
+                  adding ? undefined : (selectedLocation ?? undefined)
+                }
+                searchCenter={searchCenter ?? undefined}
+                onBound={handleBound}
+                onClose={closeSearch}
+              />
+            ) : (
+              renderActiveTab()
+            )}
+          </LocalSeoMapDetailPanel>
         ) : null}
-      </LocalSeoMapSidebar>
+      </div>
     </div>
   )
 }

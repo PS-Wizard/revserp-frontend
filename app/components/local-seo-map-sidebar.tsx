@@ -1,5 +1,15 @@
-import type { ReactNode, RefObject } from "react"
-import { PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon } from "lucide-react"
+import { useState } from "react"
+import {
+  ChevronRightIcon,
+  MapPinIcon,
+  MapPinOffIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
+  PinIcon,
+  PlusIcon,
+  SearchIcon,
+  SearchXIcon,
+} from "lucide-react"
 
 import {
   isLocalSeoLocationBound,
@@ -7,6 +17,11 @@ import {
   type LocalSeoRun,
 } from "~/lib/local-seo-api"
 import { Button } from "~/components/ui/button"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "~/components/ui/input-group"
 import { Skeleton } from "~/components/ui/skeleton"
 import { cn } from "~/lib/utils"
 
@@ -54,21 +69,30 @@ export function describeLocalSeoSidebarRow(
   }
 }
 
+export function filterLocalSeoSidebarLocations(
+  locations: LocalSeoLocation[],
+  query: string
+): LocalSeoLocation[] {
+  const needle = query.trim().toLowerCase()
+  if (needle === "") return locations
+  return locations.filter((location) =>
+    [location.name, location.address, location.locality].some((field) =>
+      field.toLowerCase().includes(needle)
+    )
+  )
+}
+
 export type LocalSeoMapSidebarProps = {
   collapsed: boolean
   locations: LocalSeoLocation[]
   runByLocation: Map<string, LocalSeoRun | null>
   selectedId: string | null
-  selectedRadiusM: number
-  searchActive: boolean
   locationsPending: boolean
   locationsError: string | null
   onSelectLocation: (location: LocalSeoLocation) => void
   onAddLocation: () => void
   onToggleCollapsed: () => void
-  panelRef?: RefObject<HTMLElement | null>
-  searchForm?: ReactNode
-  children?: ReactNode
+  className?: string
 }
 
 export function LocalSeoMapSidebar({
@@ -76,33 +100,24 @@ export function LocalSeoMapSidebar({
   locations,
   runByLocation,
   selectedId,
-  selectedRadiusM,
-  searchActive,
   locationsPending,
   locationsError,
   onSelectLocation,
   onAddLocation,
   onToggleCollapsed,
-  panelRef,
-  searchForm,
-  children,
+  className,
 }: LocalSeoMapSidebarProps) {
-  const selectedLocation =
-    locations.find((location) => location.id === selectedId) ?? null
-  const selectedBound = selectedLocation
-    ? isLocalSeoLocationBound(selectedLocation)
-    : false
+  const [query, setQuery] = useState("")
+  const filteredLocations = filterLocalSeoSidebarLocations(locations, query)
 
   return (
     <aside
-      ref={panelRef}
       id="local-seo-map-sidebar"
       aria-label="Locations"
       className={cn(
-        "absolute top-[13px] left-3 z-20 flex flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg",
-        collapsed
-          ? "w-11"
-          : "bottom-3 w-[clamp(15rem,60vw,21.25rem)] xl:w-[23.75rem]"
+        "pointer-events-auto flex flex-col overflow-hidden rounded-xl border border-border bg-background shadow-lg",
+        collapsed ? "w-11 self-start" : "min-h-0 w-[clamp(18rem,22vw,22rem)]",
+        className
       )}
     >
       {collapsed ? (
@@ -121,56 +136,56 @@ export function LocalSeoMapSidebar({
         </div>
       ) : (
         <>
-          <header className="flex items-center gap-2 border-b border-border px-3 py-2">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border/60 px-4">
             <h2 className="text-sm font-medium">Locations</h2>
-            <div className="ml-auto flex items-center gap-1">
-              {searchActive ? null : (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={onAddLocation}
-                >
-                  <PlusIcon aria-hidden="true" data-icon="inline-start" />
-                  Add location
-                </Button>
-              )}
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                aria-controls="local-seo-map-sidebar"
-                aria-expanded={true}
-                aria-label="Collapse locations"
-                onClick={onToggleCollapsed}
-              >
-                <PanelLeftCloseIcon aria-hidden="true" />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-controls="local-seo-map-sidebar"
+              aria-expanded={true}
+              aria-label="Collapse locations"
+              className="ml-auto"
+              onClick={onToggleCollapsed}
+            >
+              <PanelLeftCloseIcon aria-hidden="true" />
+            </Button>
           </header>
+
+          <div className="shrink-0 px-4 py-3">
+            <InputGroup className="shadow-none">
+              <InputGroupAddon align="inline-start">
+                <SearchIcon aria-hidden="true" />
+              </InputGroupAddon>
+              <InputGroupInput
+                type="search"
+                value={query}
+                autoComplete="off"
+                placeholder="Search saved locations"
+                aria-label="Search saved locations"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </InputGroup>
+          </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             {locationsPending ? (
-              <div className="flex flex-col gap-2 p-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
+              <div className="flex flex-col gap-3 p-4">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
               </div>
             ) : locationsError ? (
               <p
                 role="alert"
-                className="m-4 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive"
+                className="m-4 rounded-lg border border-destructive/40 px-3 py-2 text-xs text-destructive"
               >
                 {locationsError}
               </p>
-            ) : searchActive ? (
-              <div className="p-4">{searchForm}</div>
             ) : (
-              <ul className="flex flex-col">
-                {locations.map((location) => {
-                  const row = describeLocalSeoSidebarRow(
-                    location,
-                    runByLocation.get(location.id) ?? null
-                  )
+              <ul className="flex flex-col divide-y divide-border/60">
+                {filteredLocations.map((location) => {
+                  const run = runByLocation.get(location.id) ?? null
+                  const row = describeLocalSeoSidebarRow(location, run)
                   const selected = location.id === selectedId
                   return (
                     <li key={location.id}>
@@ -179,61 +194,92 @@ export function LocalSeoMapSidebar({
                         aria-current={selected ? "true" : undefined}
                         onClick={() => onSelectLocation(location)}
                         className={cn(
-                          "flex w-full flex-col items-start gap-0.5 border-b border-border/60 px-4 py-3 text-left transition-colors outline-none hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
-                          selected && "bg-muted/60"
+                          "group relative flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-150 outline-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
+                          selected && "bg-muted"
                         )}
                       >
-                        <span className="flex items-center gap-2 text-sm font-medium">
+                        {selected ? (
                           <span
                             aria-hidden="true"
-                            className={cn(
-                              "size-2 shrink-0 rounded-full",
-                              row.bound
-                                ? "bg-emerald-500"
-                                : "border border-dashed border-amber-500"
-                            )}
+                            className="absolute inset-y-0 left-0 w-0.5 bg-primary"
                           />
-                          {location.name}
-                        </span>
+                        ) : null}
                         <span
+                          aria-hidden="true"
                           className={cn(
-                            "pl-4 text-xs",
+                            "flex size-8 shrink-0 items-center justify-center rounded-lg",
                             row.bound
-                              ? "text-muted-foreground"
-                              : "text-amber-600 dark:text-amber-500"
+                              ? "bg-muted text-muted-foreground"
+                              : "bg-amber-500/10 text-amber-600 dark:text-amber-500"
                           )}
                         >
-                          {row.label}
+                          {row.bound ? (
+                            <MapPinIcon className="size-4" />
+                          ) : (
+                            <PinIcon className="size-4" />
+                          )}
                         </span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="truncate text-sm font-medium text-foreground">
+                            {location.name}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground tabular-nums">
+                            {row.bound && run
+                              ? `${row.label} · ${describeLocalSeoRadiusLabel(run.radius_m)}`
+                              : row.label}
+                          </span>
+                        </span>
+                        <ChevronRightIcon
+                          aria-hidden="true"
+                          className={cn(
+                            "size-4 shrink-0 text-muted-foreground transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100",
+                            selected ? "opacity-100" : "opacity-0"
+                          )}
+                        />
                       </button>
                     </li>
                   )
                 })}
-                {locations.length === 0 ? (
-                  <li className="px-4 py-6 text-sm text-muted-foreground">
-                    No locations yet. Add one to drop a pin on the map.
-                  </li>
-                ) : null}
               </ul>
             )}
 
-            {!searchActive && selectedBound && selectedLocation ? (
-              <section
-                aria-label={`${selectedLocation.name} details`}
-                className="flex flex-col gap-3 border-t border-border p-4"
-              >
-                <div className="flex flex-col gap-0.5">
-                  <h3 className="text-sm font-medium">
-                    {selectedLocation.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    {describeLocalSeoRadiusLabel(selectedRadiusM)}
-                  </p>
-                </div>
-                {children}
-              </section>
+            {!locationsPending &&
+            !locationsError &&
+            filteredLocations.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                {locations.length === 0 ? (
+                  <MapPinOffIcon
+                    aria-hidden="true"
+                    className="size-6 text-muted-foreground/60"
+                  />
+                ) : (
+                  <SearchXIcon
+                    aria-hidden="true"
+                    className="size-6 text-muted-foreground/60"
+                  />
+                )}
+                <p className="max-w-[18rem] text-xs text-muted-foreground">
+                  {locations.length === 0
+                    ? "No locations yet. Use New location to drop a pin on the map."
+                    : "No saved locations match this search."}
+                </p>
+              </div>
             ) : null}
           </div>
+
+          <button
+            type="button"
+            onClick={onAddLocation}
+            className="flex w-full shrink-0 items-center gap-3 border-t border-border/60 px-4 py-3 text-left text-sm font-medium text-foreground transition-colors duration-150 outline-none hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset"
+          >
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+            >
+              <PlusIcon className="size-4" />
+            </span>
+            New location
+          </button>
         </>
       )}
     </aside>
