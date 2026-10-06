@@ -5,6 +5,10 @@ import {
   describeLocalSeoPinStatus,
   describeLocalSeoUnresolvedMarker,
   frozenLocalSeoRunCenter,
+  generatedQueryDrafts,
+  isCurrentLocalSeoLocation,
+  mergeLocalSeoRefreshedQueryDrafts,
+  preserveLocalSeoLandmarkDrafts,
   selectLocalSeoOverlayCells,
   selectLocalSeoOverlayCenter,
   selectLocalSeoReportCenter,
@@ -13,7 +17,12 @@ import {
   upsertLocalSeoLocationInList,
 } from "~/components/local-seo-map-page"
 import { localSeoLocationsBounds } from "~/components/local-seo-map-position"
-import type { LocalSeoLocation, LocalSeoRun } from "~/lib/local-seo-api"
+import type {
+  LocalSeoLocation,
+  LocalSeoLocationQueryDraft,
+  LocalSeoLocationQueryRecord,
+  LocalSeoRun,
+} from "~/lib/local-seo-api"
 
 function makeRun(status: LocalSeoRun["status"]): LocalSeoRun {
   return {
@@ -58,10 +67,28 @@ function makeLocation(
     place_id: null,
     address: "Main St",
     locality: "Downtown",
-    query_service: "coffee",
+    localities: [],
+    services: [],
     latitude: 27.7,
     longitude: 85.3,
     queries: [],
+    ...overrides,
+  }
+}
+
+function mapQuery(
+  text: string,
+  overrides: Partial<LocalSeoLocationQueryRecord> = {}
+): LocalSeoLocationQueryRecord {
+  return {
+    id: `q-${text}`,
+    text,
+    ordinal: 0,
+    enabled: true,
+    kind: "map",
+    source: "manual",
+    origin: "service",
+    landmark_id: null,
     ...overrides,
   }
 }
@@ -347,4 +374,200 @@ describe("initial recorded grid", () => {
     expect(frozenLocalSeoRunCenter(recorded)).toEqual([85.3, 27.7])
     expect(selectLocalSeoInitialReportLocation([draft, empty], runs)).toBeNull()
   })
+})
+
+describe("generated query drafts", () => {
+  test("a regenerated text reuses the existing map record id and metadata", () => {
+    const existing = mapQuery("Coffee Shop", {
+      id: "q-existing",
+      source: "generated",
+      enabled: false,
+    })
+    const drafts = generatedQueryDrafts(["  coffee   shop "], [existing])
+    expect(drafts[0].id).toBe("q-existing")
+    expect(drafts[0].text).toBe("  coffee   shop ")
+    expect(drafts[0].enabled).toBe(false)
+    expect(drafts[0].source).toBe("generated")
+  })
+
+  test("a new text stays a new generated candidate without an id", () => {
+    const drafts = generatedQueryDrafts(
+      ["plumber"],
+      [mapQuery("coffee", { id: "q-coffee" })]
+    )
+    expect(drafts[0].id).toBeUndefined()
+    expect(drafts[0]).toEqual({
+      text: "plumber",
+      enabled: true,
+      kind: "map",
+      source: "generated",
+    })
+  })
+})
+
+describe("landmark refresh query drafts", () => {
+  test("a newly created candidate keeps its disabled state, id, and source", () => {
+    const drafts: LocalSeoLocationQueryDraft[] = [
+      {
+        id: "q-saved",
+        text: "coffee",
+        enabled: true,
+        kind: "map",
+        source: "manual",
+      },
+    ]
+    const records = [
+      mapQuery("coffee", { id: "q-saved" }),
+      mapQuery("coffee near Boudhanath", {
+        id: "q-land",
+        enabled: false,
+        source: "generated",
+        origin: "landmark",
+        landmark_id: "lm-1",
+      }),
+    ]
+    const merged = mergeLocalSeoRefreshedQueryDrafts({
+      drafts,
+      records,
+      previousRecordIds: new Set(["q-saved"]),
+    })
+    expect(merged.map((draft) => draft.id)).toEqual(["q-saved", "q-land"])
+    expect(merged[1]).toEqual({
+      id: "q-land",
+      text: "coffee near Boudhanath",
+      enabled: false,
+      kind: "map",
+      source: "generated",
+    })
+  })
+
+  test("user edits, removals, and enablement survive the merge", () => {
+    const edited: LocalSeoLocationQueryDraft = {
+      id: "q-edited",
+      text: "coffee edited",
+      enabled: false,
+      kind: "map",
+      source: "manual",
+    }
+    const records = [
+      mapQuery("coffee", { id: "q-edited" }),
+      mapQuery("tea", { id: "q-removed" }),
+      mapQuery("bread", {
+        id: "q-new",
+        enabled: false,
+        source: "generated",
+        origin: "landmark",
+      }),
+    ]
+    const merged = mergeLocalSeoRefreshedQueryDrafts({
+      drafts: [edited],
+      records,
+      previousRecordIds: new Set(["q-edited", "q-removed"]),
+    })
+    expect(merged[0]).toBe(edited)
+    expect(merged.map((draft) => draft.id)).toEqual(["q-edited", "q-new"])
+  })
+
+  test("an unchanged merge returns the same draft reference", () => {
+    const drafts: LocalSeoLocationQueryDraft[] = [
+      { id: "q-1", text: "a", enabled: true, kind: "map", source: "manual" },
+    ]
+    expect(
+      mergeLocalSeoRefreshedQueryDrafts({
+        drafts,
+        records: [],
+        previousRecordIds: new Set(["q-1"]),
+      })
+    ).toBe(drafts)
+  })
+
+  test("a late response for a location the user left is not current", () => {
+    expect(isCurrentLocalSeoLocation("loc-2", "loc-1")).toBe(false)
+    expect(isCurrentLocalSeoLocation(null, "loc-1")).toBe(false)
+    expect(isCurrentLocalSeoLocation("loc-1", "loc-1")).toBe(true)
+  })
+
+  test("service/locality generation carries saved landmark candidates forward", () => {
+    const records = [
+      mapQuery("coffee", { id: "q-svc", origin: "service" }),
+      mapQuery("coffee near Boudhanath", {
+        id: "q-land",
+        enabled: false,
+        source: "generated",
+        origin: "landmark",
+        landmark_id: "lm-1",
+      }),
+    ]
+    const generated = generatedQueryDrafts(["coffee"], records)
+    const drafts: LocalSeoLocationQueryDraft[] = [
+      {
+        id: "q-svc",
+        text: "coffee",
+        enabled: true,
+        kind: "map",
+        source: "manual",
+      },
+      {
+        id: "q-land",
+        text: "coffee near Boudhanath",
+        enabled: false,
+        kind: "map",
+        source: "generated",
+      },
+    ]
+    const preserved = preserveLocalSeoLandmarkDrafts({
+      generated,
+      drafts,
+      records,
+    })
+    expect(preserved.map((draft) => draft.id)).toEqual(["q-svc", "q-land"])
+    expect(preserved.at(-1)?.enabled).toBe(false)
+  })
+})
+
+test("generation shares five enabled slots with preserved landmarks", () => {
+  const record = mapQuery("coffee near temple", {
+    id: "land",
+    origin: "landmark",
+  })
+  const drafts: LocalSeoLocationQueryDraft[] = [
+    {
+      id: record.id,
+      text: record.text,
+      enabled: true,
+      kind: "map",
+      source: "generated",
+    },
+  ]
+  const result = preserveLocalSeoLandmarkDrafts({
+    generated: generatedQueryDrafts(
+      ["coffee", "tea", "bread", "cake", "milk"],
+      []
+    ),
+    drafts,
+    records: [record],
+  })
+  expect(result.length).toBe(6)
+  expect(result.filter((draft) => draft.enabled).length).toBe(5)
+  expect(result.at(-1)).toBe(drafts[0])
+})
+
+test("generation keeps an edited landmark ID when its text matches a generated query", () => {
+  const record = mapQuery("coffee near temple", {
+    id: "land",
+    origin: "landmark",
+  })
+  const edited: LocalSeoLocationQueryDraft = {
+    id: "land",
+    text: "coffee",
+    enabled: false,
+    kind: "map",
+    source: "generated",
+  }
+  const result = preserveLocalSeoLandmarkDrafts({
+    generated: generatedQueryDrafts(["coffee"], []),
+    drafts: [edited],
+    records: [record],
+  })
+  expect(result).toEqual([edited])
 })

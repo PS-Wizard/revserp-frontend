@@ -21,6 +21,7 @@ import {
   validateLocalSeoCoordinates,
   type LocalSeoListingLookup,
   type LocalSeoLocation,
+  type LocalSeoLocationQueryRecord,
 } from "~/lib/local-seo-api"
 
 function makeLocation(overrides: Partial<LocalSeoLocation>): LocalSeoLocation {
@@ -31,10 +32,28 @@ function makeLocation(overrides: Partial<LocalSeoLocation>): LocalSeoLocation {
     place_id: null,
     address: "Main Street 1",
     locality: "Downtown",
-    query_service: "coffee roastery",
+    localities: [],
+    services: [],
     latitude: 27.7,
     longitude: 85.3,
     queries: [],
+    ...overrides,
+  }
+}
+
+function mapQuery(
+  text: string,
+  overrides: Partial<LocalSeoLocationQueryRecord> = {}
+): LocalSeoLocationQueryRecord {
+  return {
+    id: `q-${text}`,
+    text,
+    ordinal: 0,
+    enabled: true,
+    kind: "map",
+    source: "manual",
+    origin: "service",
+    landmark_id: null,
     ...overrides,
   }
 }
@@ -67,10 +86,10 @@ describe("validateEditableLocalSeoQueries", () => {
     ).toBeNull()
   })
 
-  test("rejects more than five without padding", () => {
+  test("allows saving more than five editor rows without padding", () => {
     expect(
       validateEditableLocalSeoQueries(["a", "b", "c", "d", "e", "f"])
-    ).toBe("At most 5 queries are allowed.")
+    ).toBeNull()
   })
 
   test("rejects blank rows instead of keeping them", () => {
@@ -111,7 +130,9 @@ describe("bound identity run gate", () => {
   test("unbound locations never run, even with five queries", () => {
     expect(isLocalSeoLocationBound(makeLocation({}))).toBe(false)
     expect(
-      canRunLocalSeoGrid(makeLocation({ queries: ["a", "b", "c", "d", "e"] }))
+      canRunLocalSeoGrid(
+        makeLocation({ queries: ["a", "b", "c", "d", "e"].map((text) => mapQuery(text)) })
+      )
     ).toBe(false)
   })
 
@@ -119,23 +140,43 @@ describe("bound identity run gate", () => {
     expect(isLocalSeoLocationBound(makeLocation({ place_id: "" }))).toBe(false)
   })
 
-  test("bound locations run with between one and five saved queries", () => {
+  test("bound locations run with between one and five enabled map queries", () => {
     expect(
       canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: [] }))
     ).toBe(false)
     expect(
-      canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: ["a"] }))
-    ).toBe(true)
-    expect(
       canRunLocalSeoGrid(
-        makeLocation({ place_id: "ChIJ1", queries: ["a", "b", "c", "d", "e"] })
+        makeLocation({ place_id: "ChIJ1", queries: [mapQuery("a")] })
       )
     ).toBe(true)
     expect(
       canRunLocalSeoGrid(
         makeLocation({
           place_id: "ChIJ1",
-          queries: ["a", "b", "c", "d", "e", "f"],
+          queries: ["a", "b", "c", "d", "e"].map((text) => mapQuery(text)),
+        })
+      )
+    ).toBe(true)
+    expect(
+      canRunLocalSeoGrid(
+        makeLocation({
+          place_id: "ChIJ1",
+          queries: ["a", "b", "c", "d", "e", "f"].map((text) =>
+            mapQuery(text)),
+        })
+      )
+    ).toBe(false)
+  })
+
+  test("disabled map and ai_question records stay out of the price guard", () => {
+    expect(
+      canRunLocalSeoGrid(
+        makeLocation({
+          place_id: "ChIJ1",
+          queries: [
+            mapQuery("a", { enabled: false }),
+            mapQuery("b", { kind: "ai_question" }),
+          ],
         })
       )
     ).toBe(false)
@@ -173,21 +214,21 @@ describe("location setup API module", () => {
     expect(seen[0].method).toBe("GET")
   })
 
-  test("creates an unbound location without a place_id", async () => {
+  test("creates an unbound location without a place_id, service, or query drafts", async () => {
     mockFetchOnce(201, makeLocation({ id: "loc-2" }))
     await createLocalSeoLocation("proj-1", {
       name: "Roastery",
       address: "Main Street 1",
       locality: "Downtown",
-      query_service: "coffee roastery",
       latitude: 27.7,
       longitude: 85.3,
-      queries: ["a", "b"],
     })
     expect(seen[0].method).toBe("POST")
     expect(seen[0].url).toContain("/projects/proj-1/locations")
     const created = seen[0].body as Record<string, unknown>
     expect("place_id" in created).toBe(false)
+    expect("query_service" in created).toBe(false)
+    expect("queries" in created).toBe(false)
     expect(created["locality"]).toBe("Downtown")
     expect(created["latitude"]).toBe(27.7)
   })
@@ -236,11 +277,11 @@ describe("location setup API module", () => {
     expect(reversed["longitude"]).toBe(85.3)
   })
 
-  test("paid lookup posts an empty body and binds from a stored lookup", async () => {
+  test("free lookup quotes zero credits and binds from a stored lookup", async () => {
     mockFetchOnce(200, makeLookup({}))
     await createLocalSeoListingLookup("proj-1", "loc-1")
     expect(seen[0].url).toContain("/locations/loc-1/listing-lookups")
-    expect(seen[0].body).toEqual({})
+    expect(seen[0].body).toEqual({ expected_credits: 0 })
 
     mockFetchOnce(200, makeLocation({ place_id: "ChIJ1" }))
     const bound = await bindLocalSeoListing("proj-1", "loc-1", {

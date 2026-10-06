@@ -43,11 +43,14 @@ function errorMessageOf(error: unknown, fallback: string) {
   return fallback;
 }
 
-/** One deliberate paid search: the label carries the only price in this card. */
-export const LOCAL_SEO_FIND_BUSINESSES_LABEL = `Find Google businesses · ${LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS} credits`;
+/** Finding businesses is a free Places lookup; the label states that. */
+export const LOCAL_SEO_FIND_BUSINESSES_LABEL =
+  LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS > 0
+    ? `Find Google businesses · ${LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS} credits`
+    : "Find Google businesses · Free";
 
 /**
- * A stored paid-search attempt: normalized search term plus exact search-area
+ * A stored lookup attempt: normalized search term plus exact search-area
  * centre. The centre is only where the provider looked, never business coords.
  */
 export type LocalSeoSourceCandidate = {
@@ -78,7 +81,7 @@ export function isSameLocalSeoSourceCandidate(
 }
 
 /**
- * Build the paid lookup body from the explicit search term plus the actual
+ * Build the lookup body from the explicit search term plus the actual
  * search-area centre. No cached geocoder candidate is ever sent.
  */
 export function buildLocalSeoListingLookupInput(
@@ -91,8 +94,8 @@ export function buildLocalSeoListingLookupInput(
 
 /**
  * Build one unbound draft from the explicit search term. The search-area
- * centre is stored as the draft viewport only; address, service, locality,
- * and queries stay empty for later setup. Never a verified identity.
+ * centre is stored as the draft viewport only; address and locality stay
+ * empty for later setup. Never a verified identity.
  */
 export function buildLocalSeoUnboundDraftInput(
   searchTerm: string,
@@ -102,10 +105,8 @@ export function buildLocalSeoUnboundDraftInput(
     name: searchTerm.trim(),
     address: "",
     locality: "",
-    query_service: "",
     latitude: viewport.latitude,
     longitude: viewport.longitude,
-    queries: [],
   };
 }
 
@@ -128,9 +129,9 @@ function viewportOfLive(searchCenter: [number, number] | null | undefined): {
 }
 
 /**
- * Resolve the search area for one paid attempt. The live map viewport wins;
+ * Resolve the search area for one lookup attempt. The live map viewport wins;
  * a saved draft falls back to its stored viewport, clearly labeled as a
- * search area. Null means no paid action is allowed.
+ * search area. Null means no lookup action is allowed.
  */
 export function resolveLocalSeoSearchArea(
   searchCenter: [number, number] | null | undefined,
@@ -163,12 +164,12 @@ export type LocalSeoResolveGate = {
 };
 
 /**
- * Explicit paid-resolution gate. A repeat of the stored search term plus
- * exact viewport is blocked with plain feedback and free reuse; a different
- * term or viewport is a deliberate paid action. Active, running, uncertain,
- * held, or unconfirmed states block every new attempt, as do loading or
- * failed latest-lookup reads, a bound listing, a missing term, and a missing
- * search area. Nothing here ever retries automatically.
+ * Explicit resolution gate. A repeat of the same stored zero-credit Places
+ * search plus exact viewport is blocked with plain feedback; a different term
+ * or viewport is a new free attempt. Active, running, uncertain, held, or
+ * unconfirmed states block every new attempt, as do loading or failed
+ * latest-lookup reads, a bound listing, a missing term, and a missing search
+ * area. Nothing here ever retries automatically.
  */
 export function describeLocalSeoResolveAction(gate: LocalSeoResolveGate): {
   canResolve: boolean;
@@ -242,18 +243,30 @@ export function describeLocalSeoResolveAction(gate: LocalSeoResolveGate): {
       gate.lastSourceCandidate ?? null,
     )
   ) {
-    const displayName = gate.lastSourceCandidate!.display_name;
+    if (gate.lookupStatus === "completed" && gate.candidateCount > 0) {
+      return {
+        canResolve: false,
+        resolveLabel: LOCAL_SEO_FIND_BUSINESSES_LABEL,
+        canBind: gate.selectedPlaceId !== null && !gate.bindBusy,
+        reason:
+          "This search was already resolved. Choose a stored Google listing to bind. No new charge.",
+      };
+    }
+    if (gate.lookupStatus === "completed") {
+      return {
+        canResolve: false,
+        resolveLabel: LOCAL_SEO_FIND_BUSINESSES_LABEL,
+        canBind: false,
+        reason:
+          "No business matching that name was found near this search area. Nothing more was charged.",
+      };
+    }
+    // Failed or unknown evidence keeps its real state; never a false no-match.
     return {
       canResolve: false,
       resolveLabel: LOCAL_SEO_FIND_BUSINESSES_LABEL,
-      canBind:
-        gate.lookupStatus === "completed" &&
-        gate.selectedPlaceId !== null &&
-        !gate.bindBusy,
-      reason:
-        gate.lookupStatus === "completed" && gate.candidateCount > 0
-          ? "This search was already resolved. Choose a stored Google listing to bind. No new charge."
-          : `We already tried "${displayName}" in this search area and it did not resolve. Change the term or move the map for a new paid search. Reuse of stored evidence is free; no new charge.`,
+      canBind: false,
+      reason: null,
     };
   }
   return {
@@ -269,7 +282,7 @@ export function describeLocalSeoResolveAction(gate: LocalSeoResolveGate): {
 
 /**
  * Binding card for one Google listing. One business search field plus the
- * live map viewport drives a single explicit paid search; the viewport is
+ * live map viewport drives a single explicit free search; the viewport is
  * only the search area, never the business identity. Candidates with a real
  * place id plus coords are chosen by the user and bound explicitly for free.
  */
@@ -375,6 +388,10 @@ export function LocalSeoMapSearchCard({
     latestLookupQuery.data ?? null;
   const lastSource: LocalSeoSourceCandidate | null =
     latest?.source_candidate ?? null;
+  // Only zero-credit Places evidence deduplicates; a historical cache row
+  // stays visible but must not block a new Places lookup for the same search.
+  const dedupSource: LocalSeoSourceCandidate | null =
+    latest && latest.expected_credits === 0 ? lastSource : null;
   const bound = created ? isLocalSeoLocationBound(created) : false;
   const latestPending = created ? latestLookupQuery.isPending : false;
   const latestFailed = created ? latestLookupQuery.isError : false;
@@ -388,7 +405,7 @@ export function LocalSeoMapSearchCard({
     candidateCount: latest?.candidates.length ?? 0,
     selectedPlaceId: googlePlaceId,
     selectedSearch,
-    lastSourceCandidate: lastSource,
+    lastSourceCandidate: dedupSource,
     creditKnown: latest ? latest.credit_known : null,
     reservedCredits: latest?.reserved_credits ?? 0,
     hasQuery: trimmedQuery !== "",
@@ -451,8 +468,8 @@ export function LocalSeoMapSearchCard({
         <CardTitle>Add a location</CardTitle>
         <CardDescription>
           One search field and the current map view define the search area.
-          Finding businesses is deliberate and paid; binding your choice is
-          free and explicit.
+          Finding businesses is deliberate and free; binding your choice is
+          explicit.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -550,13 +567,16 @@ export function LocalSeoMapSearchCard({
             {latest ? (
               <div className="flex flex-col gap-1 text-sm">
                 <p className="text-muted-foreground">
-                  {latest.status} · expected {latest.expected_credits} credit ·
-                  confirmed {latest.credits_used}
-                  {latest.deduplicated
-                    ? " · reused stored evidence, no new charge"
+                  {latest.status}
+                  {latest.expected_credits > 0
+                    ? ` · expected ${latest.expected_credits} credit`
+                    : " · Free"}
+                  {latest.credit_known
+                    ? ` · confirmed ${latest.credits_used}`
                     : ""}
+                  {latest.deduplicated ? " · reused stored evidence" : ""}
                 </p>
-                {latest.error ? (
+                {latest.error && latest.status !== "completed" ? (
                   <FieldError>{latest.error}</FieldError>
                 ) : null}
                 {!latest.credit_known ? (

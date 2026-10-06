@@ -26,10 +26,11 @@ function makeLocation(
     place_id: "ChIJ1",
     address: "Main St",
     locality: "Downtown",
-    query_service: "coffee",
+    localities: [],
+    services: [],
     latitude: 27.7,
     longitude: 85.3,
-    queries: ["coffee"],
+    queries: [],
     ...overrides,
   }
 }
@@ -404,7 +405,7 @@ describe("report content focused point", () => {
         queries: ["coffee", "tea", "matcha", "cocoa"],
         cells,
       }),
-      location: makeLocation({ queries: ["live-only"] }),
+      location: makeLocation(),
       focusedPointIndex: 0,
       onClearPointFocus: () => {},
     })

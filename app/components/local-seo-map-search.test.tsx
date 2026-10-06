@@ -12,7 +12,12 @@ import {
   normalizeLocalSeoCandidateName,
   resolveLocalSeoSearchArea,
 } from "~/components/local-seo-map-search";
-import { localSeoLatestListingLookupQueryKey, type LocalSeoLocation, type LocalSeoListingLookup } from "~/lib/local-seo-api";
+import {
+  LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS,
+  localSeoLatestListingLookupQueryKey,
+  type LocalSeoLocation,
+  type LocalSeoListingLookup,
+} from "~/lib/local-seo-api";
 
 function makeUnboundLocation(overrides: Partial<LocalSeoLocation> = {}): LocalSeoLocation {
   return {
@@ -22,7 +27,8 @@ function makeUnboundLocation(overrides: Partial<LocalSeoLocation> = {}): LocalSe
     place_id: null,
     address: "",
     locality: "",
-    query_service: "",
+    localities: [],
+    services: [],
     latitude: 27.71,
     longitude: 85.33,
     queries: [],
@@ -67,6 +73,12 @@ function countOccurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
+function findButtonDisabled(html: string): boolean {
+  const button = html.match(/<button[^>]*>[^<]*Find Google businesses[^<]*<\/button>/);
+  if (!button) throw new Error("Find Google businesses button not found");
+  return button[0].includes('disabled=""');
+}
+
 describe("no geocoder binding call", () => {
   test("binding card source never touches the free address API", async () => {
     const { readFile } = await import("node:fs/promises");
@@ -89,7 +101,7 @@ describe("no geocoder binding call", () => {
   });
 });
 
-describe("explicit paid search gate", () => {
+describe("explicit free Places gate", () => {
   test("first attempt is one explicit priced action", () => {
     const gate = describeLocalSeoResolveAction({
       bound: false,
@@ -106,12 +118,12 @@ describe("explicit paid search gate", () => {
       hasViewport: true,
     });
     expect(gate.canResolve).toBe(true);
-    expect(gate.resolveLabel).toBe("Find Google businesses · 3 credits");
+    expect(gate.resolveLabel).toBe("Find Google businesses · Free");
     expect(gate.resolveLabel).toBe(LOCAL_SEO_FIND_BUSINESSES_LABEL);
     expect(gate.canBind).toBe(false);
   });
 
-  test("running, uncertain, held, and unconfirmed states block new paid calls", () => {
+  test("running, uncertain, held, and unconfirmed states block new lookups", () => {
     for (const status of ["running", "uncertain"] as const) {
       const gate = describeLocalSeoResolveAction({
         bound: false,
@@ -196,7 +208,7 @@ describe("explicit paid search gate", () => {
     expect(gate.canBind).toBe(false);
   });
 
-  test("missing term or missing search area blocks paid action", () => {
+  test("missing term or missing search area blocks the lookup", () => {
     const noQuery = describeLocalSeoResolveAction({
       bound: false,
       lookupStatus: null,
@@ -232,10 +244,10 @@ describe("explicit paid search gate", () => {
 });
 
 describe("same search versus different term", () => {
-  test("same normalized term plus exact viewport is blocked with free reuse", () => {
+  test("a completed empty repeat is blocked with the exact no-match message", () => {
     const gate = describeLocalSeoResolveAction({
       bound: false,
-      lookupStatus: "failed",
+      lookupStatus: "completed",
       lookupBusy: false,
       bindBusy: false,
       candidateCount: 0,
@@ -248,12 +260,32 @@ describe("same search versus different term", () => {
       hasViewport: true,
     });
     expect(gate.canResolve).toBe(false);
-    expect(gate.reason).toContain("already tried");
-    expect(gate.reason).toContain("no new charge");
-    expect(gate.resolveLabel).toContain("3 credits");
+    expect(gate.reason).toBe(
+      "No business matching that name was found near this search area. Nothing more was charged.",
+    );
+    expect(gate.resolveLabel).toBe("Find Google businesses · Free");
   });
 
-  test("different term or moved viewport is a new explicit paid search", () => {
+  test("a failed repeat is blocked without inventing a no-match", () => {
+    const gate = describeLocalSeoResolveAction({
+      bound: false,
+      lookupStatus: "failed",
+      lookupBusy: false,
+      bindBusy: false,
+      candidateCount: 0,
+      selectedPlaceId: null,
+      selectedSearch: { display_name: "Cafe A", latitude: 27.71, longitude: 85.33 },
+      lastSourceCandidate: { display_name: "Cafe A", latitude: 27.71, longitude: 85.33 },
+      creditKnown: true,
+      reservedCredits: 0,
+      hasQuery: true,
+      hasViewport: true,
+    });
+    expect(gate.canResolve).toBe(false);
+    expect(gate.reason).toBeNull();
+  });
+
+  test("different term or moved viewport is a new explicit free search", () => {
     const differentTerm = describeLocalSeoResolveAction({
       bound: false,
       lookupStatus: "failed",
@@ -269,7 +301,7 @@ describe("same search versus different term", () => {
       hasViewport: true,
     });
     expect(differentTerm.canResolve).toBe(true);
-    expect(differentTerm.resolveLabel).toContain("3 credits");
+    expect(differentTerm.resolveLabel).toBe("Find Google businesses · Free");
     const movedViewport = describeLocalSeoResolveAction({
       bound: false,
       lookupStatus: "failed",
@@ -332,7 +364,7 @@ describe("search term normalization", () => {
   });
 });
 
-describe("paid body and draft body", () => {
+describe("lookup body and draft body", () => {
   test("paid body carries the actual search term plus live viewport", () => {
     const input = buildLocalSeoListingLookupInput("  cafe search ", 27.71, 85.33);
     expect(input).toEqual({ search_query: "cafe search", latitude: 27.71, longitude: 85.33 });
@@ -346,8 +378,8 @@ describe("paid body and draft body", () => {
     expect(draft.name).toBe("Main Street Cafe");
     expect(draft.address).toBe("");
     expect(draft.locality).toBe("");
-    expect(draft.query_service).toBe("");
-    expect(draft.queries).toEqual([]);
+    expect("query_service" in draft).toBe(false);
+    expect("queries" in draft).toBe(false);
     expect(draft.latitude).toBe(27.71);
     expect(draft.longitude).toBe(85.33);
   });
@@ -365,11 +397,11 @@ describe("paid body and draft body", () => {
 });
 
 describe("map search card", () => {
-  test("new search shows one business field and exactly one explicit price", () => {
+  test("new search shows one business field and one free lookup label", () => {
     const html = renderCard({ projectId: "proj-1", searchCenter: [85.33, 27.71], onClose: () => {} });
     expect(html).toContain("Business name search");
-    expect(html).toContain("Find Google businesses · 3 credits");
-    expect(countOccurrences(html, "3 credits")).toBe(1);
+    expect(html).toContain("Find Google businesses · Free");
+    expect(countOccurrences(html, "credits")).toBe(0);
     expect(html.includes("Service text")).toBe(false);
     expect(html.includes("Locality")).toBe(false);
     expect(html).toContain("Search area");
@@ -377,13 +409,13 @@ describe("map search card", () => {
     expect(html).toContain("Close");
   });
 
-  test("missing viewport blocks the paid action before any charge", () => {
+  test("missing viewport blocks the lookup before any charge", () => {
     const html = renderCard({ projectId: "proj-1" });
     expect(html).toContain("Move the map to set a search area");
-    expect(/disabled[^>]*>Find Google businesses/.test(html)).toBe(true);
+    expect(findButtonDisabled(html)).toBe(true);
   });
 
-  test("resume draft shows stored search area with priced retry and close", () => {
+  test("resume draft shows stored search area with free retry and close", () => {
     const html = renderCard({
       projectId: "proj-1",
       initialLocation: makeUnboundLocation(),
@@ -393,7 +425,7 @@ describe("map search card", () => {
     expect(html).toContain("Google listing for Main Street Cafe");
     expect(html).toContain("Saved unbound search");
     expect(html).toContain("search area only");
-    expect(html).toContain("Find Google businesses · 3 credits");
+    expect(html).toContain("Find Google businesses · Free");
     expect(html).toContain("Close");
   });
 
@@ -406,15 +438,17 @@ describe("map search card", () => {
     });
     expect(html).toContain("Bound to");
     expect(html).toContain("Unbind");
-    expect(/disabled[^>]*>Find Google businesses/.test(html)).toBe(true);
+    expect(findButtonDisabled(html)).toBe(true);
   });
 
-  test("same failed search is disabled with helpful feedback and no recharge", () => {
+  test("a repeat free Places no-match is disabled with the exact charge-free message", () => {
     const location = makeUnboundLocation();
     const html = renderCard(
       { projectId: "proj-1", initialLocation: location },
       makeLookup({
-        status: "failed",
+        expected_credits: 0,
+        status: "completed",
+        error: null,
         candidates: [],
         source_candidate: {
           display_name: "Main Street Cafe",
@@ -423,10 +457,32 @@ describe("map search card", () => {
         },
       }),
     );
-    expect(html).toContain("already tried");
-    expect(html).toContain("no new charge");
-    expect(/disabled[^>]*>Find Google businesses/.test(html)).toBe(true);
+    expect(html).toContain(
+      "No business matching that name was found near this search area. Nothing more was charged.",
+    );
+    expect(findButtonDisabled(html)).toBe(true);
     expect(html).toContain("Last attempted search");
+  });
+
+  test("a repeat free Places failure stays disabled and keeps its real error", () => {
+    const location = makeUnboundLocation();
+    const html = renderCard(
+      { projectId: "proj-1", initialLocation: location },
+      makeLookup({
+        expected_credits: 0,
+        status: "failed",
+        error: "Places transport failure",
+        candidates: [],
+        source_candidate: {
+          display_name: "Main Street Cafe",
+          latitude: 27.71,
+          longitude: 85.33,
+        },
+      }),
+    );
+    expect(html).toContain("Places transport failure");
+    expect(html.includes("No business matching that name")).toBe(false);
+    expect(findButtonDisabled(html)).toBe(true);
   });
 
   test("completed lookup needs explicit human confirmation to bind for free", () => {
@@ -434,6 +490,7 @@ describe("map search card", () => {
     const html = renderCard(
       { projectId: "proj-1", initialLocation: location, searchCenter: [99, 9] },
       makeLookup({
+        expected_credits: 0,
         status: "completed",
         error: null,
         candidates: [
@@ -449,6 +506,63 @@ describe("map search card", () => {
     expect(html).toContain("Choose your listing");
     expect(html).toContain("Cafe One");
     expect(html).toContain("Bind selected listing · Free");
-    expect(html).toContain("Find Google businesses · 3 credits");
+    expect(html).toContain("Find Google businesses · Free");
+  });
+});
+
+describe("historical Serper evidence versus the free Places lookup", () => {
+  test("an old paid empty failure never dedups a new free Places search", () => {
+    const location = makeUnboundLocation();
+    const html = renderCard(
+      { projectId: "proj-1", initialLocation: location },
+      makeLookup({
+        expected_credits: 3,
+        status: "failed",
+        error: "serper listing lookup: status 500",
+        candidates: [],
+        source_candidate: {
+          display_name: "Main Street Cafe",
+          latitude: 27.71,
+          longitude: 85.33,
+        },
+      }),
+    );
+    expect(html).toContain("serper listing lookup: status 500");
+    expect(html).toContain("expected 3 credit");
+    expect(html.includes("No business matching that name")).toBe(false);
+    expect(findButtonDisabled(html)).toBe(false);
+    expect(html).toContain("Find Google businesses · Free");
+  });
+
+  test("an old paid unknown charge stays truthful and holds", () => {
+    const location = makeUnboundLocation();
+    const html = renderCard(
+      { projectId: "proj-1", initialLocation: location },
+      makeLookup({
+        expected_credits: 3,
+        status: "uncertain",
+        credit_known: false,
+        credits_used: 0,
+        reserved_credits: 3,
+        error: "connection reset",
+        candidates: [],
+        source_candidate: {
+          display_name: "Main Street Cafe",
+          latitude: 27.71,
+          longitude: 85.33,
+        },
+      }),
+    );
+    expect(html).toContain("Charge unconfirmed");
+    expect(html).toContain("connection reset");
+    expect(html.includes("No business matching that name")).toBe(false);
+    expect(findButtonDisabled(html)).toBe(true);
+  });
+});
+
+describe("free Places lookup label", () => {
+  test("the find label quotes no credits", () => {
+    expect(LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS).toBe(0);
+    expect(LOCAL_SEO_FIND_BUSINESSES_LABEL).toBe("Find Google businesses · Free");
   });
 });

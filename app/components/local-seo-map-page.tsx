@@ -11,20 +11,28 @@ import { useReducedMotion } from "motion/react"
 import { ApiError } from "~/lib/api"
 import {
   LOCAL_SEO_DEFAULT_RADIUS_M,
+  LOCAL_SEO_QUERY_COUNT,
+  fetchLocalSeoLandmarks,
   fetchLocalSeoLatestListingLookup,
   fetchLocalSeoLatestRun,
+  fetchLocalSeoLocationQueryRecords,
   fetchLocalSeoLocations,
   generateLocalSeoQueries,
   isLocalSeoLocationBound,
+  localSeoLandmarksQueryKey,
   localSeoLatestListingLookupQueryKey,
   localSeoLatestRunQueryKey,
   localSeoLocationQueryKey,
+  localSeoLocationQueryRecordsQueryKey,
   localSeoLocationsQueryKey,
-  splitLocalSeoServices,
-  updateLocalSeoQueries,
+  localSeoQueryTextKey,
+  refreshLocalSeoLandmarks,
+  updateLocalSeoLocationQueryRecords,
   validateLocalSeoCoordinates,
   validateLocalSeoRadiusM,
   type LocalSeoLocation,
+  type LocalSeoLocationQueryDraft,
+  type LocalSeoLocationQueryRecord,
   type LocalSeoRun,
   type LocalSeoRunStatus,
 } from "~/lib/local-seo-api"
@@ -38,7 +46,12 @@ import {
 import { LocalSeoMapDetailPanel } from "~/components/local-seo-map-detail-panel"
 import { LocalSeoMapSearchCard } from "~/components/local-seo-map-search"
 import { LocalSeoMapReportContent } from "~/components/local-seo-map-report"
-import { LocalSeoMapSetupContent } from "~/components/local-seo-map-setup"
+import {
+  countEnabledLocalSeoMapDrafts,
+  LocalSeoMapSetupContent,
+} from "~/components/local-seo-map-setup"
+import { LocalSeoServicesEditor } from "~/components/local-seo-services-editor"
+import { LocalSeoRunControls } from "~/components/local-seo-run-controls"
 import {
   LocalSeoMapSidebar,
   describeLocalSeoRadiusLabel,
@@ -49,6 +62,125 @@ function errorMessageOf(error: unknown, fallback: string) {
   if (error instanceof ApiError) return error.message || fallback
   if (error instanceof Error) return error.message || fallback
   return fallback
+}
+
+/** Editor draft rows that keep the saved id and metadata so an unchanged save is a no-op. */
+function queryDraftsFromRecords(
+  records: LocalSeoLocationQueryRecord[]
+): LocalSeoLocationQueryDraft[] {
+  return records.map((record) => ({
+    id: record.id,
+    text: record.text,
+    enabled: record.enabled,
+    kind: record.kind,
+    source: record.source,
+  }))
+}
+
+/** Free generation returns plain strings; an existing map record with the same
+ * normalized text keeps its id so a regenerated row is updated, not duplicated. */
+export function generatedQueryDrafts(
+  texts: string[],
+  existing: LocalSeoLocationQueryRecord[]
+): LocalSeoLocationQueryDraft[] {
+  const existingByText = new Map(
+    existing
+      .filter((record) => record.kind === "map")
+      .map((record) => [localSeoQueryTextKey(record.text), record])
+  )
+  return texts.map((text) => {
+    const match = existingByText.get(localSeoQueryTextKey(text))
+    return match
+      ? {
+          id: match.id,
+          text,
+          enabled: match.enabled,
+          kind: "map" as const,
+          source: match.source,
+        }
+      : {
+          text,
+          enabled: true,
+          kind: "map" as const,
+          source: "generated" as const,
+        }
+  })
+}
+
+/**
+ * Landmark candidates the refresh just created are merged into the user's unsaved
+ * drafts by id. Only ids that were not already known are added, so an edit, a
+ * removal, or an enabled choice already in the drafts is never overwritten. A new
+ * candidate keeps its stored record id, source, and server enabled flag.
+ */
+export function mergeLocalSeoRefreshedQueryDrafts(args: {
+  drafts: LocalSeoLocationQueryDraft[]
+  records: LocalSeoLocationQueryRecord[]
+  previousRecordIds: ReadonlySet<string>
+}): LocalSeoLocationQueryDraft[] {
+  const knownIds = new Set(args.previousRecordIds)
+  for (const draft of args.drafts) {
+    if (draft.id !== undefined) knownIds.add(draft.id)
+  }
+  const additions = args.records
+    .filter((record) => record.kind === "map" && !knownIds.has(record.id))
+    .map((record) => ({
+      id: record.id,
+      text: record.text,
+      enabled: record.enabled,
+      kind: record.kind,
+      source: record.source,
+    }))
+  return additions.length === 0 ? args.drafts : [...args.drafts, ...additions]
+}
+
+/**
+ * Landmark rows are not part of service/locality generation output, so generation
+ * carries the saved or edited landmark drafts forward instead of dropping them.
+ */
+export function preserveLocalSeoLandmarkDrafts(args: {
+  generated: LocalSeoLocationQueryDraft[]
+  drafts: LocalSeoLocationQueryDraft[]
+  records: LocalSeoLocationQueryRecord[]
+}): LocalSeoLocationQueryDraft[] {
+  const landmarkIds = new Set(
+    args.records
+      .filter(
+        (record) => record.origin === "landmark" || record.landmark_id !== null
+      )
+      .map((record) => record.id)
+  )
+  const preserved = args.drafts.filter(
+    (draft) => draft.id !== undefined && landmarkIds.has(draft.id)
+  )
+  const preservedIds = new Set(preserved.map((draft) => draft.id))
+  const preservedKeys = new Set(
+    preserved.map((draft) => localSeoQueryTextKey(draft.text))
+  )
+  let slots = Math.max(
+    0,
+    LOCAL_SEO_QUERY_COUNT - countEnabledLocalSeoMapDrafts(preserved)
+  )
+  const generated = args.generated
+    .filter(
+      (draft) =>
+        !preservedIds.has(draft.id) &&
+        !preservedKeys.has(localSeoQueryTextKey(draft.text))
+    )
+    .map((draft) => {
+      const enabled = draft.enabled && slots > 0
+      if (enabled) slots--
+      return enabled === draft.enabled ? draft : { ...draft, enabled }
+    })
+  return [...generated, ...preserved]
+}
+
+/** True while a location-scoped response still belongs to the selected location. */
+export function isCurrentLocalSeoLocation(
+  selectedLocationId: string | null,
+  responseLocationId: string
+): boolean {
+  return selectedLocationId === responseLocationId
 }
 
 export type LocalSeoPinRunStatus = LocalSeoRunStatus | "none"
@@ -187,9 +319,10 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
   const [adding, setAdding] = useState(false)
   const [activeTab, setActiveTab] = useState<LocalSeoMapSidebarTab>("overview")
   const [radiusDrafts, setRadiusDrafts] = useState<Record<string, number>>({})
-  const [serviceText, setServiceText] = useState("")
   const [localityText, setLocalityText] = useState("")
-  const [queryDrafts, setQueryDrafts] = useState<string[] | null>(null)
+  const [queryDrafts, setQueryDrafts] = useState<
+    LocalSeoLocationQueryDraft[] | null
+  >(null)
   const [searchCenter, setSearchCenter] = useState<[number, number] | null>(
     null
   )
@@ -272,6 +405,18 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
       fetchLocalSeoLatestListingLookup(projectId, selectedLocation!.id),
     enabled: selectedBound,
   })
+
+  const landmarksQuery = useQuery({
+    queryKey:
+      selectedLocation && selectedBound
+        ? localSeoLandmarksQueryKey(projectId, selectedLocation.id)
+        : ["local-seo-landmarks", projectId, "none"],
+    queryFn: () => fetchLocalSeoLandmarks(projectId, selectedLocation!.id),
+    enabled: selectedBound && activeTab === "queries",
+  })
+
+  const selectedLocationIdRef = useRef<string | null>(null)
+  selectedLocationIdRef.current = selectedLocation?.id ?? null
 
   const pendingDrafts = useMemo(
     () => selectPendingLocalSeoDrafts(locations),
@@ -533,34 +678,142 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     if (!selectedBound || !selectedLocation) return
     if (seededLocationIdRef.current === selectedLocation.id) return
     seededLocationIdRef.current = selectedLocation.id
-    setServiceText(selectedLocation.query_service)
     setLocalityText(selectedLocation.locality)
     setQueryDrafts(null)
   }, [selectedBound, selectedLocation])
 
   const generateMutation = useMutation({
-    mutationFn: () =>
-      generateLocalSeoQueries(projectId, {
-        service: serviceText.trim(),
-        services: splitLocalSeoServices(serviceText),
-        locality: localityText.trim(),
+    mutationFn: (input: {
+      projectId: string
+      locationId: string
+      services: string[]
+      locality: string
+      localities: string[]
+      existingRecords: LocalSeoLocationQueryRecord[]
+    }) =>
+      generateLocalSeoQueries(input.projectId, {
+        service: "",
+        services: input.services,
+        locality: input.locality,
+        localities: input.localities,
       }),
-    onSuccess: (data) => setQueryDrafts(data.queries),
+    onSuccess: (data, input) => {
+      if (
+        !isCurrentLocalSeoLocation(
+          selectedLocationIdRef.current,
+          input.locationId
+        )
+      )
+        return
+      setQueryDrafts((current) => {
+        const generated = generatedQueryDrafts(
+          data.queries,
+          input.existingRecords
+        )
+        return preserveLocalSeoLandmarkDrafts({
+          generated,
+          drafts: current ?? queryDraftsFromRecords(input.existingRecords),
+          records: input.existingRecords,
+        })
+      })
+    },
   })
-  const saveQueriesMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedLocation) throw new Error("Select a location first")
-      return updateLocalSeoQueries(
+  const refreshLandmarksMutation = useMutation({
+    mutationFn: (input: {
+      locationId: string
+      previousRecords: LocalSeoLocationQueryRecord[]
+    }) => refreshLocalSeoLandmarks(projectId, input.locationId),
+    onSuccess: async (refreshed, input) => {
+      if (
+        !isCurrentLocalSeoLocation(
+          selectedLocationIdRef.current,
+          input.locationId
+        )
+      )
+        return
+      queryClient.setQueryData(
+        localSeoLandmarksQueryKey(projectId, input.locationId),
+        refreshed
+      )
+      const records = await fetchLocalSeoLocationQueryRecords(
         projectId,
-        selectedLocation.id,
-        (queryDrafts ?? selectedLocation.queries).map((query) => query.trim())
+        input.locationId
+      )
+      if (
+        !isCurrentLocalSeoLocation(
+          selectedLocationIdRef.current,
+          input.locationId
+        )
+      )
+        return
+      const previousRecordIds = new Set(
+        input.previousRecords.map((record) => record.id)
+      )
+      queryClient.setQueryData(
+        localSeoLocationQueryRecordsQueryKey(projectId, input.locationId),
+        records
+      )
+      queryClient.setQueryData(
+        localSeoLocationQueryKey(projectId, input.locationId),
+        (current: LocalSeoLocation | undefined) =>
+          current ? { ...current, queries: records } : current
+      )
+      queryClient.setQueryData(
+        localSeoLocationsQueryKey(projectId),
+        (current: LocalSeoLocation[] | undefined) =>
+          current?.map((location) =>
+            location.id === input.locationId
+              ? { ...location, queries: records }
+              : location
+          )
+      )
+      setQueryDrafts((current) =>
+        current === null
+          ? null
+          : mergeLocalSeoRefreshedQueryDrafts({
+              drafts: current,
+              records,
+              previousRecordIds,
+            })
       )
     },
-    onSuccess: (updated) => {
-      setQueryDrafts(null)
+  })
+  const saveQueriesMutation = useMutation({
+    mutationFn: (input: {
+      locationId: string
+      records: LocalSeoLocationQueryDraft[]
+    }) =>
+      updateLocalSeoLocationQueryRecords(
+        projectId,
+        input.locationId,
+        input.records
+      ),
+    onSuccess: (saved, input) => {
+      if (
+        isCurrentLocalSeoLocation(
+          selectedLocationIdRef.current,
+          input.locationId
+        )
+      ) {
+        setQueryDrafts(null)
+      }
       queryClient.setQueryData(
-        localSeoLocationQueryKey(projectId, updated.id),
-        updated
+        localSeoLocationQueryRecordsQueryKey(projectId, input.locationId),
+        saved
+      )
+      queryClient.setQueryData(
+        localSeoLocationQueryKey(projectId, input.locationId),
+        (current: LocalSeoLocation | undefined) =>
+          current ? { ...current, queries: saved } : current
+      )
+      queryClient.setQueryData(
+        localSeoLocationsQueryKey(projectId),
+        (current: LocalSeoLocation[] | undefined) =>
+          current?.map((location) =>
+            location.id === input.locationId
+              ? { ...location, queries: saved }
+              : location
+          )
       )
       void queryClient.invalidateQueries({
         queryKey: localSeoLocationsQueryKey(projectId),
@@ -641,10 +894,25 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
   }
 
   function renderActiveTab() {
-    if (!selectedLocation || !selectedBound) return null
+    if (!selectedLocation) return null
     if (activeTab === "queries") {
+      if (!selectedBound) {
+        return (
+          <p className="text-sm text-muted-foreground">
+            Resolve this listing first to set up queries. This search area is
+            not yet bound to a business location.
+          </p>
+        )
+      }
+      const activeQueryDrafts =
+        queryDrafts ?? queryDraftsFromRecords(selectedLocation.queries)
+      const effectiveServices = selectedLocation.services
       return (
         <div className="flex flex-col gap-3">
+          <LocalSeoServicesEditor
+            projectId={projectId}
+            locationId={selectedLocation.id}
+          />
           <p className="text-xs text-muted-foreground">
             Setup preview · {describeLocalSeoRadiusLabel(selectedRadiusM)} · the
             map grid fills after a run.
@@ -657,13 +925,20 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
                 [selectedLocation.id]: value,
               }))
             }
-            serviceText={serviceText}
-            onServiceTextChange={setServiceText}
             localityText={localityText}
             onLocalityTextChange={setLocalityText}
-            queryDrafts={queryDrafts ?? selectedLocation.queries}
+            queryDrafts={activeQueryDrafts}
             onQueryDraftsChange={setQueryDrafts}
-            onGenerate={() => generateMutation.mutate()}
+            onGenerate={() =>
+              generateMutation.mutate({
+                projectId,
+                locationId: selectedLocation.id,
+                services: effectiveServices,
+                locality: localityText.trim(),
+                localities: selectedLocation.localities,
+                existingRecords: selectedLocation.queries,
+              })
+            }
             generating={generateMutation.isPending}
             generateError={
               generateMutation.isError
@@ -673,7 +948,41 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
                   )
                 : null
             }
-            onSave={() => saveQueriesMutation.mutate()}
+            effectiveServices={effectiveServices}
+            queryRecords={selectedLocation.queries}
+            landmarks={landmarksQuery.data ?? null}
+            landmarksError={
+              landmarksQuery.isError
+                ? errorMessageOf(
+                    landmarksQuery.error,
+                    "Could not load landmarks"
+                  )
+                : null
+            }
+            onRefreshLandmarks={() =>
+              refreshLandmarksMutation.mutate({
+                locationId: selectedLocation.id,
+                previousRecords: selectedLocation.queries,
+              })
+            }
+            refreshingLandmarks={refreshLandmarksMutation.isPending}
+            refreshLandmarksError={
+              refreshLandmarksMutation.isError
+                ? errorMessageOf(
+                    refreshLandmarksMutation.error,
+                    "Could not refresh landmarks"
+                  )
+                : null
+            }
+            onSave={() =>
+              saveQueriesMutation.mutate({
+                locationId: selectedLocation.id,
+                records: activeQueryDrafts.map((draft) => ({
+                  ...draft,
+                  text: draft.text.trim(),
+                })),
+              })
+            }
             saving={saveQueriesMutation.isPending}
             saveError={
               saveQueriesMutation.isError
@@ -687,6 +996,18 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
         </div>
       )
     }
+    if (activeTab === "run") {
+      if (!selectedBound) return null
+      return (
+        <LocalSeoRunControls
+          key={`${projectId}:${selectedLocation.id}`}
+          projectId={projectId}
+          location={selectedLocation}
+          radiusM={selectedRadiusM}
+        />
+      )
+    }
+    if (!selectedBound) return null
     return (
       <LocalSeoMapReportContent
         projectId={projectId}
