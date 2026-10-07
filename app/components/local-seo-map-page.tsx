@@ -4,6 +4,7 @@ import {
   useQueries,
   useQuery,
   useQueryClient,
+  type Query,
 } from "@tanstack/react-query"
 import { Marker, type Map as MapLibreMap } from "maplibre-gl"
 import { useReducedMotion } from "motion/react"
@@ -17,6 +18,9 @@ import {
   fetchLocalSeoLatestRun,
   fetchLocalSeoLocationQueryRecords,
   fetchLocalSeoLocations,
+  fetchLocalSeoPointDetails,
+  fetchLocalSeoRunCompetitors,
+  fetchLocalSeoRunPointCompetitors,
   generateLocalSeoQueries,
   isLocalSeoLocationBound,
   localSeoLandmarksQueryKey,
@@ -25,7 +29,11 @@ import {
   localSeoLocationQueryKey,
   localSeoLocationQueryRecordsQueryKey,
   localSeoLocationsQueryKey,
+  localSeoPointDetailsQueryKey,
+  localSeoRunCompetitorsQueryKey,
+  localSeoRunPointCompetitorsQueryKey,
   localSeoQueryTextKey,
+  localSeoRunRefetchInterval,
   refreshLocalSeoLandmarks,
   updateLocalSeoLocationQueryRecords,
   validateLocalSeoCoordinates,
@@ -352,6 +360,14 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
       queryKey: localSeoLatestRunQueryKey(projectId, location.id),
       queryFn: () => fetchLocalSeoLatestRun(projectId, location.id),
       enabled: projectId !== "",
+      refetchInterval:
+        (focusedPointIndex !== null ||
+          activeTab === "overview" ||
+          activeTab === "competitors") &&
+        location.id === selectedId
+          ? (query: Query<LocalSeoRun | null>) =>
+              localSeoRunRefetchInterval(query.state.data?.status)
+          : false,
     })),
   })
   const runByLocation = useMemo(() => {
@@ -413,6 +429,92 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
         : ["local-seo-landmarks", projectId, "none"],
     queryFn: () => fetchLocalSeoLandmarks(projectId, selectedLocation!.id),
     enabled: selectedBound && activeTab === "queries",
+  })
+
+  const pointDetailsQuery = useQuery({
+    queryKey:
+      selectedLocation && selectedRun && focusedPointIndex !== null
+        ? localSeoPointDetailsQueryKey(
+            projectId,
+            selectedLocation.id,
+            selectedRun.id,
+            focusedPointIndex,
+            selectedRun.status
+          )
+        : ["local-seo-point-details", projectId, "none"],
+    queryFn: () =>
+      fetchLocalSeoPointDetails(
+        projectId,
+        selectedLocation!.id,
+        selectedRun!.id,
+        focusedPointIndex!
+      ),
+    enabled:
+      projectId !== "" &&
+      selectedBound &&
+      selectedRun !== null &&
+      focusedPointIndex !== null &&
+      activeTab === "overview",
+    refetchInterval: localSeoRunRefetchInterval(selectedRun?.status),
+  })
+
+  const competitorsEnabled =
+    projectId !== "" &&
+    selectedBound &&
+    selectedRun !== null &&
+    activeTab === "competitors" &&
+    focusedPointIndex === null
+  const competitorsQuery = useQuery({
+    queryKey:
+      selectedLocation && selectedRun && competitorsEnabled
+        ? localSeoRunCompetitorsQueryKey(
+            projectId,
+            selectedLocation.id,
+            selectedRun.id,
+            selectedRun.status,
+            selectedRun.completed_cells ?? null,
+          )
+        : ["local-seo-run-competitors", projectId, "none"],
+    queryFn: () =>
+      fetchLocalSeoRunCompetitors(
+        projectId,
+        selectedLocation!.id,
+        selectedRun!.id,
+      ),
+    enabled: competitorsEnabled,
+    refetchInterval: localSeoRunRefetchInterval(selectedRun?.status),
+  })
+
+  const pointCompetitorsEnabled =
+    projectId !== "" &&
+    selectedBound &&
+    selectedRun !== null &&
+    activeTab === "competitors" &&
+    focusedPointIndex !== null
+  const pointCompetitorsQuery = useQuery({
+    queryKey:
+      selectedLocation &&
+      selectedRun &&
+      pointCompetitorsEnabled &&
+      focusedPointIndex !== null
+        ? localSeoRunPointCompetitorsQueryKey(
+            projectId,
+            selectedLocation.id,
+            selectedRun.id,
+            focusedPointIndex,
+            selectedRun.status,
+            selectedRun.completed_cells ?? null,
+          )
+        : ["local-seo-run-point-competitors", projectId, "none"],
+    queryFn: () =>
+      fetchLocalSeoRunPointCompetitors(
+        projectId,
+        selectedLocation!.id,
+        selectedRun!.id,
+        focusedPointIndex!,
+      ),
+    enabled: pointCompetitorsEnabled,
+    refetchInterval: localSeoRunRefetchInterval(selectedRun?.status),
   })
 
   const selectedLocationIdRef = useRef<string | null>(null)
@@ -874,6 +976,18 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
     setFocusedPointIndex(null)
   }
 
+  function selectPoint(pointIndex: number) {
+    setFocusedPointIndex(pointIndex)
+    setDetailRequested(true)
+    setActiveTab("competitors")
+  }
+
+  function selectCompetitorScope(pointIndex: number | null) {
+    setFocusedPointIndex(pointIndex)
+    setDetailRequested(true)
+    setActiveTab("competitors")
+  }
+
   function handleBound(location: LocalSeoLocation) {
     queryClient.setQueryData(
       localSeoLocationQueryKey(projectId, location.id),
@@ -1020,6 +1134,47 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
         tab={activeTab}
         focusedPointIndex={focusedPointIndex}
         onClearPointFocus={() => setFocusedPointIndex(null)}
+        onSelectPoint={selectPoint}
+        pointDetails={pointDetailsQuery.data ?? null}
+        pointDetailsPending={pointDetailsQuery.isPending}
+        pointDetailsError={
+          pointDetailsQuery.isError
+            ? errorMessageOf(
+                pointDetailsQuery.error,
+                "Could not load point results"
+              )
+            : null
+        }
+        competitors={
+          competitorsEnabled ? (competitorsQuery.data ?? null) : undefined
+        }
+        competitorsPending={
+          competitorsEnabled ? competitorsQuery.isPending : false
+        }
+        competitorsError={
+          competitorsEnabled && competitorsQuery.isError
+            ? errorMessageOf(
+                competitorsQuery.error,
+                "Could not load competitors"
+              )
+            : null
+        }
+        pointCompetitors={
+          pointCompetitorsEnabled ? (pointCompetitorsQuery.data ?? null) : undefined
+        }
+        pointCompetitorsPending={
+          pointCompetitorsEnabled ? pointCompetitorsQuery.isPending : false
+        }
+        pointCompetitorsError={
+          pointCompetitorsEnabled && pointCompetitorsQuery.isError
+            ? errorMessageOf(
+                pointCompetitorsQuery.error,
+                "Could not load competitors"
+              )
+            : null
+        }
+        onSelectCompetitorScope={selectCompetitorScope}
+        onShowAllCompetitors={() => setFocusedPointIndex(null)}
       />
     )
   }
@@ -1040,9 +1195,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
           onFeatureClick={(feature) => {
             const pointIndex = feature.properties?.pointIndex
             if (typeof pointIndex !== "number") return
-            setFocusedPointIndex(pointIndex)
-            setDetailRequested(true)
-            setActiveTab("overview")
+            selectPoint(pointIndex)
           }}
           onReady={setMap}
         />

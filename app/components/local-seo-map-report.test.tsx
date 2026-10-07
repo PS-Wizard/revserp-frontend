@@ -1,18 +1,27 @@
 import { describe, expect, test } from "bun:test"
+import { act } from "react"
+import { createRoot } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { StaticRouter } from "react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
+import { installTestDom } from "~/lib/dom-test-setup"
 import {
   describeLocalSeoReportRunState,
   LocalSeoMapLookupEvidence,
   LocalSeoMapReportContent,
+  LocalSeoRunCompetitorsCard,
   type LocalSeoMapReportTab,
 } from "~/components/local-seo-map-report"
 import type {
   LocalSeoCell,
   LocalSeoListingLookup,
   LocalSeoLocation,
+  LocalSeoPointDetails,
+  LocalSeoRunCompetitor,
+  LocalSeoRunCompetitors,
+  LocalSeoPointPlace,
+  LocalSeoPointQuery,
   LocalSeoRun,
 } from "~/lib/local-seo-api"
 
@@ -79,6 +88,18 @@ function renderReport({
   lookupPending = false,
   focusedPointIndex = null,
   onClearPointFocus,
+  onSelectPoint,
+  pointDetails = null,
+  pointDetailsPending = false,
+  pointDetailsError = null,
+  competitors = null,
+  competitorsPending = false,
+  competitorsError = null,
+  pointCompetitors = null,
+  pointCompetitorsPending = false,
+  pointCompetitorsError = null,
+  onSelectCompetitorScope,
+  onShowAllCompetitors,
 }: {
   tab: LocalSeoMapReportTab
   location?: LocalSeoLocation
@@ -89,6 +110,18 @@ function renderReport({
   lookupPending?: boolean
   focusedPointIndex?: number | null
   onClearPointFocus?: () => void
+  onSelectPoint?: (pointIndex: number) => void
+  pointDetails?: LocalSeoPointDetails | null
+  pointDetailsPending?: boolean
+  pointDetailsError?: string | null
+  competitors?: LocalSeoRunCompetitors | null
+  competitorsPending?: boolean
+  competitorsError?: string | null
+  pointCompetitors?: LocalSeoRunCompetitors | null
+  pointCompetitorsPending?: boolean
+  pointCompetitorsError?: string | null
+  onSelectCompetitorScope?: (pointIndex: number | null) => void
+  onShowAllCompetitors?: () => void
 }) {
   const client = new QueryClient()
   const html = renderToStaticMarkup(
@@ -104,6 +137,18 @@ function renderReport({
           lookupPending={lookupPending}
           focusedPointIndex={focusedPointIndex}
           onClearPointFocus={onClearPointFocus}
+          onSelectPoint={onSelectPoint}
+          pointDetails={pointDetails}
+          pointDetailsPending={pointDetailsPending}
+          pointDetailsError={pointDetailsError}
+          competitors={competitors}
+          competitorsPending={competitorsPending}
+          competitorsError={competitorsError}
+          pointCompetitors={pointCompetitors}
+          pointCompetitorsPending={pointCompetitorsPending}
+          pointCompetitorsError={pointCompetitorsError}
+          onSelectCompetitorScope={onSelectCompetitorScope}
+          onShowAllCompetitors={onShowAllCompetitors}
           tab={tab}
         />
       </StaticRouter>
@@ -370,72 +415,809 @@ describe("unknown status stays free", () => {
 })
 
 describe("report content focused point", () => {
-  const cells = [
-    makeCell({ query_index: 0, point_index: 0, sector: "NW", rank: 4 }),
-    makeCell({
-      query_index: 1,
-      point_index: 0,
-      sector: "NW",
-      call_status: "success_empty",
-      match_status: "absent",
-      rank: null,
-    }),
-    makeCell({
-      query_index: 2,
-      point_index: 0,
-      sector: "NW",
-      call_status: "request_failed",
-      match_status: "unknown",
-      rank: null,
-    }),
-    makeCell({
-      query_index: 3,
-      point_index: 0,
-      sector: "NW",
-      call_status: "pending",
-      match_status: "unknown",
-      rank: null,
-    }),
-  ]
+  function makeQuery(
+    overrides: Partial<LocalSeoPointQuery> = {}
+  ): LocalSeoPointQuery {
+    return {
+      query_index: 0,
+      query: "coffee",
+      call_status: "success_nonempty",
+      match_status: "found",
+      rank: 1,
+      error: null,
+      places: [],
+      ...overrides,
+    }
+  }
 
-  test("lists each saved query's result at the focused point from the frozen run", () => {
-    const html = renderReport({
+  function makePlace(
+    overrides: Partial<LocalSeoPointPlace> = {}
+  ): LocalSeoPointPlace {
+    return {
+      position: 1,
+      title: "Blue Bottle",
+      address: "1 Main St",
+      place_id: "ChIJ-a",
+      rating: null,
+      rating_count: null,
+      is_target: false,
+      ...overrides,
+    }
+  }
+
+  function makeDetails(
+    overrides: Partial<LocalSeoPointDetails> = {}
+  ): LocalSeoPointDetails {
+    return {
+      run_id: "run-1",
+      point_index: 0,
+      target_place_id: "ChIJ-target",
+      queries: [],
+      ...overrides,
+    }
+  }
+
+  function renderFocusedPoint(
+    details: LocalSeoPointDetails | null,
+    overrides: Partial<Parameters<typeof renderReport>[0]> = {}
+  ) {
+    return renderReport({
       tab: "overview",
-      latestRun: makeRun({
-        queries: ["coffee", "tea", "matcha", "cocoa"],
-        cells,
-      }),
-      location: makeLocation(),
+      latestRun: makeRun({ queries: ["coffee"] }),
       focusedPointIndex: 0,
       onClearPointFocus: () => {},
+      pointDetails: details,
+      ...overrides,
     })
+  }
+
+  test("renders every frozen query with its ranked places in provider order", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            query_index: 0,
+            query: "coffee",
+            rank: 1,
+            places: [
+              makePlace({ position: 2, title: "Second Cup", place_id: "ChIJ-2" }),
+              makePlace({ position: 1, title: "First Cup", place_id: "ChIJ-1" }),
+              makePlace({ position: 3, title: "Third Cup", place_id: "ChIJ-3" }),
+            ],
+          }),
+          makeQuery({ query_index: 1, query: "tea", rank: 4 }),
+        ],
+      })
+    )
     expect(html).toContain("Point A · North-west")
     expect(html).toContain("coffee")
-    expect(html).toContain("matcha")
+    expect(html).toContain("tea")
+    expect(html).toContain("#1")
     expect(html).toContain("#4")
-    expect(html).toContain("Not found")
-    expect(html).toContain("Failed")
-    expect(html).toContain("Unknown")
+    expect(html.indexOf("Second Cup") < html.indexOf("First Cup")).toBe(
+      true
+    )
+    expect(html.indexOf("First Cup") < html.indexOf("Third Cup")).toBe(
+      true
+    )
     expect(html).toContain('aria-label="Clear point A"')
-    expect(html.includes("live-only")).toBe(false)
   })
 
-  test("says so plainly when the frozen run has no cell for the point", () => {
+  test("marks the frozen target and keeps same-name businesses with different ids apart", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        target_place_id: "ChIJ-frozen",
+        queries: [
+          makeQuery({
+            places: [
+              makePlace({
+                title: "Blue Bottle",
+                place_id: "ChIJ-frozen",
+                is_target: true,
+              }),
+              makePlace({ title: "Blue Bottle", place_id: "ChIJ-other" }),
+            ],
+          }),
+        ],
+      })
+    )
+    expect(html.split("Blue Bottle").length - 1).toBe(2)
+    expect(html.split("Your business").length - 1).toBe(1)
+    expect(html).toContain("ChIJ-frozen")
+  })
+
+  test("keeps id-less entries visible and unmarked", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            places: [makePlace({ title: "Nameless Kiosk", place_id: null })],
+          }),
+        ],
+      })
+    )
+    expect(html).toContain("Nameless Kiosk")
+    expect(html.includes("Your business")).toBe(false)
+  })
+
+  test("shows the stored request_failed error instead of an empty list", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            call_status: "request_failed",
+            match_status: "unknown",
+            rank: null,
+            error: "Serper rejected the request.",
+          }),
+        ],
+      })
+    )
+    expect(html).toContain("Serper rejected the request.")
+    expect(html.includes("The provider returned nothing here.")).toBe(false)
+  })
+
+  test("success_empty uses the exact provider-empty copy", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            call_status: "success_empty",
+            match_status: "absent",
+            rank: null,
+          }),
+        ],
+      })
+    )
+    expect(html).toContain("The provider returned nothing here.")
+  })
+
+  test("success_nonempty absence lists the places and says the business is missing", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            match_status: "absent",
+            rank: null,
+            places: [makePlace({ title: "Rival Roasters" })],
+          }),
+        ],
+      })
+    )
+    expect(html).toContain("Rival Roasters")
+    expect(html).toContain("Your business is not in this list.")
+  })
+
+  test("a pending query shows no response instead of an empty result", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            call_status: "pending",
+            match_status: "unknown",
+            rank: null,
+          }),
+        ],
+      })
+    )
+    expect(html).toContain("No response yet.")
+  })
+
+  test("an undecodable stored payload surfaces the evidence error, not an empty list", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        queries: [
+          makeQuery({
+            error: "Stored provider results could not be read.",
+            places: [],
+          }),
+        ],
+      })
+    )
+    expect(html).toContain("Stored provider results could not be read.")
+    expect(html.includes("The provider returned nothing here.")).toBe(false)
+  })
+
+  test("loading shows a skeleton and a fetch error shows its message", () => {
+    const loading = renderFocusedPoint(null, { pointDetailsPending: true })
+    expect(loading).toContain('data-slot="skeleton"')
+    const failed = renderFocusedPoint(null, {
+      pointDetailsError: "Could not load point results",
+    })
+    expect(failed).toContain("Could not load point results")
+  })
+
+  test("marks the run's frozen target even after the location is rebound", () => {
+    const html = renderFocusedPoint(
+      makeDetails({
+        target_place_id: "ChIJ-old",
+        queries: [
+          makeQuery({
+            places: [
+              makePlace({
+                title: "Old Roastery",
+                place_id: "ChIJ-old",
+                is_target: true,
+              }),
+              makePlace({ title: "New Roastery", place_id: "ChIJ-new" }),
+            ],
+          }),
+        ],
+      }),
+      { location: makeLocation({ place_id: "ChIJ-new" }) }
+    )
+    expect(html).toContain("ChIJ-old")
+    expect(html.split("Your business").length - 1).toBe(1)
+  })
+
+  test("changing the focused point swaps the evidence for that point", () => {
+    const atA = renderFocusedPoint(
+      makeDetails({
+        point_index: 0,
+        queries: [makeQuery({ query: "coffee" })],
+      })
+    )
+    const atE = renderFocusedPoint(
+      makeDetails({
+        point_index: 4,
+        queries: [makeQuery({ query: "matcha" })],
+      }),
+      { focusedPointIndex: 4 }
+    )
+    expect(atA).toContain("Point A · North-west")
+    expect(atA).toContain("coffee")
+    expect(atA.includes("matcha")).toBe(false)
+    expect(atE).toContain("Point E · Centre")
+    expect(atE).toContain("matcha")
+    expect(atE.includes("Point A · North-west")).toBe(false)
+  })
+
+  test("no point panel is rendered without a focus", () => {
     const html = renderReport({
       tab: "overview",
-      latestRun: makeRun({ queries: ["coffee"], cells: [] }),
+      latestRun: makeRun({ queries: ["coffee"] }),
+    })
+    expect(html.includes("Point A · North-west")).toBe(false)
+  })
+})
+describe("report competitors", () => {
+  function makeCompetitor(
+    overrides: Partial<LocalSeoRunCompetitor> = {},
+  ): LocalSeoRunCompetitor {
+    return {
+      place_id: "ChIJ-a",
+      title: "Rival Roasters",
+      address: "1 Main St",
+      query_points_seen: 5,
+      best_rank: 2,
+      same_brand_domain: false,
+      query_indexes: [0],
+      ...overrides,
+    }
+  }
+
+  function makeCompetitors(
+    overrides: Partial<LocalSeoRunCompetitors> = {},
+  ): LocalSeoRunCompetitors {
+    return {
+      run_id: "run-1",
+      target_place_id: "ChIJ-target",
+      queries: ["coffee", "tea"],
+      point_index: null,
+      total_query_points: 20,
+      contributing_query_points: 18,
+      failed_query_points: 1,
+      pending_query_points: 1,
+      unreadable_query_points: 0,
+      idless_entries: 0,
+      competitors: [],
+      ...overrides,
+    }
+  }
+
+  function renderCard(props: {
+    data?: LocalSeoRunCompetitors | null
+    pending?: boolean
+    error?: string | null
+    locationName?: string | null
+    pointIndex?: number | null
+  }) {
+    return renderToStaticMarkup(
+      <LocalSeoRunCompetitorsCard
+        data={props.data ?? null}
+        pending={props.pending ?? false}
+        error={props.error ?? null}
+        locationName={props.locationName ?? null}
+        pointIndex={props.pointIndex ?? null}
+      />,
+    )
+  }
+
+  test("states coverage against the total, never a bare point count", () => {
+    const html = renderCard({
+      data: makeCompetitors({
+        competitors: [makeCompetitor()],
+        idless_entries: 0,
+      }),
+    })
+    expect(html).toContain("Results from 18 of 20 query-points")
+    expect(html).toContain("1 failed")
+    expect(html).toContain("1 pending")
+    expect(html).toContain("No entries omitted without an ID.")
+    expect(html).toContain("in 5 of 20 query-points")
+    expect(html.includes("of 9")).toBe(false)
+  })
+
+  test("keeps backend order, shows seen-once rows, and keeps same names ID-separated", () => {
+    const html = renderCard({
+      data: makeCompetitors({
+        total_query_points: 20,
+        contributing_query_points: 20,
+        failed_query_points: 0,
+        pending_query_points: 0,
+        competitors: [
+          makeCompetitor({
+            place_id: "ChIJ-first",
+            title: "Same Name",
+            query_points_seen: 8,
+            best_rank: 3,
+            query_indexes: [0],
+          }),
+          makeCompetitor({
+            place_id: "ChIJ-second",
+            title: "Same Name",
+            query_points_seen: 1,
+            best_rank: null,
+            query_indexes: [1],
+          }),
+        ],
+      }),
+    })
+    expect(html.split("Same Name").length - 1).toBe(2)
+    expect(html).toContain("in 1 of 20 query-points")
+    expect(html).toContain("No recorded rank")
+    expect(html).toContain("coffee")
+    expect(html).toContain("tea")
+    expect(html.indexOf("Same Name") < html.lastIndexOf("Same Name")).toBe(true)
+  })
+
+  test("ranks show only positive best positions with full wrapping names", () => {
+    const html = renderCard({
+      data: makeCompetitors({
+        competitors: [
+          makeCompetitor({
+            title: "A Very Long Business Name That Must Wrap Fully",
+            address: "A Very Long Street Address That Must Wrap Fully",
+            best_rank: 1,
+          }),
+        ],
+      }),
+    })
+    expect(html).toContain("A Very Long Business Name That Must Wrap Fully")
+    expect(html).toContain("A Very Long Street Address That Must Wrap Fully")
+    expect(html).toContain("#1")
+    expect(html.includes("truncate")).toBe(false)
+  })
+
+  test("empty, error, and pending states stay distinct", () => {
+    const empty = renderCard({ data: makeCompetitors({ competitors: [] }) })
+    expect(empty).toContain("No competitors recorded in the stored results.")
+    const failed = renderCard({ error: "Could not load competitors" })
+    expect(failed).toContain("Could not load competitors")
+    expect(failed.includes("No competitors recorded")).toBe(false)
+    const pending = renderCard({ pending: true })
+    expect(pending).toContain('data-slot="skeleton"')
+    expect(pending.includes("No competitors recorded")).toBe(false)
+  })
+
+  test("all failed never reads as complete coverage", () => {
+    const html = renderCard({
+      data: makeCompetitors({
+        total_query_points: 10,
+        contributing_query_points: 0,
+        failed_query_points: 10,
+        pending_query_points: 0,
+        unreadable_query_points: 0,
+        competitors: [],
+        idless_entries: 3,
+      }),
+    })
+    expect(html).toContain("Results from 0 of 10 query-points")
+    expect(html).toContain("10 failed")
+    expect(html).toContain("coverage is incomplete")
+    expect(html).toContain("3 entries omitted without an ID")
+    expect(html.toLowerCase().includes("complete coverage")).toBe(false)
+  })
+
+  test("overview never renders whole-run competitors", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({ queries: ["coffee"] }),
+      competitors: makeCompetitors({ competitors: [makeCompetitor()] }),
+    } as Parameters<typeof renderReport>[0])
+    expect(html.includes("Rival Roasters")).toBe(false)
+    expect(html.includes("Whole run competitors")).toBe(false)
+    expect(html.includes("Point F competitors")).toBe(false)
+  })
+
+  test("competitors tab renders one whole-run card with global copy", () => {
+    const html = renderReport({
+      tab: "competitors",
+      latestRun: makeRun({ queries: ["coffee", "tea"] }),
+      focusedPointIndex: null,
+      competitors: makeCompetitors({ competitors: [makeCompetitor()] }),
+    } as Parameters<typeof renderReport>[0])
+    expect(html).toContain("Whole run competitors")
+    expect(html).toContain("Combined across all saved queries and map points")
+    expect(html).toContain("Rival Roasters")
+    expect(html).toContain("in 5 of 20 query-points")
+    expect(html.includes("Point F competitors")).toBe(false)
+  })
+
+  test("point scope renders its own heading, copy, and frequency", () => {
+    const point = makeCompetitors({
+      point_index: 5,
+      queries: ["coffee", "tea"],
+      total_query_points: 2,
+      contributing_query_points: 2,
+      failed_query_points: 0,
+      pending_query_points: 0,
+      unreadable_query_points: 0,
+      competitors: [
+        makeCompetitor({
+          place_id: "ChIJ-point",
+          title: "Point Rival",
+          query_points_seen: 2,
+          query_indexes: [0, 1],
+        }),
+      ],
+    })
+    const html = renderReport({
+      tab: "competitors",
+      latestRun: makeRun({ queries: ["coffee", "tea"] }),
+      focusedPointIndex: 5,
+      competitors: makeCompetitors({ competitors: [makeCompetitor()] }),
+      pointCompetitors: point,
+    } as Parameters<typeof renderReport>[0])
+    expect(html).toContain("Point F competitors")
+    expect(html).toContain("Combined only this point")
+    expect(html).toContain("Point Rival")
+    expect(html).toContain("Seen in 2 of 2 queries at Point F")
+    expect(html.includes("Rival Roasters")).toBe(false)
+    expect(html.includes("Whole run competitors")).toBe(false)
+  })
+
+  test("swapping from point A to point F swaps rows without leaking", () => {
+    const atA = renderReport({
+      tab: "competitors",
+      latestRun: makeRun({ queries: ["coffee"] }),
+      focusedPointIndex: 0,
+      pointCompetitors: makeCompetitors({
+        point_index: 0,
+        competitors: [makeCompetitor({ place_id: "ChIJ-a", title: "Alpha Cafe" })],
+      }),
+    } as Parameters<typeof renderReport>[0])
+    const atF = renderReport({
+      tab: "competitors",
+      latestRun: makeRun({ queries: ["coffee"] }),
+      focusedPointIndex: 5,
+      pointCompetitors: makeCompetitors({
+        point_index: 5,
+        competitors: [makeCompetitor({ place_id: "ChIJ-f", title: "Foxtrot Cafe" })],
+      }),
+    } as Parameters<typeof renderReport>[0])
+    expect(atA).toContain("Point A competitors")
+    expect(atA).toContain("Alpha Cafe")
+    expect(atA.includes("Foxtrot Cafe")).toBe(false)
+    expect(atF).toContain("Point F competitors")
+    expect(atF).toContain("Foxtrot Cafe")
+    expect(atF.includes("Alpha Cafe")).toBe(false)
+    expect(atF.includes("Rival Roasters")).toBe(false)
+  })
+
+  test("point pending and error never render global rows", () => {
+    const global = makeCompetitors({ competitors: [makeCompetitor()] })
+    const pending = renderReport({
+      tab: "competitors",
+      latestRun: makeRun({ queries: ["coffee"] }),
+      focusedPointIndex: 5,
+      competitors: global,
+      pointCompetitors: null,
+      pointCompetitorsPending: true,
+    } as Parameters<typeof renderReport>[0])
+    expect(pending).toContain("Point F competitors")
+    expect(pending.includes("Rival Roasters")).toBe(false)
+    const failed = renderReport({
+      tab: "competitors",
+      latestRun: makeRun({ queries: ["coffee"] }),
+      focusedPointIndex: 5,
+      competitors: global,
+      pointCompetitorsError: "Could not load competitors",
+    } as Parameters<typeof renderReport>[0])
+    expect(failed).toContain("Point F competitors")
+    expect(failed).toContain("Could not load competitors")
+    expect(failed.includes("Rival Roasters")).toBe(false)
+  })
+
+  test("scope selector offers whole run plus points A to I", () => {
+    installTestDom()
+    const seen: Array<number | null> = []
+    const { createRoot: createRoot2 } = require("react-dom/client") as typeof import("react-dom/client")
+    const { act: act2 } = require("react") as typeof import("react")
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const root = createRoot2(host)
+    const client = new QueryClient()
+    act2(() => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <StaticRouter location="/app">
+            <LocalSeoMapReportContent
+              projectId="proj-1"
+              location={makeLocation()}
+              latestRun={makeRun({ queries: ["coffee"] })}
+              runPending={false}
+              lookup={null}
+              lookupPending={false}
+              tab="competitors"
+              focusedPointIndex={5}
+              onSelectCompetitorScope={(index) => seen.push(index)}
+              competitors={makeCompetitors()}
+              pointCompetitors={makeCompetitors({ point_index: 5 })}
+            />
+          </StaticRouter>,
+        </QueryClientProvider>,
+      )
+    })
+    const select = host.querySelector('select[aria-label="Competitor scope"]') as HTMLSelectElement | null
+    expect(select === null).toBe(false)
+    const options = Array.from(select!.querySelectorAll("option")).map((option) => option.textContent)
+    expect(options[0]).toBe("Whole run")
+    expect(options).toContain("Point A")
+    expect(options).toContain("Point F")
+    expect(options).toContain("Point I")
+    expect(options.length).toBe(10)
+    expect(select!.value).toBe("5")
+    act2(() => {
+      select!.value = "0"
+      select!.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    act2(() => root.unmount())
+    host.remove()
+    client.clear()
+  })
+
+  test("selector callback receives point A, point F, and whole run", () => {
+    installTestDom()
+    const seen: Array<number | null> = []
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    const client = new QueryClient()
+    act(() => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <StaticRouter location="/app">
+            <LocalSeoMapReportContent
+              projectId="proj-1"
+              location={makeLocation()}
+              latestRun={makeRun({ queries: ["coffee"] })}
+              runPending={false}
+              lookup={null}
+              lookupPending={false}
+              tab="competitors"
+              focusedPointIndex={5}
+              onSelectCompetitorScope={(index) => seen.push(index)}
+              competitors={makeCompetitors()}
+              pointCompetitors={makeCompetitors({ point_index: 5 })}
+            />
+          </StaticRouter>,
+        </QueryClientProvider>,
+      )
+    })
+    const select = host.querySelector('select[aria-label="Competitor scope"]') as HTMLSelectElement | null
+    expect(select === null).toBe(false)
+    const fireChange = (value: string) => {
+      act(() => {
+        if (!select) return
+        select.value = value
+        select.dispatchEvent(new Event("change", { bubbles: true }))
+      })
+    }
+    fireChange("0")
+    fireChange("5")
+    fireChange("whole")
+    expect(seen).toEqual([0, 5, null])
+    act(() => root.unmount())
+    host.remove()
+    client.clear()
+  })
+
+  test("marks the shared website host without branch claims", () => {
+    const html = renderCard({
+      data: makeCompetitors({
+        competitors: [makeCompetitor({ same_brand_domain: true })],
+      }),
+    })
+    expect(html).toContain("Same website host")
+    expect(html).toContain(
+      "Same website host does not identify all company branches."
+    )
+    expect(html.includes("Your branch")).toBe(false)
+    expect(html.toLowerCase().includes("same company")).toBe(false)
+    const plain = renderCard({
+      data: makeCompetitors({
+        competitors: [makeCompetitor({ same_brand_domain: false })],
+      }),
+    })
+    expect(plain.includes("Same website host")).toBe(false)
+  })
+  test("groups title-prefix branches without fuzzy matching", () => {
+    const html = renderCard({
+      locationName: "Sunrise Dental, Main Street",
+      data: makeCompetitors({
+        competitors: [
+          makeCompetitor({
+            place_id: "ChIJ-north",
+            title: "Sunrise Dental North",
+            query_points_seen: 8,
+          }),
+          makeCompetitor({
+            place_id: "ChIJ-reliable",
+            title: "Reliable Plumbing",
+            query_points_seen: 7,
+          }),
+          makeCompetitor({
+            place_id: "ChIJ-south",
+            title: "Sunrise Dental South",
+            query_points_seen: 6,
+          }),
+          makeCompetitor({
+            place_id: "ChIJ-sunset",
+            title: "Sunset Smiles",
+            query_points_seen: 5,
+          }),
+          makeCompetitor({
+            place_id: "ChIJ-national",
+            title: "National Storage",
+            query_points_seen: 4,
+          }),
+        ],
+      }),
+    })
+    expect(html).toContain("Likely your branches (2)")
+    expect(html).toContain("Competitors (3)")
+    expect(html).toContain("not verified ownership")
+    expect(
+      html.indexOf("Sunrise Dental North") <
+        html.indexOf("Sunrise Dental South"),
+    ).toBe(true)
+    expect(
+      html.indexOf("Reliable Plumbing") < html.indexOf("National Storage"),
+    ).toBe(true)
+    expect(html.indexOf("Sunset Smiles") > html.indexOf("Competitors (3)")).toBe(
+      true,
+    )
+    for (const title of [
+      "Sunrise Dental North",
+      "Reliable Plumbing",
+      "Sunrise Dental South",
+      "Sunset Smiles",
+      "National Storage",
+    ]) {
+      expect(html).toContain(title)
+    }
+  })
+
+  test("an unrelated title on the same website host still groups as likely", () => {
+    const html = renderCard({
+      locationName: "Sunrise Dental, Main Street",
+      data: makeCompetitors({
+        competitors: [
+          makeCompetitor({
+            title: "Totally Different Co",
+            same_brand_domain: true,
+          }),
+          makeCompetitor({ title: "Reliable Plumbing" }),
+        ],
+      }),
+    })
+    expect(html).toContain("Likely your branches (1)")
+    expect(html).toContain("Competitors (1)")
+    expect(html.indexOf("Totally Different Co") < html.indexOf("Competitors (1)")).toBe(
+      true,
+    )
+  })
+
+  test("a location name without a valid brand keeps every row ungrouped", () => {
+    for (const locationName of ["Solo", "", " , Main Street"]) {
+      const html = renderCard({
+        locationName,
+        data: makeCompetitors({
+          competitors: [
+            makeCompetitor({
+              title: "Sunrise Dental North",
+              same_brand_domain: true,
+            }),
+            makeCompetitor({ title: "Reliable Plumbing" }),
+          ],
+        }),
+      })
+      expect(html.includes("Likely your branches")).toBe(false)
+      expect(html).toContain("Sunrise Dental North")
+      expect(html).toContain("Reliable Plumbing")
+    }
+  })
+
+  test("multiword names without commas and comma-separated single-token brands can group", () => {
+    for (const locationName of ["Sunrise Dental", "Sunrise Dental, Main Street", "Sunrise, Main Street"]) {
+      const html = renderCard({
+        locationName,
+        data: makeCompetitors({
+          competitors: [
+            makeCompetitor({ place_id: "branch", title: "Sunrise Dental North" }),
+            makeCompetitor({ place_id: "sun", title: "Sun Sunrise Dental" }),
+            makeCompetitor({ place_id: "reliable", title: "Reliable Sunrise Dental" }),
+            makeCompetitor({ place_id: "national", title: "National Storage" }),
+          ],
+        }),
+      })
+      expect(html).toContain("Likely your branches (1)")
+      expect(html).toContain("Competitors (3)")
+    }
+  })
+})
+
+describe("board point selection", () => {
+  test("clicking a board cell selects that point index", () => {
+    installTestDom()
+    const client = new QueryClient()
+    const seen: number[] = []
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    act(() => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <StaticRouter location="/app">
+            <LocalSeoMapReportContent
+              projectId="proj-1"
+              location={makeLocation()}
+              latestRun={makeRun({ queries: ["coffee"] })}
+              runPending={false}
+              lookup={null}
+              lookupPending={false}
+              tab="overview"
+              focusedPointIndex={null}
+              onSelectPoint={(index) => seen.push(index)}
+            />
+          </StaticRouter>,
+        </QueryClientProvider>
+      )
+    })
+    const button = host.querySelector(
+      'button[aria-label*="Business centre"]'
+    ) as HTMLButtonElement | null
+    expect(button === null).toBe(false)
+    act(() => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+    expect(seen).toEqual([4])
+    act(() => root.unmount())
+    host.remove()
+    client.clear()
+  })
+
+  test("the board precedes the point panel and marks the focused cell", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({ queries: ["coffee"] }),
       focusedPointIndex: 4,
       onClearPointFocus: () => {},
     })
-    expect(html).toContain("Point E · Centre")
-    expect(html).toContain("No samples recorded for this point")
-  })
-
-  test("no point card is rendered without a focus", () => {
-    const html = renderReport({
-      tab: "overview",
-      latestRun: makeRun({ queries: ["coffee"], cells }),
-    })
-    expect(html.includes("Point A · North-west")).toBe(false)
+    expect(
+      html.indexOf("Nine-point visibility board") < html.indexOf("Point E · Centre")
+    ).toBe(true)
+    expect(html).toContain('aria-pressed="true"')
   })
 })

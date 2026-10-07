@@ -25,13 +25,19 @@ import {
 import { Skeleton } from "~/components/ui/skeleton"
 import { cn } from "~/lib/utils"
 
-export type LocalSeoMapSidebarTab = "overview" | "queries" | "listing" | "run"
+export type LocalSeoMapSidebarTab =
+  | "overview"
+  | "competitors"
+  | "queries"
+  | "listing"
+  | "run"
 
 export const LOCAL_SEO_MAP_SIDEBAR_TABS: ReadonlyArray<{
   value: LocalSeoMapSidebarTab
   label: string
 }> = [
   { value: "overview", label: "Overview" },
+  { value: "competitors", label: "Competitors" },
   { value: "queries", label: "Queries" },
   { value: "listing", label: "Listing" },
   { value: "run", label: "Run" },

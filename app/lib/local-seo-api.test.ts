@@ -7,12 +7,18 @@ import {
   fetchLocalSeoLocationQueryRecords,
   fetchLocalSeoLocationServices,
   fetchLocalSeoMapsBudget,
+  fetchLocalSeoPointDetails,
   fetchLocalSeoProjectServices,
+  fetchLocalSeoRunCompetitors,
+  fetchLocalSeoRunPointCompetitors,
   localSeoLandmarksQueryKey,
   localSeoLocationQueryRecordsQueryKey,
   localSeoLocationServicesQueryKey,
   localSeoMapsBudgetQueryKey,
+  localSeoPointDetailsQueryKey,
   localSeoProjectServicesQueryKey,
+  localSeoRunCompetitorsQueryKey,
+  localSeoRunPointCompetitorsQueryKey,
   localSeoRunRefetchInterval,
   refreshLocalSeoLandmarks,
   renameLocalSeoProjectService,
@@ -21,6 +27,8 @@ import {
   type LocalSeoLandmark,
   type LocalSeoLocationQueryRecord,
   type LocalSeoMapsBudget,
+  type LocalSeoPointDetails,
+  type LocalSeoRunCompetitors,
   type LocalSeoRunStatus,
 } from "~/lib/local-seo-api"
 
@@ -266,5 +274,201 @@ describe("maps budget contract", () => {
       "local-seo-maps-budget",
       "proj-1",
     ])
+  })
+})
+
+describe("point details contract", () => {
+  const details: LocalSeoPointDetails = {
+    run_id: "run-1",
+    point_index: 3,
+    target_place_id: "ChIJ-target",
+    queries: [
+      {
+        query_index: 0,
+        query: "coffee",
+        call_status: "success_nonempty",
+        match_status: "found",
+        rank: 2,
+        error: null,
+        places: [
+          {
+            position: 1,
+            title: "Blue Bottle",
+            address: "1 Main St",
+            place_id: "ChIJ-a",
+            rating: 4.6,
+            rating_count: 88,
+            is_target: false,
+          },
+        ],
+      },
+    ],
+  }
+
+  test("reads the frozen point evidence without a provider call", async () => {
+    mockFetch(200, details)
+    const result = await fetchLocalSeoPointDetails("proj-1", "loc-1", "run-1", 3)
+    expect(result).toEqual(details)
+    expect(calls[0].method).toBe("GET")
+    expect(calls[0].url).toContain(
+      "/projects/proj-1/locations/loc-1/runs/run-1/points/3"
+    )
+  })
+
+  test("keeps a failure as an ApiError instead of empty evidence", async () => {
+    mockFetch(500, { error: "internal server error" })
+    let thrown: unknown
+    try {
+      await fetchLocalSeoPointDetails("proj-1", "loc-1", "run-1", 3)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown instanceof ApiError && thrown.status === 500).toBe(true)
+  })
+
+  test("scopes the query key to project, location, run, point, and status", () => {
+    const base = localSeoPointDetailsQueryKey(
+      "proj-1",
+      "loc-1",
+      "run-1",
+      0,
+      "running"
+    )
+    expect(base).toEqual([
+      "local-seo-point-details",
+      "proj-1",
+      "loc-1",
+      "run-1",
+      0,
+      "running",
+    ])
+    const signature = (key: readonly unknown[]) => key.join("/")
+    expect(
+      signature(
+        localSeoPointDetailsQueryKey("proj-1", "loc-1", "run-1", 4, "running")
+      ) === signature(base)
+    ).toBe(false)
+    expect(
+      signature(
+        localSeoPointDetailsQueryKey("proj-1", "loc-1", "run-2", 0, "running")
+      ) === signature(base)
+    ).toBe(false)
+    expect(
+      signature(
+        localSeoPointDetailsQueryKey("proj-1", "loc-2", "run-1", 0, "running")
+      ) === signature(base)
+    ).toBe(false)
+    expect(
+      signature(
+        localSeoPointDetailsQueryKey("proj-1", "loc-1", "run-1", 0, "completed")
+      ) === signature(base)
+    ).toBe(false)
+  })
+})
+describe("run competitors contract", () => {
+  test("reads the frozen rollup without a provider call", async () => {
+    const payload: LocalSeoRunCompetitors = {
+      run_id: "run-1",
+      target_place_id: "ChIJ-target",
+      queries: ["coffee", "tea"],
+      point_index: null,
+      total_query_points: 20,
+      contributing_query_points: 18,
+      failed_query_points: 1,
+      pending_query_points: 1,
+      unreadable_query_points: 0,
+      idless_entries: 2,
+      competitors: [
+        {
+          place_id: "ChIJ-a",
+          title: "Rival Roasters",
+          address: "1 Main St",
+          query_points_seen: 5,
+          best_rank: 2,
+          same_brand_domain: true,
+          query_indexes: [0, 1],
+        },
+      ],
+    }
+    mockFetch(200, payload)
+    const result = await fetchLocalSeoRunCompetitors("proj-1", "loc-1", "run-1")
+    expect(result).toEqual(payload)
+    expect(calls[0].method).toBe("GET")
+    expect(calls[0].url).toContain(
+      "/projects/proj-1/locations/loc-1/runs/run-1/competitors",
+    )
+  })
+
+  test("scopes the query key to run, status, and progress", () => {
+    const active = localSeoRunCompetitorsQueryKey(
+      "proj-1",
+      "loc-1",
+      "run-1",
+      "running",
+      12,
+    )
+    expect(active[0]).toBe("local-seo-run-competitors")
+    expect(active.slice(1, 4)).toEqual(["proj-1", "loc-1", "run-1"])
+    const same = (key: readonly unknown[]) => key.join('/')
+    expect(
+      same(
+        localSeoRunCompetitorsQueryKey("proj-1", "loc-1", "run-1", "completed", 45),
+      ) === same(active),
+    ).toBe(false)
+    expect(
+      same(
+        localSeoRunCompetitorsQueryKey("proj-1", "loc-1", "run-1", "running", 13),
+      ) === same(active),
+    ).toBe(false)
+    expect(
+      same(
+        localSeoRunCompetitorsQueryKey("proj-1", "loc-1", "run-2", "running", 12),
+      ) === same(active),
+    ).toBe(false)
+  })
+
+  test("reads the frozen point rollup from the point route", async () => {
+    const payload: LocalSeoRunCompetitors = {
+      run_id: "run-1",
+      target_place_id: "ChIJ-target",
+      queries: ["coffee", "tea"],
+      point_index: 5,
+      total_query_points: 2,
+      contributing_query_points: 2,
+      failed_query_points: 0,
+      pending_query_points: 0,
+      unreadable_query_points: 0,
+      idless_entries: 0,
+      competitors: [
+        {
+          place_id: "ChIJ-f",
+          title: "Point Rival",
+          address: "1 Main St",
+          query_points_seen: 2,
+          best_rank: 1,
+          same_brand_domain: false,
+          query_indexes: [0, 1],
+        },
+      ],
+    }
+    mockFetch(200, payload)
+    const result = await fetchLocalSeoRunPointCompetitors("proj-1", "loc-1", "run-1", 5)
+    expect(result).toEqual(payload)
+    expect(result.point_index).toBe(5)
+    expect(calls[0].method).toBe("GET")
+    expect(calls[0].url).toContain(
+      "/projects/proj-1/locations/loc-1/runs/run-1/points/5/competitors",
+    )
+  })
+
+  test("point keys stay scoped by point and never collide with the whole run", () => {
+    const pointF = localSeoRunPointCompetitorsQueryKey("proj-1", "loc-1", "run-1", 5, "completed", 45)
+    expect(pointF[0]).toBe("local-seo-run-point-competitors")
+    expect(pointF.slice(1, 5)).toEqual(["proj-1", "loc-1", "run-1", 5])
+    const same = (key: readonly unknown[]) => key.join("/")
+    expect(same(localSeoRunPointCompetitorsQueryKey("proj-1", "loc-1", "run-1", 0, "completed", 45)) === same(pointF)).toBe(false)
+    expect(same(localSeoRunPointCompetitorsQueryKey("proj-1", "loc-1", "run-2", 5, "completed", 45)) === same(pointF)).toBe(false)
+    expect(same(localSeoRunCompetitorsQueryKey("proj-1", "loc-1", "run-1", "completed", 45)) === same(pointF)).toBe(false)
+    expect(same(localSeoRunPointCompetitorsQueryKey("proj-1", "loc-1", "run-1", 5, "running", 12)) === same(pointF)).toBe(false)
   })
 })

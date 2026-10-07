@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react"
+
 import { XIcon } from "lucide-react"
 
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -5,14 +7,19 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ApiError } from "~/lib/api"
 import {
   isLocalSeoLocationBound,
+  LOCAL_SEO_POINT_COUNT,
   localSeoLocationQueryKey,
   localSeoLocationsQueryKey,
   localSeoPointLetter,
   unbindLocalSeoListing,
-  type LocalSeoCell,
   type LocalSeoListingLookup,
   type LocalSeoLocation,
+  type LocalSeoPointDetails,
+  type LocalSeoPointPlace,
+  type LocalSeoPointQuery,
   type LocalSeoRun,
+  type LocalSeoRunCompetitor,
+  type LocalSeoRunCompetitors,
   type LocalSeoSector,
 } from "~/lib/local-seo-api"
 import {
@@ -30,7 +37,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import { Separator } from "~/components/ui/separator"
 import { Skeleton } from "~/components/ui/skeleton"
 import { cn } from "~/lib/utils"
 
@@ -62,33 +68,117 @@ function localSeoSectorCaption(sector: LocalSeoSector): string {
   return sector === "centre" ? "Centre" : sector
 }
 
-function describeLocalSeoPointCellResult(
-  cell: LocalSeoCell | undefined
-): string {
-  if (!cell) return "Unknown"
-  const succeeded =
-    cell.call_status === "success_empty" ||
-    cell.call_status === "success_nonempty"
-  if (!succeeded) return cell.call_status === "pending" ? "Unknown" : "Failed"
+const LOCAL_SEO_POINT_EMPTY_TEXT = "The provider returned nothing here."
+
+function describeLocalSeoPointQueryResult(entry: LocalSeoPointQuery): string {
+  if (entry.error) return "Error"
+  if (entry.call_status === "pending") return "Pending"
+  if (entry.call_status === "request_failed") return "Failed"
+  if (entry.call_status === "success_empty") return "No results"
   if (
-    cell.match_status === "found" &&
-    typeof cell.rank === "number" &&
-    Number.isFinite(cell.rank) &&
-    cell.rank > 0
+    entry.match_status === "found" &&
+    typeof entry.rank === "number" &&
+    Number.isFinite(entry.rank) &&
+    entry.rank > 0
   ) {
-    return `#${Number.isInteger(cell.rank) ? cell.rank : cell.rank.toFixed(1)}`
+    return `#${Number.isInteger(entry.rank) ? entry.rank : entry.rank.toFixed(1)}`
   }
-  if (cell.match_status === "absent") return "Not found"
-  return "Unknown"
+  if (entry.match_status === "absent") return "Not found"
+  return "Unranked"
 }
 
-function LocalSeoPointCard({
-  run,
+function LocalSeoPointPlaceRow({ place }: { place: LocalSeoPointPlace }) {
+  const ratingParts: string[] = []
+  if (place.rating !== null) ratingParts.push(`★ ${place.rating}`)
+  if (place.rating_count !== null) {
+    ratingParts.push(`${place.rating_count} reviews`)
+  }
+  return (
+    <li className="flex items-start gap-2 text-sm">
+      <span className="w-5 shrink-0 text-right text-muted-foreground tabular-nums">
+        {place.position ?? "—"}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="flex flex-wrap items-baseline gap-1.5">
+          <span className="text-foreground">{place.title}</span>
+          {place.is_target ? (
+            <Badge variant="secondary">Your business</Badge>
+          ) : null}
+        </p>
+        {place.address ? (
+          <p className="text-xs text-muted-foreground">{place.address}</p>
+        ) : null}
+        {ratingParts.length > 0 ? (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            {ratingParts.join(" · ")}
+          </p>
+        ) : null}
+      </div>
+    </li>
+  )
+}
+
+function LocalSeoPointQueryResult({ entry }: { entry: LocalSeoPointQuery }) {
+  if (entry.error) {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        {entry.error}
+      </p>
+    )
+  }
+  if (entry.call_status === "pending") {
+    return <p className="text-sm text-muted-foreground">No response yet.</p>
+  }
+  if (entry.call_status === "request_failed") {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        The provider call failed.
+      </p>
+    )
+  }
+  if (entry.call_status === "success_empty") {
+    return (
+      <p className="text-sm text-muted-foreground">
+        {LOCAL_SEO_POINT_EMPTY_TEXT}
+      </p>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      {entry.places.length === 0 ? (
+        <p role="alert" className="text-sm text-destructive">
+          The provider reported results but stored none.
+        </p>
+      ) : (
+        <ol className="flex flex-col gap-1.5">
+          {entry.places.map((place, index) => (
+            <LocalSeoPointPlaceRow
+              key={`${entry.query_index}:${index}`}
+              place={place}
+            />
+          ))}
+        </ol>
+      )}
+      {entry.match_status === "absent" ? (
+        <p className="text-sm text-muted-foreground">
+          Your business is not in this list.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+export function LocalSeoPointResultsPanel({
   pointIndex,
+  details,
+  pending,
+  error,
   onClear,
 }: {
-  run: LocalSeoRun
   pointIndex: number
+  details: LocalSeoPointDetails | null
+  pending: boolean
+  error: string | null
   onClear?: () => void
 }) {
   const letter = localSeoPointLetter(pointIndex)
@@ -97,23 +187,11 @@ function LocalSeoPointCard({
     sector === "centre"
       ? localSeoSectorCaption(sector)
       : LOCAL_SEO_SECTOR_NAMES[sector]
-  const pointCells = run.cells.filter((cell) => cell.point_index === pointIndex)
-  const summary = summarizeLocalSeoGridCells(run.cells, null).points.find(
-    (point) => point.pointIndex === pointIndex
-  )
-  const failedCount = pointCells.filter(
-    (cell) => cell.call_status === "request_failed"
-  ).length
   return (
     <Card size="sm">
       <CardHeader>
         <CardTitle className="text-sm">{`Point ${letter} · ${caption}`}</CardTitle>
-        <CardDescription className="tabular-nums">
-          Found-only mean rank{" "}
-          {formatLocalSeoMeanRank(summary?.meanRank ?? null)} ·{" "}
-          {summary?.foundCount ?? 0} found · {summary?.absentCount ?? 0} absent
-          · {failedCount} failed
-        </CardDescription>
+        <CardDescription>Stored results for this map point, one list per saved query. The tracked listing is badged.</CardDescription>
         {onClear ? (
           <CardAction>
             <Button
@@ -129,29 +207,45 @@ function LocalSeoPointCard({
           </CardAction>
         ) : null}
       </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <Separator />
-        {pointCells.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No samples recorded for this point in the frozen run.
+      <CardContent className="flex flex-col gap-3">
+        {pending ? <Skeleton className="h-24 w-full" /> : null}
+        {!pending && error ? (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
           </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {run.queries.map((query, index) => (
-              <li
-                key={`${index}-${query}`}
-                className="flex items-baseline justify-between gap-3 text-sm"
-              >
-                <span className="truncate text-muted-foreground">{query}</span>
-                <span className="shrink-0 font-medium tabular-nums">
-                  {describeLocalSeoPointCellResult(
-                    pointCells.find((cell) => cell.query_index === index)
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        ) : null}
+        {!pending && !error && details ? (
+          <>
+            {details.target_place_id ? (
+              <p className="text-xs text-muted-foreground">
+                Marking frozen run target {details.target_place_id}.
+              </p>
+            ) : null}
+            <ol className="flex flex-col gap-3">
+              {details.queries.map((entry) => (
+                <li
+                  key={`${entry.query_index}:${entry.query}`}
+                  className="flex flex-col gap-1"
+                >
+                  <div className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="truncate font-medium text-foreground">
+                      {entry.query}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground tabular-nums">
+                      {describeLocalSeoPointQueryResult(entry)}
+                    </span>
+                  </div>
+                  <LocalSeoPointQueryResult entry={entry} />
+                </li>
+              ))}
+            </ol>
+          </>
+        ) : null}
+        {!pending && !error && !details ? (
+          <p className="text-sm text-muted-foreground">
+            No stored results for this point in the frozen run.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -228,25 +322,31 @@ function LocalSeoRunOverview({
   run,
   focusedPointIndex,
   onClearPointFocus,
+  onSelectPoint,
+  pointDetails,
+  pointDetailsPending,
+  pointDetailsError,
 }: {
   run: LocalSeoRun
   focusedPointIndex?: number | null
   onClearPointFocus?: () => void
+  onSelectPoint?: (pointIndex: number) => void
+  pointDetails?: LocalSeoPointDetails | null
+  pointDetailsPending?: boolean
+  pointDetailsError?: string | null
 }) {
+  const pointPanelRef = useRef<HTMLDivElement | null>(null)
   const overview = summarizeLocalSeoRunOverview(run)
   const summary = summarizeLocalSeoGridCells(run.cells, null)
   const pointBySector = new Map(
     summary.points.map((point) => [point.sector, point] as const)
   )
+  useEffect(() => {
+    if (focusedPointIndex === null || focusedPointIndex === undefined) return
+    pointPanelRef.current?.scrollIntoView({ block: "nearest" })
+  }, [focusedPointIndex])
   return (
     <>
-      {focusedPointIndex !== null && focusedPointIndex !== undefined ? (
-        <LocalSeoPointCard
-          run={run}
-          pointIndex={focusedPointIndex}
-          onClear={onClearPointFocus}
-        />
-      ) : null}
       <Card size="sm">
         <CardHeader>
           <CardDescription>
@@ -283,29 +383,33 @@ function LocalSeoRunOverview({
                   point.unknownCount
                 )
           return (
-            <li
-              key={sector}
-              aria-label={
-                point
-                  ? `${LOCAL_SEO_SECTOR_NAMES[sector]} sampled point: mean rank ${headline}, ${point.foundCount} found, ${point.absentCount} absent, ${point.unknownCount} unknown`
-                  : `${LOCAL_SEO_SECTOR_NAMES[sector]}: not sampled`
-              }
-              className={cn(
-                "flex min-h-16 flex-col items-center justify-center gap-0.5 rounded-md border border-border px-1 py-2 text-center",
-                sector === "centre" && "border-primary/40 bg-muted/60"
-              )}
-            >
-              <span className="text-[10px] font-medium tracking-wide text-muted-foreground">
-                {`${localSeoPointLetter(index)} · ${localSeoSectorCaption(sector)}`}
-              </span>
-              <span className="text-base leading-none font-semibold tabular-nums">
-                {headline}
-              </span>
-              {point ? (
-                <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {point.foundCount} found · {point.absentCount} absent
+            <li key={sector} className="contents">
+              <button
+                type="button"
+                onClick={() => onSelectPoint?.(index)}
+                aria-pressed={focusedPointIndex === index}
+                aria-label={
+                  point
+                    ? `${LOCAL_SEO_SECTOR_NAMES[sector]} sampled point: mean rank ${headline}, ${point.foundCount} found, ${point.absentCount} absent, ${point.unknownCount} unknown`
+                    : `${LOCAL_SEO_SECTOR_NAMES[sector]}: not sampled`
+                }
+                className={cn(
+                  "flex min-h-16 w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md border border-border px-1 py-2 text-center hover:bg-muted/60 aria-pressed:border-primary aria-pressed:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none",
+                  sector === "centre" && "border-primary/40 bg-muted/60"
+                )}
+              >
+                <span className="text-[10px] font-medium tracking-wide text-muted-foreground">
+                  {`${localSeoPointLetter(index)} · ${localSeoSectorCaption(sector)}`}
                 </span>
-              ) : null}
+                <span className="text-base leading-none font-semibold tabular-nums">
+                  {headline}
+                </span>
+                {point ? (
+                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                    {point.foundCount} found · {point.absentCount} absent
+                  </span>
+                ) : null}
+              </button>
             </li>
           )
         })}
@@ -316,6 +420,18 @@ function LocalSeoRunOverview({
             `${localSeoPointLetter(index)} ${localSeoSectorCaption(sector)}`
         ).join(" · ")}
       </p>
+      {focusedPointIndex !== null && focusedPointIndex !== undefined ? (
+        <div>
+          <div ref={pointPanelRef} className="scroll-mt-2" />
+          <LocalSeoPointResultsPanel
+            pointIndex={focusedPointIndex}
+            details={pointDetails ?? null}
+            pending={pointDetailsPending ?? false}
+            error={pointDetailsError ?? null}
+            onClear={onClearPointFocus}
+          />
+        </div>
+      ) : null}
     </>
   )
 }
@@ -345,7 +461,222 @@ function LocalSeoReportRunStateNotice({
   return null
 }
 
-export type LocalSeoMapReportTab = "overview" | "listing" | "run"
+function describeLocalSeoCompetitorRank(bestRank: number | null): string {
+  if (typeof bestRank === "number" && Number.isFinite(bestRank) && bestRank > 0) {
+    return `#${Number.isInteger(bestRank) ? bestRank : bestRank.toFixed(1)}`
+  }
+  return "No recorded rank"
+}
+
+function deriveLocalSeoBranchBrand(
+  locationName: string | null | undefined
+): string | null {
+  if (!locationName) return null
+  const brand = locationName.split(",")[0].trim().toLowerCase()
+  if (!brand) return null
+  if (!locationName.includes(",") && brand.split(/\s+/).length < 2) return null
+  return brand
+}
+
+function LocalSeoRunCompetitorRow({
+  competitor,
+  total,
+  queryLabels,
+  pointLetter,
+}: {
+  competitor: LocalSeoRunCompetitor
+  total: number
+  queryLabels: string
+  pointLetter?: string | null
+}) {
+  return (
+    <li className="flex flex-col gap-0.5">
+      <div className="flex items-baseline justify-between gap-2 text-sm">
+        <span className="min-w-0 flex-1 break-words font-medium text-foreground">
+          {competitor.title}
+          {competitor.same_brand_domain ? (
+            <Badge variant="secondary" className="ml-1.5">
+              Same website host
+            </Badge>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-muted-foreground tabular-nums">
+          {describeLocalSeoCompetitorRank(competitor.best_rank)}
+        </span>
+      </div>
+      {competitor.address ? (
+        <p className="break-words text-xs text-muted-foreground">
+          {competitor.address}
+        </p>
+      ) : null}
+      <p className="text-xs text-muted-foreground tabular-nums">
+        {pointLetter
+          ? `Seen in ${competitor.query_points_seen} of ${total} queries at Point ${pointLetter}`
+          : `in ${competitor.query_points_seen} of ${total} query-points`}
+      </p>
+      {queryLabels ? (
+        <p className="break-words text-xs text-muted-foreground">
+          {queryLabels}
+        </p>
+      ) : null}
+    </li>
+  )
+}
+export function LocalSeoRunCompetitorsCard({
+  data,
+  pending = false,
+  error = null,
+  locationName,
+  pointIndex = null,
+}: {
+  data?: LocalSeoRunCompetitors | null
+  pending?: boolean
+  error?: string | null
+  locationName?: string | null
+  pointIndex?: number | null
+}) {
+  const pointLetter = typeof pointIndex === "number" ? localSeoPointLetter(pointIndex) : null
+  const heading = pointLetter ? `Point ${pointLetter} competitors` : "Whole run competitors"
+  if (pending) {
+    return (
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="text-sm">{heading}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+  if (error) {
+    return (
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="text-sm">{heading}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+  if (!data) return null
+  const total = data.total_query_points
+  const labelsFor = (competitor: LocalSeoRunCompetitor) =>
+    competitor.query_indexes
+      .map((index) => data.queries[index] ?? `Query ${index + 1}`)
+      .join(" · ")
+  const branchBrand = deriveLocalSeoBranchBrand(locationName)
+  const isLikelyBranch = (competitor: LocalSeoRunCompetitor) =>
+    branchBrand !== null &&
+    (competitor.title.trim().toLowerCase().startsWith(branchBrand) ||
+      competitor.same_brand_domain)
+  const likelyBranches = data.competitors.filter(isLikelyBranch)
+  const otherCompetitors = data.competitors.filter(
+    (competitor) => !isLikelyBranch(competitor)
+  )
+  const grouped = branchBrand !== null && likelyBranches.length > 0
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle className="text-sm">{heading}</CardTitle>
+        <CardDescription>
+          {pointLetter
+            ? "Combined only this point's queries. Each place ID is a separate listing."
+            : "Combined across all saved queries and map points. Each place ID is a separate listing."}
+        </CardDescription>
+        <CardDescription>
+          {`Results from ${data.contributing_query_points} of ${total} query-points`} · {`${data.failed_query_points} failed`} ·{" "}
+          {`${data.pending_query_points} pending`} · {`${data.unreadable_query_points} unreadable`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {data.contributing_query_points === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No contributing query-points yet — coverage is incomplete.
+          </p>
+        ) : null}
+        {data.competitors.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No competitors recorded in the stored results.
+          </p>
+        ) : grouped ? (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs text-muted-foreground">
+              Grouping is a guess based on title prefix or website host, not
+              verified ownership.
+            </p>
+            <h3 className="text-sm font-medium">
+              {`Likely your branches (${likelyBranches.length})`}
+            </h3>
+            <ul className="flex flex-col gap-2">
+              {likelyBranches.map((competitor) => (
+                <LocalSeoRunCompetitorRow
+                  key={competitor.place_id}
+                  competitor={competitor}
+                  total={total}
+                  queryLabels={labelsFor(competitor)}
+                  pointLetter={pointLetter}
+                />
+              ))}
+            </ul>
+            <h3 className="text-sm font-medium">
+              {`Competitors (${otherCompetitors.length})`}
+            </h3>
+            {otherCompetitors.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {otherCompetitors.map((competitor) => (
+                  <LocalSeoRunCompetitorRow
+                    key={competitor.place_id}
+                    competitor={competitor}
+                    total={total}
+                    queryLabels={labelsFor(competitor)}
+                    pointLetter={pointLetter}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No other competitors.
+              </p>
+            )}
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {data.competitors.map((competitor) => (
+              <LocalSeoRunCompetitorRow
+                key={competitor.place_id}
+                competitor={competitor}
+                total={total}
+                queryLabels={labelsFor(competitor)}
+                pointLetter={pointLetter}
+              />
+            ))}
+          </ul>
+        )}
+        {data.competitors.some((competitor) => competitor.same_brand_domain) ? (
+          <p className="text-xs text-muted-foreground">
+            Same website host does not identify all company branches.
+          </p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          {data.idless_entries > 0
+            ? `${data.idless_entries} ${data.idless_entries === 1 ? "entry" : "entries"} omitted without an ID`
+            : "No entries omitted without an ID."}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+export type LocalSeoMapReportTab =
+  | "overview"
+  | "competitors"
+  | "listing"
+  | "run"
 
 export function LocalSeoMapReportContent({
   projectId,
@@ -359,6 +690,18 @@ export function LocalSeoMapReportContent({
   tab,
   focusedPointIndex,
   onClearPointFocus,
+  onSelectPoint,
+  pointDetails = null,
+  pointDetailsPending = false,
+  pointDetailsError = null,
+  competitors = null,
+  competitorsPending = false,
+  competitorsError = null,
+  pointCompetitors = null,
+  pointCompetitorsPending = false,
+  pointCompetitorsError = null,
+  onSelectCompetitorScope,
+  onShowAllCompetitors,
 }: {
   projectId: string
   location: LocalSeoLocation
@@ -371,6 +714,18 @@ export function LocalSeoMapReportContent({
   tab: LocalSeoMapReportTab
   focusedPointIndex?: number | null
   onClearPointFocus?: () => void
+  onSelectPoint?: (pointIndex: number) => void
+  pointDetails?: LocalSeoPointDetails | null
+  pointDetailsPending?: boolean
+  pointDetailsError?: string | null
+  competitors?: LocalSeoRunCompetitors | null
+  competitorsPending?: boolean
+  competitorsError?: string | null
+  pointCompetitors?: LocalSeoRunCompetitors | null
+  pointCompetitorsPending?: boolean
+  pointCompetitorsError?: string | null
+  onSelectCompetitorScope?: (pointIndex: number | null) => void
+  onShowAllCompetitors?: () => void
 }) {
   const queryClient = useQueryClient()
   const bound = isLocalSeoLocationBound(location)
@@ -402,7 +757,73 @@ export function LocalSeoMapReportContent({
             run={latestRun}
             focusedPointIndex={focusedPointIndex}
             onClearPointFocus={onClearPointFocus}
+            onSelectPoint={onSelectPoint}
+            pointDetails={pointDetails}
+            pointDetailsPending={pointDetailsPending}
+            pointDetailsError={pointDetailsError}
           />
+        ) : null}
+      </section>
+    )
+  }
+
+  if (tab === "competitors") {
+    const competitorScope = focusedPointIndex ?? null
+    const scopeValue = competitorScope === null ? "whole" : String(competitorScope)
+    const handleScopeChange = (value: string) => {
+      if (value === "whole") {
+        if (onSelectCompetitorScope) onSelectCompetitorScope(null)
+        else if (onShowAllCompetitors) onShowAllCompetitors()
+        else onClearPointFocus?.()
+        return
+      }
+      const parsed = Number.parseInt(value, 10)
+      if (!Number.isInteger(parsed)) return
+      if (onSelectCompetitorScope) onSelectCompetitorScope(parsed)
+      else onSelectPoint?.(parsed)
+    }
+    return (
+      <section aria-label="Competitors" className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium">Competitors</h2>
+        <LocalSeoReportRunStateNotice runState={runState} runError={runError} />
+        {runState === "ready" && latestRun !== null ? (
+          <>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-muted-foreground">Scope</span>
+              <select
+                aria-label="Competitor scope"
+                value={scopeValue}
+                onChange={(event) => handleScopeChange(event.target.value)}
+                className="rounded-md border border-border bg-background px-2 py-1.5 text-sm"
+              >
+                <option value="whole">Whole run</option>
+                {Array.from({ length: LOCAL_SEO_POINT_COUNT }, (_, index) => (
+                  <option key={index} value={String(index)}>
+                    {`Point ${localSeoPointLetter(index)}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {competitorScope === null ? (
+              <LocalSeoRunCompetitorsCard
+                key="whole"
+                data={competitors ?? null}
+                pending={competitorsPending ?? false}
+                error={competitorsError ?? null}
+                locationName={location.name}
+                pointIndex={null}
+              />
+            ) : (
+              <LocalSeoRunCompetitorsCard
+                key={`point-${competitorScope}`}
+                data={pointCompetitors ?? null}
+                pending={pointCompetitorsPending ?? false}
+                error={pointCompetitorsError ?? null}
+                locationName={location.name}
+                pointIndex={competitorScope}
+              />
+            )}
+          </>
         ) : null}
       </section>
     )

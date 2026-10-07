@@ -134,6 +134,37 @@ export type LocalSeoRun = {
   total_cells?: number | null
 }
 
+export type LocalSeoPointPlace = {
+  /** Provider position exactly as stored; null when the provider omitted it. */
+  position: number | null
+  title: string
+  address: string
+  place_id: string | null
+  rating: number | null
+  rating_count: number | null
+  /** True only for the frozen run target, never the current location place id. */
+  is_target: boolean
+}
+
+export type LocalSeoPointQuery = {
+  query_index: number
+  query: string
+  call_status: LocalSeoCallStatus
+  match_status: LocalSeoMatchStatus
+  rank: number | null
+  error: string | null
+  /** Provider order is preserved; never re-sorted, re-ranked, or deduplicated. */
+  places: LocalSeoPointPlace[]
+}
+
+export type LocalSeoPointDetails = {
+  run_id: string
+  point_index: number
+  /** Frozen run target; a rebound current location place id may differ. */
+  target_place_id: string
+  queries: LocalSeoPointQuery[]
+}
+
 export type LocalSeoCreateRunResponse = {
   id: string
   status: LocalSeoRunStatus
@@ -440,6 +471,36 @@ export function fetchLocalSeoRun(
   )
 }
 
+export function localSeoPointDetailsQueryKey(
+  projectId: string,
+  locationId: string,
+  runId: string,
+  pointIndex: number,
+  /** Run status is part of the key so a terminal transition refetches once more. */
+  status: LocalSeoRunStatus,
+) {
+  return [
+    "local-seo-point-details",
+    projectId,
+    locationId,
+    runId,
+    pointIndex,
+    status,
+  ] as const
+}
+
+/** Frozen per-point provider evidence; a stored-data read that never calls a provider. */
+export function fetchLocalSeoPointDetails(
+  projectId: string,
+  locationId: string,
+  runId: string,
+  pointIndex: number,
+) {
+  return clientApiFetch<LocalSeoPointDetails>(
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}/points/${pointIndex}`,
+  )
+}
+
 /** Atomically reserves expectedCredits then enqueues; the run starts queued. */
 export function createLocalSeoRun(
   projectId: string,
@@ -697,5 +758,95 @@ error rather than defaulting to a synthetic allowance. */
 export function fetchLocalSeoMapsBudget(projectId: string) {
   return clientApiFetch<LocalSeoMapsBudget>(
     `/projects/${projectId}/maps-budget`,
+  )
+}
+
+/** Run-level competitor rollup; backend order is frequency desc, best rank asc, id. */
+export type LocalSeoRunCompetitor = {
+  place_id: string
+  title: string
+  address: string
+  query_points_seen: number
+  best_rank: number | null
+  /** True when the row shares the frozen target website host; false when the website is missing. */
+  same_brand_domain: boolean
+  query_indexes: number[]
+}
+
+
+/** Frozen competitor evidence for one recorded run; target is excluded by the backend. */
+export type LocalSeoRunCompetitors = {
+  run_id: string
+  target_place_id: string
+  queries: string[]
+  /** Null for the whole run; a point index for per-point scope. */
+  point_index: number | null
+  total_query_points: number
+  contributing_query_points: number
+  failed_query_points: number
+  pending_query_points: number
+  unreadable_query_points: number
+  idless_entries: number
+  competitors: LocalSeoRunCompetitor[]
+}
+
+/** Status plus completed_cells bust the cache while a run is still active. */
+export function localSeoRunCompetitorsQueryKey(
+  projectId: string,
+  locationId: string,
+  runId: string,
+  status: LocalSeoRunStatus,
+  completedCells: number | null | undefined,
+) {
+  return [
+    "local-seo-run-competitors",
+    projectId,
+    locationId,
+    runId,
+    status,
+    completedCells ?? null,
+  ] as const
+}
+
+/** Frozen stored competitor rollup; never calls a provider. */
+export function fetchLocalSeoRunCompetitors(
+  projectId: string,
+  locationId: string,
+  runId: string,
+) {
+  return clientApiFetch<LocalSeoRunCompetitors>(
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}/competitors`,
+  )
+}
+
+/** Status plus completed_cells bust the cache while a run is still active. */
+export function localSeoRunPointCompetitorsQueryKey(
+  projectId: string,
+  locationId: string,
+  runId: string,
+  pointIndex: number,
+  status: LocalSeoRunStatus,
+  completedCells: number | null | undefined,
+) {
+  return [
+    "local-seo-run-point-competitors",
+    projectId,
+    locationId,
+    runId,
+    pointIndex,
+    status,
+    completedCells ?? null,
+  ] as const
+}
+
+/** Frozen stored per-point competitor rollup; never calls a provider. */
+export function fetchLocalSeoRunPointCompetitors(
+  projectId: string,
+  locationId: string,
+  runId: string,
+  pointIndex: number,
+) {
+  return clientApiFetch<LocalSeoRunCompetitors>(
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}/points/${pointIndex}/competitors`,
   )
 }

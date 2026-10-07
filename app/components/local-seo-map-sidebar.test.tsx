@@ -261,6 +261,7 @@ describe("detail panel", () => {
   test("pins the tabs and renders the active content", () => {
     const html = renderDetail()
     expect(html).toContain("Overview")
+    expect(html).toContain("Competitors")
     expect(html).toContain("Queries")
     expect(html).toContain("Listing")
     expect(html).toContain("Run")

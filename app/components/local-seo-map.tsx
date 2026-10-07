@@ -8,7 +8,6 @@ import {
   type GeoJSONSource,
   type Map as MapLibreMap,
   type MapGeoJSONFeature,
-  type MapLayerMouseEvent,
 } from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
 
@@ -437,11 +436,30 @@ export function LocalSeoMap({
       clearTimeout(watchdog)
     })
     instance.on("click", (event) => {
+      const layers = [
+        OVERLAY_FILL_LAYER_ID,
+        OVERLAY_HATCH_LAYER_ID,
+        OVERLAY_LABEL_LAYER_ID,
+      ].filter((id) => {
+        try {
+          return Boolean(instance.getLayer(id))
+        } catch {
+          return false
+        }
+      })
+      let features: MapGeoJSONFeature[] = []
+      try {
+        features =
+          instance.queryRenderedFeatures(event.point, { layers }) ?? []
+      } catch {
+        features = []
+      }
+      const feature = features[0]
+      if (feature && onFeatureClickRef.current) {
+        onFeatureClickRef.current(feature)
+        return
+      }
       onMapClickRef.current?.([event.lngLat.lng, event.lngLat.lat])
-    })
-    instance.on("click", OVERLAY_FILL_LAYER_ID, (event: MapLayerMouseEvent) => {
-      const feature = event.features?.[0]
-      if (feature) onFeatureClickRef.current?.(feature)
     })
     instance.on("load", () => {
       installLocalSeoSources(instance)

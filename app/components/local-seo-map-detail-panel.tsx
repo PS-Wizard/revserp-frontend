@@ -94,7 +94,7 @@ export function LocalSeoMapDetailPanel({
           <div className="shrink-0 px-4 pt-2">
             <TabsList variant="line" className="w-full">
               {LOCAL_SEO_MAP_SIDEBAR_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value}>
+                <TabsTrigger key={tab.value} value={tab.value} className="flex-none px-1.5 text-xs">
                   {tab.label}
                 </TabsTrigger>
               ))}

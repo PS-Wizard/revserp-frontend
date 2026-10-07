@@ -24,6 +24,7 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 
 type ClickPayload = {
   lngLat: { lng: number; lat: number }
+  point?: { x: number; y: number }
   features?: Array<Record<string, unknown>>
 }
 
@@ -52,6 +53,8 @@ class FakeMap {
   images = new Map<string, unknown>()
   handlers = new Map<string, HandlerEntry[]>()
   removed = false
+  queriedLayerSets: Array<Array<string> | undefined> = []
+  queuedFeatures: Array<Array<Record<string, unknown>>> = []
   constructor(options: Record<string, unknown>) {
     if (FakeMap.failConstruction) throw new Error("WebGL is unavailable")
     this.options = options
@@ -65,6 +68,13 @@ class FakeMap {
   }
   getSource(id: string) {
     return this.sources.get(id)
+  }
+  getLayer(id: string) {
+    return this.layers.find((layer) => layer["id"] === id)
+  }
+  queryRenderedFeatures(_point: unknown, options?: { layers?: string[] }) {
+    this.queriedLayerSets.push(options?.layers)
+    return (this.queuedFeatures.shift() ?? []) as Array<Record<string, unknown>>
   }
   hasImage(id: string) {
     return this.images.has(id)
@@ -360,12 +370,12 @@ describe("local SEO map clicks", () => {
       center: CENTRE,
       onFeatureClick: (feature) => seen.push(feature),
     })
-    const feature = { properties: { label: "1" } }
-    map.fire(
-      "click",
-      { lngLat: { lng: CENTRE[0], lat: CENTRE[1] }, features: [feature] },
-      "local-seo-overlay-fill"
-    )
+    const feature = { properties: { pointIndex: 4 } }
+    map.queuedFeatures.push([feature])
+    map.fire("click", {
+      lngLat: { lng: CENTRE[0], lat: CENTRE[1] },
+      point: { x: 10, y: 10 },
+    })
     expect(seen).toEqual([feature])
   })
 
@@ -374,8 +384,91 @@ describe("local SEO map clicks", () => {
     map.fire("load", { lngLat: { lng: 0, lat: 0 } })
     const seen: Array<[number, number]> = []
     rerender({ center: CENTRE, onMapClick: (lngLat) => seen.push(lngLat) })
-    map.fire("click", { lngLat: { lng: 85.3, lat: 27.7 } })
+    map.fire("click", {
+      lngLat: { lng: 85.3, lat: 27.7 },
+      point: { x: 1, y: 1 },
+    })
     expect(seen).toEqual([[85.3, 27.7]])
+  })
+
+  test("overlay clicks still reach the map callback without a feature handler", () => {
+    const seen: Array<[number, number]> = []
+    const map = renderMap({
+      center: CENTRE,
+      onMapClick: (lngLat) => seen.push(lngLat),
+    })
+    map.fire("load", { lngLat: { lng: 0, lat: 0 } })
+    map.queuedFeatures.push([{ properties: { pointIndex: 4 } }])
+    map.fire("click", {
+      lngLat: { lng: CENTRE[0], lat: CENTRE[1] },
+      point: { x: 10, y: 10 },
+    })
+    expect(seen).toEqual([CENTRE])
+  })
+
+  test("hatched and label cells select through the single dispatcher", () => {
+    const map = renderMap({ center: CENTRE })
+    map.fire("load", { lngLat: { lng: 0, lat: 0 } })
+    const selected: unknown[] = []
+    const background: Array<[number, number]> = []
+    rerender({
+      center: CENTRE,
+      onFeatureClick: (feature) => selected.push(feature),
+      onMapClick: (lngLat) => background.push(lngLat),
+    })
+    const hatched = { properties: { pointIndex: 1 } }
+    map.queuedFeatures.push([hatched])
+    map.fire("click", {
+      lngLat: { lng: CENTRE[0], lat: CENTRE[1] },
+      point: { x: 20, y: 20 },
+    })
+    expect(selected).toEqual([hatched])
+    expect(background).toEqual([])
+    expect(map.queriedLayerSets.at(-1)).toContain("local-seo-overlay-fill")
+    expect(map.queriedLayerSets.at(-1)).toContain("local-seo-overlay-hatch")
+    expect(map.queriedLayerSets.at(-1)).toContain("local-seo-overlay-label")
+  })
+
+  test("background clicks clear without selecting when no cell is hit", () => {
+    const map = renderMap({ center: CENTRE })
+    map.fire("load", { lngLat: { lng: 0, lat: 0 } })
+    const selected: unknown[] = []
+    const background: Array<[number, number]> = []
+    rerender({
+      center: CENTRE,
+      onFeatureClick: (feature) => selected.push(feature),
+      onMapClick: (lngLat) => background.push(lngLat),
+    })
+    map.queuedFeatures.push([])
+    map.fire("click", {
+      lngLat: { lng: 85.3, lat: 27.7 },
+      point: { x: 5, y: 5 },
+    })
+    expect(selected).toEqual([])
+    expect(background).toEqual([[85.3, 27.7]])
+  })
+
+  test("missing hatch and label layers still dispatch fill cells", () => {
+    const map = renderMap({ center: CENTRE })
+    map.fire("load", { lngLat: { lng: 0, lat: 0 } })
+    map.layers = map.layers.filter(
+      (layer) =>
+        layer["id"] !== "local-seo-overlay-hatch" &&
+        layer["id"] !== "local-seo-overlay-label"
+    )
+    const selected: unknown[] = []
+    rerender({
+      center: CENTRE,
+      onFeatureClick: (feature) => selected.push(feature),
+    })
+    const feature = { properties: { pointIndex: 4 } }
+    map.queuedFeatures.push([feature])
+    map.fire("click", {
+      lngLat: { lng: CENTRE[0], lat: CENTRE[1] },
+      point: { x: 10, y: 10 },
+    })
+    expect(selected).toEqual([feature])
+    expect(map.queriedLayerSets.at(-1)).toEqual(["local-seo-overlay-fill"])
   })
 })
 
