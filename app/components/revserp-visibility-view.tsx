@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   Check,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
   Card,
@@ -27,20 +28,36 @@ import type {
   AIAuditListResponse,
   AIAuditResponse,
   AIAuditRunResponse,
-  CrawlResponse,
-  ProjectResponse,
 } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 
 type Props = {
-  activeProject: ProjectResponse | null
-  currentCrawl: CrawlResponse | null
+  projectId: string | null
+  crawlId: string | null
+  locationId?: string
+  locationName?: string
+  initialAuditId?: string
 }
 
-function auditListQueryKey(projectId: string, crawlId?: string) {
-  return crawlId
-    ? (["ai-audits-list", projectId, crawlId] as const)
-    : (["ai-audits-list", projectId] as const)
+type AIAuditScope =
+  | { kind: "crawl"; projectId: string; crawlId: string }
+  | { kind: "location"; projectId: string; locationId: string }
+
+function auditListQueryKey(scope: AIAuditScope) {
+  return scope.kind === "location"
+    ? ([
+        "ai-audits-list",
+        scope.projectId,
+        "location",
+        scope.locationId,
+      ] as const)
+    : (["ai-audits-list", scope.projectId, "crawl", scope.crawlId] as const)
+}
+
+function auditScopeKey(scope: AIAuditScope) {
+  return scope.kind === "location"
+    ? `location:${scope.projectId}:${scope.locationId}`
+    : `crawl:${scope.projectId}:${scope.crawlId}`
 }
 
 function auditDetailQueryKey(auditId: string) {
@@ -82,6 +99,24 @@ function RankPill({ mentioned, rank }: { mentioned?: boolean; rank?: number }) {
   )
 }
 
+function MentionBadge({ run }: { run: AIAuditRunResponse }) {
+  if (run.mentioned_branch === true) {
+    return (
+      <Badge variant="secondary" className="px-1.5 text-micro">
+        Branch mention
+      </Badge>
+    )
+  }
+  if (run.mentioned_target === true && run.mentioned_branch === false) {
+    return (
+      <Badge variant="outline" className="px-1.5 text-micro">
+        Brand mention
+      </Badge>
+    )
+  }
+  return null
+}
+
 function SkeletonCell() {
   return (
     <div className="flex items-center justify-center p-3">
@@ -102,8 +137,9 @@ function ResultCell({ run }: { run: AIAuditRunResponse }) {
   }
 
   return (
-    <div className="flex items-center justify-center p-3">
+    <div className="flex flex-col items-center justify-center gap-1 p-3">
       <RankPill mentioned={run.mentioned_target} rank={run.target_rank} />
+      <MentionBadge run={run} />
     </div>
   )
 }
@@ -135,7 +171,7 @@ function SummaryCards({ runs }: { runs: AIAuditRunResponse[] }) {
   )[0]
 
   return (
-<div className="grid min-w-0 gap-5 lg:grid-cols-4">
+    <div className="grid min-w-0 gap-5 @3xl/main:grid-cols-4">
       <Card className="@container/card bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader className="pb-2">
           <CardDescription>Visibility Rate</CardDescription>
@@ -357,7 +393,10 @@ function QuestionRow({
             Running
           </span>
         ) : run ? (
-          <RankPill mentioned={run.mentioned_target} rank={run.target_rank} />
+          <span className="flex shrink-0 items-center gap-2">
+            <MentionBadge run={run} />
+            <RankPill mentioned={run.mentioned_target} rank={run.target_rank} />
+          </span>
         ) : null}
         {expandable ? (
           <ChevronDown
@@ -431,7 +470,7 @@ function ModelResponseCards({
   if (models.length === 0) {
     if (!isRunning) return null
     return (
-<div className="h-[38rem] lg:h-[40rem]">
+      <div className="h-[38rem] @3xl/main:h-[40rem]">
         <Card className="flex h-full items-center border-border/50">
           <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
             <RefreshCwIcon className="size-4 animate-spin" />
@@ -443,7 +482,7 @@ function ModelResponseCards({
   }
 
   return (
-    <div className="grid min-w-0 gap-5 max-lg:auto-rows-[38rem] lg:h-[40rem] lg:grid-cols-4 lg:grid-rows-1">
+    <div className="grid min-w-0 auto-rows-[38rem] gap-5 @3xl/main:h-[40rem] @3xl/main:auto-rows-auto @3xl/main:grid-cols-4 @3xl/main:grid-rows-1">
       {models.map((model) => {
         const count = mentionCount(model)
         return (
@@ -640,7 +679,7 @@ function MatrixLegend() {
 
 function RunningBanner({ completedCount }: { completedCount: number }) {
   return (
-    <div className="mx-6 flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-5 py-4 lg:mx-8">
+    <div className="mx-0 flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-4 py-4 @3xl/main:mx-6 @3xl/main:px-5 @5xl/main:mx-8">
       <RefreshCwIcon className="size-4 shrink-0 animate-spin text-muted-foreground" />
       <div className="flex-1">
         <div className="mb-1.5 flex items-center justify-between text-sm">
@@ -660,39 +699,66 @@ function RunningBanner({ completedCount }: { completedCount: number }) {
 }
 
 export const RevserpVisibilityView = memo(function RevserpVisibilityView({
-  activeProject,
-  currentCrawl,
+  projectId,
+  crawlId,
+  locationId,
+  locationName,
+  initialAuditId,
 }: Props) {
   const queryClient = useQueryClient()
-  const projectId = activeProject?.id
-  const crawlId = currentCrawl?.id
   const [isTriggeringRun, setIsTriggeringRun] = useState(false)
-  const [activeAuditId, setActiveAuditId] = useState<string | null>(null)
 
-  // Clear the pinned audit id when the selected crawl changes, so the
-  // detail query falls back to `listData?.id` for the newly selected crawl
-  // instead of staying pinned to a previous crawl's just-triggered run.
-  useEffect(() => {
-    setActiveAuditId(null)
-  }, [crawlId])
+  const scope = useMemo<AIAuditScope | null>(
+    () =>
+      projectId
+        ? locationId
+          ? { kind: "location", projectId, locationId }
+          : crawlId
+            ? { kind: "crawl", projectId, crawlId }
+            : null
+        : null,
+    [projectId, crawlId, locationId]
+  )
+  const scopeKey = scope ? auditScopeKey(scope) : null
+  const listQueryKey = useMemo(
+    () => (scope ? auditListQueryKey(scope) : null),
+    [scope]
+  )
 
-  const { data: listData, isLoading: isLoadingList } = useQuery({
-    queryKey:
-      projectId && crawlId
-        ? auditListQueryKey(projectId, crawlId)
-        : ["ai-audits-list-disabled"],
+  const [pinnedAudit, setPinnedAudit] = useState<{
+    scopeKey: string
+    auditId: string
+  } | null>(null)
+  const pinnedAuditId =
+    pinnedAudit && pinnedAudit.scopeKey === scopeKey
+      ? pinnedAudit.auditId
+      : null
+
+  const {
+    data: listData,
+    isLoading: isLoadingList,
+    isError: isListError,
+  } = useQuery({
+    queryKey: listQueryKey ?? (["ai-audits-list-disabled"] as const),
     queryFn: () =>
       clientApiFetch<AIAuditListResponse>(
-        `/projects/${projectId!}/ai-audits?limit=1&offset=0&crawl_id=${crawlId!}`
+        locationId
+          ? `/projects/${projectId!}/ai-audits?limit=1&offset=0&location_id=${locationId}`
+          : `/projects/${projectId!}/ai-audits?limit=1&offset=0&crawl_id=${crawlId!}`
       ),
-    enabled: Boolean(projectId && crawlId),
+    enabled: listQueryKey !== null,
     select: (data) =>
-      data.ai_audits.find((a) => a.crawl_id === crawlId) ??
-      data.ai_audits[0] ??
-      null,
+      locationId
+        ? (data.ai_audits.find(
+            (a) => a.location_id === locationId && a.project_id === projectId
+          ) ?? null)
+        : (data.ai_audits.find((a) => a.crawl_id === crawlId) ??
+          data.ai_audits[0] ??
+          null),
   })
 
-  const resolvedAuditId = activeAuditId ?? listData?.id ?? null
+  const resolvedAuditId =
+    pinnedAuditId ?? initialAuditId ?? listData?.id ?? null
 
   const { data: audit } = useQuery({
     queryKey: resolvedAuditId
@@ -701,33 +767,40 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
     queryFn: () =>
       clientApiFetch<AIAuditResponse>(`/ai-audits/${resolvedAuditId!}`),
     enabled: Boolean(resolvedAuditId),
+    select: (data) =>
+      data.project_id === projectId &&
+      (locationId
+        ? data.location_id === locationId
+        : !data.location_id && data.crawl_id === crawlId)
+        ? data
+        : null,
   })
 
   const handleRunTest = useCallback(async () => {
-    if (!projectId || !crawlId) return
+    if (!projectId || !scope || !listQueryKey) return
     setIsTriggeringRun(true)
 
     try {
       const created = await clientApiPost<AIAuditResponse>(
         `/projects/${projectId}/ai-audits`,
-        { crawl_id: crawlId }
+        scope.kind === "location"
+          ? { location_id: scope.locationId }
+          : { crawl_id: scope.crawlId }
       )
-      setActiveAuditId(created.id)
-      queryClient.invalidateQueries({
-        queryKey: auditListQueryKey(projectId, crawlId),
-      })
+      if (scopeKey) setPinnedAudit({ scopeKey, auditId: created.id })
+      queryClient.invalidateQueries({ queryKey: listQueryKey })
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        queryClient.invalidateQueries({
-          queryKey: auditListQueryKey(projectId, crawlId),
-        })
+        queryClient.invalidateQueries({ queryKey: listQueryKey })
       } else if (err instanceof ApiError && err.status === 400) {
         toast.error(
           typeof err.details === "object" &&
             err.details !== null &&
             "error" in err.details
             ? String((err.details as { error: string }).error)
-            : "Could not start visibility test. Make sure AI questions have been generated first."
+            : locationId
+              ? "Could not start visibility test. Make sure this location has enabled map queries."
+              : "Could not start visibility test. Make sure AI questions have been generated first."
         )
       } else if (err instanceof ApiError && err.status === 429) {
         const now = new Date()
@@ -749,9 +822,9 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
     } finally {
       setIsTriggeringRun(false)
     }
-  }, [projectId, crawlId, queryClient])
+  }, [projectId, scope, scopeKey, listQueryKey, queryClient])
 
-  if (!projectId || !crawlId) {
+  if (!projectId || (!crawlId && !locationId)) {
     return (
       <div className="flex flex-1 items-center justify-center p-12">
         <div className="text-center text-muted-foreground">
@@ -773,11 +846,13 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   const completedCount = runs.filter(
     (r) => r.status === "success" || r.status === "failed"
   ).length
+  const showListError =
+    Boolean(locationId) && isListError && !hasResults && !isLoadingList
 
   return (
-    <div className="@container/main flex max-w-full min-w-0 flex-1 flex-col gap-10 overflow-x-hidden py-10">
+    <div className="@container/main flex max-w-full min-w-0 flex-1 flex-col gap-8 overflow-x-hidden py-6 @3xl/main:gap-10 @3xl/main:py-10">
       {/* Header */}
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="space-y-2">
           <h2 className="font-heading text-[1.75rem] leading-tight font-semibold tracking-tight text-foreground sm:text-[2rem]">
             LLM Visibility
@@ -785,7 +860,9 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
           <p className="text-sm leading-relaxed text-muted-foreground">
             {displayAudit?.completed_at
               ? `Last run ${new Date(displayAudit.completed_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
-              : "Test how your brand appears across AI models"}
+              : locationName
+                ? `Test whether AI answers mention ${locationName}`
+                : "Test how your brand appears across AI models"}
           </p>
         </div>
         <Button
@@ -818,13 +895,13 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
       {/* Results matrix */}
       {hasResults && (
         <div className="flex min-w-0 flex-col gap-10 pb-6">
-          <Separator className="mx-6 w-auto lg:mx-8" />
+          <Separator className="mx-0 w-auto @3xl/main:mx-6 @5xl/main:mx-8" />
           <VisibilityGrid audit={displayAudit!} isRunning={isRunning} />
         </div>
       )}
 
       {/* Empty state */}
-      {!hasResults && !isLoadingList && (
+      {!hasResults && !isLoadingList && !showListError && (
         <div className="flex flex-1 items-center justify-center">
           <Card className="w-full max-w-md border-dashed border-border/50">
             <CardContent className="flex flex-col items-center gap-4 py-14 text-center">
@@ -834,8 +911,9 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
               <div>
                 <p className="font-medium">No visibility data yet</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-                  Run a visibility test to see how your brand appears across AI
-                  models for your generated questions.
+                  {locationName
+                    ? `Run a visibility test to see how AI answers mention ${locationName}.`
+                    : "Run a visibility test to see how your brand appears across AI models for your generated questions."}
                 </p>
               </div>
               <Button onClick={handleRunTest} disabled={!canRun}>
@@ -845,6 +923,23 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
           </Card>
         </div>
       )}
+
+      {showListError ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Card className="w-full max-w-md border-dashed border-border/50">
+            <CardContent className="flex flex-col items-center gap-4 py-14 text-center">
+              <div>
+                <p className="font-medium">Could not load visibility data</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                  {locationName
+                    ? `The saved visibility results for ${locationName} could not be loaded. Try again in a moment.`
+                    : "The saved visibility results could not be loaded."}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   )
 })

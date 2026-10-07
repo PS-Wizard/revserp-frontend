@@ -12,10 +12,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { clientApiSSE } from "~/lib/api"
+import { clientApiFetch, clientApiSSE } from "~/lib/api"
+import { describeAIAuditFailure } from "~/lib/ai-audit-results"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
-import type { OrganizationEventFrame } from "~/lib/api.types"
+import type { AIAuditResponse, OrganizationEventFrame } from "~/lib/api.types"
 
 // Server closes the stream around five minutes; reconnect quietly.
 const RECONNECT_DELAY_MS = 1500
@@ -131,7 +132,7 @@ export function OrganizationEventsProvider({
   orgId: string
   onReady: () => void
   onCrawlEvent: (event: OrganizationEventFrame) => void
-  onViewVisibility: (projectId: string | null) => void
+  onViewVisibility: (audit: AIAuditResponse) => void
   revalidate: () => void
   children: ReactNode
 }) {
@@ -185,7 +186,21 @@ export function OrganizationEventsProvider({
         const toastId = auditId ? `ai-audit-${auditId}` : undefined
         const action = {
           label: "View",
-          onClick: () => onViewVisibilityRef.current(event.project_id),
+          onClick: async () => {
+            if (!auditId) return
+            try {
+              const audit = await queryClient.fetchQuery({
+                queryKey: ["ai-audit", auditId],
+                queryFn: () =>
+                  clientApiFetch<AIAuditResponse>(`/ai-audits/${auditId}`),
+              })
+              onViewVisibilityRef.current(audit)
+            } catch {
+              toast.error("Could not open visibility results", {
+                description: "Try the View button again.",
+              })
+            }
+          },
         }
         if (
           type.startsWith("ai_audit.completed") ||
@@ -218,7 +233,7 @@ export function OrganizationEventsProvider({
             })
           } else if (type === "ai_audit.failed") {
             toast.error("Visibility test failed", {
-              description: errorDescription(event),
+              description: describeAIAuditFailure(event.payload.error),
               id: toastId,
               action,
             })

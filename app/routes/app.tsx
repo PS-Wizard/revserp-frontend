@@ -61,8 +61,10 @@ import { useProjectSetup } from "~/hooks/use-project-setup"
 import { OrganizationEventsProvider } from "~/hooks/use-organization-events"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
+import { getAIAuditResultsPath } from "~/lib/ai-audit-results"
 import { isAccountSuspended } from "~/lib/auth.server"
 import type {
+  AIAuditResponse,
   AppBootstrapResponse,
   CrawlResponse,
   MeResponse,
@@ -451,25 +453,11 @@ export default function AppPage() {
   )
 
   const goToVisibility = useCallback(
-    (projectId: string | null) => {
-      if (!projectId || projectId === activeProject?.id) {
-        handleViewChange("revserp-visibility")
-        return
-      }
-      setView("revserp-visibility")
-      const params = new URLSearchParams(location.search)
-      params.set("project", projectId)
-      params.delete("crawl")
-      params.delete("revbotConversation")
-      void navigate(`${location.pathname}?${params.toString()}`)
+    (audit: AIAuditResponse) => {
+      if (!audit.location_id) setView("revserp-visibility")
+      void navigate(getAIAuditResultsPath(audit))
     },
-    [
-      activeProject?.id,
-      handleViewChange,
-      navigate,
-      location.pathname,
-      location.search,
-    ]
+    [navigate]
   )
 
   const projectNameById = useMemo(() => {
@@ -848,8 +836,9 @@ export default function AppPage() {
               />
             ) : view === "revserp-visibility" ? (
               <RevserpVisibilityView
-                activeProject={activeProject}
-                currentCrawl={stableCurrentCrawl}
+                projectId={activeProject?.id ?? null}
+                crawlId={stableCurrentCrawl?.id ?? null}
+                initialAuditId={new URLSearchParams(location.search).get("audit") ?? undefined}
               />
             ) : view === "keywords" ? (
               <KeywordsView projectId={activeProject?.id ?? null} />

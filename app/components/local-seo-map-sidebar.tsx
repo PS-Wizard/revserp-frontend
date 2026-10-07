@@ -31,6 +31,7 @@ export type LocalSeoMapSidebarTab =
   | "queries"
   | "listing"
   | "run"
+  | "visibility"
 
 export const LOCAL_SEO_MAP_SIDEBAR_TABS: ReadonlyArray<{
   value: LocalSeoMapSidebarTab
@@ -41,6 +42,7 @@ export const LOCAL_SEO_MAP_SIDEBAR_TABS: ReadonlyArray<{
   { value: "queries", label: "Queries" },
   { value: "listing", label: "Listing" },
   { value: "run", label: "Run" },
+  { value: "visibility", label: "AI" },
 ]
 
 export function describeLocalSeoRadiusLabel(radiusM: number): string {

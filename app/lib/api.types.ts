@@ -581,6 +581,8 @@ export type AIAuditRunResponse = {
   status: "pending" | "running" | "success" | "failed"
   raw_response?: string
   mentioned_target?: boolean
+  /** Absent or null for old, project, and failed runs; a boolean only for completed location audits. */
+  mentioned_branch?: boolean
   target_rank?: number
   visibility_score?: number
   error_message?: string
@@ -594,6 +596,7 @@ export type AIAuditResponse = {
   id: string
   project_id: string
   crawl_id?: string
+  location_id?: string
   status:
     "queued" | "running" | "completed" | "completed_with_failures" | "failed"
   score?: number

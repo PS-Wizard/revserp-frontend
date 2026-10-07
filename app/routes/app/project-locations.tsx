@@ -1,4 +1,4 @@
-import { useParams } from "react-router"
+import { useParams, useSearchParams } from "react-router"
 
 import { LocalSeoMapPage } from "~/components/local-seo-map-page"
 import {
@@ -11,6 +11,9 @@ import {
 export default function ProjectLocationsRoute() {
   const params = useParams()
   const projectId = params.projectID ?? params.projectId ?? ""
+  const [searchParams] = useSearchParams()
+  const initialLocationId = searchParams.get("location") ?? undefined
+  const initialVisibilityAuditId = searchParams.get("audit") ?? undefined
 
   if (projectId === "") {
     return (
@@ -29,7 +32,12 @@ export default function ProjectLocationsRoute() {
 
   return (
     <main aria-label="Locations map" className="h-full min-h-0 w-full">
-      <LocalSeoMapPage projectId={projectId} />
+      <LocalSeoMapPage
+        key={`${projectId}:${initialLocationId ?? ""}:${initialVisibilityAuditId ?? ""}`}
+        projectId={projectId}
+        initialLocationId={initialLocationId}
+        initialVisibilityAuditId={initialVisibilityAuditId}
+      />
     </main>
   )
 }

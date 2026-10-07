@@ -60,6 +60,7 @@ import {
 } from "~/components/local-seo-map-setup"
 import { LocalSeoServicesEditor } from "~/components/local-seo-services-editor"
 import { LocalSeoRunControls } from "~/components/local-seo-run-controls"
+import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import {
   LocalSeoMapSidebar,
   describeLocalSeoRadiusLabel,
@@ -315,17 +316,27 @@ export function localSeoMapFitPadding(args: {
   }
 }
 
-export function LocalSeoMapPage({ projectId }: { projectId: string }) {
+export function LocalSeoMapPage({
+  projectId,
+  initialLocationId,
+  initialVisibilityAuditId,
+}: {
+  projectId: string
+  initialLocationId?: string
+  initialVisibilityAuditId?: string
+}) {
   const queryClient = useQueryClient()
   const [map, setMap] = useState<MapLibreMap | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [detailRequested, setDetailRequested] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(initialLocationId ?? null)
+  const [detailRequested, setDetailRequested] = useState(Boolean(initialLocationId))
   const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(
     null
   )
   const [adding, setAdding] = useState(false)
-  const [activeTab, setActiveTab] = useState<LocalSeoMapSidebarTab>("overview")
+  const [activeTab, setActiveTab] = useState<LocalSeoMapSidebarTab>(
+    initialVisibilityAuditId ? "visibility" : "overview"
+  )
   const [radiusDrafts, setRadiusDrafts] = useState<Record<string, number>>({})
   const [localityText, setLocalityText] = useState("")
   const [queryDrafts, setQueryDrafts] = useState<
@@ -340,7 +351,7 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
   const markersRef = useRef<Marker[]>([])
   const mapContainerRef = useRef<HTMLDivElement | null>(null)
   const panelsRef = useRef<HTMLDivElement | null>(null)
-  const initialSelectionDoneRef = useRef(false)
+  const initialSelectionDoneRef = useRef(Boolean(initialLocationId))
   const initialFitDoneRef = useRef(false)
   const fitKeyRef = useRef<string | null>(null)
   const seededLocationIdRef = useRef<string | null>(null)
@@ -1118,6 +1129,20 @@ export function LocalSeoMapPage({ projectId }: { projectId: string }) {
           projectId={projectId}
           location={selectedLocation}
           radiusM={selectedRadiusM}
+        />
+      )
+    }
+    if (activeTab === "visibility") {
+      if (!selectedBound) return null
+      return (
+        <RevserpVisibilityView
+          projectId={projectId}
+          crawlId={null}
+          locationId={selectedLocation.id}
+          locationName={selectedLocation.name}
+          initialAuditId={
+            selectedLocation.id === initialLocationId ? initialVisibilityAuditId : undefined
+          }
         />
       )
     }
