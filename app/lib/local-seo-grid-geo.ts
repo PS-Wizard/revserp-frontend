@@ -46,6 +46,10 @@ export type GridGeoCellProperties = GridGeoCellStyle & {
   label: string
   /** The honest value on its own: a rank number, Not found, Failed, or Unknown. */
   gridValue: string
+  /** Map label rank line: Avg N for ranked means, otherwise the plain gridValue. */
+  displayRank: string
+  /** Returned-results count line per successful query (N/query or min-max/query), Count unknown for recorded points, or empty for preview. */
+  resultCountLabel: string
   /** Exact frozen sample coordinates, or the spherical preview fallback. */
   latitude: number
   longitude: number
@@ -95,7 +99,7 @@ export type GridMeasurementLabelFeatureCollection = FeatureCollection<
  */
 export type GridGeoCellSummary = Pick<
   LocalSeoCell,
-  "point_index" | "call_status" | "match_status" | "rank"
+  "point_index" | "call_status" | "match_status" | "rank" | "result_count"
 > &
   Partial<Pick<LocalSeoCell, "latitude" | "longitude">>
 
@@ -392,6 +396,34 @@ function meanGridRank(cells: GridGeoCellSummary[]): number | null {
 }
 
 /**
+ * Returned-results count per successful query for one grid point.
+ * Only success_empty/success_nonempty cells count; failed/pending are ignored.
+ * Returns null for preview points with no successful answers, Count unknown
+ * when no successful cell has a known count or any successful count is
+ * unknown, else N/query or min-max/query. Counts are stored raw places
+ * entries (includes target/branches/duplicates), not distinct competitors.
+ */
+export function gridResultCountLabel(group: GridGeoCellSummary[]): string | null {
+  const answered = group.filter((cell) => isGridSuccess(cell.call_status))
+  if (answered.length === 0) return null
+  const counts: number[] = []
+  for (const cell of answered) {
+    const count = cell.result_count
+    if (
+      typeof count !== "number" ||
+      !Number.isInteger(count) ||
+      count < 0
+    ) {
+      return "Count unknown"
+    }
+    counts.push(count)
+  }
+  const min = Math.min(...counts)
+  const max = Math.max(...counts)
+  return min === max ? `${min}/query` : `${min}-${max}/query`
+}
+
+/**
  * One square feature per grid point, anchored at the frozen sample coordinates
  * when the cells carry them and at the spherical preview otherwise. Pass the
  * frozen run centre (point 4) and run.radius_m; never current location edits.
@@ -418,6 +450,8 @@ export function gridFeatureCollection(
     const callStatus = aggregateCallStatus(group)
     const meanRank = meanGridRank(group)
     const gridValue = gridCellLabel(meanRank, callStatus)
+    const displayRank = meanRank !== null ? `Avg ${gridValue}` : gridValue
+    const resultCountLabel = gridResultCountLabel(group) ?? ""
     const anchor =
       frozenAnchor(group) ?? gridPreviewAnchor(pointIndex, centre, radiusM)
     const status: GridGeoCellStatus =
@@ -442,6 +476,8 @@ export function gridFeatureCollection(
         status,
         label: `${pointLetter} · ${gridValue}`,
         gridValue,
+        displayRank,
+        resultCountLabel,
         latitude: anchor[1],
         longitude: anchor[0],
         ...(meanRank === null ? {} : { meanRank }),

@@ -9,6 +9,7 @@ import {
   gridCellPolygon,
   gridDestinationPoint,
   gridFeatureCollection,
+  gridResultCountLabel,
   gridMeasurementFeatureCollection,
   gridMeasurementLabelCollection,
   gridPointIndex,
@@ -750,5 +751,111 @@ describe("pin visual", () => {
   test("idle pins are smaller with a thinner ring than selected pins", () => {
     expect(pinVisualForState("idle")).toEqual({ size: 28, ring: 2 })
     expect(pinVisualForState("selected")).toEqual({ size: 32, ring: 3 })
+  })
+})
+
+describe("stored result counts per successful query", () => {
+  function countCell(point_index: number, query_index: number, overrides: Partial<LocalSeoCell> = {}): LocalSeoCell {
+    return makeCell({ point_index, query_index, ...overrides })
+  }
+
+  test("equal counts show Avg rank plus N/query, not a fraction of total", () => {
+    const cells = [1, 6, 6, 15].map((rank, query_index) =>
+      countCell(3, query_index, {
+        call_status: "success_nonempty",
+        match_status: "found",
+        rank,
+        result_count: 20,
+      })
+    )
+    const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[3].properties
+    expect(properties.pointLetter).toBe("D")
+    expect(properties.rank).toBe(7)
+    expect(properties.gridValue).toBe("7")
+    expect(properties.displayRank).toBe("Avg 7")
+    expect(properties.resultCountLabel).toBe("20/query")
+    expect(properties.label).toBe("D · 7")
+    expect(gridResultCountLabel(cells)).toBe("20/query")
+  })
+
+  test("unequal successful counts show an ASCII min-max range", () => {
+    const cells = [
+      countCell(3, 0, { call_status: "success_nonempty", match_status: "found", rank: 1, result_count: 15 }) ,
+      countCell(3, 1, { call_status: "success_nonempty", match_status: "found", rank: 2, result_count: 20 }) ,
+    ]
+    expect(gridResultCountLabel(cells)).toBe("15-20/query")
+    const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[3].properties
+    expect(properties.resultCountLabel).toBe("15-20/query")
+    expect(properties.displayRank).toBe("Avg 1.5")
+  })
+
+  test("counts are stored raw entries, never filtered or reranked", () => {
+    const cells = [1, 6, 6, 15].map((rank, query_index) =>
+      countCell(3, query_index, {
+        call_status: "success_nonempty",
+        match_status: "found",
+        rank,
+        result_count: 20,
+      })
+    )
+    const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[3].properties
+    expect(properties.rank).toBe(7)
+    expect(properties.meanRank).toBe(7)
+    expect(properties.resultCountLabel).toBe("20/query")
+  })
+
+  test("missing or null counts read as Count unknown, failed rows ignored", () => {
+    const missing = [
+      countCell(3, 0, { call_status: "success_nonempty", match_status: "found", rank: 1, result_count: 20 }) ,
+      countCell(3, 1, { call_status: "success_nonempty", match_status: "found", rank: 2 }) ,
+    ]
+    expect(gridResultCountLabel(missing)).toBe("Count unknown")
+    const nulled = [
+      countCell(3, 0, { call_status: "success_nonempty", match_status: "found", rank: 1, result_count: 20 }) ,
+      countCell(3, 1, { call_status: "success_nonempty", match_status: "found", rank: 2, result_count: null }) ,
+    ]
+    expect(gridResultCountLabel(nulled)).toBe("Count unknown")
+    const withFailed = [
+      countCell(3, 0, { call_status: "success_nonempty", match_status: "found", rank: 4, result_count: 20 }) ,
+      countCell(3, 1, { call_status: "request_failed", match_status: "unknown", rank: null }) ,
+    ]
+    expect(gridResultCountLabel(withFailed)).toBe("20/query")
+    const collection = gridFeatureCollection(withFailed, FROZEN_CENTRE, FROZEN_RADIUS_M)
+    expect(collection.features[3].properties.rank).toBe(4)
+    expect(collection.features[3].properties.resultCountLabel).toBe("20/query")
+  })
+
+  test("empty successful answers with known zero still show a count", () => {
+    const cells = [
+      countCell(0, 0, { call_status: "success_empty", match_status: "absent", rank: null, result_count: 0 }) ,
+    ]
+    expect(gridResultCountLabel(cells)).toBe("0/query")
+    const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[0].properties
+    expect(properties.gridValue).toBe("Not found")
+    expect(properties.displayRank).toBe("Not found")
+    expect(properties.resultCountLabel).toBe("0/query")
+  })
+
+  test("preview points with no successful answers keep empty counts", () => {
+    expect(gridResultCountLabel([])).toBeNull()
+    const pending = [countCell(1, 0, { call_status: "pending", match_status: "unknown", rank: null })]
+    expect(gridResultCountLabel(pending)).toBeNull()
+    const collection = gridFeatureCollection([], FROZEN_CENTRE, FROZEN_RADIUS_M)
+    expect(collection.features[0].properties.resultCountLabel).toBe("")
+    expect(collection.features[0].properties.displayRank).toBe("Unknown")
+  })
+
+  test("found-only mean is unchanged by result counts", () => {
+    const base = [
+      countCell(6, 0, { rank: 2, result_count: 20 }) ,
+      countCell(6, 1, { rank: 6, result_count: 20 }) ,
+      countCell(6, 2, { call_status: "success_empty", match_status: "absent", rank: null, result_count: 20 }) ,
+      countCell(6, 3, { call_status: "request_failed", match_status: "unknown", rank: null }) ,
+    ]
+    const properties = gridFeatureCollection(base, FROZEN_CENTRE, FROZEN_RADIUS_M).features[6].properties
+    expect(properties.meanRank).toBe(4)
+    expect(properties.gridValue).toBe("4")
+    expect(properties.displayRank).toBe("Avg 4")
+    expect(properties.resultCountLabel).toBe("20/query")
   })
 })

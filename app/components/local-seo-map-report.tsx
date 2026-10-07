@@ -27,6 +27,7 @@ import {
   formatLocalSeoMeanRank,
   summarizeLocalSeoGridCells,
 } from "~/lib/local-seo-directional"
+import { gridResultCountLabel } from "~/lib/local-seo-grid-geo"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
@@ -81,7 +82,9 @@ function describeLocalSeoPointQueryResult(entry: LocalSeoPointQuery): string {
     Number.isFinite(entry.rank) &&
     entry.rank > 0
   ) {
-    return `#${Number.isInteger(entry.rank) ? entry.rank : entry.rank.toFixed(1)}`
+    const rankText = Number.isInteger(entry.rank) ? String(entry.rank) : entry.rank.toFixed(1)
+    if (entry.places.length > 0) return `#${rankText}/${entry.places.length} returned`
+    return `#${rankText}`
   }
   if (entry.match_status === "absent") return "Not found"
   return "Unranked"
@@ -341,6 +344,11 @@ function LocalSeoRunOverview({
   const pointBySector = new Map(
     summary.points.map((point) => [point.sector, point] as const)
   )
+  const countByPoint = new Map<number, string | null>()
+  for (let pointIndex = 0; pointIndex < 9; pointIndex += 1) {
+    const group = run.cells.filter((cell) => cell.point_index === pointIndex)
+    countByPoint.set(pointIndex, gridResultCountLabel(group))
+  }
   useEffect(() => {
     if (focusedPointIndex === null || focusedPointIndex === undefined) return
     pointPanelRef.current?.scrollIntoView({ block: "nearest" })
@@ -382,6 +390,13 @@ function LocalSeoRunOverview({
                   point.absentCount,
                   point.unknownCount
                 )
+          const countLabel = countByPoint.get(index) ?? null
+          const countSuffix =
+            countLabel === null || countLabel === ""
+              ? ""
+              : countLabel === "Count unknown"
+                ? ", returned count unknown"
+                : `, ${countLabel.replace("/query", "")} returned results per successful query`
           return (
             <li key={sector} className="contents">
               <button
@@ -390,7 +405,7 @@ function LocalSeoRunOverview({
                 aria-pressed={focusedPointIndex === index}
                 aria-label={
                   point
-                    ? `${LOCAL_SEO_SECTOR_NAMES[sector]} sampled point: mean rank ${headline}, ${point.foundCount} found, ${point.absentCount} absent, ${point.unknownCount} unknown`
+                    ? `${LOCAL_SEO_SECTOR_NAMES[sector]} sampled point: mean rank ${headline}, ${point.foundCount} found, ${point.absentCount} absent, ${point.unknownCount} unknown${countSuffix}`
                     : `${LOCAL_SEO_SECTOR_NAMES[sector]}: not sampled`
                 }
                 className={cn(
@@ -419,6 +434,9 @@ function LocalSeoRunOverview({
           (sector, index) =>
             `${localSeoPointLetter(index)} ${localSeoSectorCaption(sector)}`
         ).join(" · ")}
+      </p>
+      <p className="text-[11px] text-muted-foreground">
+        Rank is the found-only mean. Counts show returned results per successful query, not distinct competitors or total Google matches.
       </p>
       {focusedPointIndex !== null && focusedPointIndex !== undefined ? (
         <div>

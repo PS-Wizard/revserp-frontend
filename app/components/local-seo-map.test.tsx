@@ -246,7 +246,8 @@ describe("local SEO map lifecycle", () => {
       (layer) => layer["id"] === "local-seo-overlay-label"
     )
     expect(JSON.stringify(label?.["layout"])).toContain("pointLetter")
-    expect(JSON.stringify(label?.["layout"])).toContain("gridValue")
+    expect(JSON.stringify(label?.["layout"])).toContain("displayRank")
+    expect(JSON.stringify(label?.["layout"])).toContain("resultCountLabel")
     expect(map.sources.has("local-seo-measurement")).toBe(true)
     expect(ids).toContain("local-seo-measurement-casing")
     expect(ids).toContain("local-seo-measurement-line")
@@ -571,5 +572,57 @@ describe("local SEO map fallback", () => {
     expect(host?.textContent).toContain("Basemap could not be reached.")
     expect(host?.querySelector("a")?.getAttribute("href")).toBe("?view=list")
     expect(FakeMap.instances).toHaveLength(1)
+  })
+})
+
+describe("local SEO map result counts", () => {
+  test("equal counts render Avg rank with N/query and keep styled data accurate", () => {
+    const overlay = gridFeatureCollection(
+      [1, 6, 6, 15].map((rank) => ({
+        point_index: 3,
+        call_status: "success_nonempty" as const,
+        match_status: "found" as const,
+        rank,
+        result_count: 20,
+        latitude: 27.715439365095264,
+        longitude: 85.30438940890343,
+      })),
+      CENTRE,
+      5000
+    )
+    const point = overlay.features[3].properties
+    expect(point.pointLetter).toBe("D")
+    expect(point.rank).toBe(7)
+    expect(point.gridValue).toBe("7")
+    expect(point.displayRank).toBe("Avg 7")
+    expect(point.resultCountLabel).toBe("20/query")
+    const map = renderMap({ center: CENTRE, overlayData: overlay })
+    map.fire("load", { lngLat: { lng: 0, lat: 0 } })
+    const data = map.sources.get("local-seo-overlay")?.data as typeof overlay
+    expect(data.features[3].properties.displayRank).toBe("Avg 7")
+    expect(data.features[3].properties.resultCountLabel).toBe("20/query")
+    expect(data.features[3].properties.gridValue).toBe("7")
+    const label = map.layers.find((layer) => layer["id"] === "local-seo-overlay-label")
+    const layout = JSON.stringify(label?.["layout"])
+    expect(layout).toContain("displayRank")
+    expect(layout).toContain("resultCountLabel")
+    expect(layout).toContain("format")
+    const labels = map.sources.get("local-seo-overlay-labels")?.data as {
+      features: Array<{ properties: Record<string, unknown> }>
+    }
+    expect(labels.features[3].properties.displayRank).toBe("Avg 7")
+    expect(labels.features[3].properties.resultCountLabel).toBe("20/query")
+  })
+
+  test("unequal counts render an ASCII range", () => {
+    const overlay = gridFeatureCollection(
+      [
+        { point_index: 3, call_status: "success_nonempty" as const, match_status: "found" as const, rank: 1, result_count: 15 },
+        { point_index: 3, call_status: "success_nonempty" as const, match_status: "found" as const, rank: 2, result_count: 20 },
+      ],
+      CENTRE,
+      5000
+    )
+    expect(overlay.features[3].properties.resultCountLabel).toBe("15-20/query")
   })
 })

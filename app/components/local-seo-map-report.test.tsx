@@ -1221,3 +1221,54 @@ describe("board point selection", () => {
     expect(html).toContain('aria-pressed="true"')
   })
 })
+
+describe("stored result counts in the report", () => {
+  test("per-query target rank shows places length with a returned label", () => {
+    const places = Array.from({ length: 20 }, (_, index) => ({
+      position: index + 1,
+      title: `Place ${index + 1}`,
+      address: "Main St",
+      place_id: `ChIJ-${index + 1}`,
+      rating: null,
+      rating_count: null,
+      is_target: index + 1 === 7,
+    }))
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({ queries: ["coffee"] }),
+      focusedPointIndex: 0,
+      onClearPointFocus: () => {},
+      pointDetails: {
+        run_id: "run-1",
+        point_index: 0,
+        target_place_id: "ChIJ-7",
+        queries: [
+          {
+            query_index: 0,
+            query: "coffee",
+            call_status: "success_nonempty",
+            match_status: "found",
+            rank: 7,
+            error: null,
+            places,
+          },
+        ],
+      },
+    })
+    expect(html).toContain("#7/20 returned")
+  })
+
+  test("legend spells the returned-count scope", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({
+        queries: ["coffee"],
+        cells: [makeCell({ point_index: 4, ring: "centre", sector: "centre", rank: 1, result_count: 20 })],
+      }),
+    })
+    expect(html).toContain("Rank is the found-only mean")
+    expect(html).toContain("returned results per successful query")
+    expect(html).toContain("not distinct competitors")
+    expect(html).toContain("20 returned results per successful query")
+  })
+})

@@ -98,6 +98,8 @@ export type LocalSeoCell = {
   match_status: LocalSeoMatchStatus
   /** Rank is only ever set alongside a found match, and is otherwise null. */
   rank: number | null
+  /** Stored raw places entries for this query (includes target/branches/duplicates), not unique competitors or all Google matches. Null when unknown. */
+  result_count?: number | null
   credits: number
   /** False while the charge for this call is still ambiguous. */
   credit_known: boolean
