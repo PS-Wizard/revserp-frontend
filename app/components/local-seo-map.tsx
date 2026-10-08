@@ -368,6 +368,8 @@ export type LocalSeoMapProps = {
   onMapClick?: (lngLat: [number, number]) => void
   onReady?: (map: MapLibreMap) => void
   interactive?: boolean
+  /** Embedded page maps scroll with the document: wheel and trackpad gestures must not zoom or capture the page scroll. Drag, click, and the +/- controls keep working. */
+  disableScrollZoom?: boolean
   overlayData?: LocalSeoOverlayData
   onFeatureClick?: (feature: MapGeoJSONFeature) => void
   fallbackHref?: string
@@ -381,6 +383,7 @@ export function LocalSeoMap({
   onMapClick,
   onReady,
   interactive = true,
+  disableScrollZoom = false,
   overlayData,
   onFeatureClick,
   fallbackHref,
@@ -421,6 +424,8 @@ export function LocalSeoMap({
         center: [center[0], center[1]],
         zoom,
         interactive,
+        // False only where requested: the default map keeps wheel zoom.
+        scrollZoom: disableScrollZoom ? false : undefined,
         attributionControl: false,
       })
     } catch {

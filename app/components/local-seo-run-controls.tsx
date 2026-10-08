@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { ApiError } from "~/lib/api"
@@ -162,9 +162,6 @@ export function describeLocalSeoRunProgress(run: LocalSeoRun): string {
   return `${completed}/${total} cells settled`
 }
 
-// The recorded run keeps the frozen inputs and progress here; money and
-// per-call outcomes are delegated so partial/failed runs can be explained
-// without rewriting the stored run or tightening the viewport validator.
 function LocalSeoRecordedRun({ run }: { run: LocalSeoRun }) {
   return (
     <div className="flex flex-col gap-2 text-sm">
@@ -173,15 +170,33 @@ function LocalSeoRecordedRun({ run }: { run: LocalSeoRun }) {
         {run.status === "queued" ? (
           <span className="text-muted-foreground">Waiting for a worker.</span>
         ) : null}
+        <span className="text-muted-foreground tabular-nums">
+          {describeLocalSeoRunProgress(run)} · {run.credits_used} credits used
+        </span>
       </div>
-      <p className="text-muted-foreground">
-        Frozen queries: {run.queries.join(" · ") || "none"}
-      </p>
-      <p className="text-muted-foreground">Frozen radius: {run.radius_m} m</p>
-      <p className="text-muted-foreground tabular-nums">
-        Progress: {describeLocalSeoRunProgress(run)}
-      </p>
-      <LocalSeoRunOutcomes run={run} />
+      <details className="group">
+        <summary className="w-fit cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+          Call outcomes
+        </summary>
+        <div className="flex flex-col gap-2 pt-3">
+          <LocalSeoRunOutcomes run={run} />
+        </div>
+      </details>
+    </div>
+  )
+}
+
+function RunStat({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-sm font-medium tabular-nums">{children}</dd>
     </div>
   )
 }
@@ -192,12 +207,16 @@ export function LocalSeoRunControls({
   radiusM,
   isRemote = false,
   onRunStarted,
+  part = "full",
 }: {
   projectId: string
   location: LocalSeoLocation
   radiusM: number
   isRemote?: boolean
   onRunStarted?: (runId: string) => void
+  /** "action" is just the start button for a toolbar; "recorded" is only the
+   * latest-run summary; "full" is the standalone card. */
+  part?: "full" | "action" | "recorded"
 }) {
   const queryClient = useQueryClient()
   const enabledMapQueries = localSeoEnabledMapQueries(location.queries)
@@ -335,34 +354,88 @@ export function LocalSeoRunControls({
     if (latestRun?.id === createdRun.runId) setCreatedRun(null)
   }, [createdRun, scopeKey, latestRun?.id])
 
+  const startSummary = `${count} ${count === 1 ? "query" : "queries"} × ${LOCAL_SEO_POINT_COUNT} points × ${LOCAL_SEO_PER_CALL_CREDITS} credits · ${(radiusM / 1000).toFixed(1)} km radius${
+    isKnownAvailableCredits(availableCredits) && budgetState === "ready"
+      ? ` · ${availableCredits} credits available`
+      : ""
+  }`
+  const startButton = (
+    <Button
+      title={startSummary}
+      type="button"
+      disabled={!gate.canStart || startMutation.isPending}
+      onClick={() =>
+        startMutation.mutate({
+          projectId,
+          locationId: location.id,
+          radiusM,
+          expectedCredits: cost,
+        })
+      }
+    >
+      {startMutation.isPending ? "Starting…" : `Start run · ${cost} credits`}
+    </Button>
+  )
+  if (part === "action") {
+    return (
+      <div
+        aria-label="Local SEO run controls"
+        role="group"
+        className="flex flex-col items-end gap-1 in-data-[slot=empty-content]:items-center"
+      >
+        {startButton}
+        {gate.reason ? (
+          <FieldDescription
+            role="status"
+            className="max-w-xs text-right in-data-[slot=empty-content]:text-center"
+          >
+            {gate.reason}
+          </FieldDescription>
+        ) : null}
+        {startMutation.isError ? (
+          <FieldError>
+            {errorMessageOf(startMutation.error, "Could not start the run")}
+          </FieldError>
+        ) : null}
+      </div>
+    )
+  }
+  if (part === "recorded") {
+    return (
+      <section aria-label="Latest recorded run" className="flex flex-col gap-2">
+        {runReadState === "ready" && latestRun ? (
+          <LocalSeoRecordedRun run={latestRun} />
+        ) : runReadState === "error" ? (
+          <FieldError>
+            {errorMessageOf(
+              latestRunQuery.error,
+              "Could not load the latest run"
+            )}
+          </FieldError>
+        ) : null}
+      </section>
+    )
+  }
+  const allowanceKnown =
+    budgetState === "ready" &&
+    availableCredits !== null &&
+    isKnownAvailableCredits(availableCredits)
   return (
     <section
       aria-label="Local SEO run controls"
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5"
     >
-      <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">Next run</h2>
-        <p className="text-sm text-muted-foreground">
-          Saved queries: {count === 0 ? "none" : enabledMapQueries.join(" · ")}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Radius freezes at: {radiusM} m
-        </p>
-        <p className="text-sm text-muted-foreground tabular-nums">
-          Cost: {count} {count === 1 ? "query" : "queries"} ×{" "}
-          {LOCAL_SEO_POINT_COUNT} points × {LOCAL_SEO_PER_CALL_CREDITS} credits
-          = {cost} credits
-        </p>
-        <p className="text-sm text-muted-foreground tabular-nums">
-          {budgetState === "ready" &&
-          availableCredits !== null &&
-          isKnownAvailableCredits(availableCredits)
-            ? availableCredits >= cost
-              ? `Maps allowance: ${availableCredits} credits available · ${availableCredits - cost} after this run`
-              : `Maps allowance: ${availableCredits} credits available · ${cost} required`
-            : "Maps allowance: unknown"}
-        </p>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h2 className="text-sm font-medium">Next run</h2>
+            <p
+              className="max-w-xl break-words text-xs text-muted-foreground"
+              title={enabledMapQueries.join(" · ")}
+            >
+              {count === 0 ? "No saved queries" : enabledMapQueries.join(" · ")}
+            </p>
+          </div>
           <Button
             type="button"
             disabled={!gate.canStart || startMutation.isPending}
@@ -380,6 +453,20 @@ export function LocalSeoRunControls({
               : `Start run · ${cost} credits`}
           </Button>
         </div>
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <RunStat label="Queries">{count}</RunStat>
+          <RunStat label="Radius">{(radiusM / 1000).toFixed(1)} km</RunStat>
+          <RunStat label={`Cost · ${count} × ${LOCAL_SEO_POINT_COUNT} × ${LOCAL_SEO_PER_CALL_CREDITS}`}>
+            {cost} credits
+          </RunStat>
+          <RunStat label="Allowance">
+            {allowanceKnown
+              ? availableCredits >= cost
+                ? `${availableCredits} · ${availableCredits - cost} after`
+                : `${availableCredits} · ${cost} required`
+              : "Unknown"}
+          </RunStat>
+        </dl>
         {gate.reason ? (
           <FieldDescription role="status">{gate.reason}</FieldDescription>
         ) : null}

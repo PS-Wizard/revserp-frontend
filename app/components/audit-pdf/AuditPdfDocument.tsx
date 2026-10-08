@@ -8,7 +8,7 @@ import { Document, Image, Page, View } from "~/lib/pdf-primitives";
 import { defaultPrimitives } from "~/lib/pdf-themes/primitives";
 import type { PdfcnTheme } from "~/types/pdf-themes";
 import arimoFontUrl from "./fonts/Arimo.ttf?url";
-import logoUrl from "../../../public/icons/revserp-192.png?url";
+import logoUrl from "../../../public/icons/revserp-icon-192.png?url";
 
 export interface AuditCommentary {
   summary: string;
@@ -41,6 +41,86 @@ export interface AuditPdfData {
   pillars: AuditPillar[];
   commentary: Record<"overall" | "seo" | "aeo" | "pagespeed", AuditCommentary>;
   model?: string;
+  /** Optional parent-project location appendix; absent means no saved location runs. */
+  locations?: AuditPdfLocation[];
+}
+
+export interface AuditPdfLocationMapsPoint {
+  pointIndex: number;
+  letter: string;
+  /** Found-only mean rank; null when nothing was found or nothing succeeded. */
+  meanRank: number | null;
+  foundCount: number;
+  absentCount: number;
+  unknownCount: number;
+  totalCount: number;
+}
+
+export interface AuditPdfLocationMaps {
+  runId: string;
+  status: "completed" | "partial" | "failed";
+  /** Frozen saved queries the run priced, in run order. */
+  queries: string[];
+  radiusM: number;
+  foundCount: number;
+  absentCount: number;
+  failedCount: number;
+  unknownCount: number;
+  totalCells: number;
+  /** Found-only mean rank; null is rendered as unknown, never zero. */
+  foundOnlyMeanRank: number | null;
+  points: AuditPdfLocationMapsPoint[];
+  /** Saved raw centre drift line; null when the run stored no usable drift. */
+  driftNote: string | null;
+  /** True when no cell succeeded, so every rank reads as unknown. */
+  failureOnly: boolean;
+  error?: string | null;
+}
+
+export interface AuditPdfLocationAiModel {
+  model: string;
+  shortModel: string;
+  mentionedCount: number;
+  successCount: number;
+  failedCount: number;
+  unknownCount: number;
+  /** Found-only mean rank; null when the model mentioned nothing ranked. */
+  avgRank: number | null;
+}
+
+export interface AuditPdfLocationAiRow {
+  order: number;
+  question: string;
+  model: string;
+  status: string;
+  mentioned: boolean | null;
+  rank: number | null;
+  branchMention: boolean | null;
+}
+
+export interface AuditPdfLocationAi {
+  auditId: string;
+  status: string;
+  completedAt?: string | null;
+  /** Mentions over successful checks; null when nothing succeeded. */
+  visibilityRate: number | null;
+  totalMentions: number;
+  totalSuccess: number;
+  /** Found-only mean rank; null when nothing ranked. */
+  avgRank: number | null;
+  failedCount: number;
+  unknownCount: number;
+  models: AuditPdfLocationAiModel[];
+  rows: AuditPdfLocationAiRow[];
+  error?: string | null;
+}
+
+/** One parent-project location with saved Maps and/or AI visibility results. */
+export interface AuditPdfLocation {
+  id: string;
+  name: string;
+  maps?: AuditPdfLocationMaps | null;
+  aiVisibility?: AuditPdfLocationAi | null;
 }
 
 const INK = "#101c24";
@@ -77,6 +157,36 @@ const AREAS = [
   { id: "aeo", label: "AEO", description: "Answer engine optimization" },
   { id: "pagespeed", label: "PageSpeed", description: "Page performance" },
 ] as const;
+
+// ponytail: location appendix reuses the product's found-only mean rank
+// formatting so the PDF never invents a zero for an unknown rank.
+const formatMeanRank = (meanRank: number | null): string =>
+  meanRank === null ? "—" : meanRank.toFixed(1);
+
+/** Empty-scope label mirroring formatLocalSeoEmptyMeanRank: absent only when clean. */
+const formatEmptyMeanRank = (absentCount: number, unknownCount: number): string =>
+  absentCount > 0 && unknownCount === 0 ? "Absent" : "—";
+
+const formatAuditPdfIsoDate = (value: string | null | undefined): string | null => {
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return value;
+  return new Date(time).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+};
+
+/** Matrix preview; the full question text lives in the product, not the PDF. */
+const auditPdfQuestionPreview = (question: string): string =>
+  question.length > 140 ? `${question.slice(0, 137)}…` : question;
+
+/** Matrix token mirroring the visibility grid: rank, ~ mentioned-unranked, — absent. */
+const auditPdfAiResultToken = (row: AuditPdfLocationAiRow): string => {
+  if (row.status === "failed") return "Error";
+  if (row.status !== "success") return "…";
+  if (row.mentioned && row.rank !== null && Number.isFinite(row.rank) && row.rank > 0)
+    return `#${Number.isInteger(row.rank) ? String(row.rank) : row.rank.toFixed(1)}`;
+  if (row.mentioned) return "~";
+  return "—";
+};
 
 const Label = ({ children }: { children: ReactNode }) => (
   <Text noMargin style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1, color: MUTED }}>
@@ -192,6 +302,197 @@ const AuditBucketTable = ({ buckets }: { buckets: AuditBucket[] }) => {
   );
 };
 
+// ponytail: one appendix page per location keeps pagination deterministic;
+// the question matrix spills onto fixed-size continuation pages instead.
+const AUDIT_PDF_LOCATION_QUESTIONS_PER_PAGE = 10;
+
+const auditPdfLocationPageStyle = { paddingTop: 24, paddingBottom: 16, breakBefore: "page" };
+
+const AuditPdfLocationMapsSection = ({ maps }: { maps: AuditPdfLocationMaps }) => {
+  const statusLabel = maps.status === "partial" ? "Partial" : maps.status === "failed" ? "Failed" : "Completed";
+  const pointRow = (point: AuditPdfLocationMapsPoint) => (
+    <TableRow key={point.pointIndex}>
+      <TableCell width="28%">{`${point.letter} · Point ${point.pointIndex + 1}`}</TableCell>
+      <TableCell width="20%" align="right">{point.meanRank !== null ? `≈${formatMeanRank(point.meanRank)}` : formatEmptyMeanRank(point.absentCount, point.unknownCount)}</TableCell>
+      <TableCell width="17%" align="right">{String(point.foundCount)}</TableCell>
+      <TableCell width="18%" align="right">{String(point.absentCount)}</TableCell>
+      <TableCell width="17%" align="right">{String(point.unknownCount)}</TableCell>
+    </TableRow>
+  );
+  return (
+    <View style={{ marginTop: 20 }}>
+      <View wrap={false}>
+        <Text noMargin style={{ fontSize: 11, fontWeight: 700, marginBottom: 10 }}>Maps visibility · {statusLabel}</Text>
+        <Text noMargin style={{ fontSize: 10, marginBottom: 6 }}>
+          {maps.foundOnlyMeanRank !== null ? `Avg. rank ≈${formatMeanRank(maps.foundOnlyMeanRank)} across ${maps.foundCount} found samples` : "No found rank in this run"}
+        </Text>
+        <Text noMargin style={{ fontSize: 9, color: MUTED, marginBottom: 6 }}>
+          {`${maps.foundCount} found · ${maps.absentCount} absent · ${maps.failedCount} failed · ${maps.unknownCount} unknown of ${maps.totalCells} cells`}
+        </Text>
+      </View>
+      {maps.points.length > 0 ? (
+        <Table variant="line">
+          <View wrap={false}>
+            <TableRow header variant="line">
+              <TableCell width="28%">Grid point</TableCell>
+              <TableCell width="20%" align="right">Avg. rank</TableCell>
+              <TableCell width="17%" align="right">Found</TableCell>
+              <TableCell width="18%" align="right">Absent</TableCell>
+              <TableCell width="17%" align="right">Unknown</TableCell>
+            </TableRow>
+            {pointRow(maps.points[0])}
+          </View>
+          {maps.points.slice(1).map(pointRow)}
+        </Table>
+      ) : null}
+      <Text style={{ fontSize: 8, color: MUTED, marginTop: 8 }}>
+        {`Frozen scope: ${maps.queries.length} saved ${maps.queries.length === 1 ? "query" : "queries"} · radius ${(maps.radiusM / 1000).toFixed(1)} km · run ${maps.runId}`}
+      </Text>
+      {maps.queries.length > 0 ? (
+        <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>{maps.queries.join(" · ")}</Text>
+      ) : null}
+      {maps.driftNote ? (
+        <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>Ranks are approximate: {maps.driftNote}</Text>
+      ) : maps.foundOnlyMeanRank !== null ? (
+        <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>Ranks are approximate — the provider may answer from a nearby map centre.</Text>
+      ) : null}
+      {maps.status === "partial" ? (
+        <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>Partial run: unsettled cells count as unknown.</Text>
+      ) : null}
+      {maps.failureOnly ? (
+        <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>No cell in this run succeeded — ranks are unknown, not zero.</Text>
+      ) : null}
+      {maps.error ? <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>{maps.error}</Text> : null}
+    </View>
+  );
+};
+
+const AuditPdfLocationAiSummary = ({ ai }: { ai: AuditPdfLocationAi }) => {
+  const completedLabel = formatAuditPdfIsoDate(ai.completedAt);
+  const headline = ai.visibilityRate !== null ? `${ai.visibilityRate}% visibility` : "No successful checks";
+  const modelRow = (model: AuditPdfLocationAiModel) => (
+    <TableRow key={model.model}>
+      <TableCell width="40%">{model.shortModel}</TableCell>
+      <TableCell width="20%" align="right">{`${model.mentionedCount}/${model.successCount}`}</TableCell>
+      <TableCell width="15%" align="right">{model.avgRank !== null ? `#${model.avgRank}` : "—"}</TableCell>
+      <TableCell width="12%" align="right">{model.failedCount > 0 ? String(model.failedCount) : "—"}</TableCell>
+      <TableCell width="13%" align="right">{model.unknownCount > 0 ? String(model.unknownCount) : "—"}</TableCell>
+    </TableRow>
+  );
+  return (
+    <View style={{ marginTop: 20 }}>
+      <View wrap={false}>
+        <Text noMargin style={{ fontSize: 11, fontWeight: 700, marginBottom: 10 }}>AI visibility</Text>
+        <Text noMargin style={{ fontSize: 10, marginBottom: 6 }}>{headline}</Text>
+        <Text noMargin style={{ fontSize: 9, color: MUTED, marginBottom: 6 }}>
+          {`${ai.totalMentions}/${ai.totalSuccess} mentions${ai.avgRank !== null ? ` · avg. rank #${ai.avgRank}` : ""}${ai.failedCount > 0 ? ` · ${ai.failedCount} failed` : ""}${ai.unknownCount > 0 ? ` · ${ai.unknownCount} unknown` : ""}${completedLabel ? ` · run ${completedLabel}` : ""}`}
+        </Text>
+      </View>
+      {ai.models.length > 0 ? (
+        <Table variant="line">
+          <View wrap={false}>
+            <TableRow header variant="line">
+              <TableCell width="40%">Model</TableCell>
+              <TableCell width="20%" align="right">Mentions</TableCell>
+              <TableCell width="15%" align="right">Avg. rank</TableCell>
+              <TableCell width="12%" align="right">Failed</TableCell>
+              <TableCell width="13%" align="right">Unknown</TableCell>
+            </TableRow>
+            {modelRow(ai.models[0])}
+          </View>
+          {ai.models.slice(1).map(modelRow)}
+        </Table>
+      ) : null}
+      <Text style={{ fontSize: 8, color: MUTED, marginTop: 8 }}>{`Saved audit ${ai.auditId} · status ${ai.status}`}</Text>
+      {ai.error ? <Text style={{ fontSize: 8, color: MUTED, marginTop: 4 }}>{ai.error}</Text> : null}
+    </View>
+  );
+};
+
+const AuditPdfLocationAiMatrixPage = ({ location, appendixLabel, models, orders, rows }: {
+  location: AuditPdfLocation;
+  appendixLabel: string;
+  models: AuditPdfLocationAiModel[];
+  orders: number[];
+  rows: AuditPdfLocationAiRow[];
+}) => {
+  const columnWidth = `${(56 / Math.max(models.length, 1)).toFixed(1)}%`;
+  const matrixRow = (order: number) => {
+    const first = rows.find((row) => row.order === order);
+    return (
+      <TableRow key={order}>
+        <TableCell width="44%">{`${order}. ${auditPdfQuestionPreview(first?.question ?? `Question ${order}`)}`}</TableCell>
+        {models.map((model) => {
+          const cell = rows.find((row) => row.order === order && row.model === model.model);
+          return (
+            <TableCell key={model.model} width={columnWidth} align="center">{cell ? auditPdfAiResultToken(cell) : "—"}</TableCell>
+          );
+        })}
+      </TableRow>
+    );
+  };
+  return (
+    <Page size="A4" style={auditPdfLocationPageStyle}>
+      <View wrap={false}>
+        <Label>{`${appendixLabel} · CONTINUED`}</Label>
+        <Text noMargin style={{ fontSize: 16, fontWeight: 700, marginTop: 10 }}>{location.name} — visibility detail</Text>
+        <Text noMargin style={{ fontSize: 9, color: MUTED, marginTop: 6 }}>Rank per question across every model. ~ is mentioned but unranked, — is not mentioned.</Text>
+      </View>
+      <View style={{ marginTop: 16 }}>
+        <Table variant="line">
+          <View wrap={false}>
+            <TableRow header variant="line">
+              <TableCell width="44%">Question</TableCell>
+              {models.map((model) => (
+                <TableCell key={model.model} width={columnWidth} align="center">{model.shortModel}</TableCell>
+              ))}
+            </TableRow>
+            {orders.length > 0 ? matrixRow(orders[0]) : null}
+          </View>
+          {orders.slice(1).map(matrixRow)}
+        </Table>
+      </View>
+    </Page>
+  );
+};
+
+const AuditPdfLocationAppendix = ({ location, index }: { location: AuditPdfLocation; index: number }) => {
+  const maps = location.maps ?? null;
+  const ai = location.aiVisibility ?? null;
+  if (!maps && !ai) return null;
+  const appendixLabel = `APPENDIX ${String(index + 1).padStart(2, "0")} / LOCATION RESULTS`;
+  const models = ai?.models ?? [];
+  const rows = ai?.rows ?? [];
+  const orders = [...new Set(rows.map((row) => row.order))].sort((a, b) => a - b);
+  const matrixPages: number[][] = [];
+  for (let at = 0; at < orders.length; at += AUDIT_PDF_LOCATION_QUESTIONS_PER_PAGE) {
+    matrixPages.push(orders.slice(at, at + AUDIT_PDF_LOCATION_QUESTIONS_PER_PAGE));
+  }
+  return (
+    <>
+      <Page size="A4" style={auditPdfLocationPageStyle}>
+        <View wrap={false}>
+          <Label>{appendixLabel}</Label>
+          <Text noMargin style={{ fontSize: 26, fontWeight: 700, marginTop: 10 }}>{location.name}</Text>
+          <Text noMargin style={{ fontSize: 9, color: MUTED, marginTop: 6 }}>Saved Maps and AI visibility runs for this location. Website audit sections above are unchanged.</Text>
+        </View>
+        {maps ? <AuditPdfLocationMapsSection maps={maps} /> : null}
+        {ai ? <AuditPdfLocationAiSummary ai={ai} /> : null}
+      </Page>
+      {models.length > 0 ? matrixPages.map((pageOrders, pageIndex) => (
+        <AuditPdfLocationAiMatrixPage
+          key={`${location.id}-matrix-${pageIndex}`}
+          location={location}
+          appendixLabel={appendixLabel}
+          models={models}
+          orders={pageOrders}
+          rows={rows}
+        />
+      )) : null}
+    </>
+  );
+};
+
 const AuditPdfBody = ({ data }: { data: AuditPdfData }) => {
   const overall = data.commentary.overall;
   const hasOverallInsights = overall.strengths.length + overall.concerns.length + overall.recommendations.length > 0;
@@ -248,6 +549,9 @@ const AuditPdfBody = ({ data }: { data: AuditPdfData }) => {
           {entry.summary ? <Text>{entry.summary}</Text> : null}
           <AuditInsights entry={entry} />
         </Page>
+      ))}
+      {(data.locations ?? []).filter((location) => location.maps || location.aiVisibility).map((location, index) => (
+        <AuditPdfLocationAppendix key={location.id} location={location} index={index} />
       ))}
     </Document>
   );

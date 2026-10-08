@@ -247,25 +247,25 @@ describe("shared enabled map query count", () => {
     ).toBe(2)
   })
 
-  test("a full set appends a disabled draft without truncating", () => {
+  test("adding a query never truncates the list and starts enabled", () => {
     const drafts = ["a", "b", "c", "d", "e"].map((text) => draft(text))
     const next = addLocalSeoQueryDraft(drafts)
     expect(next).toHaveLength(6)
     expect(next[5]).toEqual({
       text: "",
-      enabled: false,
+      enabled: true,
       kind: "map",
       source: "manual",
     })
   })
 
-  test("under the cap a new draft starts enabled", () => {
+  test("a new draft always starts enabled", () => {
     expect(addLocalSeoQueryDraft([draft("a")])[1].enabled).toBe(true)
   })
 })
 
-describe("visible shared cap", () => {
-  test("names the enabled count and blocks enabling a sixth row", () => {
+describe("visible enabled count", () => {
+  test("names the enabled count without blocking a sixth row", () => {
     const html = renderSetup({
       queryDrafts: [
         draft("a"),
@@ -276,8 +276,12 @@ describe("visible shared cap", () => {
         draft("f", { enabled: false }),
       ],
     })
-    expect(html).toContain("5 of 5 map queries enabled")
-    expect(checkboxHtml(html, "Enable query 6")).toContain('disabled=""')
+    expect(html).toContain(
+      "5 map queries enabled. A run requires at least one."
+    )
+    expect(checkboxHtml(html, "Enable query 6").includes('disabled=""')).toBe(
+      false
+    )
     expect(checkboxHtml(html, "Enable query 2").includes('disabled=""')).toBe(
       false
     )

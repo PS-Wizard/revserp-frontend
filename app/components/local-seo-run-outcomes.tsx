@@ -169,8 +169,17 @@ export function LocalSeoRunOutcomes({ run }: { run: LocalSeoRun }) {
   const pendingCells = showsDetail ? listLocalSeoPendingCells(run) : []
   const callSummary = showsDetail ? describeLocalSeoRunCalls(run) : null
 
+  const hasDetail =
+    showsDetail &&
+    Boolean(
+      (run.error && !genericError) ||
+        callSummary ||
+        failedCells.length > 0 ||
+        pendingCells.length > 0 ||
+        (genericError && !callSummary && failedCells.length === 0)
+    )
   return (
-    <div className="flex flex-col gap-2 text-sm">
+    <div className="flex flex-col gap-1.5 text-sm">
       <LocalSeoRunMoney run={run} />
       {terminal ? (
         mayStillCharge ? (
@@ -187,46 +196,57 @@ export function LocalSeoRunOutcomes({ run }: { run: LocalSeoRun }) {
           </FieldDescription>
         )
       ) : null}
-      {run.error && !genericError ? <FieldError>{run.error}</FieldError> : null}
-      {genericError &&
-      showsDetail &&
-      !callSummary &&
-      failedCells.length === 0 ? (
-        <FieldDescription role="status">
-          Some calls did not complete; per-call detail is not available for this
-          run.
-        </FieldDescription>
-      ) : null}
-      {callSummary ? (
-        <p className="text-muted-foreground">{callSummary}</p>
-      ) : null}
-      {failedCells.length > 0 ? (
-        <ul className="flex flex-col gap-1">
-          {failedCells.map((cell) => (
-            <li key={cell.key} className="text-muted-foreground">
-              <span className="font-medium text-foreground">{cell.label}</span>
-              {". "}
-              {cell.explanation} {cell.charge}.
-              {cell.rawError ? (
-                <span className="block">Raw error: {cell.rawError}</span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {pendingCells.length > 0 ? (
-        <div className="text-muted-foreground">
-          <p>
-            {pendingCells.length} call{pendingCells.length === 1 ? "" : "s"}{" "}
-            have no result recorded (unfinished; the API does not report whether
-            they started):
-          </p>
-          <ul className="flex flex-col gap-1">
-            {pendingCells.map((label) => (
-              <li key={label}>{label}</li>
-            ))}
-          </ul>
-        </div>
+      {hasDetail ? (
+        <details className="text-muted-foreground">
+          <summary className="cursor-pointer text-xs font-medium">
+            Details
+          </summary>
+          <div className="flex flex-col gap-2 pt-2">
+            {run.error && !genericError ? (
+              <FieldError>{run.error}</FieldError>
+            ) : null}
+            {genericError &&
+            showsDetail &&
+            !callSummary &&
+            failedCells.length === 0 ? (
+              <FieldDescription role="status">
+                Some calls did not complete; per-call detail is not available for
+                this run.
+              </FieldDescription>
+            ) : null}
+            {callSummary ? <p>{callSummary}</p> : null}
+            {failedCells.length > 0 ? (
+              <ul className="flex flex-col gap-1">
+                {failedCells.map((cell) => (
+                  <li key={cell.key}>
+                    <span className="font-medium text-foreground">
+                      {cell.label}
+                    </span>
+                    {". "}
+                    {cell.explanation} {cell.charge}.
+                    {cell.rawError ? (
+                      <span className="block">Raw error: {cell.rawError}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {pendingCells.length > 0 ? (
+              <div>
+                <p>
+                  {pendingCells.length} call
+                  {pendingCells.length === 1 ? "" : "s"} have no result recorded
+                  (unfinished; the API does not report whether they started):
+                </p>
+                <ul className="flex flex-col gap-1">
+                  {pendingCells.map((label) => (
+                    <li key={label}>{label}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </details>
       ) : null}
     </div>
   )

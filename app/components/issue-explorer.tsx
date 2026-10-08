@@ -30,6 +30,7 @@ import type {
   MergedIssueUrlRow,
   PillarScope,
 } from "~/components/issue-explorer/types"
+import type { IssueUrlsPageFetch } from "~/components/issue-explorer/utils"
 import {
   useIssueWorkActions,
   type IssueWorkMutationResult,
@@ -251,6 +252,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   focusRequest,
   initialPillarId,
   scopedUrl,
+  scopedIssueUrls,
 }: {
   breakdown: ScoreBreakdownResponse | null
   focusRequest?: {
@@ -262,6 +264,19 @@ export const IssueExplorer = memo(function IssueExplorer({
   } | null
   initialPillarId?: string
   scopedUrl?: string
+  /**
+   * Scoped read-only URL source (e.g. location branch audit). Replaces the
+   * parent crawl URL endpoints with an injected fetcher, forces the "all"
+   * work filter, and hides work actions plus export. No parent totals leak.
+   */
+  scopedIssueUrls?: {
+    fetchPage: IssueUrlsPageFetch
+    /** Real parent crawl id used only for page/editor deep links. */
+    pageCrawlId?: string
+    /** Stable token (crawl + scope revision) that recreates the pager. */
+    scopeKey: string
+    hideWorkActions?: boolean
+  }
 }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const {
@@ -309,6 +324,7 @@ export const IssueExplorer = memo(function IssueExplorer({
 
   const pillarOptions = breakdown?.pillars ?? EMPTY_PILLARS
   const crawlId = breakdown?.crawl_id ?? ""
+  const isScopedUrls = Boolean(scopedIssueUrls)
 
   // --- Sync selected pillars (default: initial pillar, else all) ---
   syncSelectedPillars({
@@ -481,7 +497,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   // issue type is part of the key so it recreates the pager) ---
   const urlCacheKey =
     drilledBucket && drilledIssueTypeId
-      ? `${crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}::${scopedUrl ?? ""}`
+      ? `${scopedIssueUrls?.scopeKey ?? crawlId}::${drilledBucket.key}::${drilledIssueTypeId}::${workStatus}::${scopedUrl ?? ""}`
       : ""
 
   const applyWorkMutation = useCallback(
@@ -533,7 +549,7 @@ export const IssueExplorer = memo(function IssueExplorer({
 
   const { markDone, undo, isPending } = useIssueWorkActions(applyWorkMutation)
   useEffect(() => {
-    if (!effectiveDrilledBucket || !crawlId) {
+    if (!effectiveDrilledBucket || (!crawlId && !scopedIssueUrls)) {
       pagerRef.current = null
       return
     }
@@ -544,7 +560,8 @@ export const IssueExplorer = memo(function IssueExplorer({
       effectiveDrilledBucket,
       controller.signal,
       workStatus,
-      scopedUrl
+      scopedUrl,
+      scopedIssueUrls?.fetchPage
     )
     setUrlState({
       key: urlCacheKey,
@@ -557,12 +574,20 @@ export const IssueExplorer = memo(function IssueExplorer({
     })
 
     return () => controller.abort()
-  }, [crawlId, effectiveDrilledBucket, scopedUrl, urlCacheKey, workStatus])
+  }, [
+    crawlId,
+    effectiveDrilledBucket,
+    scopedIssueUrls,
+    scopedUrl,
+    urlCacheKey,
+    workStatus,
+  ])
 
   // --- Fetch only the page currently being displayed from the pager ---
   useEffect(() => {
     const pager = pagerRef.current
-    if (!pager || !effectiveDrilledBucket || !crawlId) return
+    if (!pager || !effectiveDrilledBucket || (!crawlId && !scopedIssueUrls))
+      return
 
     setUrlState((prev) =>
       prev.key === urlCacheKey ? { ...prev, loading: true, error: "" } : prev
@@ -868,7 +893,7 @@ export const IssueExplorer = memo(function IssueExplorer({
   )
 
   const onBulkMarkDone = useCallback(async () => {
-    if (!workActionsEnabled) {
+    if (!workActionsEnabled || scopedIssueUrls) {
       toast.error("Select the latest completed crawl to update work.")
       return
     }
@@ -909,10 +934,16 @@ export const IssueExplorer = memo(function IssueExplorer({
       )
     if (failed) toast.error(`${failed} could not be marked`)
     dispatch({ type: "SET_CHECKED_URLS", payload: [] })
-  }, [applyWorkMutation, checkedUrlKeys, displayedUrls, workActionsEnabled])
+  }, [
+    applyWorkMutation,
+    checkedUrlKeys,
+    displayedUrls,
+    scopedIssueUrls,
+    workActionsEnabled,
+  ])
 
   const onExport = useCallback(async () => {
-    if (!crawlId) return
+    if (!crawlId || scopedIssueUrls) return
 
     const params = new URLSearchParams()
     if (drilledBucket) {
@@ -977,6 +1008,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     effectivePillar,
     loadedUrls,
     drilledBucket,
+    scopedIssueUrls,
     selectedPillars,
   ])
 
@@ -1059,7 +1091,9 @@ export const IssueExplorer = memo(function IssueExplorer({
         </Breadcrumb>
         {drilledBucket && drilledIssueType ? (
           <div className="flex items-center gap-2">
-            <DropdownMenu>
+            {!isScopedUrls && (
+              <>
+                <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <Button size="sm" variant="outline">
@@ -1130,6 +1164,8 @@ export const IssueExplorer = memo(function IssueExplorer({
                   Select the latest completed crawl to update work.
                 </TooltipContent>
               </Tooltip>
+                )}
+              </>
             )}
             {features.ai_chat ? (
               recommendFixesOverLimit ? (
@@ -1181,7 +1217,8 @@ export const IssueExplorer = memo(function IssueExplorer({
         {drilledBucket && drilledIssueType ? (
           <UrlIssueTable
             checkedKeys={checkedUrlKeys}
-            crawlId={crawlId}
+            crawlId={scopedIssueUrls?.pageCrawlId ?? crawlId}
+            hideWorkActions={isScopedUrls}
             error={urlError}
             getRowProps={urlDrag.getRowProps}
             isLoading={isLoadingUrls}
@@ -1228,15 +1265,17 @@ export const IssueExplorer = memo(function IssueExplorer({
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 px-(--card-spacing)">
-        <Button
-          disabled={!canAct}
-          onClick={onExport}
+        {!isScopedUrls && (
+          <Button
+            disabled={!canAct}
+            onClick={onExport}
           size="sm"
           variant="outline"
         >
           <DownloadIcon data-icon="inline-start" />
           Export XLSX
-        </Button>
+          </Button>
+        )}
         <TablePagination
           pageIndex={
             drilledIssueType

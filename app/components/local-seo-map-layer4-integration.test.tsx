@@ -362,7 +362,7 @@ describe("run pricing reads saved queries, not the drafts", () => {
       await flushTestDom()
     })
     const runDetail = await switchTab("Run")
-    expect(runDetail.textContent).toContain("Saved queries: saved-a · saved-b")
+    expect(runDetail.textContent).toContain("saved-a · saved-b")
     expect(runDetail.textContent).toContain("Start run · 54 credits")
   })
 })

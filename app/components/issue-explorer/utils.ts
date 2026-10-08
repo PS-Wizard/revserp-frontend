@@ -6,6 +6,24 @@ import type { BucketScope, MergedIssueUrlRow } from "./types"
 
 export type WorkStatusFilter = "all" | "needs_action" | "marked_done"
 
+/**
+ * Per-issue-type URL page fetcher. The default hits parent crawl endpoints;
+ * scoped views (e.g. location branch audits) inject their own endpoint.
+ * Rows arrive without work state; the pager fills in source/label context.
+ */
+export type IssueUrlsPageFetch = (args: {
+  bucketScope: BucketScope
+  issueTypeId: string
+  issueTypeLabel: string
+  limit: number
+  offset: number
+  signal?: AbortSignal
+}) => Promise<{
+  rows: MergedIssueUrlRow[]
+  total: number
+  workActionsEnabled: boolean
+}>
+
 type UrlRowWork = NonNullable<MergedIssueUrlRow["work"]>
 
 export function workFromMarkResponse(
@@ -168,7 +186,8 @@ export class BucketUrlPager {
     private bucketScope: BucketScope,
     private signal?: AbortSignal,
     private workStatus: WorkStatusFilter = "all",
-    private scopedUrl?: string
+    private scopedUrl?: string,
+    private fetchPageOverride?: IssueUrlsPageFetch
   ) {
     this.cursors = bucketScope.bucket.issues.map((issueType) => ({
       issueTypeId: issueType.id,
@@ -190,16 +209,25 @@ export class BucketUrlPager {
   }
 
   private async fillCursor(cursor: IssueTypeCursor, limit: number) {
-    const { rows, total, workActionsEnabled } = await fetchIssueTypeUrlsPage(
-      this.crawlId,
-      this.bucketScope,
-      cursor.issueTypeId,
-      cursor.issueTypeLabel,
-      limit,
-      cursor.offset,
-      this.workStatus,
-      this.signal
-    )
+    const { rows, total, workActionsEnabled } = this.fetchPageOverride
+      ? await this.fetchPageOverride({
+          bucketScope: this.bucketScope,
+          issueTypeId: cursor.issueTypeId,
+          issueTypeLabel: cursor.issueTypeLabel,
+          limit,
+          offset: cursor.offset,
+          signal: this.signal,
+        })
+      : await fetchIssueTypeUrlsPage(
+          this.crawlId,
+          this.bucketScope,
+          cursor.issueTypeId,
+          cursor.issueTypeLabel,
+          limit,
+          cursor.offset,
+          this.workStatus,
+          this.signal
+        )
     if (this.workActionsEnabled === null) {
       this.workActionsEnabled = workActionsEnabled
     }

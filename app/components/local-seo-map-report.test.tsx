@@ -10,6 +10,7 @@ import {
   describeLocalSeoReportRunState,
   LocalSeoMapLookupEvidence,
   LocalSeoMapReportContent,
+  LocalSeoPointResultsPanel,
   LocalSeoRunCompetitorsCard,
   type LocalSeoMapReportTab,
 } from "~/components/local-seo-map-report"
@@ -1270,5 +1271,127 @@ describe("stored result counts in the report", () => {
     expect(html).toContain("returned results per successful query")
     expect(html).toContain("not distinct competitors")
     expect(html).toContain("20 returned results per successful query")
+  })
+})
+
+describe("saved run failure and progress", () => {
+  test("failed run shows the underlying saved error", () => {
+    const html = renderReport({
+      tab: "run",
+      latestRun: makeRun({
+        status: "failed",
+        error: "provider quota exhausted",
+      }),
+    })
+    expect(html).toContain("Saved run failed: provider quota exhausted")
+    expect(html.includes("Retry")).toBe(false)
+    expect(html.includes("try again")).toBe(false)
+  })
+
+  test("running run shows saved cell progress without rewriting history", () => {
+    const html = renderReport({
+      tab: "run",
+      latestRun: makeRun({
+        status: "running",
+        completed_cells: 12,
+        total_cells: 45,
+      }),
+    })
+    expect(html).toContain("Run in progress")
+    expect(html).toContain("resolving cells 12 of 45")
+    expect(html).toContain("Frozen queries: coffee · tea")
+  })
+
+  test("queued run without counts still states the hold", () => {
+    const html = renderReport({
+      tab: "run",
+      latestRun: makeRun({ status: "queued" }),
+    })
+    expect(html).toContain("Run queued")
+    expect(html).toContain("Credits stay reserved")
+  })
+})
+
+describe("failed point cell errors", () => {
+  function renderPointPanel(
+    queries: Array<{
+      query_index: number
+      query: string
+      call_status: "request_failed"
+      match_status: "absent"
+      rank: number | null
+      error: string | null
+    }>
+  ) {
+    return renderToStaticMarkup(
+      <LocalSeoPointResultsPanel
+        pointIndex={4}
+        details={{
+          run_id: "run-1",
+          point_index: 4,
+          target_place_id: "ChIJ1",
+          queries: queries.map((entry) => ({ ...entry, places: [] })),
+        }}
+        pending={false}
+        error={null}
+      />
+    )
+  }
+
+  test("selecting a failed cell shows its stored provider error", () => {
+    const html = renderPointPanel([
+      {
+        query_index: 0,
+        query: "coffee",
+        call_status: "request_failed",
+        match_status: "absent",
+        rank: null,
+        error: "provider quota exhausted for this call",
+      },
+    ])
+    expect(html).toContain("provider quota exhausted for this call")
+  })
+
+  test("failed cell without a stored cause reports it clearly", () => {
+    for (const error of [null, "request failed"]) {
+      const html = renderPointPanel([
+        {
+          query_index: 0,
+          query: "coffee",
+          call_status: "request_failed",
+          match_status: "absent",
+          rank: null,
+          error,
+        },
+      ])
+      expect(html).toContain(
+        "no specific cause was stored for this query"
+      )
+      expect(html.includes("request failed;")).toBe(false)
+    }
+  })
+
+  test("saved inspection performs no network calls", () => {
+    const calls: string[] = []
+    const realFetch = globalThis.fetch
+    globalThis.fetch = ((input: string | URL | Request) => {
+      calls.push(typeof input === "string" ? input : input.toString())
+      throw new Error("no network during saved inspection")
+    }) as typeof fetch
+    try {
+      renderPointPanel([
+        {
+          query_index: 0,
+          query: "coffee",
+          call_status: "request_failed",
+          match_status: "absent",
+          rank: null,
+          error: "provider quota exhausted for this call",
+        },
+      ])
+    } finally {
+      globalThis.fetch = realFetch
+    }
+    expect(calls).toEqual([])
   })
 })

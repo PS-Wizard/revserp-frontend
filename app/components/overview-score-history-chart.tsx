@@ -38,26 +38,57 @@ function formatAxisDate(timestamp: number) {
   return axisDateFormatter.format(new Date(timestamp))
 }
 
+/**
+ * One derived history point. Scoped views (e.g. location branch audits)
+ * pass these instead of parent crawls; every point belongs to a single
+ * pinned scope revision named by caption.
+ */
+export type ScoreHistoryPoint = {
+  id: string
+  timestamp: number
+  overall: number | null
+  seo: number | null
+  aeo: number | null
+  pagespeed: number | null
+}
+
 export const OverviewScoreHistoryChart = memo(
-  function OverviewScoreHistoryChart({ crawls }: { crawls: CrawlResponse[] }) {
+  function OverviewScoreHistoryChart({
+    crawls,
+    points,
+    caption,
+  }: {
+    crawls?: CrawlResponse[]
+    points?: ScoreHistoryPoint[]
+    caption?: string
+  }) {
     const [selectedDataKey, setSelectedDataKey] = useState<string | null>(null)
 
-    const chartRows = useMemo(
-      () =>
-        [...crawls]
-          .filter((crawl) => crawl.status === "completed")
-          .sort(
-            (left, right) => getCrawlTimestamp(left) - getCrawlTimestamp(right)
-          )
-          .map((crawl) => ({
-            label: formatAxisDate(getCrawlTimestamp(crawl)),
-            overall: crawl.overall_score ?? null,
-            seo: crawl.seo_score ?? null,
-            aeo: crawl.aeo_score ?? null,
-            pagespeed: crawl.pagespeed_score ?? null,
-          })),
-      [crawls]
-    )
+    const chartRows = useMemo(() => {
+      if (points) {
+        return [...points]
+          .sort((left, right) => left.timestamp - right.timestamp)
+          .map((point) => ({
+            label: formatAxisDate(point.timestamp),
+            overall: point.overall,
+            seo: point.seo,
+            aeo: point.aeo,
+            pagespeed: point.pagespeed,
+          }))
+      }
+      return [...(crawls ?? [])]
+        .filter((crawl) => crawl.status === "completed")
+        .sort(
+          (left, right) => getCrawlTimestamp(left) - getCrawlTimestamp(right)
+        )
+        .map((crawl) => ({
+          label: formatAxisDate(getCrawlTimestamp(crawl)),
+          overall: crawl.overall_score ?? null,
+          seo: crawl.seo_score ?? null,
+          aeo: crawl.aeo_score ?? null,
+          pagespeed: crawl.pagespeed_score ?? null,
+        }))
+    }, [crawls, points])
 
     const chartConfig = useMemo(() => {
       const config: ChartConfig = {}
@@ -139,6 +170,9 @@ export const OverviewScoreHistoryChart = memo(
 
     return (
       <section className="w-full min-w-0">
+        {caption && (
+          <p className="pb-2 text-xs text-muted-foreground">{caption}</p>
+        )}
         {hasData ? (
           <div className="w-full">
             <div style={{ height: chartPlotHeight }}>

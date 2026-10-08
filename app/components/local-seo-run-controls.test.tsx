@@ -420,9 +420,10 @@ describe("next run pricing", () => {
       budget: makeBudget(),
     })
     expect(html).toContain("Start run · 27 credits")
-    expect(html).toContain("1 query × 9 points × 3 credits = 27 credits")
-    expect(html).toContain("Saved queries: coffee")
-    expect(html).toContain("Radius freezes at: 5000 m")
+    expect(html).toContain("Cost · 1 × 9 × 3")
+    expect(html).toContain("27 credits")
+    expect(html).toContain("coffee")
+    expect(html).toContain("5.0 km")
   })
 
   test("two saved queries price at fifty-four credits", () => {
@@ -431,8 +432,9 @@ describe("next run pricing", () => {
       budget: makeBudget(),
     })
     expect(html).toContain("Start run · 54 credits")
-    expect(html).toContain("2 queries × 9 points × 3 credits = 54 credits")
-    expect(html).toContain("Saved queries: coffee · tea")
+    expect(html).toContain("Cost · 2 × 9 × 3")
+    expect(html).toContain("54 credits")
+    expect(html).toContain("coffee · tea")
   })
 
   test("five saved queries price at one hundred thirty-five credits", () => {
@@ -443,16 +445,21 @@ describe("next run pricing", () => {
       budget: makeBudget(),
     })
     expect(html).toContain("Start run · 135 credits")
-    expect(html).toContain("5 queries × 9 points × 3 credits = 135 credits")
+    expect(html).toContain("Cost · 5 × 9 × 3")
+    expect(html).toContain("135 credits")
   })
 
-  test("zero or six saved queries stay blocked with the validator reason", () => {
+  test("zero saved queries stay blocked; six now price and run", () => {
+    // The Tailwind class list contains "disabled:" tokens, so match the real
+    // disabled attribute on the extracted button tag instead of a substring.
+    const startRunButton = (html: string) =>
+      html.match(/<button[^>]*>Start run/)?.[0] ?? ""
     const none = renderControls({
       location: makeLocation({ queries: [] }),
       budget: makeBudget(),
     })
-    expect(none).toContain("Between 1 and 5 queries are required, got 0.")
-    expect(/disabled[^>]*>Start run/.test(none)).toBe(true)
+    expect(none).toContain("At least 1 query is required, got 0.")
+    expect(startRunButton(none).includes('disabled=""')).toBe(true)
 
     const many = renderControls({
       location: makeLocation({
@@ -460,8 +467,10 @@ describe("next run pricing", () => {
       }),
       budget: makeBudget(),
     })
-    expect(many).toContain("Between 1 and 5 queries are required, got 6.")
-    expect(/disabled[^>]*>Start run/.test(many)).toBe(true)
+    expect(many).toContain("Start run · 162 credits")
+    expect(many).toContain("Cost · 6 × 9 × 3")
+    expect(many).toContain("162 credits")
+    expect(startRunButton(many).includes('disabled=""')).toBe(false)
   })
 })
 
@@ -471,8 +480,7 @@ describe("allowance display", () => {
       location: makeLocation({ queries: [mapQuery("coffee")] }),
       budget: makeBudget({ available_credits: 365 }),
     })
-    expect(html).toContain("365 credits available")
-    expect(html).toContain("338 after this run")
+    expect(html).toContain("365 · 338 after")
   })
 
   test("an insufficient allowance blocks without defaulting the balance", () => {
@@ -480,7 +488,7 @@ describe("allowance display", () => {
       location: makeLocation({ queries: [mapQuery("coffee")] }),
       budget: makeBudget({ available_credits: 20 }),
     })
-    expect(html).toContain("20 credits available")
+    expect(html).toContain("20 · 27 required")
     expect(html).toContain("Not enough Maps allowance")
     expect(/disabled[^>]*>Start run/.test(html)).toBe(true)
   })
@@ -490,16 +498,15 @@ describe("allowance display", () => {
       location: makeLocation({ queries: [mapQuery("coffee")] }),
       budget: makeBudget({ available_credits: 20 }),
     })
-    expect(html).toContain("20 credits available")
-    expect(html).toContain("27 required")
-    expect(html.includes("after this run")).toBe(false)
+    expect(html).toContain("20 · 27 required")
+    expect(html.includes("after")).toBe(false)
   })
 
   test("an unloaded allowance reads as unknown and blocks", () => {
     const html = renderControls({
       location: makeLocation({ queries: [mapQuery("coffee")] }),
     })
-    expect(html).toContain("Maps allowance: unknown")
+    expect(html).toContain(">Unknown<")
     expect(html).toContain("Checking the Maps allowance")
     expect(/disabled[^>]*>Start run/.test(html)).toBe(true)
   })
@@ -512,7 +519,7 @@ describe("allowance display", () => {
     await flushUntil(() =>
       (container.textContent ?? "").includes("allowance could not be read")
     )
-    expect(container.textContent).toContain("Maps allowance: unknown")
+    expect(container.textContent).toContain("Unknown")
     expect(container.textContent).toContain("allowance could not be read")
     expect(container.textContent?.includes("500 credits available")).toBe(false)
     expect(/disabled[^>]*>Start run/.test(container.innerHTML)).toBe(true)
@@ -561,15 +568,17 @@ describe("identity and capability guards", () => {
 })
 
 describe("latest recorded run", () => {
-  test("uses the run's own frozen queries and radius", () => {
+  test("the recorded run keeps its own outcomes without frozen query prose", () => {
     const html = renderControls({
       location: makeLocation({ queries: [mapQuery("live-edit")] }),
       budget: makeBudget(),
       run: makeRun({ queries: ["frozen-a", "frozen-b"], radius_m: 8000 }),
     })
-    expect(html).toContain("Frozen queries: frozen-a · frozen-b")
-    expect(html).toContain("Frozen radius: 8000 m")
-    expect(html.includes("Frozen queries: live-edit")).toBe(false)
+    expect(html).toContain("Call outcomes")
+    expect(html).toContain("27 credits used")
+    expect(html).toContain("live-edit")
+    expect(html.includes("Frozen queries")).toBe(false)
+    expect(html.includes("Frozen radius")).toBe(false)
   })
 
   test("progress absent stays honest and present progress reads n/m", () => {

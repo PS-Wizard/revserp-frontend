@@ -15,6 +15,8 @@ export type DashboardView =
   | "compare"
 export type AuditTab =
   "overview" | "seo" | "aeo" | "pagespeed" | "pages" | "site-graph"
+/** Outer-nav visibility choice. Maps renders the nine-point cards page, AI renders in chrome. */
+export type VisibilityMode = "maps" | "ai"
 export type ExportFormat = "csv" | "xlsx"
 
 /**
@@ -78,6 +80,8 @@ export type AppNavbarProps = {
   userName?: string
   view: DashboardView
   onViewChange: (value: DashboardView) => void
+  /** Outer-nav visibility choice; shell defaults to maps. */
+  visibilityMode?: VisibilityMode
   auditTab: AuditTab
   onAuditTabChange: (value: AuditTab) => void
   isPlatformAdmin: boolean

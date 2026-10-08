@@ -30,7 +30,11 @@ import {
   type MetricConfig,
 } from "./types"
 import { capitalize, dateTimestamp, formatCountryLabel } from "./formatters"
-import { useGSCQueries, type GSCQueryPreset } from "./use-gsc-queries"
+import {
+  useGSCQueries,
+  type GSCQueryPreset,
+  type GSCQueryPageOptions,
+} from "./use-gsc-queries"
 
 const chartMetricOrder: GSCMetricKey[] = [
   "impressions",
@@ -162,6 +166,11 @@ export function GSCOverview({
   isOrganizationOwner,
   onRefreshOverview,
   completedCrawls,
+  queriesBasePath,
+  queriesExtraParams,
+  onRefreshQueries,
+  keywordProjectId,
+  actions,
 }: {
   activeProjectID: string
   status: ProjectGSCStatusResponse
@@ -171,6 +180,11 @@ export function GSCOverview({
   isOrganizationOwner: boolean
   onRefreshOverview: () => Promise<void>
   completedCrawls: CrawlResponse[]
+  queriesBasePath?: string
+  queriesExtraParams?: Record<string, string>
+  onRefreshQueries?: (options: GSCQueryPageOptions) => Promise<void>
+  keywordProjectId?: string | null
+  actions?: import("react").ReactNode
 }) {
   const [state, dispatch] = useReducer(
     overviewReducer,
@@ -202,7 +216,7 @@ export function GSCOverview({
   const prevOverviewRef = useRef(selectedWindowOverview)
   if (selectedWindowOverview !== prevOverviewRef.current) {
     prevOverviewRef.current = selectedWindowOverview
-    dispatch({ type: "RESET_TABLE" })
+    if (!onRefreshQueries) dispatch({ type: "RESET_TABLE" })
   }
   // Debounced zoom/pan range reported by the chart. While zoomed or panning,
   // the metric cards reflect the visible slice and the "previous window" is
@@ -288,6 +302,9 @@ export function GSCOverview({
     search: state.tableSearch,
     preset: state.queryPreset,
     enabled: Boolean(overviewResponse),
+    queriesBasePath,
+    extraQueryParams: queriesExtraParams,
+    onRefreshPage: onRefreshQueries,
   })
 
   const queryRows = useMemo(
@@ -378,7 +395,8 @@ export function GSCOverview({
   const handleRefreshOverview = async () => {
     dispatch({ type: "SET_REFRESHING", value: true })
     try {
-      await onRefreshOverview()
+      if (onRefreshQueries) await searchConsoleQueries.refresh()
+      else await onRefreshOverview()
     } finally {
       dispatch({ type: "SET_REFRESHING", value: false })
     }
@@ -450,6 +468,7 @@ export function GSCOverview({
         overviewErrorMessage={overviewErrorMessage}
         selectedGSCSiteURL={state.selectedGSCSiteURL}
         selectedSite={selectedSite}
+        actions={actions}
       />
 
       {selectedWindowOverview ? (
@@ -495,7 +514,11 @@ export function GSCOverview({
             isLoadingMoreQueries={searchConsoleQueries.isLoadingMore}
             tableSearch={state.tableSearch}
             tableSort={state.tableSort}
-            projectId={activeProjectID}
+            projectId={
+              keywordProjectId === undefined
+                ? activeProjectID
+                : keywordProjectId
+            }
           />
         </>
       ) : isLoading ? (

@@ -16,6 +16,16 @@ import { clientApiFetch, clientApiSSE } from "~/lib/api"
 import { describeAIAuditFailure } from "~/lib/ai-audit-results"
 import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
+import {
+  locationKeywordCoverageQueryKey,
+  locationKeywordListsQueryKey,
+} from "~/lib/location-keywords-api"
+import {
+  localSeoLandmarksQueryKey,
+  localSeoLocationQueryKey,
+  localSeoLocationQueryRecordsQueryKey,
+  localSeoLocationServicesQueryKey,
+} from "~/lib/local-seo-api"
 import type { AIAuditResponse, OrganizationEventFrame } from "~/lib/api.types"
 
 // Server closes the stream around five minutes; reconnect quietly.
@@ -304,6 +314,49 @@ export function OrganizationEventsProvider({
           toast.error("Maps visibility check failed", {
             description: errorDescription(event),
             id: toastId,
+          })
+        }
+        return
+      }
+
+      // A location keyword write carries its location id. Invalidate only that
+      // location's keyword lists, coverage, and local geo/queries so siblings
+      // never refresh.
+      if (type === "location_keywords.updated") {
+        const locationId =
+          typeof event.payload.location_id === "string"
+            ? event.payload.location_id
+            : null
+        if (event.project_id && locationId) {
+          void queryClient.invalidateQueries({
+            queryKey: locationKeywordListsQueryKey(
+              event.project_id,
+              locationId
+            ),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: locationKeywordCoverageQueryKey(
+              event.project_id,
+              locationId
+            ),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: localSeoLocationQueryKey(event.project_id, locationId),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: localSeoLocationServicesQueryKey(
+              event.project_id,
+              locationId
+            ),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: localSeoLocationQueryRecordsQueryKey(
+              event.project_id,
+              locationId
+            ),
+          })
+          void queryClient.invalidateQueries({
+            queryKey: localSeoLandmarksQueryKey(event.project_id, locationId),
           })
         }
         return

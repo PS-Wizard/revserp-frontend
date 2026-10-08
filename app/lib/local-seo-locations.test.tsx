@@ -140,7 +140,7 @@ describe("bound identity run gate", () => {
     expect(isLocalSeoLocationBound(makeLocation({ place_id: "" }))).toBe(false)
   })
 
-  test("bound locations run with between one and five enabled map queries", () => {
+  test("bound locations run with any enabled count of one or more", () => {
     expect(
       canRunLocalSeoGrid(makeLocation({ place_id: "ChIJ1", queries: [] }))
     ).toBe(false)
@@ -165,7 +165,7 @@ describe("bound identity run gate", () => {
             mapQuery(text)),
         })
       )
-    ).toBe(false)
+    ).toBe(true)
   })
 
   test("disabled map and ai_question records stay out of the price guard", () => {

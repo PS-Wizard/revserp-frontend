@@ -1,5 +1,5 @@
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
-import type { AuditTab, DashboardView } from "./types"
+import type { AuditTab, DashboardView, VisibilityMode } from "./types"
 import { getCrawlReferenceTimestamp } from "~/lib/crawl"
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
@@ -194,4 +194,55 @@ export function getWorkspaceNavigationTarget(
     return { pathname: "/app", search: search ? `?${search}` : "", hash }
   }
   return { pathname: location.pathname, search: location.search, hash }
+}
+
+export function getProjectBackTarget(projectId: string) {
+  return `/app?project=${encodeURIComponent(projectId)}`
+}
+
+/**
+ * Same-shell project switch. Location-scoped params never follow into
+ * another project; view/crawl switches reuse the untouched search string
+ * in getCrawlSelectionTarget/getWorkspaceNavigationTarget instead.
+ */
+export function getProjectSwitchTarget(
+  location: { pathname: string; search: string },
+  projectId: string,
+  crawlId?: string
+) {
+  const params = new URLSearchParams(location.search)
+  params.set("project", projectId)
+  params.delete("location")
+  params.delete("revbotConversation")
+  if (crawlId) params.set("crawl", crawlId)
+  else params.delete("crawl")
+  const search = params.toString()
+  return `${location.pathname}${search ? `?${search}` : ""}`
+}
+
+/**
+ * Outer-nav visibility choice from the URL. An explicit choice wins; a saved
+ * AI run deep link without one still lands on AI so old links keep working.
+ */
+export function getVisibilityMode(search: string): VisibilityMode {
+  const params = new URLSearchParams(search)
+  const explicit = params.get("visibility")
+  if (explicit === "ai" || explicit === "maps") return explicit
+  return params.has("audit") ? "ai" : "maps"
+}
+
+export function getInitialWorkspaceView(search: string): DashboardView {
+  return new URLSearchParams(search).has("audit")
+    ? "revserp-visibility"
+    : "revserp-audit"
+}
+
+export function getVisibilityModeTarget(
+  location: { pathname: string; search: string },
+  mode: VisibilityMode
+) {
+  const params = new URLSearchParams(location.search)
+  params.set("visibility", mode)
+  const search = params.toString()
+  return `${location.pathname}${search ? `?${search}` : ""}`
 }

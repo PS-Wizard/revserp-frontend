@@ -1,6 +1,10 @@
 "use client"
 
-import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
+import type {
+  AuditTab,
+  DashboardView,
+  VisibilityMode,
+} from "~/components/app-navbar/types"
 import { Link } from "react-router"
 import {
   ActivityIcon,
@@ -58,6 +62,8 @@ export type NavTab =
       Icon: typeof GaugeIcon
       view: DashboardView
       auditTab?: AuditTab
+      /** Outer-nav visibility choice; only set on visibility tabs. */
+      visibilityMode?: VisibilityMode
       href?: never
     }
   | {
@@ -83,6 +89,8 @@ type BuildGroupsInput = {
   maxCompetitors: number
   /** Project-scoped route tabs (Locations) render only when set. */
   projectId?: string | null
+  /** Location mode hides tabs without scoped support (Marketplace). */
+  isLocationScoped?: boolean
 }
 
 /**
@@ -93,6 +101,7 @@ type BuildGroupsInput = {
 export function buildWorkspaceNavGroups({
   gscConnector,
   integrations,
+  isLocationScoped = false,
   maxCompetitors,
   projectId,
 }: BuildGroupsInput): NavGroup[] {
@@ -123,17 +132,41 @@ export function buildWorkspaceNavGroups({
       Icon: TagsIcon,
       view: "keywords",
     },
-    {
-      key: "visibility-test",
-      label: "Visibility test",
-      description: "Whether AI answers cite your site.",
-      Icon: EyeIcon,
-      view: "revserp-visibility",
-    }
+    ...(isLocationScoped
+      ? [
+          {
+            key: "visibility-maps",
+            label: "Maps test",
+            description: "Grid visibility around this location.",
+            Icon: EyeIcon,
+            view: "revserp-visibility" as const,
+            visibilityMode: "maps" as const,
+          },
+          {
+            key: "visibility-ai",
+            label: "AI visibility",
+            description: "Whether AI answers cite this location.",
+            Icon: EyeIcon,
+            view: "revserp-visibility" as const,
+            visibilityMode: "ai" as const,
+          },
+        ]
+      : [
+          {
+            key: "visibility-test",
+            label: "Visibility test",
+            description: "Whether AI answers cite your site.",
+            Icon: EyeIcon,
+            view: "revserp-visibility" as const,
+          },
+        ])
   )
 
   const compare: NavTab[] = []
-  if (maxCompetitors > 0) {
+  // Location competitors live inside the combined Maps page (same shared run
+  // and point focus), so location mode has no separate competitors tab.
+  // The parent gate below is untouched.
+  if (!isLocationScoped && maxCompetitors > 0) {
     compare.push({
       key: "competitors",
       label: "Competitors",
@@ -144,7 +177,7 @@ export function buildWorkspaceNavGroups({
   }
 
   const content: NavTab[] = []
-  if (integrations) {
+  if (integrations && !isLocationScoped) {
     content.push({
       key: "marketplace",
       label: "Marketplace",
@@ -154,11 +187,17 @@ export function buildWorkspaceNavGroups({
     })
   }
 
+  // Site graph is whole-site only: location mode drops that audit tab while
+  // the parent keeps it. Stale location deep links normalize to overview
+  // at the workspace dispatcher, so the tab is unreachable, not a dead end.
+  const auditTabs = isLocationScoped
+    ? auditSections.filter(([, tab]) => tab !== "site-graph")
+    : auditSections
   return [
     {
       key: "audit",
       label: "Audit",
-      tabs: auditSections.map(([label, tab, Icon]): NavTab => ({
+      tabs: auditTabs.map(([label, tab, Icon]): NavTab => ({
         key: `audit-${tab}`,
         label,
         description: AUDIT_TAB_DESCRIPTIONS[tab],
@@ -194,7 +233,8 @@ export function isWorkspaceTabActive(
   tab: NavTab,
   view: DashboardView,
   auditTab: AuditTab,
-  pathname?: string
+  pathname?: string,
+  visibilityMode: VisibilityMode = "maps"
 ): boolean {
   if (tab.href !== undefined) {
     if (!pathname) return false
@@ -202,7 +242,8 @@ export function isWorkspaceTabActive(
   }
   return (
     tab.view === view &&
-    (tab.auditTab === undefined || tab.auditTab === auditTab)
+    (tab.auditTab === undefined || tab.auditTab === auditTab) &&
+    (tab.visibilityMode === undefined || tab.visibilityMode === visibilityMode)
   )
 }
 
@@ -232,26 +273,28 @@ export function isNavTabActive(
   tab: NavTab,
   view: DashboardView,
   auditTab: AuditTab,
-  pathname?: string
+  pathname?: string,
+  visibilityMode: VisibilityMode = "maps"
 ): boolean {
   if (tab.href !== undefined)
-    return isWorkspaceTabActive(tab, view, auditTab, pathname)
+    return isWorkspaceTabActive(tab, view, auditTab, pathname, visibilityMode)
   if (findRouteTab(groups, pathname)) return false
-  return isWorkspaceTabActive(tab, view, auditTab, pathname)
+  return isWorkspaceTabActive(tab, view, auditTab, pathname, visibilityMode)
 }
 
 export function findActiveGroupIndex(
   groups: NavGroup[],
   view: DashboardView,
   auditTab: AuditTab,
-  pathname?: string
+  pathname?: string,
+  visibilityMode: VisibilityMode = "maps"
 ): number {
   const routeTab = findRouteTab(groups, pathname)
   const index = groups.findIndex((group) =>
     group.tabs.some((tab) =>
       routeTab
         ? tab.key === routeTab.key
-        : isWorkspaceTabActive(tab, view, auditTab, pathname)
+        : isWorkspaceTabActive(tab, view, auditTab, pathname, visibilityMode)
     )
   )
   return index === -1 ? 0 : index
@@ -261,13 +304,15 @@ export function findActiveTabKey(
   groups: NavGroup[],
   view: DashboardView,
   auditTab: AuditTab,
-  pathname?: string
+  pathname?: string,
+  visibilityMode: VisibilityMode = "maps"
 ): string | null {
   const routeTab = findRouteTab(groups, pathname)
   if (routeTab) return routeTab.key
   for (const group of groups) {
     for (const tab of group.tabs) {
-      if (isWorkspaceTabActive(tab, view, auditTab, pathname)) return tab.key
+      if (isWorkspaceTabActive(tab, view, auditTab, pathname, visibilityMode))
+        return tab.key
     }
   }
   return null
@@ -282,27 +327,36 @@ export function WorkspaceSidebarNav({
   auditTab,
   gscConnector,
   integrations,
+  isLocationScoped = false,
   maxCompetitors,
   onNavigate,
   onSelectWorkspace,
   pathname,
   projectId,
   view,
+  visibilityMode = "maps",
 }: {
   auditTab: AuditTab
   gscConnector: boolean
   integrations: boolean
+  isLocationScoped?: boolean
   maxCompetitors: number
   /** Closes the mobile drawer after a route link navigates. */
   onNavigate?: () => void
-  onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  onSelectWorkspace: (
+    nextView: DashboardView,
+    nextAuditTab?: AuditTab,
+    nextVisibilityMode?: VisibilityMode
+  ) => void
   pathname?: string
   projectId?: string | null
   view: DashboardView
+  visibilityMode?: VisibilityMode
 }) {
   const groups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
+    isLocationScoped,
     maxCompetitors,
     projectId,
   })
@@ -316,7 +370,14 @@ export function WorkspaceSidebarNav({
           </SidebarGroupLabel>
           <SidebarMenu>
             {group.tabs.map((tab) => {
-              const active = isNavTabActive(groups, tab, view, auditTab, pathname)
+              const active = isNavTabActive(
+                groups,
+                tab,
+                view,
+                auditTab,
+                pathname,
+                visibilityMode
+              )
               if (tab.href !== undefined) {
                 return (
                   <SidebarMenuItem key={tab.key}>
@@ -357,7 +418,9 @@ export function WorkspaceSidebarNav({
                         : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
                     )}
                     isActive={active}
-                    onClick={() => onSelectWorkspace(tab.view, tab.auditTab)}
+                    onClick={() =>
+                      onSelectWorkspace(tab.view, tab.auditTab, tab.visibilityMode)
+                    }
                     type="button"
                   >
                     <tab.Icon aria-hidden="true" className="size-4 shrink-0" />

@@ -5,6 +5,7 @@ import { memo, useCallback, useMemo, useRef, useState } from "react"
 import { FileWarningIcon } from "lucide-react"
 import { IssueExplorer } from "~/components/issue-explorer"
 import { IssueTreemap } from "~/components/issue-treemap"
+import type { IssueUrlsPageFetch } from "~/components/issue-explorer/utils"
 import {
   usePageHealthDetail,
   usePageIssueDetail,
@@ -40,10 +41,21 @@ export const PageHealthView = memo(function PageHealthView({
   crawlId,
   page,
   breakdown,
+  scopedIssueUrls,
 }: {
   crawlId: string | null
   page: SelectedAuditPage
   breakdown: ScoreBreakdownResponse | null
+  /**
+   * Scoped read-only URL source (e.g. location branch pages). Replaces the
+   * parent crawl URL endpoints; page-level tables stay scoped to page.url.
+   */
+  scopedIssueUrls?: {
+    fetchPage: IssueUrlsPageFetch
+    pageCrawlId?: string
+    scopeKey: string
+    hideWorkActions?: boolean
+  }
 }) {
   const healthQuery = usePageHealthDetail(crawlId, page.id)
   const issuesQuery = usePageIssueDetail(crawlId, page.url)
@@ -243,6 +255,7 @@ export const PageHealthView = memo(function PageHealthView({
                     breakdown={scopedBreakdown}
                     focusRequest={bucketFocus}
                     scopedUrl={page.url}
+                    scopedIssueUrls={scopedIssueUrls}
                   />
                 </div>
               </Card>

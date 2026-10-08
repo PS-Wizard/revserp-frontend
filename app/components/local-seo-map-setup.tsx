@@ -1,7 +1,6 @@
 import {
   LOCAL_SEO_MAX_RADIUS_M,
   LOCAL_SEO_MIN_RADIUS_M,
-  LOCAL_SEO_QUERY_COUNT,
   validateEditableLocalSeoQueries,
   validateLocalSeoRadiusM,
   type LocalSeoLandmark,
@@ -19,7 +18,7 @@ import {
 } from "~/components/ui/field"
 import { Slider } from "~/components/ui/slider"
 
-/** Enabled map-query drafts sharing the run's combined one-to-five slots. */
+/** Enabled map-query drafts; a run only requires at least one of them. */
 export function countEnabledLocalSeoMapDrafts(
   drafts: LocalSeoLocationQueryDraft[]
 ): number {
@@ -27,8 +26,8 @@ export function countEnabledLocalSeoMapDrafts(
 }
 
 /**
- * Add query never truncates the candidate list. At five enabled map queries the
- * new row starts disabled, so a run is never over the shared one-to-five cap.
+ * Add query never truncates the candidate list and never caps the count; the
+ * new row starts enabled so a run always has a candidate.
  */
 export function addLocalSeoQueryDraft(
   drafts: LocalSeoLocationQueryDraft[]
@@ -37,7 +36,7 @@ export function addLocalSeoQueryDraft(
     ...drafts,
     {
       text: "",
-      enabled: countEnabledLocalSeoMapDrafts(drafts) < LOCAL_SEO_QUERY_COUNT,
+      enabled: true,
       kind: "map",
       source: "manual",
     },
@@ -115,7 +114,6 @@ export function LocalSeoMapSetupContent({
     servicesBlocked || serviceTextRequired || localityMissing || generating
 
   const enabledMapCount = countEnabledLocalSeoMapDrafts(queryDrafts)
-  const slotsFull = enabledMapCount >= LOCAL_SEO_QUERY_COUNT
   const recordsById = new Map(queryRecords.map((record) => [record.id, record]))
   const landmarkNamesById = new Map(
     (landmarks ?? []).map((landmark) => [landmark.id, landmark.name])
@@ -269,8 +267,7 @@ export function LocalSeoMapSetupContent({
           role="status"
           className="tabular-nums"
         >
-          {enabledMapCount} of {LOCAL_SEO_QUERY_COUNT} map queries enabled. A
-          run prices 1 to 5.
+          {enabledMapCount} map queries enabled. A run requires at least one.
         </FieldDescription>
         {queryDrafts.length === 0 ? (
           <FieldDescription>
@@ -291,7 +288,6 @@ export function LocalSeoMapSetupContent({
               : draft.source === "generated"
                 ? "Generated"
                 : "Manual"
-          const enableBlocked = !draft.enabled && slotsFull
           return (
             <Field
               key={draft.id ?? `new-${index}`}
@@ -301,7 +297,6 @@ export function LocalSeoMapSetupContent({
               <div className="flex flex-wrap items-center gap-2">
                 <Checkbox
                   checked={draft.enabled}
-                  disabled={enableBlocked}
                   aria-label={`Enable query ${index + 1}`}
                   onCheckedChange={(checked) =>
                     updateDraft(index, { enabled: checked })

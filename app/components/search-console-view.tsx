@@ -24,9 +24,18 @@ import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   CrawlResponse,
   ProjectGSCOverviewResponse,
-  ProjectGSCStatusResponse,
   ProjectResponse,
 } from "~/lib/api.types"
+import { ProjectGoogleAccountBar } from "~/components/project-google-account-bar"
+import {
+  describeGoogleAccount,
+  projectGoogleBoundAccountId,
+  projectGoogleConnections,
+  projectGoogleSelectedAccountId,
+  startProjectGoogleConnect,
+  useAccountPropertyList,
+  type ProjectGscStatusWithAccounts,
+} from "~/lib/location-google-api"
 
 const ALLOWED_GSC_AUTH_HOSTS = new Set(["accounts.google.com"])
 
@@ -73,7 +82,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
       ? gscStatusQueryKey(projectId)
       : ["gsc-status-disabled"],
     queryFn: () =>
-      clientApiFetch<ProjectGSCStatusResponse>(
+      clientApiFetch<ProjectGscStatusWithAccounts>(
         `/projects/${projectId!}/gsc/status`
       ),
     enabled: Boolean(projectId),
@@ -134,6 +143,59 @@ export const SearchConsoleView = memo(function SearchConsoleView({
       return next
     })
   }, [gscStatus])
+  const [selectedAccountId, setSelectedAccountId] = useState("")
+  const googleConnections = gscStatus
+    ? projectGoogleConnections(gscStatus)
+    : []
+  const boundGoogleAccountId = gscStatus
+    ? projectGoogleBoundAccountId(gscStatus)
+    : ""
+  const boundSetupConnection = googleConnections.find(
+    (connection) => connection.id === boundGoogleAccountId
+  )
+  const boundSetupUnverified =
+    boundGoogleAccountId !== "" &&
+    (!boundSetupConnection ||
+      !describeGoogleAccount(boundSetupConnection).verified)
+  const setupSiteList = useAccountPropertyList(
+    projectId ?? "",
+    "gsc",
+    selectedAccountId
+  )
+  const setupUsesAccountList =
+    selectedAccountId !== "" &&
+    selectedAccountId !== boundGoogleAccountId &&
+    setupSiteList.loadedAccountId === selectedAccountId
+
+  function handleSetupAccountChange(next: string | null) {
+    setSelectedAccountId(next ?? "")
+    setSelectedGSCSiteURL("")
+    setupSiteList.reset()
+  }
+
+  async function handleLoadSetupSites() {
+    if (!selectedAccountId || setupSiteList.loading) return
+    const { items } = await setupSiteList.load()
+    setSelectedGSCSiteURL((prev) =>
+      prev && items.some((item) => item.value === prev) ? prev : ""
+    )
+  }
+
+  useEffect(() => {
+    setSelectedAccountId((prev) => {
+      const next = gscStatus ? projectGoogleSelectedAccountId(gscStatus) : ""
+      if (!next) return prev
+      if (
+        prev &&
+        gscStatus?.google_connections?.some(
+          (connection) => connection.id === prev
+        )
+      )
+        return prev
+      return next
+    })
+  }, [gscStatus])
+
   const [isStartingGSCConnect, setIsStartingGSCConnect] = useState(false)
   const [gscConnectErrorMessage, setGscConnectErrorMessage] = useState("")
   const [isSavingGSCProjectSelection, setIsSavingGSCProjectSelection] =
@@ -148,15 +210,34 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     })
   }
 
-  async function handleStartGSCConnect() {
+  async function handleRefreshGSCState() {
+    if (!projectId) return
+    await queryClient.invalidateQueries({
+      queryKey: gscStatusQueryKey(projectId),
+    })
+    await queryClient.invalidateQueries({
+      queryKey: gscOverviewQueryKey(projectId),
+    })
+  }
+
+  async function handleStartGSCConnectWithMode(
+    mode: "connect" | "add_account" | "reconnect_account",
+    googleConnectionId?: string
+  ) {
     if (!activeProject) return
 
     setIsStartingGSCConnect(true)
     setGscConnectErrorMessage("")
     try {
-      const response = await clientApiPost<{ auth_url: string }>(
-        `/projects/${activeProject.id}/gsc/connect/start`,
-        { return_path: window.location.pathname + window.location.search }
+      const response = await startProjectGoogleConnect(
+        activeProject.id,
+        "gsc",
+        {
+          returnPath:
+            window.location.pathname + window.location.search,
+          mode,
+          googleConnectionId,
+        }
       )
       if (!isAllowedGSCAuthURL(response.auth_url)) {
         throw new Error(
@@ -174,6 +255,22 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     }
   }
 
+  async function handleStartGSCConnect() {
+    await handleStartGSCConnectWithMode("connect")
+  }
+
+  async function handleAddGSCAccount() {
+    await handleStartGSCConnectWithMode("add_account")
+  }
+
+  async function handleReconnectGSCAccount() {
+    if (!boundGoogleAccountId) return
+    await handleStartGSCConnectWithMode(
+      "reconnect_account",
+      boundGoogleAccountId
+    )
+  }
+
   async function handleSelectGSCProject() {
     if (!activeProject || !selectedGSCSiteURL) return
 
@@ -184,6 +281,9 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         `/projects/${activeProject.id}/gsc/select-site`,
         {
           site_url: selectedGSCSiteURL,
+          ...(selectedAccountId
+            ? { google_connection_id: selectedAccountId }
+            : {}),
         }
       )
       // Invalidate both so they refetch with updated state
@@ -229,16 +329,44 @@ export const SearchConsoleView = memo(function SearchConsoleView({
 
   if (gscStatus?.has_google_connection && gscStatus.connected) {
     return (
-      <GSCOverview
-        activeProjectID={activeProject.id}
-        completedCrawls={completedCrawls}
-        isOrganizationOwner={isOrganizationOwner}
-        isLoading={isLoadingOverview}
-        onRefreshOverview={handleRefreshOverview}
-        overviewErrorMessage={gscLoadErrorMessage}
-        overviewResponse={gscOverview ?? null}
-        status={gscStatus}
-      />
+      <>
+        <div className="mx-4 mt-6 sm:mx-6 lg:mx-4">
+          <ProjectGoogleAccountBar
+            currentPropertyId={
+              gscStatus.selected_site?.site_url ?? selectedGSCSiteURL
+            }
+            disconnectPath={`/projects/${activeProject.id}/gsc/disconnect`}
+            googleAccountEmail={gscStatus.google_account_email}
+            googleConnectionId={gscStatus.google_connection_id}
+            googleConnections={gscStatus.google_connections}
+            isOrganizationOwner={isOrganizationOwner}
+            needsReconnect={gscStatus.needs_reconnect}
+            onChanged={() => void handleRefreshGSCState()}
+            projectId={activeProject.id}
+            selectBody={(googleConnectionId) => ({
+              site_url:
+                gscStatus.selected_site?.site_url ?? selectedGSCSiteURL,
+              google_connection_id: googleConnectionId,
+            })}
+            selectPath={`/projects/${activeProject.id}/gsc/select-site`}
+            selectedGoogleConnectionId={
+              gscStatus.selected_google_connection_id
+            }
+            service="gsc"
+            tokenError={gscStatus.token_error}
+          />
+        </div>
+        <GSCOverview
+          activeProjectID={activeProject.id}
+          completedCrawls={completedCrawls}
+          isOrganizationOwner={isOrganizationOwner}
+          isLoading={isLoadingOverview}
+          onRefreshOverview={handleRefreshOverview}
+          overviewErrorMessage={gscLoadErrorMessage}
+          overviewResponse={gscOverview ?? null}
+          status={gscStatus}
+        />
+      </>
     )
   }
 
@@ -256,7 +384,13 @@ export const SearchConsoleView = memo(function SearchConsoleView({
                   <SelectValue placeholder="Select a Search Console property" />
                 </SelectTrigger>
                 <SelectContent>
-                  {gscStatus.available_sites.map((site) => (
+                  {(setupUsesAccountList
+                    ? setupSiteList.items.map((item) => ({
+                        site_url: item.value,
+                        permission_level: item.detail,
+                      }))
+                    : gscStatus.available_sites
+                  ).map((site) => (
                     <SelectItem key={site.site_url} value={site.site_url}>
                       <div className="flex flex-col gap-1 py-1">
                         <span>{site.site_url}</span>
@@ -271,7 +405,92 @@ export const SearchConsoleView = memo(function SearchConsoleView({
                 </SelectContent>
               </Select>
             </div>
-            <div className="pt-5 sm:max-w-sm">
+            {googleConnections.length > 1 ? (
+              <div className="flex flex-col gap-2 pt-5 sm:max-w-xl">
+                <Select
+                  onValueChange={handleSetupAccountChange}
+                  value={selectedAccountId}
+                >
+                  <SelectTrigger className="min-h-12 w-full">
+                    <SelectValue placeholder="Select a Google account">
+                      {(value: string) => {
+                        const match = googleConnections.find(
+                          (connection) => connection.id === value
+                        )
+                        return match
+                          ? describeGoogleAccount(match).label
+                          : value
+                      }}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {googleConnections.map((connection) => {
+                      const identity = describeGoogleAccount(connection)
+                      return (
+                        <SelectItem key={connection.id} value={connection.id}>
+                          <div className="flex flex-col gap-1 py-1">
+                            <span>{identity.label}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {connection.google_status === "active"
+                                ? identity.verified
+                                  ? "Connected"
+                                  : "Connected — reconnect to verify identity"
+                                : connection.google_status ||
+                                  "Reconnect to verify identity"}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+                {selectedAccountId !== "" &&
+                selectedAccountId !== boundGoogleAccountId ? (
+                  <div className="flex flex-col gap-2">
+                    <div>
+                      <Button
+                        disabled={setupSiteList.loading}
+                        onClick={() => void handleLoadSetupSites()}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        {setupSiteList.loading
+                          ? "Loading properties…"
+                          : setupSiteList.loadedAccountId === selectedAccountId
+                            ? "Reload properties"
+                            : "Load properties for this account"}
+                      </Button>
+                    </div>
+                    {setupSiteList.error ? (
+                      <p className="text-sm text-red-200" role="alert">
+                        {setupSiteList.error}
+                      </p>
+                    ) : null}
+                    {setupSiteList.loadedAccountId === selectedAccountId &&
+                    setupSiteList.needsReconnect ? (
+                      <p className="text-sm text-muted-foreground">
+                        This account needs a reconnect before its properties
+                        can be used.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : gscStatus?.google_account_email ||
+              googleConnections.length === 1 ? (
+              <p className="pt-5 text-sm text-muted-foreground">
+                Connected as{" "}
+                {
+                  describeGoogleAccount({
+                    id: boundGoogleAccountId,
+                    google_account_email: gscStatus.google_account_email,
+                  }).label
+                }
+                .
+              </p>
+            ) : null}
+            <div className="flex flex-wrap gap-2 pt-5 sm:max-w-sm">
               <Button
                 disabled={!selectedGSCSiteURL || isSavingGSCProjectSelection}
                 onClick={handleSelectGSCProject}
@@ -280,6 +499,25 @@ export const SearchConsoleView = memo(function SearchConsoleView({
                   ? "Connecting project..."
                   : "Connect project"}
               </Button>
+              <Button
+                disabled={isStartingGSCConnect}
+                onClick={() => void handleAddGSCAccount()}
+                variant="outline"
+              >
+                Add another Google account
+              </Button>
+              {boundGoogleAccountId &&
+              (gscStatus?.needs_reconnect ||
+                gscStatus?.token_error ||
+                boundSetupUnverified) ? (
+                <Button
+                  disabled={isStartingGSCConnect}
+                  onClick={() => void handleReconnectGSCAccount()}
+                  variant="outline"
+                >
+                  Reconnect account
+                </Button>
+              ) : null}
             </div>
             {gscProjectSelectionErrorMessage ? (
               <p className="pt-4 text-sm text-red-200">

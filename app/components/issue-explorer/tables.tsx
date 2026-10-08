@@ -402,6 +402,8 @@ type UrlIssueTableProps = {
   onMarkDone: (issueId: string) => void
   onUndo: (attemptId: string) => void
   isPending: (key: string) => boolean
+  /** Hides the work column for scoped read-only views (no work objects). */
+  hideWorkActions?: boolean
 }
 
 export function UrlIssueTable({
@@ -415,6 +417,7 @@ export function UrlIssueTable({
   onToggleAll,
   getRowProps,
   workActionsEnabled,
+  hideWorkActions,
   onMarkDone,
   onUndo,
   isPending,
@@ -483,7 +486,9 @@ export function UrlIssueTable({
             <TableHead>Severity</TableHead>
             <TableHead>Message</TableHead>
             <TableHead>Details</TableHead>
-            <TableHead className="text-right">Work</TableHead>
+            {hideWorkActions ? null : (
+              <TableHead className="text-right">Work</TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -601,15 +606,17 @@ export function UrlIssueTable({
                     <span className="text-muted-foreground/50">—</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right">
-                  <UrlWorkCell
-                    row={row}
-                    workActionsEnabled={workActionsEnabled}
-                    isPending={isPending}
-                    onMarkDone={onMarkDone}
-                    onUndo={onUndo}
-                  />
-                </TableCell>
+                {hideWorkActions ? null : (
+                  <TableCell className="text-right">
+                    <UrlWorkCell
+                      row={row}
+                      workActionsEnabled={workActionsEnabled}
+                      isPending={isPending}
+                      onMarkDone={onMarkDone}
+                      onUndo={onUndo}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             )
           })}

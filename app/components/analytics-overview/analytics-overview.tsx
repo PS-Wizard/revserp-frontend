@@ -90,6 +90,7 @@ export function AnalyticsOverview({
   isLoading,
   isOrganizationOwner,
   onRefreshOverview,
+  actions,
 }: {
   activeProjectId: string
   status: ProjectAnalyticsStatusResponse
@@ -99,6 +100,7 @@ export function AnalyticsOverview({
   isLoading: boolean
   isOrganizationOwner: boolean
   onRefreshOverview: () => Promise<void>
+  actions?: import("react").ReactNode
 }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -172,6 +174,7 @@ export function AnalyticsOverview({
         properties={status.available_properties}
         selectedProperty={status.selected_property ?? null}
         selectedPropertyId={status.selected_property?.property_id ?? ""}
+        actions={actions}
       />
       {isLoading ? (
         <DataLoadingState label="Loading Analytics data..." />

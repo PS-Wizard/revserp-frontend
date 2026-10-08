@@ -28,9 +28,22 @@ import {
 } from "~/components/ui/empty"
 import { Skeleton } from "~/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import {
+  fetchLocationKeywordCoverage,
+  locationKeywordCoverageQueryKey,
+} from "~/lib/location-keywords-api"
 
 type Props = {
   projectId: string | null
+  /**
+   * Location workspace mode: coverage runs over the whole parent website using
+   * this location's selected keywords, not the branch website scope.
+   */
+  locationId?: string | null
+  /** Shown under the card title so the reader knows which site was measured. */
+  scopeNotice?: string
+  /** Overrides the no-keywords advice, which differs for local selected lists. */
+  emptyDescription?: string
 }
 
 type KeywordCoverageSeed = ProjectKeywordsResponse["seeds"][number]
@@ -39,6 +52,7 @@ type FilterState = "all" | KeywordCoverageState
 
 type Page = { url: string; fields: KeywordCoverageField[] }
 
+type CoverageData = { seeds?: KeywordCoverageSeed[] }
 
 const FIELD_LABELS: Record<KeywordCoverageField, string> = {
   title: "Title",
@@ -437,9 +451,24 @@ function CoverageEmpty({
   )
 }
 
-export function KeywordsCoverage({ projectId }: Props) {
-  const query = useQuery({
-    ...keywordsQueryOptions(projectId!),
+export function KeywordsCoverage({
+  projectId,
+  locationId = null,
+  scopeNotice,
+  emptyDescription = "Add keywords in the cards above, or let Revbot suggest them from Search Console.",
+}: Props) {
+  const scoped = Boolean(projectId && locationId)
+  const query = useQuery<CoverageData>({
+    queryKey: scoped
+      ? locationKeywordCoverageQueryKey(projectId!, locationId!)
+      : keywordsQueryKey(projectId!),
+    queryFn: async (): Promise<CoverageData> =>
+      scoped
+        ? await fetchLocationKeywordCoverage(projectId!, locationId!)
+        : await keywordsQueryOptions(projectId!).queryFn(),
+    staleTime: 0,
+    gcTime: 30_000,
+    retry: false,
     enabled: Boolean(projectId),
     placeholderData: (previous) => previous,
   })
@@ -507,7 +536,7 @@ export function KeywordsCoverage({ projectId }: Props) {
   if (seeds.length === 0) {
     return (
       <CoverageEmpty
-        description="Add keywords in the cards above, or let Revbot suggest them from Search Console."
+        description={emptyDescription}
         icon={<TagsIcon aria-hidden="true" />}
         title="No keywords yet"
       />
@@ -517,9 +546,16 @@ export function KeywordsCoverage({ projectId }: Props) {
   return (
     <Card className={cardClass}>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
-        <h3 className="font-heading text-base font-semibold tracking-tight">
-          Keyword coverage
-        </h3>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <h3 className="font-heading text-base font-semibold tracking-tight">
+            Keyword coverage
+          </h3>
+          {scopeNotice ? (
+            <p className="text-xs text-pretty text-muted-foreground">
+              {scopeNotice}
+            </p>
+          ) : null}
+        </div>
         <CoverageFilter
           counts={counts}
           filter={filter}

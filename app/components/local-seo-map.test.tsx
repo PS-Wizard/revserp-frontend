@@ -626,3 +626,18 @@ describe("local SEO map result counts", () => {
     expect(overlay.features[3].properties.resultCountLabel).toBe("15-20/query")
   })
 })
+
+describe("local SEO map wheel scroll", () => {
+  test("wheel zoom stays on by default so standalone maps behave as before", () => {
+    const map = renderMap({ center: CENTRE })
+    expect(map.options["scrollZoom"]).toBe(undefined)
+  })
+
+  test("embedded pages opt out of wheel capture but keep the zoom controls", () => {
+    const map = renderMap({ center: CENTRE, disableScrollZoom: true })
+    expect(map.options["scrollZoom"]).toBe(false)
+    expect(
+      map.controls.some((control) => control instanceof FakeNavigationControl)
+    ).toBe(true)
+  })
+})

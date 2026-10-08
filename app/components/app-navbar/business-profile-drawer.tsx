@@ -30,6 +30,7 @@ import {
 import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
 import { BusinessProfileServicesEditor } from "~/components/business-profile-services-editor"
+import { LocationProfileServicesField } from "~/components/app-navbar/location-profile-services-field"
 import type { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import type { ProjectAIQuestionsResponse } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
@@ -75,6 +76,10 @@ export function BusinessProfileDrawer({
 }) {
   const {
     businessProfileProject,
+    businessProfileLocationId,
+    businessProfileLocationName,
+    isLocationScoped,
+    profileServices,
     brandName,
     websiteUrl,
     primaryCategory,
@@ -94,6 +99,7 @@ export function BusinessProfileDrawer({
     hasUnsavedChanges,
     closeBusinessProfileDrawer,
     regenerateAIQuestions,
+    saveAIQuestions,
     handleSaveBusinessProfile,
     updateSeedPrompt,
     setBrandName,
@@ -104,6 +110,7 @@ export function BusinessProfileDrawer({
     setProductDescription,
     setTargetAudience,
     setBusinessCompetitors,
+    setProfileServices,
   } = businessProfile
 
   const [competitorsOpen, setCompetitorsOpen] = useState(false)
@@ -152,14 +159,16 @@ export function BusinessProfileDrawer({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <DrawerTitle>Business profile</DrawerTitle>
-                  {hasUnsavedChanges ? (
+                  {isLocationScoped ? (
                     <Badge className="px-1.5" variant="secondary">
-                      Unsaved changes
+                      Location
                     </Badge>
                   ) : null}
                 </div>
                 <DrawerDescription className="truncate">
-                  {businessProfileProject.name}
+                  {businessProfileLocationName
+                    ? `${businessProfileLocationName} · ${businessProfileProject.name}`
+                    : businessProfileProject.name}
                 </DrawerDescription>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -359,12 +368,21 @@ export function BusinessProfileDrawer({
                         </Field>
                       </div>
                       {businessProfileProject ? (
-                        <BusinessProfileServicesEditor
-                          key={businessProfileProject.id}
-                          projectId={businessProfileProject.id}
-                          canManage={canManageBusinessProfile}
-                          disabled={fieldsDisabled}
-                        />
+                        isLocationScoped && businessProfileLocationId ? (
+                          <LocationProfileServicesField
+                            key={`${businessProfileProject.id}:${businessProfileLocationId}`}
+                            services={profileServices}
+                            disabled={fieldsDisabled}
+                            onChange={setProfileServices}
+                          />
+                        ) : (
+                          <BusinessProfileServicesEditor
+                            key={businessProfileProject.id}
+                            projectId={businessProfileProject.id}
+                            canManage={canManageBusinessProfile}
+                            disabled={fieldsDisabled}
+                          />
+                        )
                       ) : null}
                     </section>
 
@@ -419,9 +437,11 @@ export function BusinessProfileDrawer({
                 <AIGeneratedQuestions
                   aiQuestions={aiQuestions}
                   canManage={canManageBusinessProfile}
+                  editable={isLocationScoped}
                   isLoading={isLoadingAIQuestions}
                   isRegenerating={isRegeneratingAIQuestions}
                   onRegenerate={regenerateAIQuestions}
+                  onSaveQuestions={saveAIQuestions}
                   questionCount={questionCount}
                 />
               </aside>
@@ -599,6 +619,8 @@ function AIGeneratedQuestions({
   isRegenerating,
   onRegenerate,
   questionCount,
+  editable,
+  onSaveQuestions,
 }: {
   aiQuestions: ProjectAIQuestionsResponse | null
   canManage: boolean
@@ -606,9 +628,29 @@ function AIGeneratedQuestions({
   isRegenerating: boolean
   onRegenerate: () => void
   questionCount: number
+  editable?: boolean
+  onSaveQuestions?: (questions: string[]) => Promise<boolean>
 }) {
   const locationQuestion = aiQuestions?.location_questions?.[0] ?? ""
   const hasQuestions = questionCount > 0
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+
+  function startEditing() {
+    setDraft(aiQuestions?.questions?.length ? [...aiQuestions.questions] : [""])
+    setEditing(true)
+  }
+
+  async function saveQuestions() {
+    if (!onSaveQuestions) return
+    setSaving(true)
+    const saved = await onSaveQuestions(
+      draft.map((question) => question.trim()).filter(Boolean)
+    )
+    setSaving(false)
+    if (saved) setEditing(false)
+  }
 
   return (
     <section className="flex flex-col gap-4">
@@ -631,18 +673,31 @@ function AIGeneratedQuestions({
             </p>
           </div>
         </div>
-        <Button
-          disabled={!canManage || isLoading || isRegenerating}
-          onClick={onRegenerate}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <RefreshCw
-            className={cn("size-3.5", isRegenerating && "animate-spin")}
-          />
-          {isRegenerating ? "Regenerating" : "Regenerate"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {editable && hasQuestions && canManage && !editing ? (
+            <Button
+              disabled={isLoading || isRegenerating}
+              onClick={startEditing}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Edit
+            </Button>
+          ) : null}
+          <Button
+            disabled={!canManage || isLoading || isRegenerating || editing}
+            onClick={onRegenerate}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <RefreshCw
+              className={cn("size-3.5", isRegenerating && "animate-spin")}
+            />
+            {isRegenerating ? "Regenerating" : "Regenerate"}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -654,6 +709,52 @@ function AIGeneratedQuestions({
             state="searching"
           />
         </div>
+      ) : editing ? (
+        <div className="flex flex-col gap-2" data-vaul-no-drag>
+          {draft.map((question, index) => (
+            <Textarea
+              aria-label={`Question ${index + 1}`}
+              className="min-h-16 text-sm"
+              key={index}
+              onChange={(event) =>
+                setDraft((current) =>
+                  current.map((value, i) =>
+                    i === index ? event.target.value : value
+                  )
+                )
+              }
+              value={question}
+            />
+          ))}
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={saving}
+              onClick={saveQuestions}
+              size="sm"
+              type="button"
+            >
+              {saving ? "Saving" : "Save questions"}
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={() => setDraft((current) => [...current, ""])}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Add
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={() => setEditing(false)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       ) : isRegenerating && !hasQuestions ? (
         <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-border/60">
           <p className="text-sm text-muted-foreground">Generating questions…</p>
@@ -661,7 +762,9 @@ function AIGeneratedQuestions({
       ) : !hasQuestions ? (
         <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-border/60">
           <p className="text-sm text-muted-foreground">
-            Save your profile to generate questions.
+            {editable
+              ? "Generate or add questions for this location."
+              : "Save your profile to generate questions."}
           </p>
         </div>
       ) : (
@@ -695,13 +798,13 @@ function AIGeneratedQuestions({
                 </p>
               </div>
             </div>
-          ) : (
+          ) : !editable ? (
             <p className="mt-3 text-xs text-muted-foreground">
               No Maps query yet. Add a primary location, then regenerate.
             </p>
-          )}
+          ) : null}
 
-          {aiQuestions && !isRegenerating ? (
+          {aiQuestions?.generated_at ? (
             <p className="mt-3 text-xs text-muted-foreground">
               Generated {new Date(aiQuestions.generated_at).toLocaleString()}
             </p>

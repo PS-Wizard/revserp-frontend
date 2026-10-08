@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
 import {
-  LOCAL_SEO_BASE_EXPECTED_CREDITS,
-  LOCAL_SEO_CELL_COUNT,
   validateLocalSeoQueries,
   validateLocalSeoRadiusM,
 } from "~/lib/local-seo-api"
@@ -75,13 +73,6 @@ function makeLocalSeoTieCells(): LocalSeoCell[] {
   return cells
 }
 
-describe("derived grid cost", () => {
-  test("base reservation still totals 135 credits", () => {
-    expect(LOCAL_SEO_CELL_COUNT).toBe(45)
-    expect(LOCAL_SEO_BASE_EXPECTED_CREDITS).toBe(135)
-  })
-})
-
 describe("validateLocalSeoQueries", () => {
   test("rejects duplicates ignoring case and surrounding spaces", () => {
     expect(
@@ -100,8 +91,14 @@ describe("validateLocalSeoQueries", () => {
     )
   })
 
-  test("accepts five distinct queries within the byte limit", () => {
+  test("requires at least one query and accepts more than five", () => {
+    expect(validateLocalSeoQueries([])).toBe(
+      "At least 1 query is required, got 0."
+    )
     expect(validateLocalSeoQueries(["a", "b", "c", "d", "e"])).toBeNull()
+    expect(
+      validateLocalSeoQueries(["a", "b", "c", "d", "e", "f"])
+    ).toBeNull()
     expect(
       validateLocalSeoQueries(["a".repeat(500), "b", "c", "d", "e"])
     ).toBeNull()
@@ -109,9 +106,15 @@ describe("validateLocalSeoQueries", () => {
 })
 
 describe("validateLocalSeoRadiusM", () => {
-  test("rejects non-integers", () => {
+  test("rejects non-integers, non-finite values, and out-of-range radii", () => {
     expect(validateLocalSeoRadiusM(5000.5)).toBe(
       "Radius must be a whole number of metres."
+    )
+    expect(validateLocalSeoRadiusM(Number.POSITIVE_INFINITY)).toBe(
+      "Radius must be a number."
+    )
+    expect(validateLocalSeoRadiusM(999)).toBe(
+      "Radius must be between 1000 and 25000 metres."
     )
     expect(validateLocalSeoRadiusM(5000)).toBeNull()
   })

@@ -1,17 +1,29 @@
 "use client"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useInfiniteQuery } from "@tanstack/react-query"
 import { Loader2Icon, SearchIcon, XIcon } from "lucide-react"
 
 import {
-  useCrawlPageSearch,
+  fetchCrawlPageSearch,
+  PAGE_SEARCH_DEBOUNCE_MS,
   PAGE_SEARCH_PAGE_SIZE,
+  useDebouncedValue,
+  type CrawlPageSearchRequest,
 } from "~/components/page-audit/use-page-audit-queries"
 import type { SelectedAuditPage } from "~/components/page-audit/page-audit-context"
 import { Input } from "~/components/ui/input"
 import { Button } from "~/components/ui/button"
-import type { CrawlPageSearchResultPage } from "~/lib/api.types"
+import type {
+  CrawlPageSearchResponse,
+  CrawlPageSearchResultPage,
+} from "~/lib/api.types"
 import { cn } from "~/lib/utils"
+
+/** Scoped search adapter: the parent bar owns the infinite query plumbing. */
+export type PageSearchRequest = (
+  params: CrawlPageSearchRequest
+) => Promise<CrawlPageSearchResponse>
 
 function pagePrimaryLine(page: CrawlPageSearchResultPage) {
   if (page.title?.trim()) return page.title.trim()
@@ -41,12 +53,18 @@ export const PageSearchBar = memo(function PageSearchBar({
   selectedPage,
   onSelectPage,
   onClearPage,
+  searchRequest,
+  searchKey,
+  placeholder,
 }: {
   crawlId: string | null
   disabled?: boolean
   selectedPage: SelectedAuditPage | null
   onSelectPage: (page: SelectedAuditPage) => void
   onClearPage: () => void
+  searchRequest?: PageSearchRequest
+  searchKey?: string
+  placeholder?: string
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -55,7 +73,28 @@ export const PageSearchBar = memo(function PageSearchBar({
   const listRef = useRef<HTMLDivElement>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
-  const searchQuery = useCrawlPageSearch(crawlId, query, open && !selectedPage)
+  const debouncedQuery = useDebouncedValue(query, PAGE_SEARCH_DEBOUNCE_MS)
+  const searchQuery = useInfiniteQuery({
+    enabled: Boolean((crawlId || searchRequest) && open && !selectedPage),
+    queryKey: ["crawl-page-search", crawlId, searchKey ?? "parent", debouncedQuery],
+    initialPageParam: 0,
+    queryFn: ({ pageParam, signal }) => {
+      const request = {
+        offset: pageParam,
+        limit: PAGE_SEARCH_PAGE_SIZE,
+        query: debouncedQuery,
+        signal,
+      }
+      if (searchRequest) return searchRequest(request)
+      return fetchCrawlPageSearch(crawlId as string, request)
+    },
+    getNextPageParam: (lastPage) => {
+      const { offset, count, total } = lastPage.pagination
+      const nextOffset = offset + count
+      return nextOffset < total ? nextOffset : undefined
+    },
+    staleTime: 60_000,
+  })
 
   const pages = useMemo(
     () => searchQuery.data?.pages.flatMap((page) => page.pages) ?? [],
@@ -161,7 +200,7 @@ export const PageSearchBar = memo(function PageSearchBar({
             setOpen(false)
           }
         }}
-        placeholder="Search pages…"
+        placeholder={placeholder ?? "Search pages…"}
         readOnly={Boolean(selectedPage)}
         role="combobox"
         value={displayValue}

@@ -22,6 +22,28 @@ export function useDebouncedValue<T>(value: T, delayMs: number) {
   return debounced
 }
 
+export type CrawlPageSearchRequest = {
+  offset: number
+  limit: number
+  query: string
+  signal: AbortSignal
+}
+
+export function fetchCrawlPageSearch(
+  crawlId: string,
+  { offset, limit, query, signal }: CrawlPageSearchRequest
+) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  if (query.trim()) params.set("q", query.trim())
+  return clientApiFetch<CrawlPageSearchResponse>(
+    `/crawls/${crawlId}/pages/search?${params.toString()}`,
+    { signal }
+  )
+}
+
 export function useCrawlPageSearch(
   crawlId: string | null,
   query: string,
@@ -33,17 +55,13 @@ export function useCrawlPageSearch(
     enabled: Boolean(crawlId && enabled),
     queryKey: ["crawl-page-search", crawlId, debouncedQuery],
     initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) => {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SEARCH_PAGE_SIZE),
-        offset: String(pageParam),
-      })
-      if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim())
-      return clientApiFetch<CrawlPageSearchResponse>(
-        `/crawls/${crawlId}/pages/search?${params.toString()}`,
-        { signal }
-      )
-    },
+    queryFn: ({ pageParam, signal }) =>
+      fetchCrawlPageSearch(crawlId as string, {
+        offset: pageParam,
+        limit: PAGE_SEARCH_PAGE_SIZE,
+        query: debouncedQuery,
+        signal,
+      }),
     getNextPageParam: (lastPage) => {
       const { offset, count, total } = lastPage.pagination
       const nextOffset = offset + count

@@ -525,7 +525,7 @@ describe("landmark refresh query drafts", () => {
   })
 })
 
-test("generation shares five enabled slots with preserved landmarks", () => {
+test("generation keeps every enabled generated query with preserved landmarks", () => {
   const record = mapQuery("coffee near temple", {
     id: "land",
     origin: "landmark",
@@ -548,7 +548,7 @@ test("generation shares five enabled slots with preserved landmarks", () => {
     records: [record],
   })
   expect(result.length).toBe(6)
-  expect(result.filter((draft) => draft.enabled).length).toBe(5)
+  expect(result.filter((draft) => draft.enabled).length).toBe(6)
   expect(result.at(-1)).toBe(drafts[0])
 })
 

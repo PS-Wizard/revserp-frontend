@@ -65,6 +65,10 @@ export type ProjectSetupResponse = {
 export type ProjectBusinessProfileResponse = {
   id: string
   project_id: string
+  /** Present on location profiles: independent services snapshot, copied once at bind. */
+  location_id?: string | null
+  /** Present on location profiles when the snapshot exists; absent on old profiles. */
+  services?: string[]
   brand_name: string
   website_url: string
   primary_category?: string
@@ -715,6 +719,8 @@ export type AIConversationResponse = {
   turn_status: string | null
   /** ID of that turn, when one is active — lets the client resume streaming. */
   turn_id: string | null
+  /** Workspace scope for location chats (migration 105). Null/absent means the parent project scope; immutable once created. */
+  location_id?: string | null
 }
 
 export type AIConversationsResponse = {

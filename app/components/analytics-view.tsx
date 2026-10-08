@@ -24,9 +24,18 @@ import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   ProjectAnalyticsOverviewResponse,
   ProjectAnalyticsRealtimeResponse,
-  ProjectAnalyticsStatusResponse,
   ProjectResponse,
 } from "~/lib/api.types"
+import { ProjectGoogleAccountBar } from "~/components/project-google-account-bar"
+import {
+  describeGoogleAccount,
+  projectGoogleBoundAccountId,
+  projectGoogleConnections,
+  projectGoogleSelectedAccountId,
+  startProjectGoogleConnect,
+  useAccountPropertyList,
+  type ProjectAnalyticsStatusWithAccounts,
+} from "~/lib/location-google-api"
 
 const allowedGoogleAuthHosts = new Set(["accounts.google.com"])
 function isAllowedGoogleAuthURL(rawURL: string) {
@@ -73,7 +82,7 @@ export const AnalyticsView = memo(
         ? analyticsStatusQueryKey(projectId)
         : ["analytics-status-disabled"],
       queryFn: () =>
-        clientApiFetch<ProjectAnalyticsStatusResponse>(
+        clientApiFetch<ProjectAnalyticsStatusWithAccounts>(
           `/projects/${projectId!}/analytics/status`
         ),
       enabled: Boolean(projectId),
@@ -117,9 +126,48 @@ export const AnalyticsView = memo(
       refetchInterval: 60_000,
     })
     const [propertyId, setPropertyId] = useState("")
+    const [selectedAccountId, setSelectedAccountId] = useState("")
     const [isStarting, setIsStarting] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [actionError, setActionError] = useState("")
+    const googleConnections = status
+      ? projectGoogleConnections(status)
+      : []
+    const boundGoogleAccountId = status
+      ? projectGoogleBoundAccountId(status)
+      : ""
+    const boundSetupConnection = googleConnections.find(
+      (connection) => connection.id === boundGoogleAccountId
+    )
+    const boundSetupUnverified =
+      boundGoogleAccountId !== "" &&
+      (!boundSetupConnection ||
+        !describeGoogleAccount(boundSetupConnection).verified)
+    const setupPropertyList = useAccountPropertyList(
+      projectId ?? "",
+      "analytics",
+      selectedAccountId
+    )
+    const setupUsesAccountList =
+      selectedAccountId !== "" &&
+      selectedAccountId !== boundGoogleAccountId &&
+      setupPropertyList.loadedAccountId === selectedAccountId
+
+    function handleSetupAccountChange(next: string | null) {
+      setSelectedAccountId(next ?? "")
+      setPropertyId("")
+      setupPropertyList.reset()
+    }
+
+    async function handleLoadSetupProperties() {
+      if (!selectedAccountId || setupPropertyList.loading) return
+      const { items } = await setupPropertyList.load()
+      setPropertyId((current) =>
+        current && items.some((item) => item.value === current)
+          ? current
+          : ""
+      )
+    }
     useEffect(() => {
       const next = status?.selected_property?.property_id ?? ""
       setPropertyId((current) =>
@@ -130,6 +178,20 @@ export const AnalyticsView = memo(
           ? current
           : next
       )
+    }, [status])
+    useEffect(() => {
+      setSelectedAccountId((current) => {
+        const next = status ? projectGoogleSelectedAccountId(status) : ""
+        if (!next) return current
+        if (
+          current &&
+          status?.google_connections?.some(
+            (connection) => connection.id === current
+          )
+        )
+          return current
+        return next
+      })
     }, [status])
 
     const errorMessage =
@@ -144,18 +206,24 @@ export const AnalyticsView = memo(
             : overviewError
               ? "Unable to load Google Analytics data."
               : "")
-    async function startConnection() {
+    async function startConnectionWithMode(
+      mode?: "add_account" | "reconnect_account",
+      googleConnectionId?: string
+    ) {
       if (!activeProject) return
       setIsStarting(true)
       setActionError("")
       try {
-        const response = await clientApiPost<{ auth_url: string }>(
-          `/projects/${activeProject.id}/analytics/connect/start`,
+        const response = await startProjectGoogleConnect(
+          activeProject.id,
+          "analytics",
           {
-            return_path:
+            returnPath:
               window.location.pathname +
               window.location.search +
               window.location.hash,
+            mode,
+            googleConnectionId,
           }
         )
         if (!isAllowedGoogleAuthURL(response.auth_url))
@@ -174,6 +242,19 @@ export const AnalyticsView = memo(
         setIsStarting(false)
       }
     }
+    async function startConnection() {
+      await startConnectionWithMode()
+    }
+    async function handleAddAnalyticsAccount() {
+      await startConnectionWithMode("add_account")
+    }
+    async function handleReconnectAnalyticsAccount() {
+      if (!boundGoogleAccountId) return
+      await startConnectionWithMode(
+        "reconnect_account",
+        boundGoogleAccountId
+      )
+    }
     async function selectProperty() {
       if (!activeProject || !propertyId) return
       setIsSaving(true)
@@ -181,7 +262,12 @@ export const AnalyticsView = memo(
       try {
         await clientApiPost<{ ok: boolean }>(
           `/projects/${activeProject.id}/analytics/select-property`,
-          { property_id: propertyId }
+          {
+            property_id: propertyId,
+            ...(selectedAccountId
+              ? { google_connection_id: selectedAccountId }
+              : {}),
+          }
         )
         await queryClient.invalidateQueries({
           queryKey: analyticsStatusQueryKey(activeProject.id),
@@ -242,11 +328,23 @@ export const AnalyticsView = memo(
           title="Grant Analytics access"
           description="Google is connected for this workspace, but Analytics access needs to be granted again."
           action={
-            <Button disabled={isStarting} onClick={startConnection}>
-              {isStarting
-                ? "Redirecting to Google..."
-                : "Grant Analytics access"}
-            </Button>
+            <span className="flex flex-wrap gap-2">
+              <Button disabled={isStarting} onClick={startConnection}>
+                {isStarting
+                  ? "Redirecting to Google..."
+                  : "Grant Analytics access"}
+              </Button>
+              {boundGoogleAccountId &&
+              (status.needs_reconnect || boundSetupUnverified) ? (
+                <Button
+                  disabled={isStarting}
+                  onClick={() => void handleReconnectAnalyticsAccount()}
+                  variant="outline"
+                >
+                  Reconnect selected account
+                </Button>
+              ) : null}
+            </span>
           }
           errorMessage={actionError}
         />
@@ -258,17 +356,45 @@ export const AnalyticsView = memo(
       )
     if (connected)
       return (
-        <AnalyticsOverview
-          key={status.selected_property?.property_id}
-          activeProjectId={activeProject.id}
-          isLoading={loadingOverview}
-          isOrganizationOwner={isOrganizationOwner}
-          onRefreshOverview={refresh}
-          overviewErrorMessage={errorMessage}
-          realtimeActiveUsers={realtime?.active_users}
-          status={status}
-          overviewResponse={overview ?? null}
-        />
+        <>
+          <div className="mx-4 mt-6 sm:mx-6 lg:mx-4">
+            <ProjectGoogleAccountBar
+              currentPropertyId={
+                status.selected_property?.property_id ?? propertyId
+              }
+              disconnectPath={`/projects/${activeProject.id}/analytics/disconnect`}
+              googleAccountEmail={status.google_account_email}
+              googleConnectionId={status.google_connection_id}
+              googleConnections={status.google_connections}
+              isOrganizationOwner={isOrganizationOwner}
+              needsReconnect={status.needs_reconnect}
+              onChanged={() => void refresh()}
+              projectId={activeProject.id}
+              selectBody={(googleConnectionId) => ({
+                property_id:
+                  status.selected_property?.property_id ?? propertyId,
+                google_connection_id: googleConnectionId,
+              })}
+              selectPath={`/projects/${activeProject.id}/analytics/select-property`}
+              selectedGoogleConnectionId={
+                status.selected_google_connection_id
+              }
+              service="analytics"
+              tokenError={status.token_error}
+            />
+          </div>
+          <AnalyticsOverview
+            key={status.selected_property?.property_id}
+            activeProjectId={activeProject.id}
+            isLoading={loadingOverview}
+            isOrganizationOwner={isOrganizationOwner}
+            onRefreshOverview={refresh}
+            overviewErrorMessage={errorMessage}
+            realtimeActiveUsers={realtime?.active_users}
+            status={status}
+            overviewResponse={overview ?? null}
+          />
+        </>
       )
     if (status.has_google_connection && isOrganizationOwner)
       return (
@@ -284,14 +410,27 @@ export const AnalyticsView = memo(
                 <SelectTrigger className="min-h-12 w-full sm:max-w-xl">
                   <SelectValue placeholder="Select a Google Analytics property">
                     {(value) =>
-                      status.available_properties.find(
-                        (property) => property.property_id === value
-                      )?.display_name ?? value
+                      (setupUsesAccountList
+                        ? setupPropertyList.items.map((item) => ({
+                            property_id: item.value,
+                            display_name: item.label,
+                            account_display_name: item.detail,
+                          }))
+                        : status.available_properties
+                      ).find((property) => property.property_id === value)
+                        ?.display_name ?? value
                     }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {status.available_properties.map((property) => (
+                  {(setupUsesAccountList
+                    ? setupPropertyList.items.map((item) => ({
+                        property_id: item.value,
+                        display_name: item.label,
+                        account_display_name: item.detail,
+                      }))
+                    : status.available_properties
+                  ).map((property) => (
                     <SelectItem
                       key={property.property_id}
                       value={property.property_id}
@@ -308,13 +447,115 @@ export const AnalyticsView = memo(
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                className="mt-5"
-                disabled={!propertyId || isSaving}
-                onClick={selectProperty}
-              >
-                {isSaving ? "Connecting project..." : "Connect project"}
-              </Button>
+              {googleConnections.length > 1 ? (
+                <div className="flex flex-col gap-2">
+                  <Select
+                    onValueChange={handleSetupAccountChange}
+                    value={selectedAccountId}
+                  >
+                    <SelectTrigger className="min-h-12 w-full sm:max-w-xl">
+                      <SelectValue placeholder="Select a Google account">
+                        {(value: string) => {
+                          const match = googleConnections.find(
+                            (connection) => connection.id === value
+                          )
+                          return match
+                            ? describeGoogleAccount(match).label
+                            : value
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {googleConnections.map((connection) => {
+                        const identity = describeGoogleAccount(connection)
+                        return (
+                          <SelectItem
+                            key={connection.id}
+                            value={connection.id}
+                          >
+                            <div className="flex flex-col gap-1 py-1">
+                              <span>{identity.label}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {connection.google_status === "active"
+                                  ? identity.verified
+                                    ? "Connected"
+                                    : "Connected — reconnect to verify identity"
+                                  : connection.google_status ||
+                                    "Reconnect to verify identity"}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                  {selectedAccountId !== "" &&
+                  selectedAccountId !== boundGoogleAccountId ? (
+                    <div className="flex flex-col gap-2">
+                      <div>
+                        <Button
+                          disabled={setupPropertyList.loading}
+                          onClick={() => void handleLoadSetupProperties()}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          {setupPropertyList.loading
+                            ? "Loading properties…"
+                            : setupPropertyList.loadedAccountId ===
+                                selectedAccountId
+                              ? "Reload properties"
+                              : "Load properties for this account"}
+                        </Button>
+                      </div>
+                      {setupPropertyList.error ? (
+                        <p className="text-sm text-red-200" role="alert">
+                          {setupPropertyList.error}
+                        </p>
+                      ) : null}
+                      {setupPropertyList.loadedAccountId ===
+                        selectedAccountId &&
+                      (setupPropertyList.needsReconnect ||
+                        setupPropertyList.missingScope) ? (
+                        <p className="text-sm text-muted-foreground">
+                          {setupPropertyList.missingScope
+                            ? "This account hasn't granted Analytics access yet — grant it from the parent connection first."
+                            : "This account needs a reconnect before its properties can be used."}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : status.google_account_email ||
+                googleConnections.length === 1 ? (
+                <p className="text-sm text-muted-foreground">
+                  Connected as{" "}
+                  {
+                    describeGoogleAccount({
+                      id: boundGoogleAccountId,
+                      google_account_email: status.google_account_email,
+                    }).label
+                  }
+                  .
+                </p>
+              ) : null}
+              <span className="flex flex-wrap gap-2">
+                <Button
+                  className="mt-5"
+                  disabled={!propertyId || isSaving}
+                  onClick={selectProperty}
+                >
+                  {isSaving ? "Connecting project..." : "Connect project"}
+                </Button>
+                <Button
+                  className="mt-5"
+                  disabled={isStarting}
+                  onClick={() => void handleAddAnalyticsAccount()}
+                  variant="outline"
+                >
+                  Add another Google account
+                </Button>
+              </span>
             </>
           }
           errorMessage={actionError || status.token_error || ""}

@@ -1,15 +1,8 @@
 "use client"
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  Check,
-  ChevronDown,
-  Loader2,
-  PlayIcon,
-  RefreshCwIcon,
-  X,
-} from "lucide-react"
+import { PlayIcon, RefreshCwIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "~/components/ui/badge"
@@ -21,15 +14,18 @@ import {
   CardTitle,
   CardDescription,
 } from "~/components/ui/card"
-import { ScrollArea } from "~/components/ui/scroll-area"
 import { Separator } from "~/components/ui/separator"
+import {
+  VisibilityModelCard,
+  VisibilityQueryRow,
+  VisibilityRunningBanner,
+} from "~/components/visibility-shared"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   AIAuditListResponse,
   AIAuditResponse,
   AIAuditRunResponse,
 } from "~/lib/api.types"
-import { cn } from "~/lib/utils"
 
 type Props = {
   projectId: string | null
@@ -69,15 +65,24 @@ function formatModelName(slug: string): string {
   return afterSlash.replace(/:[^:]+$/, "")
 }
 
-// Small colored rank pill — no # prefix, just the number
 function RankPill({ mentioned, rank }: { mentioned?: boolean; rank?: number }) {
   if (!mentioned) {
-    return <span className="text-sm text-muted-foreground/40">—</span>
+    return (
+      <span
+        role="img"
+        aria-label="Not mentioned"
+        className="text-sm text-muted-foreground/40"
+      >
+        —
+      </span>
+    )
   }
   if (!rank || rank === 0) {
     return (
       <span
         title="Mentioned but not ranked"
+        role="img"
+        aria-label="Mentioned but not ranked"
         className="text-xs text-muted-foreground"
       >
         ~
@@ -306,37 +311,6 @@ function ResponseBody({ run }: { run: AIAuditRunResponse }) {
   )
 }
 
-function QuestionStatusIcon({
-  status,
-}: {
-  status: AIAuditRunResponse["status"] | "pending"
-}) {
-  if (status === "pending" || status === "running") {
-    return (
-      <Loader2
-        aria-hidden="true"
-        className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
-        strokeWidth={2.25}
-      />
-    )
-  }
-  if (status === "failed") {
-    return (
-      <X
-        aria-hidden="true"
-        className="size-3.5 shrink-0 text-destructive"
-        strokeWidth={2.5}
-      />
-    )
-  }
-  return (
-    <Check
-      aria-hidden="true"
-      className="size-3.5 shrink-0 text-emerald-500"
-      strokeWidth={2.5}
-    />
-  )
-}
 
 function QuestionRow({
   order,
@@ -350,88 +324,27 @@ function QuestionRow({
   isLast: boolean
 }) {
   const status = run?.status ?? "pending"
-  const expandable = status === "success" || status === "failed"
-  const [open, setOpen] = useState(status === "failed")
-
-  useEffect(() => {
-    if (status === "failed") {
-      setOpen(true)
-      return
-    }
-    if (status === "success") setOpen(false)
-  }, [status])
-
   const label = question?.trim() || `Question ${order}`
-
+  void isLast
   return (
-    <div className={cn("w-full", !isLast && "border-b border-border/40")}>
-      <button
-        aria-expanded={open}
-        className={cn(
-          "flex min-h-14 w-full items-center gap-3 rounded-md px-3 py-4 text-left transition-colors duration-100",
-          expandable && "hover:bg-muted/50",
-          !expandable && "cursor-default"
-        )}
-        disabled={!expandable}
-        onClick={() => {
-          if (!expandable) return
-          setOpen((current) => !current)
-        }}
-        type="button"
-      >
-        <QuestionStatusIcon status={status} />
-        <span className="min-w-0 flex-1 truncate text-sm leading-snug font-medium text-foreground/90">
-          <span className="mr-1.5 text-muted-foreground">{order}.</span>
-          {label}
-        </span>
-        {status === "failed" ? (
-          <span className="shrink-0 text-xs font-medium text-destructive">
-            Failed
-          </span>
-        ) : status === "pending" || status === "running" ? (
-          <span className="shrink-0 text-xs font-medium text-muted-foreground">
-            Running
-          </span>
-        ) : run ? (
-          <span className="flex shrink-0 items-center gap-2">
+    <VisibilityQueryRow
+      order={order}
+      label={label}
+      status={status}
+      failedLabel="Failed"
+      runningLabel="Running"
+      meta={
+        run ? (
+          <>
             <MentionBadge run={run} />
             <RankPill mentioned={run.mentioned_target} rank={run.target_rank} />
-          </span>
-        ) : null}
-        {expandable ? (
-          <ChevronDown
-            aria-hidden="true"
-            className={cn(
-              "size-3.5 shrink-0 text-muted-foreground transition-transform duration-300",
-              open && "rotate-180"
-            )}
-            strokeWidth={2.2}
-          />
-        ) : (
-          <span aria-hidden="true" className="size-3.5 shrink-0" />
-        )}
-      </button>
-
-      {expandable ? (
-        <div
-          className="grid transition-[grid-template-rows,opacity] duration-300 motion-reduce:transition-none"
-          style={{
-            gridTemplateRows: open ? "1fr" : "0fr",
-            opacity: open ? 1 : 0,
-            transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)",
-          }}
-        >
-          <div className="overflow-hidden">
-            <div className="flex flex-col gap-3 px-3 pb-5 pl-10">
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {label}
-              </p>
-              {run ? <ResponseBody run={run} /> : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+          </>
+        ) : undefined
+      }
+    >
+      <p className="text-sm leading-relaxed text-muted-foreground">{label}</p>
+      {run ? <ResponseBody run={run} /> : null}
+    </VisibilityQueryRow>
   )
 }
 
@@ -486,43 +399,21 @@ function ModelResponseCards({
       {models.map((model) => {
         const count = mentionCount(model)
         return (
-          <Card
+          <VisibilityModelCard
             key={model}
-            className="flex h-full min-h-0 flex-col gap-0 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 py-0"
+            title={formatModelName(model)}
+            countLabel={`${count}/${orders.length}`}
           >
-            <div className="flex shrink-0 items-center justify-between gap-3 px-5 pt-5 pb-4">
-              <h3
-                className="truncate font-heading text-base font-semibold tracking-tight"
-                title={formatModelName(model)}
-              >
-                {formatModelName(model)}
-              </h3>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-micro font-semibold tabular-nums",
-                  count > 0
-                    ? "bg-emerald-500/15 text-emerald-500"
-                    : "bg-muted text-muted-foreground"
-                )}
-              >
-                {count}/{orders.length}
-              </span>
-            </div>
-            <hr className="mx-5 shrink-0 border-0 border-t border-border/60" />
-            <ScrollArea className="min-h-0 flex-1 overflow-hidden">
-              <div className="flex flex-col px-3 py-4">
-                {orders.map((order, index) => (
-                  <QuestionRow
-                    key={order}
-                    order={order}
-                    question={questionByOrder.get(order)}
-                    run={runMap.get(`${order}:${model}`)}
-                    isLast={index === orders.length - 1}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
-          </Card>
+            {orders.map((order, index) => (
+              <QuestionRow
+                key={order}
+                order={order}
+                question={questionByOrder.get(order)}
+                run={runMap.get(`${order}:${model}`)}
+                isLast={index === orders.length - 1}
+              />
+            ))}
+          </VisibilityModelCard>
         )
       })}
     </div>
@@ -677,26 +568,6 @@ function MatrixLegend() {
   )
 }
 
-function RunningBanner({ completedCount }: { completedCount: number }) {
-  return (
-    <div className="mx-0 flex items-center gap-3 rounded-lg border border-border/50 bg-muted/30 px-4 py-4 @3xl/main:mx-6 @3xl/main:px-5 @5xl/main:mx-8">
-      <RefreshCwIcon className="size-4 shrink-0 animate-spin text-muted-foreground" />
-      <div className="flex-1">
-        <div className="mb-1.5 flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            Running visibility checks…
-          </span>
-          <span className="font-medium text-muted-foreground tabular-nums">
-            {completedCount} completed
-          </span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div className="h-full w-1/3 animate-pulse rounded-full bg-primary" />
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export const RevserpVisibilityView = memo(function RevserpVisibilityView({
   projectId,
@@ -799,7 +670,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
             "error" in err.details
             ? String((err.details as { error: string }).error)
             : locationId
-              ? "Could not start visibility test. Make sure this location has enabled map queries."
+              ? "Could not start visibility test. Generate this location's AI questions from the Business profile menu first."
               : "Could not start visibility test. Make sure AI questions have been generated first."
         )
       } else if (err instanceof ApiError && err.status === 429) {
@@ -882,7 +753,13 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
       </div>
 
       {/* Running progress banner */}
-      {isRunning && <RunningBanner completedCount={completedCount} />}
+      {isRunning && (
+        <VisibilityRunningBanner
+          label="Running visibility checks…"
+          completedText={`${completedCount} completed`}
+          fraction={runs.length > 0 ? completedCount / runs.length : null}
+        />
+      )}
 
       {/* Summary stats */}
       {successRuns.length > 0 && <SummaryCards runs={successRuns} />}
@@ -912,7 +789,7 @@ export const RevserpVisibilityView = memo(function RevserpVisibilityView({
                 <p className="font-medium">No visibility data yet</p>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
                   {locationName
-                    ? `Run a visibility test to see how AI answers mention ${locationName}.`
+                    ? `Run a visibility test to see how AI answers mention ${locationName}. Generate this location's AI questions from the Business profile menu first; nothing is generated automatically.`
                     : "Run a visibility test to see how your brand appears across AI models for your generated questions."}
                 </p>
               </div>

@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { ApiError } from "~/lib/api"
 import {
   isLocalSeoLocationBound,
+  isLocalSeoRunActive,
   LOCAL_SEO_POINT_COUNT,
   localSeoLocationQueryKey,
   localSeoLocationsQueryKey,
@@ -71,6 +72,13 @@ function localSeoSectorCaption(sector: LocalSeoSector): string {
 
 const LOCAL_SEO_POINT_EMPTY_TEXT = "The provider returned nothing here."
 
+/**
+ * Point-details fills request_failed errors with the stored row error, or
+ * this literal when none was stored. The panel reports that case as an
+ * unknown cause instead of echoing the placeholder as a diagnosis.
+ */
+const SAVED_POINT_REQUEST_FAILED_FALLBACK = "request failed"
+
 function describeLocalSeoPointQueryResult(entry: LocalSeoPointQuery): string {
   if (entry.error) return "Error"
   if (entry.call_status === "pending") return "Pending"
@@ -122,7 +130,10 @@ function LocalSeoPointPlaceRow({ place }: { place: LocalSeoPointPlace }) {
 }
 
 function LocalSeoPointQueryResult({ entry }: { entry: LocalSeoPointQuery }) {
-  if (entry.error) {
+  const failedWithoutStoredCause =
+    entry.call_status === "request_failed" &&
+    (entry.error === null || entry.error === SAVED_POINT_REQUEST_FAILED_FALLBACK)
+  if (entry.error && !failedWithoutStoredCause) {
     return (
       <p role="alert" className="text-sm text-destructive">
         {entry.error}
@@ -135,7 +146,7 @@ function LocalSeoPointQueryResult({ entry }: { entry: LocalSeoPointQuery }) {
   if (entry.call_status === "request_failed") {
     return (
       <p role="alert" className="text-sm text-destructive">
-        The provider call failed.
+        The provider call failed; no specific cause was stored for this query.
       </p>
     )
   }
@@ -457,9 +468,11 @@ function LocalSeoRunOverview({
 function LocalSeoReportRunStateNotice({
   runState,
   runError,
+  run,
 }: {
   runState: "pending" | "error" | "empty" | "ready"
   runError: string | null
+  run?: LocalSeoRun | null
 }) {
   if (runState === "pending") return <Skeleton className="h-24 w-full" />
   if (runState === "error") {
@@ -473,6 +486,29 @@ function LocalSeoReportRunStateNotice({
     return (
       <p className="text-sm text-muted-foreground">
         No runs yet for this location.
+      </p>
+    )
+  }
+  if (run && isLocalSeoRunActive(run.status)) {
+    const done = run.completed_cells
+    const planned = run.total_cells
+    return (
+      <p role="status" className="text-sm text-muted-foreground tabular-nums">
+        {run.status === "queued" ? "Run queued" : "Run in progress"}
+        {typeof done === "number" && typeof planned === "number"
+          ? ` · resolving cells ${done} of ${planned}`
+          : ""}
+        . Credits stay reserved until it finishes; nothing retries automatically.
+      </p>
+    )
+  }
+  // Saved run failure, distinct from a read failure above: the stored
+  // backend error explains it. Absent-vs-failed point counts stay in the
+  // overview card; this is the underlying cause.
+  if (run && (run.status === "failed" || run.status === "partial") && run.error) {
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        Saved run {run.status}: {run.error}
       </p>
     )
   }
@@ -769,7 +805,11 @@ export function LocalSeoMapReportContent({
     return (
       <section aria-label="Run overview" className="flex flex-col gap-3">
         <h2 className="text-sm font-medium">Latest run</h2>
-        <LocalSeoReportRunStateNotice runState={runState} runError={runError} />
+        <LocalSeoReportRunStateNotice
+          runState={runState}
+          runError={runError}
+          run={latestRun}
+        />
         {runState === "ready" && latestRun !== null ? (
           <LocalSeoRunOverview
             run={latestRun}
@@ -803,7 +843,11 @@ export function LocalSeoMapReportContent({
     return (
       <section aria-label="Competitors" className="flex flex-col gap-3">
         <h2 className="text-sm font-medium">Competitors</h2>
-        <LocalSeoReportRunStateNotice runState={runState} runError={runError} />
+        <LocalSeoReportRunStateNotice
+          runState={runState}
+          runError={runError}
+          run={latestRun}
+        />
         {runState === "ready" && latestRun !== null ? (
           <>
             <label className="flex flex-col gap-1 text-sm">
@@ -914,7 +958,11 @@ export function LocalSeoMapReportContent({
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="secondary">{latestRun?.status ?? "none"}</Badge>
       </div>
-      <LocalSeoReportRunStateNotice runState={runState} runError={runError} />
+      <LocalSeoReportRunStateNotice
+        runState={runState}
+        runError={runError}
+        run={latestRun}
+      />
       {runState === "ready" && latestRun !== null ? (
         <div className="flex flex-col gap-2 text-sm">
           <p className="text-muted-foreground">

@@ -171,9 +171,11 @@ export function GSCTableSection({
 
             <RowsTable
               emptyMessage={
-                tab.key === "queries" && isLoadingQueries
-                  ? "Loading queries..."
-                  : emptyMessage(tab.key)
+                tab.key === "queries" && queriesErrorMessage
+                  ? "Query results are not available."
+                  : tab.key === "queries" && isLoadingQueries
+                    ? "Loading queries..."
+                    : emptyMessage(tab.key)
               }
               onToggleTableSort={onToggleTableSort}
               primaryColumnLabel={dimensionTabLabel(tab.key).slice(0, -1)}
@@ -284,14 +286,20 @@ function RowsTable({
                 )}
                 key={row.label}
               >
-                <QueryLabelCell label={row.label} withTooltip={showMatch === true} />
+                <QueryLabelCell
+                  label={row.label}
+                  withTooltip={showMatch === true}
+                />
                 <TableCell>{formatNumber(row.clicks)}</TableCell>
                 <TableCell>{formatNumber(row.impressions)}</TableCell>
                 <TableCell>{formatPercent(row.ctr)}</TableCell>
                 <TableCell>{formatPosition(row.position)}</TableCell>
                 {showMatch ? (
                   <TableCell>
-                    <QueryMatchBadges match={match} ready={matchReady === true} />
+                    <QueryMatchBadges
+                      match={match}
+                      ready={matchReady === true}
+                    />
                   </TableCell>
                 ) : null}
               </UITableRow>
@@ -322,12 +330,12 @@ function QueryLabelCell({
   return (
     <TableCell className="max-w-[34rem] text-foreground">
       <Tooltip>
-        <TooltipTrigger render={<span className="block truncate" tabIndex={0} />}>
+        <TooltipTrigger
+          render={<span className="block truncate" tabIndex={0} />}
+        >
           {display}
         </TooltipTrigger>
-        <TooltipContent className="max-w-xs break-words">
-          {full}
-        </TooltipContent>
+        <TooltipContent className="max-w-xs break-words">{full}</TooltipContent>
       </Tooltip>
     </TableCell>
   )

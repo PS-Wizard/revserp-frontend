@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 import { RefreshCw } from "lucide-react"
 
 import { Button } from "~/components/ui/button"
@@ -28,6 +30,7 @@ export function GSCHeaderCard({
   gscProjectSelectionErrorMessage,
   onRefreshOverview,
   onSelectedSiteChange,
+  actions,
 }: {
   isOrganizationOwner: boolean
   selectedGSCSiteURL: string
@@ -39,6 +42,7 @@ export function GSCHeaderCard({
   gscProjectSelectionErrorMessage: string
   onRefreshOverview: () => void | Promise<void>
   onSelectedSiteChange: (nextSiteURL: string) => void | Promise<void>
+  actions?: ReactNode
 }) {
   return (
     <Card className="mx-4 bg-gradient-to-br from-card via-card to-muted/30 sm:mx-6 lg:mx-4">
@@ -92,6 +96,11 @@ export function GSCHeaderCard({
             </div>
           )}
 
+          {actions ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {actions}
+            </div>
+          ) : null}
           <Button
             disabled={isRefreshingOverview || isSavingGSCProjectSelection}
             onClick={onRefreshOverview}

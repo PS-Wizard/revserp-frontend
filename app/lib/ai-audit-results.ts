@@ -5,8 +5,9 @@ export function getAIAuditResultsPath(
 ) {
   const params = new URLSearchParams({ audit: audit.id })
   if (audit.location_id) {
+    params.set("project", audit.project_id)
     params.set("location", audit.location_id)
-    return `/app/projects/${encodeURIComponent(audit.project_id)}/locations?${params}`
+    return `/app?${params}`
   }
   params.set("project", audit.project_id)
   if (audit.crawl_id) params.set("crawl", audit.crawl_id)

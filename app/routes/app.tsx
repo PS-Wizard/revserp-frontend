@@ -22,7 +22,11 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import type { DashboardView } from "~/components/app-navbar/types"
 import type { AuditTab } from "~/components/app-navbar/types"
 import { revbotHashTarget } from "~/components/app-navbar/types"
-import { getWorkspaceNavigationTarget } from "~/components/app-navbar/utils"
+import {
+  getInitialWorkspaceView,
+  getVisibilityMode,
+  getWorkspaceNavigationTarget,
+} from "~/components/app-navbar/utils"
 import { usePdfExport } from "~/components/pdf-export/use-pdf-export"
 import { PdfPrintSections } from "~/components/pdf-export/pdf-print-sections"
 import { IssueWorkspacePanelProvider } from "~/components/summary/issue-workspace-floating-panel"
@@ -46,6 +50,12 @@ import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { SearchConsoleView } from "~/components/search-console-view"
 import { AnalyticsView } from "~/components/analytics-view"
 import { MarketplaceView } from "~/components/marketplace/marketplace-view"
+import {
+  LocationWorkspaceProvider,
+  locationWorkspaceAPIPath,
+  type LocationWorkspace,
+  type LocationWorkspaceResponse,
+} from "~/lib/location-workspace"
 import { FeaturesProvider } from "~/lib/features"
 import {
   Card,
@@ -75,6 +85,12 @@ import type {
 
 // Lazy so d3-force and the canvas renderer stay out of the main bundle
 // until the Site-Graph tab is opened.
+const LocationWorkspaceView = lazy(() =>
+  import("~/components/locations/location-workspace-view").then((module) => ({
+    default: module.LocationWorkspaceView,
+  }))
+)
+
 const SiteGraphView = lazy(() =>
   import("~/components/site-graph/site-graph-view").then((module) => ({
     default: module.SiteGraphView,
@@ -92,6 +108,10 @@ export async function loader({
   const requestedProjectId =
     params.projectID ?? requestUrl.searchParams.get("project")
   const requestedCrawlId = requestUrl.searchParams.get("crawl")
+  const requestedLocationId = requestUrl.searchParams.get("location")
+  if (requestUrl.searchParams.has("location") && !requestedLocationId) {
+    throw new Response("Invalid location", { status: 400 })
+  }
 
   const qs = new URLSearchParams()
   if (requestedProjectId) qs.set("project", requestedProjectId)
@@ -99,11 +119,30 @@ export async function loader({
   const qsStr = qs.toString()
 
   let bootstrap: AppBootstrapResponse
+  let locationWorkspace: LocationWorkspace | null = null
   try {
     bootstrap = await serverApiFetch<AppBootstrapResponse>(
       `/app-bootstrap${qsStr ? `?${qsStr}` : ""}`,
       request
     )
+    if (requestedLocationId) {
+      if (!bootstrap.active_project) throw new Response("Project not found", { status: 404 })
+      const projectId = bootstrap.active_project.id
+      const workspace = await serverApiFetch<LocationWorkspaceResponse>(
+        `${locationWorkspaceAPIPath(projectId, requestedLocationId)}/workspace`,
+        request
+      )
+      if (workspace.location.project_id !== projectId || workspace.location.id !== requestedLocationId.toLowerCase()) {
+        throw new Response("Location not found", { status: 404 })
+      }
+      locationWorkspace = {
+        projectId,
+        location: workspace.location,
+        canManage: workspace.can_manage,
+        websiteScope: workspace.website_scope,
+        websiteScopeRevisions: workspace.website_scope_revisions,
+      }
+    }
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       const nextPath = `${requestUrl.pathname}${requestUrl.search}`
@@ -162,10 +201,12 @@ export async function loader({
     crawlBreakdowns,
     sessionExpiresAt,
     sessionRenewAfter,
+    locationWorkspace,
   }
 }
 
 type AppLoaderData = {
+  locationWorkspace: LocationWorkspace | null
   me: MeResponse
   projects: ProjectResponse[]
   activeProject: ProjectResponse | null
@@ -302,6 +343,7 @@ export default function AppPage() {
     crawlBreakdowns,
     sessionExpiresAt,
     sessionRenewAfter,
+    locationWorkspace,
   } = useLoaderData() as AppLoaderData
   const revalidator = useRevalidator()
   const location = useLocation()
@@ -309,12 +351,10 @@ export default function AppPage() {
   const navigation = useNavigation()
   const navigationLocation = navigation.location ?? location
   const outlet = useOutlet()
-  const fullBleed = useMemo(() => {
-    if (!outlet) return false
-    return /^\/app\/projects\/[^/]+\/locations\/?$/.test(location.pathname)
-  }, [outlet, location.pathname])
   useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
-  const [view, setView] = useState<DashboardView>("revserp-audit")
+  const [view, setView] = useState<DashboardView>(() =>
+    getInitialWorkspaceView(location.search)
+  )
   const [auditTab, setAuditTab] = useState<AuditTab>("overview")
   const shouldReduceMotion = useReducedMotion() ?? false
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
@@ -328,6 +368,11 @@ export default function AppPage() {
   } | null>(null)
 
   useEffect(() => {
+    setView(getInitialWorkspaceView(location.search))
+    setAuditTab("overview")
+  }, [activeProject?.id, locationWorkspace?.location.id])
+
+  useEffect(() => {
     const target = revbotHashTarget(location.hash.replace(/^#/, ""))
     if (!target) return
     if (
@@ -335,13 +380,8 @@ export default function AppPage() {
       me.features?.gsc_connector === false
     )
       return
-    if (target.view === "marketplace" && me.features?.integrations === false)
-      return
-    if (
-      target.view === "competitors" &&
-      (me.features?.max_competitors ?? 0) === 0
-    )
-      return
+    if (target.view === "marketplace" && (locationWorkspace || me.features?.integrations === false)) return
+    if (target.view === "competitors" && !locationWorkspace && (me.features?.max_competitors ?? 0) === 0) return
     setView(target.view)
     if ("tab" in target) setAuditTab(target.tab)
   }, [
@@ -349,6 +389,7 @@ export default function AppPage() {
     me.features?.gsc_connector,
     me.features?.integrations,
     me.features?.max_competitors,
+    locationWorkspace?.location.id,
   ])
 
   const handleViewChange = useCallback(
@@ -438,7 +479,9 @@ export default function AppPage() {
     (projectId: string, crawlId?: string, destination?: "competitors") => {
       const params = new URLSearchParams(location.search)
       params.set("project", projectId)
-      if (projectId !== activeProject?.id) {
+      params.delete("location")
+      params.delete("audit")
+      if (locationWorkspace || projectId !== activeProject?.id) {
         params.delete("revbotConversation")
       }
       if (crawlId) {
@@ -447,14 +490,14 @@ export default function AppPage() {
         params.delete("crawl")
       }
       const hash = destination === "competitors" ? "#competitors" : ""
-      void navigate(`${location.pathname}?${params.toString()}${hash}`)
+      void navigate(`/app?${params.toString()}${hash}`)
     },
-    [activeProject?.id, navigate, location.pathname, location.search]
+    [activeProject?.id, navigate, location.search, locationWorkspace]
   )
 
   const goToVisibility = useCallback(
     (audit: AIAuditResponse) => {
-      if (!audit.location_id) setView("revserp-visibility")
+      setView("revserp-visibility")
       void navigate(getAIAuditResultsPath(audit))
     },
     [navigate]
@@ -480,7 +523,7 @@ export default function AppPage() {
   // provider refreshes it on every project_setup frame (no polling).
   const projectSetup = useProjectSetup({
     projectId: activeProject?.id ?? null,
-    enabled: view === "revserp-audit" && !!activeProject,
+    enabled: view === "revserp-audit" && !!activeProject && !locationWorkspace,
   })
 
   // Keep showing setup after its own crawl completes. A separate manual crawl
@@ -498,6 +541,7 @@ export default function AppPage() {
   const showProjectSetup =
     view === "revserp-audit" &&
     !!activeProject &&
+    !locationWorkspace &&
     !hasCompletedCrawlOutsideSetup &&
     (setupIsActive || setupIsLoading)
 
@@ -512,7 +556,7 @@ export default function AppPage() {
       clientApiFetch<ProjectBucketTrendsResponse>(
         `/projects/${activeProject!.id}/bucket-trends?limit=50`
       ),
-    enabled: view === "revserp-audit" && !!activeProject?.id,
+    enabled: view === "revserp-audit" && !!activeProject?.id && !locationWorkspace,
     staleTime: 60_000,
   })
 
@@ -681,7 +725,7 @@ export default function AppPage() {
   // A comparison needs a scored crawl on both sides. The near side follows the
   // current selection, so switching project or crawl invalidates it.
   const compareSides = useMemo(() => {
-    if (!compareTarget || !stableCurrentCrawl || !activeProject) return null
+    if (locationWorkspace || !compareTarget || !stableCurrentCrawl || !activeProject) return null
     if (stableCurrentCrawl.status !== "completed") return null
     if (compareTarget.crawl.project_id === activeProject.id) return null
     return {
@@ -692,7 +736,7 @@ export default function AppPage() {
       },
       b: compareTarget,
     }
-  }, [compareTarget, stableCurrentCrawl, activeProject])
+  }, [compareTarget, stableCurrentCrawl, activeProject, locationWorkspace])
 
   const handleCompareCrawl = useCallback(
     (crawl: CrawlResponse) => {
@@ -722,6 +766,14 @@ export default function AppPage() {
   }, [compareTarget, compareSides])
 
   return (
+    <LocationWorkspaceProvider
+      key={`${activeProject?.id ?? ""}:${locationWorkspace?.location.id ?? "project"}`}
+      workspace={
+        locationWorkspace
+          ? { ...locationWorkspace, refresh: revalidateIfIdle }
+          : null
+      }
+    >
     <OrganizationEventsProvider
       onCrawlEvent={handleCrawlEvent}
       onReady={syncActiveCrawls}
@@ -732,7 +784,7 @@ export default function AppPage() {
       <FeaturesProvider features={me.features}>
         <IssueWorkspacePanelProvider
           crawlId={
-            stableCurrentCrawl?.status === "completed"
+            !locationWorkspace && stableCurrentCrawl?.status === "completed"
               ? stableCurrentCrawl.id
               : null
           }
@@ -763,11 +815,23 @@ export default function AppPage() {
             userEmail={me.user.email}
             userName={me.user.name}
             view={view}
-            fullBleed={fullBleed}
+            visibilityMode={getVisibilityMode(location.search)}
+            fullBleed={false}
           >
             {cancelDialog}
 
-            {outlet ?? (view === "revserp-audit" ? (
+            {outlet ?? (locationWorkspace ? (
+              <Suspense fallback={null}>
+                <LocationWorkspaceView
+                  view={view}
+                  visibilityMode={getVisibilityMode(location.search)}
+                  auditTab={auditTab}
+                  currentCrawlId={stableCurrentCrawl?.status === "completed" ? stableCurrentCrawl.id : null}
+                  initialAuditId={new URLSearchParams(location.search).get("audit") ?? undefined}
+                  onAuditTabChange={handleAuditTabChange}
+                />
+              </Suspense>
+            ) : view === "revserp-audit" ? (
               showProjectSetup ? (
                 <ProjectSetupPanel
                   canStart={isOrganizationOwner}
@@ -886,7 +950,7 @@ export default function AppPage() {
                 </Card>
               </div>
             ))}
-            {showPrintSections && (
+            {showPrintSections && !locationWorkspace && (
               <PdfPrintSections
                 coverRef={coverRef}
                 overallRef={overallRef}
@@ -905,6 +969,7 @@ export default function AppPage() {
         </IssueWorkspacePanelProvider>
       </FeaturesProvider>
     </OrganizationEventsProvider>
+    </LocationWorkspaceProvider>
   )
 }
 

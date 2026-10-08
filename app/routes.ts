@@ -10,7 +10,9 @@ export default [
   route("invite/:token", "routes/invite.tsx"),
   route("account-suspended", "routes/account-suspended.tsx"),
   route("app", "routes/app.tsx", [
+    route("admin", "routes/app/admin.tsx"),
     route("projects/:projectID/locations", "routes/app/project-locations.tsx"),
+    route("settings/integrations", "routes/app/settings-integrations.tsx"),
   ]),
   route("dev/audit-pdf", "routes/dev.audit-pdf.tsx"),
 ] satisfies RouteConfig

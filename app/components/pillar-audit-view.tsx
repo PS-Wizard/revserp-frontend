@@ -1,6 +1,13 @@
 "use client"
 
-import { memo, useCallback, useMemo, useRef, useState } from "react"
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
@@ -17,6 +24,8 @@ import { Separator } from "~/components/ui/separator"
 import { GooglePSIDrawer } from "~/components/gsc-overview/google-psi-drawer"
 import type { GooglePSIStoredResult } from "~/lib/api.types"
 import type { CrawlResponse, ScoreBreakdownResponse } from "~/lib/api.types"
+import { filterUnsupportedBuckets } from "~/components/locations/location-website-audit-api"
+import type { IssueUrlsPageFetch } from "~/components/issue-explorer/utils"
 import { cn, formatBucketLabel } from "~/lib/utils"
 import { getPillarChartColor } from "~/lib/pillar-colors"
 import {
@@ -42,6 +51,8 @@ export type CrawlBreakdown = {
   breakdown: CrawlBreakdownScores
 }
 
+const EMPTY_UNSUPPORTED: string[] = []
+
 type PillarAuditViewProps = {
   activeProjectName?: string
   crawlBreakdowns: CrawlBreakdown[]
@@ -49,6 +60,19 @@ type PillarAuditViewProps = {
   currentCrawlId?: string
   pillarId: string
   title: string
+  /**
+   * Backend-flagged buckets that cannot be measured in this scope
+   * (e.g. psi_cwv for branch audits). Filtered from every gauge, card,
+   * treemap, and issue table so they never render as real readings.
+   */
+  unsupportedBucketIds?: string[]
+  /** Scoped read-only URL source for nested issue tables. */
+  scopedIssueUrls?: {
+    fetchPage: IssueUrlsPageFetch
+    pageCrawlId?: string
+    scopeKey: string
+    hideWorkActions?: boolean
+  }
 }
 
 export const PillarAuditView = memo(function PillarAuditView({
@@ -58,11 +82,31 @@ export const PillarAuditView = memo(function PillarAuditView({
   currentCrawlId,
   pillarId,
   title,
+  unsupportedBucketIds,
+  scopedIssueUrls,
 }: PillarAuditViewProps) {
+  const unsupported = unsupportedBucketIds ?? EMPTY_UNSUPPORTED
+  const displayBreakdowns = useMemo(
+    () =>
+      unsupported.length === 0
+        ? crawlBreakdowns
+        : crawlBreakdowns.map(({ crawl, breakdown }) => ({
+            crawl,
+            breakdown: filterUnsupportedBuckets(breakdown, unsupported),
+          })),
+    [crawlBreakdowns, unsupported]
+  )
+  const displayBreakdown = useMemo(
+    () =>
+      currentBreakdown && unsupported.length > 0
+        ? filterUnsupportedBuckets(currentBreakdown, unsupported)
+        : currentBreakdown,
+    [currentBreakdown, unsupported]
+  )
   const currentEntry =
-    crawlBreakdowns.find(({ crawl }) => crawl.id === currentCrawlId) ??
-    crawlBreakdowns[0]
-  const currentPillar = currentBreakdown?.pillars.find(
+    displayBreakdowns.find(({ crawl }) => crawl.id === currentCrawlId) ??
+    displayBreakdowns[0]
+  const currentPillar = displayBreakdown?.pillars.find(
     (pillar) => pillar.id === pillarId
   )
   const radialSegments =
@@ -72,6 +116,16 @@ export const PillarAuditView = memo(function PillarAuditView({
       value: bucket.score,
       color: getPillarChartColor(pillarId, index),
     })) ?? []
+  const removedBucketCount =
+    (currentBreakdown?.pillars.find((pillar) => pillar.id === pillarId)?.buckets
+      .length ?? 0) - (currentPillar?.buckets.length ?? 0)
+  /**
+   * A pillar left with no measurable buckets (PageSpeed under psi_cwv)
+   * loses its radial too: the derived pillar score would read as a real
+   * headline. The note above explains the gap.
+   */
+  const hideRadialForUnsupported =
+    removedBucketCount > 0 && (currentPillar?.buckets.length ?? 0) === 0
 
   const issueExplorerRef = useRef<HTMLDivElement>(null)
   const focusTokenRef = useRef(0)
@@ -102,24 +156,32 @@ export const PillarAuditView = memo(function PillarAuditView({
     <div className="flex flex-col gap-4 md:gap-6">
       <BucketScoreHistoryChart
         activeProjectName={activeProjectName}
-        crawlBreakdowns={crawlBreakdowns}
+        crawlBreakdowns={displayBreakdowns}
         pillarId={pillarId}
         title={title}
       />
+      {removedBucketCount > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Branch scope cannot measure {unsupported.join(", ")} — shown as info
+          below, not a score.
+        </p>
+      )}
       <div className="mt-6 md:mt-8">
-<div>
+        <div>
           <div className="border-t border-border" />
         </div>
-<div className="grid items-stretch gap-3 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:pt-4">
-          <ScoreRadialChart
-            centerLabel={title}
-            centerValue={currentPillar?.score}
-            description="Current crawl bucket scores"
-            segments={radialSegments}
-            title={`${title} Score`}
-          />
+        <div className="grid items-stretch gap-3 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:pt-4">
+          {!hideRadialForUnsupported && (
+            <ScoreRadialChart
+              centerLabel={title}
+              centerValue={currentPillar?.score}
+              description="Current crawl bucket scores"
+              segments={radialSegments}
+              title={`${title} Score`}
+            />
+          )}
           <BucketScoreCards
-            crawlBreakdowns={crawlBreakdowns}
+            crawlBreakdowns={displayBreakdowns}
             currentCrawlId={currentCrawlId}
             onSelectBucket={handleFocusBucket}
             pillarId={pillarId}
@@ -134,10 +196,10 @@ export const PillarAuditView = memo(function PillarAuditView({
           />
         </div>
       </div>
-<div>
+      <div>
         <Card className="bg-gradient-to-br from-card via-card to-muted/30">
           <IssueTreemap
-            breakdown={currentBreakdown}
+            breakdown={displayBreakdown}
             pillarId={pillarId}
             onSelect={(selection) => {
               if (selection.bucketId) {
@@ -153,9 +215,10 @@ export const PillarAuditView = memo(function PillarAuditView({
           <Separator />
           <div className="scroll-mt-4" ref={issueExplorerRef}>
             <IssueExplorer
-              breakdown={currentBreakdown}
+              breakdown={displayBreakdown}
               focusRequest={bucketFocus}
               initialPillarId={pillarId}
+              scopedIssueUrls={scopedIssueUrls}
             />
           </div>
         </Card>
@@ -245,7 +308,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
           }
 
           return (
-            <>
+            <Fragment key={bucket.id}>
               <Card
                 aria-label={
                   onSelectBucket
@@ -259,7 +322,6 @@ const BucketScoreCards = memo(function BucketScoreCards({
                   isInteractive &&
                     "cursor-pointer transition hover:border-primary/30 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
                 )}
-                key={bucket.id}
                 onClick={isInteractive ? activate : undefined}
                 onKeyDown={
                   isInteractive
@@ -278,7 +340,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
                   <CardDescription>{bucketLabel}</CardDescription>
                   {delta !== null && <TrendBadge delta={delta} />}
                 </CardHeader>
-<div className="flex flex-1 items-center justify-center py-4">
+                <div className="flex flex-1 items-center justify-center py-4">
                   <span className="font-heading text-4xl leading-none font-semibold tabular-nums">
                     {bucket.score === undefined ? (
                       "—"
@@ -304,7 +366,7 @@ const BucketScoreCards = memo(function BucketScoreCards({
                   psiResult={psiResult}
                 />
               )}
-            </>
+            </Fragment>
           )
         })}
       </div>

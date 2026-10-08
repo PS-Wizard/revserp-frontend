@@ -7,7 +7,7 @@ async function renderAuditPdf(data: AuditPdfData) {
   const originalFetch = globalThis.fetch;
   // Bun imports asset URLs as file paths; Vite serves them over HTTP.
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
-    if (typeof input === "string" && (input.endsWith("/fonts/Arimo.ttf") || input.endsWith("/icons/revserp-192.png"))) {
+    if (typeof input === "string" && (input.endsWith("/fonts/Arimo.ttf") || input.endsWith("/icons/revserp-icon-192.png"))) {
       return new Response(new Uint8Array(await readFile(input)));
     }
     throw new Error(`Unexpected network request in PDF render test: ${input}`);

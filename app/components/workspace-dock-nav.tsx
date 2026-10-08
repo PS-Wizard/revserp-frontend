@@ -3,11 +3,16 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router"
 
-import type { AuditTab, DashboardView } from "~/components/app-navbar/types"
+import type {
+  AuditTab,
+  DashboardView,
+  VisibilityMode,
+} from "~/components/app-navbar/types"
 import type { ExportFormat } from "~/components/app-navbar/types"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 
 import {
+  ArrowLeftIcon,
   CircleIcon,
   FileSpreadsheetIcon,
   HistoryIcon,
@@ -68,13 +73,24 @@ type WorkspaceDockNavProps = {
   auditTab: AuditTab
   gscConnector: boolean
   integrations: boolean
+  /** Location mode hides groups without scoped support (Marketplace). */
+  isLocationScoped?: boolean
+  /** Back-to-project href shown above the project list when scoped. */
+  locationBackHref?: string | null
+  /** Location name replacing the project name in the navbar when scoped. */
+  locationName?: string | null
   maxCompetitors: number
-  onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  onSelectWorkspace: (
+    nextView: DashboardView,
+    nextAuditTab?: AuditTab,
+    nextVisibilityMode?: VisibilityMode
+  ) => void
   /** Active route for link tabs; view tabs keep matching on view. */
   pathname?: string
   /** Project-scoped route tabs (Locations) render only when set. */
   projectId?: string | null
   view: DashboardView
+  visibilityMode?: VisibilityMode
 }
 
 /**
@@ -91,6 +107,9 @@ export function WorkspaceDockNav({
   formatCrawlLabel,
   gscConnector,
   integrations,
+  isLocationScoped = false,
+  locationBackHref,
+  locationName,
   maxCompetitors,
   onCreateProject,
   onDeleteCrawl,
@@ -105,6 +124,7 @@ export function WorkspaceDockNav({
   projects,
   trailing,
   view,
+  visibilityMode = "maps",
 }: WorkspaceDockNavProps) {
   const navigate = useNavigate()
   // Controlled so a click can dismiss the mega menu before the project panel
@@ -117,6 +137,7 @@ export function WorkspaceDockNav({
   const groups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
+    isLocationScoped,
     maxCompetitors,
     projectId,
   })
@@ -149,15 +170,22 @@ export function WorkspaceDockNav({
               }}
             >
               <span className="truncate">
-                {projects.find((project) => project.id === activeProjectId)
-                  ?.name ?? "Select a project"}
+                {locationName ??
+                  projects.find((project) => project.id === activeProjectId)
+                    ?.name ?? "Select a project"}
               </span>
+              {locationName ? (
+                <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-micro font-medium text-muted-foreground">
+                  Location
+                </span>
+              ) : null}
             </NavigationMenuTrigger>
             <NavigationMenuContent
               className={cn("p-2", projects.length > 3 ? "w-[36rem]" : "w-80")}
             >
               <ProjectPanelList
                 activeProjectId={activeProjectId}
+                locationBackHref={locationBackHref}
                 onContextOpenChange={setContextOpen}
                 onCreateProject={onCreateProject}
                 onDeleteProject={onDeleteProject}
@@ -178,6 +206,7 @@ export function WorkspaceDockNav({
               }}
             >
               <span className="truncate">
+                {isLocationScoped ? "Parent · " : ""}
                 {currentCrawl ? formatCrawlLabel(currentCrawl) : "No crawl yet"}
               </span>
             </NavigationMenuTrigger>
@@ -187,6 +216,7 @@ export function WorkspaceDockNav({
               <CrawlPanelList
                 crawls={crawls}
                 currentCrawlId={currentCrawl?.id}
+                isLocationScoped={isLocationScoped}
                 onContextOpenChange={setContextOpen}
                 formatLabel={formatCrawlLabel}
                 onDeleteCrawl={onDeleteCrawl}
@@ -204,7 +234,14 @@ export function WorkspaceDockNav({
           />
           {groups.map((group) => {
             const activeTab = group.tabs.find((tab) =>
-              isNavTabActive(groups, tab, view, auditTab, pathname)
+              isNavTabActive(
+                groups,
+                tab,
+                view,
+                auditTab,
+                pathname,
+                visibilityMode
+              )
             )
             return (
               <NavigationMenuItem key={group.key} value={group.key}>
@@ -219,7 +256,11 @@ export function WorkspaceDockNav({
                       void navigate(landing.href)
                       return
                     }
-                    onSelectWorkspace(landing.view, landing.auditTab)
+                    onSelectWorkspace(
+                      landing.view,
+                      landing.auditTab,
+                      landing.visibilityMode
+                    )
                   }}
                   className={cn(
                     "relative z-10 h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-sm",
@@ -252,6 +293,7 @@ export function WorkspaceDockNav({
                     onSelectWorkspace={onSelectWorkspace}
                     pathname={pathname}
                     view={view}
+                    visibilityMode={visibilityMode}
                   />
                 </NavigationMenuContent>
               </NavigationMenuItem>
@@ -294,6 +336,7 @@ function DockPanel({
   onSelectWorkspace,
   pathname,
   view,
+  visibilityMode = "maps",
 }: {
   auditTab: AuditTab
   group: {
@@ -302,9 +345,14 @@ function DockPanel({
     tabs: ReturnType<typeof buildWorkspaceNavGroups>[number]["tabs"]
   }
   groups: ReturnType<typeof buildWorkspaceNavGroups>
-  onSelectWorkspace: (nextView: DashboardView, nextAuditTab?: AuditTab) => void
+  onSelectWorkspace: (
+    nextView: DashboardView,
+    nextAuditTab?: AuditTab,
+    nextVisibilityMode?: VisibilityMode
+  ) => void
   pathname?: string
   view: DashboardView
+  visibilityMode?: VisibilityMode
 }) {
   const { clearPill, pill, setItemRef, showPill } = useKeyedHoverPill()
 
@@ -318,7 +366,14 @@ function DockPanel({
     >
       <HoverPill className="rounded-lg" pill={pill} />
       {group.tabs.map((tab) => {
-        const active = isNavTabActive(groups, tab, view, auditTab, pathname)
+        const active = isNavTabActive(
+          groups,
+          tab,
+          view,
+          auditTab,
+          pathname,
+          visibilityMode
+        )
         if (tab.href !== undefined) {
           return (
             <li key={tab.key}>
@@ -364,7 +419,9 @@ function DockPanel({
                   ? "text-foreground"
                   : "text-foreground/80 hover:text-foreground"
               )}
-              onClick={() => onSelectWorkspace(tab.view, tab.auditTab)}
+              onClick={() =>
+                onSelectWorkspace(tab.view, tab.auditTab, tab.visibilityMode)
+              }
               onMouseEnter={() => showPill(tab.key)}
               ref={setItemRef(tab.key)}
             >
@@ -437,6 +494,7 @@ function DockActions({ actions }: { actions: DockActionItem[] }) {
 
 function ProjectPanelList({
   activeProjectId,
+  locationBackHref,
   onContextOpenChange,
   onCreateProject,
   onDeleteProject,
@@ -444,6 +502,7 @@ function ProjectPanelList({
   projects,
 }: {
   activeProjectId?: string
+  locationBackHref?: string | null
   onContextOpenChange: (open: boolean) => void
   onCreateProject: () => void
   onDeleteProject: (project: ProjectResponse) => void
@@ -460,6 +519,25 @@ function ProjectPanelList({
       style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
     >
       <HoverPill className="rounded-lg" pill={pill} />
+      {locationBackHref ? (
+        <li className="col-span-full">
+          <NavigationMenuLink
+            className="relative z-10 h-auto cursor-pointer items-start gap-2.5 bg-transparent p-2 text-foreground/80 hover:bg-transparent hover:text-foreground"
+            onMouseEnter={() => showPill("__back_to_project__")}
+            ref={setItemRef("__back_to_project__")}
+            render={
+              <Link to={locationBackHref}>
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] text-muted-foreground ring-1 ring-white/[0.06] ring-inset">
+                  <ArrowLeftIcon aria-hidden="true" className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">Back to project</span>
+                </span>
+              </Link>
+            }
+          />
+        </li>
+      ) : null}
       <li className="col-span-full">
         <button
           className="relative z-10 flex w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left text-muted-foreground hover:bg-transparent hover:text-foreground"
@@ -531,6 +609,7 @@ function CrawlPanelList({
   crawls,
   currentCrawlId,
   formatLabel,
+  isLocationScoped = false,
   onContextOpenChange,
   onDeleteCrawl,
   onExportCrawl,
@@ -539,6 +618,8 @@ function CrawlPanelList({
   crawls: CrawlResponse[]
   currentCrawlId?: string
   formatLabel: (crawl: CrawlResponse) => string
+  /** Location mode labels parent evidence and drops parent mutations. */
+  isLocationScoped?: boolean
   onContextOpenChange: (open: boolean) => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
@@ -555,71 +636,80 @@ function CrawlPanelList({
   }
 
   return (
-    <ul
-      className="relative max-h-72 flex-col gap-0.5 overflow-y-auto"
-      onMouseLeave={clearPill}
-    >
-      <HoverPill className="rounded-lg" pill={pill} />
-      {crawls.map((crawl) => {
-        const active = crawl.id === currentCrawlId
-        return (
-          <ContextMenu key={crawl.id} onOpenChange={onContextOpenChange}>
-            <ContextMenuTrigger className="block">
-              <button
+    <>
+      {isLocationScoped ? (
+        <p className="px-2 pt-1 pb-2 text-xs text-muted-foreground">
+          Parent project crawls — shared evidence for location views.
+        </p>
+      ) : null}
+      <ul
+        className="relative max-h-72 flex-col gap-0.5 overflow-y-auto"
+        onMouseLeave={clearPill}
+      >
+        <HoverPill className="rounded-lg" pill={pill} />
+        {crawls.map((crawl) => {
+          const active = crawl.id === currentCrawlId
+          const row = (
+            <button
+              className={cn(
+                "relative z-10 flex h-auto w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left hover:bg-transparent focus:bg-transparent",
+                active
+                  ? "text-foreground"
+                  : "text-foreground/80 hover:text-foreground"
+              )}
+              onClick={() => onSelectCrawl(crawl.id)}
+              onMouseEnter={() => showPill(crawl.id)}
+              ref={setItemRef(crawl.id)}
+              type="button"
+            >
+              <span
                 className={cn(
-                  "relative z-10 flex h-auto w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left hover:bg-transparent focus:bg-transparent",
-                  active
-                    ? "text-foreground"
-                    : "text-foreground/80 hover:text-foreground"
+                  "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] ring-1 ring-white/[0.06] ring-inset",
+                  active ? "text-foreground" : "text-muted-foreground"
                 )}
-                onClick={() => onSelectCrawl(crawl.id)}
-                onMouseEnter={() => showPill(crawl.id)}
-                ref={setItemRef(crawl.id)}
-                type="button"
               >
-                <span
-                  className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] ring-1 ring-white/[0.06] ring-inset",
-                    active ? "text-foreground" : "text-muted-foreground"
-                  )}
+                <HistoryIcon aria-hidden="true" className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium">
+                  {formatLabel(crawl)}
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  {crawl.urls_crawled}/{crawl.page_count ?? 0} · Discovered:{" "}
+                  {crawl.urls_discovered} · Crawled: {crawl.urls_crawled}
+                </span>
+              </span>
+              <span className="ml-auto shrink-0 text-[0.65rem] tracking-wide text-muted-foreground uppercase">
+                {crawl.status}
+              </span>
+            </button>
+          )
+          if (isLocationScoped) return <li key={crawl.id}>{row}</li>
+          return (
+            <ContextMenu key={crawl.id} onOpenChange={onContextOpenChange}>
+              <ContextMenuTrigger className="block">{row}</ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={() => onExportCrawl(crawl, "xlsx")}>
+                  <FileSpreadsheetIcon aria-hidden="true" />
+                  Export crawl as XLSX
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => onExportCrawl(crawl, "csv")}>
+                  <FileSpreadsheetIcon aria-hidden="true" />
+                  Export crawl as CSV
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onClick={() => onDeleteCrawl(crawl)}
+                  variant="destructive"
                 >
-                  <HistoryIcon aria-hidden="true" className="size-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">
-                    {formatLabel(crawl)}
-                  </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                    {crawl.urls_crawled}/{crawl.page_count ?? 0} · Discovered:{" "}
-                    {crawl.urls_discovered} · Crawled: {crawl.urls_crawled}
-                  </span>
-                </span>
-                <span className="ml-auto shrink-0 text-[0.65rem] tracking-wide text-muted-foreground uppercase">
-                  {crawl.status}
-                </span>
-              </button>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem onClick={() => onExportCrawl(crawl, "xlsx")}>
-                <FileSpreadsheetIcon aria-hidden="true" />
-                Export crawl as XLSX
-              </ContextMenuItem>
-              <ContextMenuItem onClick={() => onExportCrawl(crawl, "csv")}>
-                <FileSpreadsheetIcon aria-hidden="true" />
-                Export crawl as CSV
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem
-                onClick={() => onDeleteCrawl(crawl)}
-                variant="destructive"
-              >
-                <TrashIcon aria-hidden="true" />
-                Delete crawl
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        )
-      })}
-    </ul>
+                  <TrashIcon aria-hidden="true" />
+                  Delete crawl
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          )
+        })}
+      </ul>
+    </>
   )
 }

@@ -57,7 +57,11 @@ import {
   getCrawlSelectionTarget,
   getCrawlValidationError,
   getInitials,
+  getProjectBackTarget,
+  getProjectSwitchTarget,
+  getVisibilityModeTarget,
 } from "~/components/app-navbar/utils"
+import { useOptionalLocationWorkspace } from "~/lib/location-workspace"
 import { ProjectPanelOpenContext } from "~/components/summary/project-panel-context"
 import { ProjectPanel } from "~/components/command-dock/project-panel"
 import { PageEditor } from "~/components/editor/page-editor"
@@ -87,6 +91,7 @@ import type {
 import { useFeatures } from "~/lib/features"
 import { toast } from "sonner"
 import { WorkspaceDockNav } from "~/components/workspace-dock-nav"
+import { LocationWebsiteScopeSettingsButton } from "~/components/locations/location-website-scope-settings"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 
 type CreateProjectState = {
@@ -249,6 +254,7 @@ export function WorkspaceShellPreview({
   userName,
   view,
   onViewChange,
+  visibilityMode = "maps",
   revbotConversationId,
   onRevbotConversationChange,
   auditTab,
@@ -290,7 +296,22 @@ export function WorkspaceShellPreview({
   const fetchingProjectIds = useRef(new Set<string>())
   const [, setFetchedCrawlsVersion] = useState(0)
   const shouldReduceMotion = useReducedMotion() ?? false
-  const workspaceContentKey = view
+  const locationWorkspace = useOptionalLocationWorkspace()
+  const isLocationScoped = locationWorkspace !== null
+  const locationProfileScope = useMemo(
+    () =>
+      locationWorkspace
+        ? {
+            projectId: locationWorkspace.projectId,
+            locationId: locationWorkspace.location.id,
+            locationName: locationWorkspace.location.name,
+          }
+        : undefined,
+    [locationWorkspace]
+  )
+  const workspaceContentKey = locationWorkspace
+    ? `${view}:${locationWorkspace.location.id}`
+    : view
   const islandMorphTransition = islandTransition(shouldReduceMotion)
   const pendingIslandPromptFocusRef = useRef(false)
 
@@ -435,6 +456,7 @@ export function WorkspaceShellPreview({
   const islandRevbot = useRevbot({
     activeProject,
     allowedEfforts: features.ai_allowed_reasoning_efforts,
+    locationId: locationWorkspace?.location.id,
     onConversationChange: onRevbotConversationChange,
     requestedConversationId: revbotConversationId,
   })
@@ -472,7 +494,7 @@ export function WorkspaceShellPreview({
     revalidator,
   })
   const autoCrawl = useAutoCrawlSettings(activeProjectId)
-  const businessProfile = useBusinessProfile()
+  const businessProfile = useBusinessProfile(locationProfileScope)
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
     return getInitials(source, "R")
@@ -505,9 +527,12 @@ export function WorkspaceShellPreview({
       void navigate(`/app/projects/${projectId}/locations`)
       return
     }
+    if (projectId !== activeProjectId) {
+      void navigate(getProjectSwitchTarget(location, projectId, crawlId))
+      return
+    }
     const params = new URLSearchParams(location.search)
     params.set("project", projectId)
-    if (projectId !== activeProjectId) params.delete("revbotConversation")
     if (crawlId) params.set("crawl", crawlId)
     else params.delete("crawl")
     void navigate(`${location.pathname}?${params.toString()}`)
@@ -539,10 +564,19 @@ export function WorkspaceShellPreview({
 
   function selectWorkspace(
     nextView: typeof view,
-    nextAuditTab?: typeof auditTab
+    nextAuditTab?: typeof auditTab,
+    nextVisibilityMode?: typeof visibilityMode
   ) {
     onViewChange(nextView)
     if (nextAuditTab !== undefined) onAuditTabChange(nextAuditTab)
+    if (
+      nextVisibilityMode !== undefined &&
+      nextView === "revserp-visibility"
+    ) {
+      void navigate(getVisibilityModeTarget(location, nextVisibilityMode), {
+        replace: true,
+      })
+    }
     setIsMobileSidebarOpen(false)
   }
 
@@ -655,12 +689,14 @@ export function WorkspaceShellPreview({
                 auditTab={auditTab}
                 gscConnector={features.gsc_connector}
                 integrations={features.integrations !== false}
+                isLocationScoped={isLocationScoped}
                 maxCompetitors={features.max_competitors}
                 onNavigate={() => setIsMobileSidebarOpen(false)}
                 onSelectWorkspace={selectWorkspace}
                 pathname={location.pathname}
                 projectId={activeProject?.id}
                 view={view}
+                visibilityMode={visibilityMode}
               />
             </SidebarContent>
           </Sidebar>
@@ -689,8 +725,15 @@ export function WorkspaceShellPreview({
                       type="button"
                     >
                       <span className="truncate">
-                        {activeProject?.name ?? "Select a project"}
+                        {locationWorkspace
+                          ? locationWorkspace.location.name
+                          : (activeProject?.name ?? "Select a project")}
                       </span>
+                      {locationWorkspace ? (
+                        <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-micro font-medium text-muted-foreground">
+                          Location
+                        </span>
+                      ) : null}
                     </button>
                   </header>
                 )}
@@ -814,6 +857,13 @@ export function WorkspaceShellPreview({
                     formatCrawlLabel={formatCrawlDateTime}
                     gscConnector={features.gsc_connector}
                     integrations={features.integrations !== false}
+                    isLocationScoped={isLocationScoped}
+                    locationBackHref={
+                      locationWorkspace
+                        ? getProjectBackTarget(locationWorkspace.projectId)
+                        : null
+                    }
+                    locationName={locationWorkspace?.location.name ?? null}
                     maxCompetitors={features.max_competitors}
                     onCreateProject={() =>
                       createProjectDispatch({ type: "OPEN" })
@@ -835,32 +885,49 @@ export function WorkspaceShellPreview({
                     projectId={activeProject?.id}
                     projects={projects}
                     trailing={
-                      <button
-                        className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
-                        disabled={!activeProject || isCrawlRunning}
-                        onClick={() => runCrawlDispatch({ type: "OPEN" })}
-                        type="button"
-                      >
-                        <PlayIcon aria-hidden="true" className="size-4" />
-                        {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
-                      </button>
+                      isLocationScoped && locationWorkspace ? (
+                        <LocationWebsiteScopeSettingsButton
+                          projectId={locationWorkspace.projectId}
+                          locationId={locationWorkspace.location.id}
+                          workspace={locationWorkspace}
+                          parentUrl={activeProject?.base_url ?? null}
+                        />
+                      ) : (
+                        <button
+                          className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
+                          disabled={!activeProject || isCrawlRunning}
+                          onClick={() => runCrawlDispatch({ type: "OPEN" })}
+                          type="button"
+                        >
+                          <PlayIcon aria-hidden="true" className="size-4" />
+                          {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                        </button>
+                      )
                     }
                     view={view}
+                    visibilityMode={visibilityMode}
                     actions={[
-                      {
-                        key: "auto-crawl",
-                        icon: (
-                          <SparklesIcon aria-hidden="true" className="size-4" />
-                        ),
-                        disabled: !activeProject || autoCrawl.isSaving,
-                        label: autoCrawl.enabled
-                          ? "Auto crawl on"
-                          : "Auto crawl",
-                        onSelect: () =>
-                          autoCrawl.enabled
-                            ? void autoCrawl.handleDisable()
-                            : void autoCrawl.openDialog(),
-                      },
+                      ...(isLocationScoped
+                        ? []
+                        : [
+                            {
+                              key: "auto-crawl",
+                              icon: (
+                                <SparklesIcon
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              ),
+                              disabled: !activeProject || autoCrawl.isSaving,
+                              label: autoCrawl.enabled
+                                ? "Auto crawl on"
+                                : "Auto crawl",
+                              onSelect: () =>
+                                autoCrawl.enabled
+                                  ? void autoCrawl.handleDisable()
+                                  : void autoCrawl.openDialog(),
+                            },
+                          ]),
                       ...(features.integrations !== false
                         ? [
                             {
@@ -894,54 +961,72 @@ export function WorkspaceShellPreview({
                             )
                         },
                       },
-                      { key: "d1", divider: true },
-                      {
-                        key: "export-pdf",
-                        icon: (
-                          <FileTextIcon aria-hidden="true" className="size-4" />
-                        ),
-                        disabled: !currentCrawlCompleted || isExportingAudit,
-                        label: isExportingAudit
-                          ? "Generating audit…"
-                          : "Export PDF audit",
-                        onSelect: onExportAudit,
-                      },
-                      {
-                        key: "export-xlsx",
-                        icon: (
-                          <FileSpreadsheetIcon
-                            aria-hidden="true"
-                            className="size-4"
-                          />
-                        ),
-                        disabled: !currentCrawlCompleted || isExportingCrawl,
-                        label: "Export crawl as XLSX",
-                        onSelect: () => {
-                          if (currentCrawl)
-                            void projectActions.handleExportCrawl(
-                              currentCrawl,
-                              "xlsx"
-                            )
-                        },
-                      },
-                      {
-                        key: "export-csv",
-                        icon: (
-                          <FileSpreadsheetIcon
-                            aria-hidden="true"
-                            className="size-4"
-                          />
-                        ),
-                        disabled: !currentCrawlCompleted || isExportingCrawl,
-                        label: "Export crawl as CSV",
-                        onSelect: () => {
-                          if (currentCrawl)
-                            void projectActions.handleExportCrawl(
-                              currentCrawl,
-                              "csv"
-                            )
-                        },
-                      },
+                      ...(isLocationScoped ? [] : [{ key: "d1", divider: true }]),
+                      ...(isLocationScoped
+                        ? []
+                        : [
+                            {
+                              key: "export-pdf",
+                              icon: (
+                                <FileTextIcon
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              ),
+                              disabled:
+                                !currentCrawlCompleted || isExportingAudit,
+                              label: isExportingAudit
+                                ? "Generating audit…"
+                                : "Export PDF audit",
+                              onSelect: onExportAudit,
+                            },
+                          ]),
+                      ...(isLocationScoped
+                        ? []
+                        : [
+                            {
+                              key: "export-xlsx",
+                              icon: (
+                                <FileSpreadsheetIcon
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              ),
+                              disabled:
+                                !currentCrawlCompleted || isExportingCrawl,
+                              label: "Export crawl as XLSX",
+                              onSelect: () => {
+                                if (currentCrawl)
+                                  void projectActions.handleExportCrawl(
+                                    currentCrawl,
+                                    "xlsx"
+                                  )
+                              },
+                            },
+                          ]),
+                      ...(isLocationScoped
+                        ? []
+                        : [
+                            {
+                              key: "export-csv",
+                              icon: (
+                                <FileSpreadsheetIcon
+                                  aria-hidden="true"
+                                  className="size-4"
+                                />
+                              ),
+                              disabled:
+                                !currentCrawlCompleted || isExportingCrawl,
+                              label: "Export crawl as CSV",
+                              onSelect: () => {
+                                if (currentCrawl)
+                                  void projectActions.handleExportCrawl(
+                                    currentCrawl,
+                                    "csv"
+                                  )
+                              },
+                            },
+                          ]),
                     ]}
                   />
                 </div>

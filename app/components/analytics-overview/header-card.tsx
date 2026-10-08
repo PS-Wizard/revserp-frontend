@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 import { RefreshCw } from "lucide-react"
 
 import { Button } from "~/components/ui/button"
@@ -30,6 +32,7 @@ export function AnalyticsHeaderCard({
   errorMessage,
   onPropertyChange,
   onRefresh,
+  actions,
 }: {
   properties: ProjectAnalyticsPropertyResponse[]
   selectedProperty: ProjectAnalyticsPropertyResponse | null
@@ -43,6 +46,7 @@ export function AnalyticsHeaderCard({
   errorMessage: string
   onPropertyChange: (value: string) => void | Promise<void>
   onRefresh: () => void | Promise<void>
+  actions?: ReactNode
 }) {
   return (
     <Card className="mx-4 bg-gradient-to-br from-card via-card to-muted/30 sm:mx-6 lg:mx-4">
@@ -122,6 +126,11 @@ export function AnalyticsHeaderCard({
               </p>
             </div>
           )}
+          {actions ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {actions}
+            </div>
+          ) : null}
           <Button disabled={isRefreshing || isSaving} onClick={onRefresh}>
             <RefreshCw className={isRefreshing ? "animate-spin" : ""} />
             {isRefreshing ? "Refreshing..." : "Refresh data"}

@@ -13,11 +13,13 @@ export type LocalSeoMapDetailPanelProps = {
   title: string
   meta?: string
   pill?: string
-  onClose: () => void
+  onClose?: () => void
   onBack?: () => void
   backClassName?: string
   activeTab?: LocalSeoMapSidebarTab
   onTabChange?: (tab: LocalSeoMapSidebarTab) => void
+  /** Locked scopes render a subset; defaults to every tab. */
+  visibleTabs?: LocalSeoMapSidebarTab[]
   children: ReactNode
 }
 
@@ -30,9 +32,13 @@ export function LocalSeoMapDetailPanel({
   backClassName,
   activeTab,
   onTabChange,
+  visibleTabs,
   children,
 }: LocalSeoMapDetailPanelProps) {
   const showTabs = activeTab !== undefined && onTabChange !== undefined
+  const tabs = LOCAL_SEO_MAP_SIDEBAR_TABS.filter(
+    (tab) => visibleTabs === undefined || visibleTabs.includes(tab.value)
+  )
 
   return (
     <div
@@ -73,16 +79,18 @@ export function LocalSeoMapDetailPanel({
             </div>
           ) : null}
         </div>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          aria-label="Close details"
-          className="-mr-2 size-7"
-          onClick={onClose}
-        >
-          <XIcon aria-hidden="true" />
-        </Button>
+        {onClose ? (
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Close details"
+            className="-mr-2 size-7"
+            onClick={onClose}
+          >
+            <XIcon aria-hidden="true" />
+          </Button>
+        ) : null}
       </header>
 
       {showTabs ? (
@@ -93,7 +101,7 @@ export function LocalSeoMapDetailPanel({
         >
           <div className="shrink-0 px-4 pt-2">
             <TabsList variant="line" className="w-full">
-              {LOCAL_SEO_MAP_SIDEBAR_TABS.map((tab) => (
+              {tabs.map((tab) => (
                 <TabsTrigger key={tab.value} value={tab.value} className="flex-none px-1.5 text-xs">
                   {tab.label}
                 </TabsTrigger>

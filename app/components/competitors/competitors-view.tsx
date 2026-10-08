@@ -13,7 +13,11 @@ import { toast } from "sonner"
 
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
-import { Card } from "~/components/ui/card"
+import {
+  CompetitorCardShell,
+  CompetitorCardSkeleton,
+  competitorCardActionClass,
+} from "~/components/competitors/competitor-card-shell"
 import {
   Dialog,
   DialogClose,
@@ -34,7 +38,6 @@ import {
 import { Field, FieldGroup, FieldLabel } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import { Progress } from "~/components/ui/progress"
-import { Skeleton } from "~/components/ui/skeleton"
 import {
   ApiError,
   clientApiDelete,
@@ -98,30 +101,7 @@ function hostLabel(url: string) {
   }
 }
 
-const COVER_GRADIENTS = [
-  {
-    background:
-      "linear-gradient(145deg, rgb(225 29 72 / 0.24) 0%, rgb(127 29 29 / 0.14) 42%, transparent 74%)",
-    monogram: "rgb(225 29 72 / 0.3)",
-  },
-  {
-    background:
-      "linear-gradient(145deg, rgb(20 184 166 / 0.24) 0%, rgb(15 118 110 / 0.14) 42%, transparent 74%)",
-    monogram: "rgb(20 184 166 / 0.3)",
-  },
-  {
-    background:
-      "linear-gradient(145deg, rgb(99 102 241 / 0.24) 0%, rgb(67 56 202 / 0.14) 42%, transparent 74%)",
-    monogram: "rgb(99 102 241 / 0.3)",
-  },
-] as const
-
-function coverGradient(index: number) {
-  return COVER_GRADIENTS[index % COVER_GRADIENTS.length]
-}
-
-const cardActionClass =
-  "flex size-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-background/60 text-muted-foreground transition-colors"
+const cardActionClass = competitorCardActionClass
 
 type CrawlTone = "muted" | "active" | "ok" | "bad"
 
@@ -196,8 +176,6 @@ function CompetitorCard({
       : isProgressing
         ? 0
         : null
-  const cover = coverGradient(index)
-  const monogram = cardTitle.charAt(0).toUpperCase()
   const isCancelled = crawl?.status === "cancelled"
   const crawlDate = crawl?.completed_at ? new Date(crawl.completed_at) : null
   const crawlDateLabel =
@@ -211,54 +189,22 @@ function CompetitorCard({
   }
 
   return (
-    <Card
-      className={cn(
-        "relative flex min-h-44 w-full flex-col gap-0 self-start overflow-hidden bg-card py-0",
-        isCompleted &&
-          "cursor-pointer transition-colors hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
-      )}
-      onClick={isCompleted ? openInsights : undefined}
-      onKeyDown={
-        isCompleted
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault()
-                openInsights()
-              }
-            }
-          : undefined
-      }
-      role={isCompleted ? "button" : undefined}
-      tabIndex={isCompleted ? 0 : undefined}
-    >
-      <div
-        aria-hidden="true"
-        className="absolute inset-0"
-        style={{ background: cover.background }}
-      />
-      <div className="relative flex items-start justify-between gap-3 px-4 pt-4">
-        <span className="min-w-0 truncate pr-2 text-sm font-medium">
-          {cardTitle}
-        </span>
-        <span
-          className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border/50 text-micro font-semibold uppercase"
-          style={{ backgroundColor: cover.monogram }}
-        >
-          {monogram}
-        </span>
-      </div>
-
-      <div className="relative flex flex-1 items-center justify-center px-4 py-5 text-center">
-        {isCompleted ? (
+    <CompetitorCardShell
+      title={cardTitle}
+      index={index}
+      interactive={isCompleted}
+      onActivate={isCompleted ? openInsights : undefined}
+      body={
+        isCompleted ? (
           <p className="text-sm text-foreground">
-            {crawl.urls_crawled.toLocaleString()} pages
+            {crawl!.urls_crawled.toLocaleString()} pages
             {crawlDateLabel ? ` · crawled ${crawlDateLabel}` : ""}
           </p>
         ) : isProgressing ? (
           <div className="flex w-full max-w-xs flex-col gap-2">
             <Progress value={progressValue ?? 0} />
             <p className="text-sm text-muted-foreground">
-              {crawlProgressLabel(crawl)}
+              {crawlProgressLabel(crawl!)}
             </p>
           </div>
         ) : isFailed ? (
@@ -273,10 +219,9 @@ function CompetitorCard({
           <p className="text-sm text-muted-foreground">
             Not crawled for this audit yet.
           </p>
-        )}
-      </div>
-
-      <div className="relative flex items-center justify-between gap-2 px-4 pb-4">
+        )
+      }
+      footerBadge={
         <Badge variant={badgeVariant(state.tone)}>
           {isActive ? (
             <Loader2Icon
@@ -293,7 +238,9 @@ function CompetitorCard({
           ) : null}
           {state.label}
         </Badge>
-        <div className="flex items-center gap-1.5">
+      }
+      footerActions={
+        <>
           <button
             aria-label={`Remove ${displayName}`}
             className={cn(
@@ -318,27 +265,9 @@ function CompetitorCard({
               <ArrowRightIcon className="size-4" />
             </span>
           ) : null}
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-function CompetitorCardSkeleton() {
-  return (
-    <Card className="flex min-h-44 flex-col gap-0 py-0">
-      <div className="flex items-start justify-between px-4 pt-4">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="size-6 rounded-md" />
-      </div>
-      <div className="flex flex-1 items-center justify-center px-4 py-5">
-        <Skeleton className="h-4 w-40" />
-      </div>
-      <div className="flex items-center justify-between px-4 pb-4">
-        <Skeleton className="h-5 w-16 rounded-full" />
-        <Skeleton className="size-8 rounded-full" />
-      </div>
-    </Card>
+        </>
+      }
+    />
   )
 }
 

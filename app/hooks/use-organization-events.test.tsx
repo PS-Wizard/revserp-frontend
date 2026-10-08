@@ -149,7 +149,7 @@ test("location completion toast resolves audit scope before opening results", as
     await flushTestDom()
   })
   expect(viewed).toEqual([
-    "/app/projects/project-1/locations?audit=audit-1&location=branch-2",
+    "/app?audit=audit-1&project=project-1&location=branch-2",
   ])
 })
 

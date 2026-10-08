@@ -12,13 +12,14 @@ import { useReducedMotion } from "motion/react"
 import { ApiError } from "~/lib/api"
 import {
   LOCAL_SEO_DEFAULT_RADIUS_M,
-  LOCAL_SEO_QUERY_COUNT,
   fetchLocalSeoLandmarks,
   fetchLocalSeoLatestListingLookup,
   fetchLocalSeoLatestRun,
+  fetchLocalSeoLocation,
   fetchLocalSeoLocationQueryRecords,
   fetchLocalSeoLocations,
   fetchLocalSeoPointDetails,
+  fetchLocalSeoRun,
   fetchLocalSeoRunCompetitors,
   fetchLocalSeoRunPointCompetitors,
   generateLocalSeoQueries,
@@ -32,6 +33,7 @@ import {
   localSeoPointDetailsQueryKey,
   localSeoRunCompetitorsQueryKey,
   localSeoRunPointCompetitorsQueryKey,
+  localSeoRunQueryKey,
   localSeoQueryTextKey,
   localSeoRunRefetchInterval,
   refreshLocalSeoLandmarks,
@@ -54,12 +56,10 @@ import {
 import { LocalSeoMapDetailPanel } from "~/components/local-seo-map-detail-panel"
 import { LocalSeoMapSearchCard } from "~/components/local-seo-map-search"
 import { LocalSeoMapReportContent } from "~/components/local-seo-map-report"
-import {
-  countEnabledLocalSeoMapDrafts,
-  LocalSeoMapSetupContent,
-} from "~/components/local-seo-map-setup"
+import { LocalSeoMapSetupContent } from "~/components/local-seo-map-setup"
 import { LocalSeoServicesEditor } from "~/components/local-seo-services-editor"
 import { LocalSeoRunControls } from "~/components/local-seo-run-controls"
+import { LocationSavedRunPicker } from "~/components/locations/location-saved-run-picker"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
 import {
   LocalSeoMapSidebar,
@@ -166,21 +166,11 @@ export function preserveLocalSeoLandmarkDrafts(args: {
   const preservedKeys = new Set(
     preserved.map((draft) => localSeoQueryTextKey(draft.text))
   )
-  let slots = Math.max(
-    0,
-    LOCAL_SEO_QUERY_COUNT - countEnabledLocalSeoMapDrafts(preserved)
+  const generated = args.generated.filter(
+    (draft) =>
+      !preservedIds.has(draft.id) &&
+      !preservedKeys.has(localSeoQueryTextKey(draft.text))
   )
-  const generated = args.generated
-    .filter(
-      (draft) =>
-        !preservedIds.has(draft.id) &&
-        !preservedKeys.has(localSeoQueryTextKey(draft.text))
-    )
-    .map((draft) => {
-      const enabled = draft.enabled && slots > 0
-      if (enabled) slots--
-      return enabled === draft.enabled ? draft : { ...draft, enabled }
-    })
   return [...generated, ...preserved]
 }
 
@@ -320,22 +310,40 @@ export function LocalSeoMapPage({
   projectId,
   initialLocationId,
   initialVisibilityAuditId,
+  lockedLocationId,
 }: {
   projectId: string
   initialLocationId?: string
   initialVisibilityAuditId?: string
+  /** Location-shell scope. Locks selection, hides the picker/add and AI/query tabs. */
+  lockedLocationId?: string
 }) {
   const queryClient = useQueryClient()
   const [map, setMap] = useState<MapLibreMap | null>(null)
   const [collapsed, setCollapsed] = useState(false)
-  const [selectedId, setSelectedId] = useState<string | null>(initialLocationId ?? null)
-  const [detailRequested, setDetailRequested] = useState(Boolean(initialLocationId))
+  const [selectedIdState, setSelectedId] = useState<string | null>(
+    lockedLocationId ?? initialLocationId ?? null
+  )
+  const selectedId = lockedLocationId ?? selectedIdState
+  const [detailRequested, setDetailRequested] = useState(
+    Boolean(lockedLocationId ?? initialLocationId)
+  )
   const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(
     null
   )
   const [adding, setAdding] = useState(false)
   const [activeTab, setActiveTab] = useState<LocalSeoMapSidebarTab>(
-    initialVisibilityAuditId ? "visibility" : "overview"
+    lockedLocationId
+      ? "overview"
+      : initialVisibilityAuditId
+        ? "visibility"
+        : "overview"
+  )
+  const [lockedHistoryRunId, setLockedHistoryRunId] = useState<string | null>(
+    null
+  )
+  const [lockedSessionRunId, setLockedSessionRunId] = useState<string | null>(
+    null
   )
   const [radiusDrafts, setRadiusDrafts] = useState<Record<string, number>>({})
   const [localityText, setLocalityText] = useState("")
@@ -359,12 +367,21 @@ export function LocalSeoMapPage({
   const locationsQuery = useQuery({
     queryKey: localSeoLocationsQueryKey(projectId),
     queryFn: () => fetchLocalSeoLocations(projectId),
-    enabled: projectId !== "",
+    enabled: projectId !== "" && lockedLocationId === undefined,
   })
-  const locations = useMemo(
-    () => locationsQuery.data ?? [],
-    [locationsQuery.data]
-  )
+  const lockedLocationQuery = useQuery({
+    queryKey: lockedLocationId
+      ? localSeoLocationQueryKey(projectId, lockedLocationId)
+      : ["local-seo-location", projectId, "none"],
+    queryFn: () => fetchLocalSeoLocation(projectId, lockedLocationId!),
+    enabled: projectId !== "" && lockedLocationId !== undefined,
+  })
+  const locations = useMemo(() => {
+    if (lockedLocationId) {
+      return lockedLocationQuery.data ? [lockedLocationQuery.data] : []
+    }
+    return locationsQuery.data ?? []
+  }, [lockedLocationId, lockedLocationQuery.data, locationsQuery.data])
 
   const latestRuns = useQueries({
     queries: locations.map((location) => ({
@@ -397,8 +414,23 @@ export function LocalSeoMapPage({
   const selectedRun = selectedLocation
     ? (runByLocation.get(selectedLocation.id) ?? null)
     : null
+  const lockedEvidenceQuery = useQuery({
+    queryKey:
+      lockedLocationId && lockedHistoryRunId
+        ? localSeoRunQueryKey(projectId, lockedLocationId, lockedHistoryRunId)
+        : ["local-seo-run", projectId, "none"],
+    queryFn: () =>
+      fetchLocalSeoRun(projectId, lockedLocationId!, lockedHistoryRunId!),
+    enabled: lockedLocationId !== undefined && lockedHistoryRunId !== null,
+  })
+  const evidenceRun =
+    lockedLocationId && lockedHistoryRunId
+      ? (lockedEvidenceQuery.data ?? null)
+      : selectedRun
   const searchActive = adding || (selectedLocation !== null && !selectedBound)
-  const detailOpen = adding || (selectedLocation !== null && detailRequested)
+  const detailOpen = lockedLocationId
+    ? selectedBound
+    : adding || (selectedLocation !== null && detailRequested)
   const detailSubtitle =
     adding || !selectedLocation
       ? undefined
@@ -406,8 +438,8 @@ export function LocalSeoMapPage({
         ? selectedLocation.address || selectedLocation.locality || undefined
         : "Unresolved search area"
   const detailRadiusLabel =
-    !adding && selectedBound && selectedRun
-      ? describeLocalSeoRadiusLabel(selectedRun.radius_m)
+    !adding && selectedBound && evidenceRun
+      ? describeLocalSeoRadiusLabel(evidenceRun.radius_m)
       : undefined
 
   const selectedIndex = selectedLocation
@@ -422,6 +454,19 @@ export function LocalSeoMapPage({
           "Could not load the latest run"
         )
       : null
+  const historySelected =
+    lockedLocationId !== undefined && lockedHistoryRunId !== null
+  const evidenceRunPending = historySelected
+    ? lockedEvidenceQuery.isPending
+    : selectedRunPending
+  const evidenceRunError = historySelected
+    ? lockedEvidenceQuery.isError
+      ? errorMessageOf(
+          lockedEvidenceQuery.error,
+          "Could not load the saved run"
+        )
+      : null
+    : selectedRunError
 
   const lookupQuery = useQuery({
     queryKey:
@@ -444,20 +489,20 @@ export function LocalSeoMapPage({
 
   const pointDetailsQuery = useQuery({
     queryKey:
-      selectedLocation && selectedRun && focusedPointIndex !== null
+      selectedLocation && evidenceRun && focusedPointIndex !== null
         ? localSeoPointDetailsQueryKey(
             projectId,
             selectedLocation.id,
-            selectedRun.id,
+            evidenceRun.id,
             focusedPointIndex,
-            selectedRun.status
+            evidenceRun.status
           )
         : ["local-seo-point-details", projectId, "none"],
     queryFn: () =>
       fetchLocalSeoPointDetails(
         projectId,
         selectedLocation!.id,
-        selectedRun!.id,
+        evidenceRun!.id,
         focusedPointIndex!
       ),
     enabled:
@@ -466,7 +511,7 @@ export function LocalSeoMapPage({
       selectedRun !== null &&
       focusedPointIndex !== null &&
       activeTab === "overview",
-    refetchInterval: localSeoRunRefetchInterval(selectedRun?.status),
+    refetchInterval: localSeoRunRefetchInterval(evidenceRun?.status),
   })
 
   const competitorsEnabled =
@@ -477,23 +522,23 @@ export function LocalSeoMapPage({
     focusedPointIndex === null
   const competitorsQuery = useQuery({
     queryKey:
-      selectedLocation && selectedRun && competitorsEnabled
+      selectedLocation && evidenceRun && competitorsEnabled
         ? localSeoRunCompetitorsQueryKey(
             projectId,
             selectedLocation.id,
-            selectedRun.id,
-            selectedRun.status,
-            selectedRun.completed_cells ?? null,
+            evidenceRun.id,
+            evidenceRun.status,
+            evidenceRun.completed_cells ?? null
           )
         : ["local-seo-run-competitors", projectId, "none"],
     queryFn: () =>
       fetchLocalSeoRunCompetitors(
         projectId,
         selectedLocation!.id,
-        selectedRun!.id,
+        evidenceRun!.id
       ),
     enabled: competitorsEnabled,
-    refetchInterval: localSeoRunRefetchInterval(selectedRun?.status),
+    refetchInterval: localSeoRunRefetchInterval(evidenceRun?.status),
   })
 
   const pointCompetitorsEnabled =
@@ -505,27 +550,27 @@ export function LocalSeoMapPage({
   const pointCompetitorsQuery = useQuery({
     queryKey:
       selectedLocation &&
-      selectedRun &&
+      evidenceRun &&
       pointCompetitorsEnabled &&
       focusedPointIndex !== null
         ? localSeoRunPointCompetitorsQueryKey(
             projectId,
             selectedLocation.id,
-            selectedRun.id,
+            evidenceRun.id,
             focusedPointIndex,
-            selectedRun.status,
-            selectedRun.completed_cells ?? null,
+            evidenceRun.status,
+            evidenceRun.completed_cells ?? null
           )
         : ["local-seo-run-point-competitors", projectId, "none"],
     queryFn: () =>
       fetchLocalSeoRunPointCompetitors(
         projectId,
         selectedLocation!.id,
-        selectedRun!.id,
-        focusedPointIndex!,
+        evidenceRun!.id,
+        focusedPointIndex!
       ),
     enabled: pointCompetitorsEnabled,
-    refetchInterval: localSeoRunRefetchInterval(selectedRun?.status),
+    refetchInterval: localSeoRunRefetchInterval(evidenceRun?.status),
   })
 
   const selectedLocationIdRef = useRef<string | null>(null)
@@ -539,6 +584,9 @@ export function LocalSeoMapPage({
   function radiusDraftFor(id: string): number {
     return (
       radiusDrafts[id] ??
+      (lockedLocationId
+        ? locations.find((location) => location.id === id)?.radius_m
+        : null) ??
       runByLocation.get(id)?.radius_m ??
       LOCAL_SEO_DEFAULT_RADIUS_M
     )
@@ -554,7 +602,7 @@ export function LocalSeoMapPage({
       : null
   const reportRun =
     selectedBound && !searchActive && activeTab !== "queries"
-      ? selectedRun
+      ? evidenceRun
       : null
 
   const overlayCenter = selectLocalSeoOverlayCenter({
@@ -708,7 +756,7 @@ export function LocalSeoMapPage({
   }, [])
 
   useEffect(() => {
-    if (initialSelectionDoneRef.current) return
+    if (lockedLocationId || initialSelectionDoneRef.current) return
     if (locationsQuery.isPending || locationsQuery.isError) return
     const initial = selectLocalSeoInitialReportLocation(
       locations,
@@ -948,6 +996,7 @@ export function LocalSeoMapPage({
   }
 
   function selectLocation(location: LocalSeoLocation) {
+    if (lockedLocationId) return
     initialSelectionDoneRef.current = true
     setAdding(false)
     setSelectedId(location.id)
@@ -964,6 +1013,7 @@ export function LocalSeoMapPage({
   }
 
   function openAddLocation() {
+    if (lockedLocationId) return
     initialSelectionDoneRef.current = true
     setAdding(true)
     setDetailRequested(true)
@@ -978,10 +1028,12 @@ export function LocalSeoMapPage({
   }
 
   function closeDetail() {
+    if (lockedLocationId) return
     setDetailRequested(false)
   }
 
   function clearSelection() {
+    if (lockedLocationId) return
     setSelectedId(null)
     setDetailRequested(false)
     setFocusedPointIndex(null)
@@ -1124,12 +1176,35 @@ export function LocalSeoMapPage({
     if (activeTab === "run") {
       if (!selectedBound) return null
       return (
-        <LocalSeoRunControls
-          key={`${projectId}:${selectedLocation.id}`}
-          projectId={projectId}
-          location={selectedLocation}
-          radiusM={selectedRadiusM}
-        />
+        <div className="flex flex-col gap-3">
+          {lockedLocationId ? (
+            <LocationSavedRunPicker
+              projectId={projectId}
+              locationId={selectedLocation.id}
+              latestRun={selectedRun}
+              value={lockedHistoryRunId}
+              sessionRunId={lockedSessionRunId}
+              onChange={(runId) => {
+                setLockedHistoryRunId(runId)
+                setFocusedPointIndex(null)
+              }}
+            />
+          ) : null}
+          <LocalSeoRunControls
+            key={`${projectId}:${selectedLocation.id}`}
+            projectId={projectId}
+            location={selectedLocation}
+            radiusM={selectedRadiusM}
+            onRunStarted={
+              lockedLocationId
+                ? (runId) => {
+                    setLockedSessionRunId(runId)
+                    setLockedHistoryRunId(runId)
+                  }
+                : undefined
+            }
+          />
+        </div>
       )
     }
     if (activeTab === "visibility") {
@@ -1141,7 +1216,9 @@ export function LocalSeoMapPage({
           locationId={selectedLocation.id}
           locationName={selectedLocation.name}
           initialAuditId={
-            selectedLocation.id === initialLocationId ? initialVisibilityAuditId : undefined
+            selectedLocation.id === initialLocationId
+              ? initialVisibilityAuditId
+              : undefined
           }
         />
       )
@@ -1151,9 +1228,9 @@ export function LocalSeoMapPage({
       <LocalSeoMapReportContent
         projectId={projectId}
         location={selectedLocation}
-        latestRun={selectedRun}
-        runPending={selectedRunPending}
-        runError={selectedRunError}
+        latestRun={evidenceRun}
+        runPending={evidenceRunPending}
+        runError={evidenceRunError}
         lookup={lookupQuery.data ?? null}
         lookupPending={lookupQuery.isPending}
         tab={activeTab}
@@ -1185,7 +1262,9 @@ export function LocalSeoMapPage({
             : null
         }
         pointCompetitors={
-          pointCompetitorsEnabled ? (pointCompetitorsQuery.data ?? null) : undefined
+          pointCompetitorsEnabled
+            ? (pointCompetitorsQuery.data ?? null)
+            : undefined
         }
         pointCompetitorsPending={
           pointCompetitorsEnabled ? pointCompetitorsQuery.isPending : false
@@ -1230,22 +1309,27 @@ export function LocalSeoMapPage({
         ref={panelsRef}
         className="pointer-events-none absolute top-[13px] bottom-3 left-3 flex items-stretch gap-2"
       >
-        <LocalSeoMapSidebar
-          collapsed={collapsed}
-          locations={locations}
-          runByLocation={runByLocation}
-          selectedId={selectedId}
-          locationsPending={locationsQuery.isPending}
-          locationsError={
-            locationsQuery.isError
-              ? errorMessageOf(locationsQuery.error, "Could not load locations")
-              : null
-          }
-          onSelectLocation={selectLocation}
-          onAddLocation={openAddLocation}
-          onToggleCollapsed={() => setCollapsed((value) => !value)}
-          className={detailOpen ? "max-lg:hidden" : undefined}
-        />
+        {lockedLocationId ? null : (
+          <LocalSeoMapSidebar
+            collapsed={collapsed}
+            locations={locations}
+            runByLocation={runByLocation}
+            selectedId={selectedId}
+            locationsPending={locationsQuery.isPending}
+            locationsError={
+              locationsQuery.isError
+                ? errorMessageOf(
+                    locationsQuery.error,
+                    "Could not load locations"
+                  )
+                : null
+            }
+            onSelectLocation={selectLocation}
+            onAddLocation={openAddLocation}
+            onToggleCollapsed={() => setCollapsed((value) => !value)}
+            className={detailOpen ? "max-lg:hidden" : undefined}
+          />
+        )}
 
         {detailOpen ? (
           <LocalSeoMapDetailPanel
@@ -1253,11 +1337,26 @@ export function LocalSeoMapPage({
             title={adding ? "Add location" : (selectedLocation?.name ?? "")}
             meta={adding ? undefined : detailSubtitle}
             pill={adding ? undefined : detailRadiusLabel}
-            onClose={searchActive ? closeSearch : closeDetail}
-            onBack={searchActive ? closeSearch : clearSelection}
+            onClose={
+              lockedLocationId
+                ? undefined
+                : searchActive
+                  ? closeSearch
+                  : closeDetail
+            }
+            onBack={
+              searchActive
+                ? closeSearch
+                : lockedLocationId
+                  ? undefined
+                  : clearSelection
+            }
             backClassName={searchActive ? undefined : "lg:hidden"}
             activeTab={searchActive ? undefined : activeTab}
             onTabChange={searchActive ? undefined : setActiveTab}
+            visibleTabs={
+              lockedLocationId ? ["overview", "competitors", "run"] : undefined
+            }
           >
             {searchActive ? (
               <LocalSeoMapSearchCard

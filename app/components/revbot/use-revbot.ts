@@ -106,14 +106,30 @@ type RevbotState = {
   approvalDecisionErrors: Record<string, string>
 }
 
-function storageKey(projectId: string) {
-  return `${STORAGE_PREFIX}${projectId}`
+function normalizeLocationScope(value: string | null | undefined): string | null {
+  return value ? value : null
 }
 
-function readStoredConversation(projectId: string): StoredConversation | null {
+function conversationLocationScope(conversation: {
+  location_id?: string | null
+} | null | undefined): string | null {
+  return normalizeLocationScope(conversation?.location_id)
+}
+
+function storageKey(projectId: string, locationId?: string | null) {
+  const scope = normalizeLocationScope(locationId)
+  return scope
+    ? `${STORAGE_PREFIX}${projectId}:${scope}`
+    : `${STORAGE_PREFIX}${projectId}`
+}
+
+function readStoredConversation(
+  projectId: string,
+  locationId?: string | null
+): StoredConversation | null {
   try {
     const value: unknown = JSON.parse(
-      localStorage.getItem(storageKey(projectId)) ?? "null"
+      localStorage.getItem(storageKey(projectId, locationId)) ?? "null"
     )
     if (!value || typeof value !== "object") return null
     const record = value as Record<string, unknown>
@@ -126,17 +142,21 @@ function readStoredConversation(projectId: string): StoredConversation | null {
   }
 }
 
-function saveStoredConversation(projectId: string, value: StoredConversation) {
+function saveStoredConversation(
+  projectId: string,
+  value: StoredConversation,
+  locationId?: string | null
+) {
   try {
-    localStorage.setItem(storageKey(projectId), JSON.stringify(value))
+    localStorage.setItem(storageKey(projectId, locationId), JSON.stringify(value))
   } catch {
     // Storage is an optional reload convenience.
   }
 }
 
-function clearStoredConversation(projectId: string) {
+function clearStoredConversation(projectId: string, locationId?: string | null) {
   try {
-    localStorage.removeItem(storageKey(projectId))
+    localStorage.removeItem(storageKey(projectId, locationId))
   } catch {}
 }
 
@@ -381,11 +401,14 @@ export function useRevbot({
   activeProject,
   allowedEfforts,
   requestedConversationId,
+  locationId,
   onConversationChange,
 }: {
   activeProject: ProjectResponse | null
   allowedEfforts: AIReasoningEffort[]
   requestedConversationId: string | null
+  /** Location workspace scope. Absent means the parent project scope. */
+  locationId?: string
   onConversationChange: (conversationId: string | null) => void
 }) {
   const queryClient = useQueryClient()
@@ -422,6 +445,8 @@ export function useRevbot({
   })
   const mountedRef = useRef(true)
   const projectIdRef = useRef<string | null>(null)
+  const locationIdRef = useRef<string | null>(null)
+  const conversationLocationRef = useRef<string | null>(null)
   const conversationIdRef = useRef<string | null>(null)
   const turnIdRef = useRef<string | null>(null)
   const statusRef = useRef<RevbotStatus>("idle")
@@ -484,23 +509,36 @@ export function useRevbot({
     // conversation id arrives right after the list fetch starts), leaving
     // the history pane empty until the next project switch. Project and
     // mount guards below are the correct invalidation scope.
+    const scopeLocationId = locationIdRef.current
+    const scopeQuery = scopeLocationId
+      ? `&location_id=${encodeURIComponent(scopeLocationId)}`
+      : ""
     void clientApiFetch<AIConversationsResponse>(
-      `/projects/${projectId}/ai/conversations?limit=50&offset=0`
+      `/projects/${projectId}/ai/conversations?limit=50&offset=0${scopeQuery}`
     )
       .then((response) => {
-        if (!mountedRef.current || projectId !== projectIdRef.current) return
+        if (
+          !mountedRef.current ||
+          projectId !== projectIdRef.current ||
+          scopeLocationId !== locationIdRef.current
+        )
+          return
+        const inScope = response.conversations.filter(
+          (conversation) =>
+            conversationLocationScope(conversation) === scopeLocationId
+        )
         const statuses: Record<string, RevbotStatus> = {}
-        for (const conversation of response.conversations) {
+        for (const conversation of inScope) {
           statuses[conversation.id] =
             (conversation.turn_status as RevbotStatus) ?? "idle"
         }
         setState((current) => ({
           ...current,
           conversations: [
-            ...response.conversations,
+            ...inScope,
             ...current.conversations.filter(
               (item) =>
-                !response.conversations.some((next) => next.id === item.id)
+                !inScope.some((next) => next.id === item.id)
             ),
           ],
           // Overlay fresh statuses, but drop entries for conversations the
@@ -512,7 +550,7 @@ export function useRevbot({
               Object.entries(current.conversationStatus).filter(
                 ([id]) =>
                   id === conversationIdRef.current ||
-                  response.conversations.some((next) => next.id === id)
+                  inScope.some((next) => next.id === id)
               )
             ),
             ...statuses,
@@ -583,6 +621,9 @@ export function useRevbot({
 
   const applyConversation = useCallback(
     (conversation: AIConversationDetailResponse, loading = false) => {
+      const scope = locationIdRef.current
+      if (conversationLocationScope(conversation) !== scope) return false
+      conversationLocationRef.current = scope
       conversationCacheRef.current.set(conversation.id, conversation)
       conversationIdRef.current = conversation.id
       notifyConversationChange(conversation.id)
@@ -632,6 +673,7 @@ export function useRevbot({
           },
         }))
       }
+      return true
     },
     [notifyConversationChange]
   )
@@ -1152,6 +1194,7 @@ export function useRevbot({
 
   useEffect(() => {
     const projectId = activeProject?.id ?? null
+    const scopeLocationId = normalizeLocationScope(locationId)
     generationRef.current += 1
     const generation = generationRef.current
     projectGenerationRef.current += 1
@@ -1160,6 +1203,8 @@ export function useRevbot({
     userStopRequestedRef.current = false
     stopObserver()
     projectIdRef.current = projectId
+    locationIdRef.current = scopeLocationId
+    conversationLocationRef.current = null
     conversationIdRef.current = null
     turnIdRef.current = null
     statusRef.current = "idle"
@@ -1190,7 +1235,7 @@ export function useRevbot({
 
     refreshConversations()
 
-    const stored = readStoredConversation(projectId)
+    const stored = readStoredConversation(projectId, scopeLocationId)
     if (!stored) {
       setState((current) => ({ ...current, loading: false }))
       return
@@ -1207,7 +1252,13 @@ export function useRevbot({
           projectId !== projectIdRef.current
         )
           return
-        applyConversation(conversation, Boolean(stored.turnId))
+        if (!applyConversation(conversation, Boolean(stored.turnId))) {
+          clearStoredConversation(projectId, scopeLocationId)
+          if (mountedRef.current) {
+            setState((current) => ({ ...current, loading: false }))
+          }
+          return
+        }
         if (!stored.turnId) return
 
         try {
@@ -1230,9 +1281,13 @@ export function useRevbot({
           )
             return
           if (error instanceof ApiError && error.status === 404) {
-            saveStoredConversation(projectId, {
-              conversationId: stored.conversationId,
-            })
+            saveStoredConversation(
+              projectId,
+              {
+                conversationId: stored.conversationId,
+              },
+              scopeLocationId
+            )
             setState((current) => ({ ...current, loading: false }))
             return
           }
@@ -1251,8 +1306,11 @@ export function useRevbot({
           projectId !== projectIdRef.current
         )
           return
-        if (error instanceof ApiError && error.status === 404) {
-          clearStoredConversation(projectId)
+        if (
+          error instanceof ApiError &&
+          (error.status === 404 || error.status === 403)
+        ) {
+          clearStoredConversation(projectId, scopeLocationId)
           setState((current) => ({ ...current, loading: false }))
           return
         }
@@ -1267,6 +1325,7 @@ export function useRevbot({
     })()
   }, [
     activeProject?.id,
+    locationId,
     applyConversation,
     applyTurn,
     observe,
@@ -1286,6 +1345,18 @@ export function useRevbot({
         return
       }
 
+      const scopeLocationId = locationIdRef.current
+      const cachedConversation =
+        conversationCacheRef.current.get(conversationId)
+      if (
+        cachedConversation &&
+        conversationLocationScope(cachedConversation) !== scopeLocationId
+      ) {
+        conversationCacheRef.current.delete(conversationId)
+        reportRevbotError("This conversation is no longer available.")
+        return
+      }
+
       generationRef.current += 1
       const generation = generationRef.current
       stopObserver()
@@ -1297,8 +1368,6 @@ export function useRevbot({
       seenEventIdsRef.current = new Set()
       assistantTextRef.current = ""
       assistantMessageIdRef.current = null
-      const cachedConversation =
-        conversationCacheRef.current.get(conversationId)
       if (cachedConversation) {
         applyConversation(cachedConversation, true)
       } else {
@@ -1312,7 +1381,6 @@ export function useRevbot({
           loading: true,
         }))
       }
-      saveStoredConversation(projectId, { conversationId })
 
       try {
         const conversation = await clientApiFetch<AIConversationDetailResponse>(
@@ -1321,20 +1389,33 @@ export function useRevbot({
         if (
           generation !== generationRef.current ||
           !mountedRef.current ||
-          projectId !== projectIdRef.current
+          projectId !== projectIdRef.current ||
+          scopeLocationId !== locationIdRef.current
         )
           return
-        applyConversation(conversation)
+        if (!applyConversation(conversation)) {
+          conversationCacheRef.current.delete(conversationId)
+          reportRevbotError("This conversation is no longer available.")
+          if (mountedRef.current) {
+            setState((current) => ({ ...current, loading: false }))
+          }
+          return
+        }
+        saveStoredConversation(projectId, { conversationId }, scopeLocationId)
         if (
           conversation.turn_id &&
           (conversation.turn_status === "queued" ||
             conversation.turn_status === "running" ||
             isTurnWaitingStatus(conversation.turn_status))
         ) {
-          saveStoredConversation(projectId, {
-            conversationId,
-            turnId: conversation.turn_id,
-          })
+          saveStoredConversation(
+            projectId,
+            {
+              conversationId,
+              turnId: conversation.turn_id,
+            },
+            scopeLocationId
+          )
           try {
             const turn = await clientApiFetch<AITurnResponse>(
               `/ai/turns/${conversation.turn_id}`
@@ -1393,7 +1474,7 @@ export function useRevbot({
     seenEventIdsRef.current = new Set()
     assistantTextRef.current = ""
     assistantMessageIdRef.current = null
-    clearStoredConversation(projectId)
+    clearStoredConversation(projectId, locationIdRef.current)
     notifyConversationChange(null)
     decidingApprovalRef.current = null
     setState((current) => ({
@@ -1506,11 +1587,20 @@ export function useRevbot({
       })
 
       try {
+        const scopeLocationId = locationIdRef.current
         let conversationId = conversationIdRef.current
+        if (
+          conversationId &&
+          conversationLocationRef.current !== scopeLocationId
+        ) {
+          conversationId = null
+          conversationIdRef.current = null
+          conversationLocationRef.current = null
+        }
         if (!conversationId) {
           const conversation = await clientApiPost<AIConversationResponse>(
             `/projects/${projectId}/ai/conversations`,
-            {}
+            scopeLocationId ? { location_id: scopeLocationId } : {}
           )
           conversationId = conversation.id
           if (
@@ -1519,9 +1609,27 @@ export function useRevbot({
             projectId !== projectIdRef.current
           )
             return
+          if (conversationLocationScope(conversation) !== scopeLocationId) {
+            activeRequestRef.current = false
+            statusRef.current = "idle"
+            assistantMessageIdRef.current = null
+            reportRevbotError("This conversation is no longer available.")
+            setState((current) => ({
+              ...current,
+              messages: current.messages.filter(
+                (message) =>
+                  message.id !== optimisticUser.id &&
+                  message.id !== optimisticAssistant.id
+              ),
+              status: "idle",
+              loading: false,
+            }))
+            return
+          }
           conversationIdRef.current = conversationId
+          conversationLocationRef.current = scopeLocationId
           notifyConversationChange(conversationId)
-          saveStoredConversation(projectId, { conversationId })
+          saveStoredConversation(projectId, { conversationId }, scopeLocationId)
           setState((current) => ({
             ...current,
             conversationId,
@@ -1558,10 +1666,14 @@ export function useRevbot({
         turnIdRef.current = turn.turn_id
         statusRef.current = turn.status
         assistantMessageIdRef.current = turn.assistant_message_id
-        saveStoredConversation(projectId, {
-          conversationId,
-          turnId: turn.turn_id,
-        })
+        saveStoredConversation(
+          projectId,
+          {
+            conversationId,
+            turnId: turn.turn_id,
+          },
+          locationIdRef.current
+        )
         setState((current) => ({
           ...current,
           messages: current.messages.map((message) => {

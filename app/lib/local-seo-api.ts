@@ -19,6 +19,7 @@ export type LocalSeoLocation = {
   services: string[]
   latitude: number
   longitude: number
+  radius_m?: number | null
   /** Ordered saved query records; a run prices only the enabled map records. */
   queries: LocalSeoLocationQueryRecord[]
 }
@@ -47,10 +48,7 @@ export type LocalSeoListingCandidate = {
 }
 
 export type LocalSeoListingLookupStatus =
-  | "completed"
-  | "failed"
-  | "uncertain"
-  | "running"
+  "completed" | "failed" | "uncertain" | "running"
 
 export type LocalSeoListingLookup = {
   id: string
@@ -62,27 +60,19 @@ export type LocalSeoListingLookup = {
   error: string | null
   candidates: LocalSeoListingCandidate[]
   deduplicated?: boolean
-  source_candidate?: Pick<LocalSeoGeocodedAddress, "display_name" | "latitude" | "longitude">
+  source_candidate?: Pick<
+    LocalSeoGeocodedAddress,
+    "display_name" | "latitude" | "longitude"
+  >
 }
 
 export type LocalSeoRing = "centre" | "edge" | "corner"
 
 export type LocalSeoSector =
-  | "centre"
-  | "N"
-  | "NE"
-  | "E"
-  | "SE"
-  | "S"
-  | "SW"
-  | "W"
-  | "NW"
+  "centre" | "N" | "NE" | "E" | "SE" | "S" | "SW" | "W" | "NW"
 
 export type LocalSeoCallStatus =
-  | "pending"
-  | "request_failed"
-  | "success_empty"
-  | "success_nonempty"
+  "pending" | "request_failed" | "success_empty" | "success_nonempty"
 
 export type LocalSeoMatchStatus = "found" | "absent" | "unknown"
 
@@ -98,6 +88,12 @@ export type LocalSeoCell = {
   match_status: LocalSeoMatchStatus
   /** Rank is only ever set alongside a found match, and is otherwise null. */
   rank: number | null
+  /** Requested map centre the provider was asked for, when the run stored it. */
+  requested_ll?: string | null
+  /** Map centre the provider actually answered from, when the run stored it. */
+  echoed_ll?: string | null
+  /** Saved raw distance between requested and returned centres; null when unknown. */
+  viewport_drift_m?: number | null
   /** Stored raw places entries for this query (includes target/branches/duplicates), not unique competitors or all Google matches. Null when unknown. */
   result_count?: number | null
   credits: number
@@ -107,11 +103,7 @@ export type LocalSeoCell = {
 }
 
 export type LocalSeoRunStatus =
-  | "queued"
-  | "running"
-  | "completed"
-  | "partial"
-  | "failed"
+  "queued" | "running" | "completed" | "partial" | "failed"
 
 export type LocalSeoRun = {
   id: string
@@ -234,7 +226,6 @@ export type LocalSeoLandmark = {
   selected: boolean
 }
 
-export const LOCAL_SEO_QUERY_COUNT = 5
 export const LOCAL_SEO_POINT_COUNT = 9
 /** Row-major point letters A to I: A is north-west, E is the centre, I is south-east. */
 export const LOCAL_SEO_POINT_LETTERS = [
@@ -254,14 +245,8 @@ export function localSeoPointLetter(pointIndex: number): string {
 }
 /** Every provider call costs three credits. */
 export const LOCAL_SEO_PER_CALL_CREDITS = 3
-/** Five queries times nine points: every run plans 45 cells. */
-export const LOCAL_SEO_CELL_COUNT =
-  LOCAL_SEO_QUERY_COUNT * LOCAL_SEO_POINT_COUNT
 /** Places identity lookup uses zero application credits; ranking is priced separately. */
 export const LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS = 0
-/** 45 cells at three credits each: every run reserves 135 credits. */
-export const LOCAL_SEO_BASE_EXPECTED_CREDITS =
-  LOCAL_SEO_CELL_COUNT * LOCAL_SEO_PER_CALL_CREDITS
 export const LOCAL_SEO_DEFAULT_RADIUS_M = 5000
 export const LOCAL_SEO_MIN_RADIUS_M = 1000
 export const LOCAL_SEO_MAX_RADIUS_M = 25000
@@ -285,15 +270,15 @@ export function isLocalSeoRunActive(status: LocalSeoRunStatus) {
 
 /** Refetch a run query every second only while queued or running; false once terminal or unknown. */
 export function localSeoRunRefetchInterval(
-  status: LocalSeoRunStatus | null | undefined,
+  status: LocalSeoRunStatus | null | undefined
 ): number | false {
   return status === "queued" || status === "running" ? 1000 : false
 }
 
 /** Mirrors the backend limits so an invalid run never reaches reservation. */
 export function validateLocalSeoQueries(queries: string[]): string | null {
-  if (queries.length < 1 || queries.length > LOCAL_SEO_QUERY_COUNT) {
-    return `Between 1 and ${LOCAL_SEO_QUERY_COUNT} queries are required, got ${queries.length}.`
+  if (queries.length < 1) {
+    return `At least 1 query is required, got ${queries.length}.`
   }
   const trimmed = queries.map((query) => query.trim())
   if (trimmed.some((query) => query === "")) {
@@ -302,7 +287,7 @@ export function validateLocalSeoQueries(queries: string[]): string | null {
   if (
     trimmed.some(
       (query) =>
-        new TextEncoder().encode(query).length > LOCAL_SEO_MAX_QUERY_BYTES,
+        new TextEncoder().encode(query).length > LOCAL_SEO_MAX_QUERY_BYTES
     )
   ) {
     return `Queries must each fit within ${LOCAL_SEO_MAX_QUERY_BYTES} bytes.`
@@ -316,10 +301,12 @@ export function validateLocalSeoQueries(queries: string[]): string | null {
 
 /**
  * Editor drafts may hold more rows than a run will price, or none at all; only
- * blank, duplicate, or oversized text is rejected here. The 1..5 price guard
+ * blank, duplicate, or oversized text is rejected here. The one-query minimum
  * lives in validateLocalSeoQueries at enqueue.
  */
-export function validateEditableLocalSeoQueries(queries: string[]): string | null {
+export function validateEditableLocalSeoQueries(
+  queries: string[]
+): string | null {
   const trimmed = queries.map((query) => query.trim())
   if (trimmed.some((query) => query === "")) {
     return "Queries must all be non-empty; remove the empty row instead."
@@ -327,7 +314,7 @@ export function validateEditableLocalSeoQueries(queries: string[]): string | nul
   if (
     trimmed.some(
       (query) =>
-        new TextEncoder().encode(query).length > LOCAL_SEO_MAX_QUERY_BYTES,
+        new TextEncoder().encode(query).length > LOCAL_SEO_MAX_QUERY_BYTES
     )
   ) {
     return `Queries must each fit within ${LOCAL_SEO_MAX_QUERY_BYTES} bytes.`
@@ -341,7 +328,7 @@ export function validateEditableLocalSeoQueries(queries: string[]): string | nul
 
 export function validateLocalSeoCoordinates(
   latitude: number,
-  longitude: number,
+  longitude: number
 ): string | null {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     return "Coordinates must be finite numbers."
@@ -362,7 +349,7 @@ export function isLocalSeoLocationBound(location: LocalSeoLocation): boolean {
 
 /** Enabled map query texts; the only strings a run prices or sends. */
 export function localSeoEnabledMapQueries(
-  queries: LocalSeoLocationQueryRecord[],
+  queries: LocalSeoLocationQueryRecord[]
 ): string[] {
   return queries
     .filter((query) => query.enabled && query.kind === "map")
@@ -374,11 +361,12 @@ export function localSeoQueryTextKey(text: string): string {
   return text.trim().split(/\s+/).join(" ").toLowerCase()
 }
 
-/** Run gate: bound identity plus between one and five enabled map queries. */
+/** Run gate: bound identity plus at least one enabled map query. */
 export function canRunLocalSeoGrid(location: LocalSeoLocation): boolean {
   return (
     isLocalSeoLocationBound(location) &&
-    validateLocalSeoQueries(localSeoEnabledMapQueries(location.queries)) === null
+    validateLocalSeoQueries(localSeoEnabledMapQueries(location.queries)) ===
+      null
   )
 }
 
@@ -399,10 +387,7 @@ export function validateLocalSeoRadiusM(radiusM: number): string | null {
   if (!Number.isInteger(radiusM)) {
     return "Radius must be a whole number of metres."
   }
-  if (
-    radiusM < LOCAL_SEO_MIN_RADIUS_M ||
-    radiusM > LOCAL_SEO_MAX_RADIUS_M
-  ) {
+  if (radiusM < LOCAL_SEO_MIN_RADIUS_M || radiusM > LOCAL_SEO_MAX_RADIUS_M) {
     return `Radius must be between ${LOCAL_SEO_MIN_RADIUS_M} and ${LOCAL_SEO_MAX_RADIUS_M} metres.`
   }
   return null
@@ -410,14 +395,14 @@ export function validateLocalSeoRadiusM(radiusM: number): string | null {
 
 export function localSeoLocationQueryKey(
   projectId: string,
-  locationId: string,
+  locationId: string
 ) {
   return ["local-seo-location", projectId, locationId] as const
 }
 
 export function localSeoLatestRunQueryKey(
   projectId: string,
-  locationId: string,
+  locationId: string
 ) {
   return ["local-seo-latest-run", projectId, locationId] as const
 }
@@ -425,14 +410,14 @@ export function localSeoLatestRunQueryKey(
 export function localSeoRunQueryKey(
   projectId: string,
   locationId: string,
-  runId: string,
+  runId: string
 ) {
   return ["local-seo-run", projectId, locationId, runId] as const
 }
 
 export function fetchLocalSeoLocation(projectId: string, locationId: string) {
   return clientApiFetch<LocalSeoLocation>(
-    `/projects/${projectId}/locations/${locationId}`,
+    `/projects/${projectId}/locations/${locationId}`
   )
 }
 
@@ -440,22 +425,22 @@ export function fetchLocalSeoLocation(projectId: string, locationId: string) {
 export function updateLocalSeoLocationQueryRecords(
   projectId: string,
   locationId: string,
-  records: LocalSeoLocationQueryDraft[],
+  records: LocalSeoLocationQueryDraft[]
 ) {
   return clientApiPut<LocalSeoLocationQueryRecord[]>(
     `/projects/${projectId}/locations/${locationId}/queries`,
-    records,
+    records
   )
 }
 
 /** Latest run, or null when the location has never run (backend 404). */
 export async function fetchLocalSeoLatestRun(
   projectId: string,
-  locationId: string,
+  locationId: string
 ): Promise<LocalSeoRun | null> {
   try {
     return await clientApiFetch<LocalSeoRun>(
-      `/projects/${projectId}/locations/${locationId}/runs/latest`,
+      `/projects/${projectId}/locations/${locationId}/runs/latest`
     )
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null
@@ -466,10 +451,10 @@ export async function fetchLocalSeoLatestRun(
 export function fetchLocalSeoRun(
   projectId: string,
   locationId: string,
-  runId: string,
+  runId: string
 ) {
   return clientApiFetch<LocalSeoRun>(
-    `/projects/${projectId}/locations/${locationId}/runs/${runId}`,
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}`
   )
 }
 
@@ -479,7 +464,7 @@ export function localSeoPointDetailsQueryKey(
   runId: string,
   pointIndex: number,
   /** Run status is part of the key so a terminal transition refetches once more. */
-  status: LocalSeoRunStatus,
+  status: LocalSeoRunStatus
 ) {
   return [
     "local-seo-point-details",
@@ -496,10 +481,10 @@ export function fetchLocalSeoPointDetails(
   projectId: string,
   locationId: string,
   runId: string,
-  pointIndex: number,
+  pointIndex: number
 ) {
   return clientApiFetch<LocalSeoPointDetails>(
-    `/projects/${projectId}/locations/${locationId}/runs/${runId}/points/${pointIndex}`,
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}/points/${pointIndex}`
   )
 }
 
@@ -508,11 +493,11 @@ export function createLocalSeoRun(
   projectId: string,
   locationId: string,
   radiusM: number,
-  expectedCredits: number,
+  expectedCredits: number
 ) {
   return clientApiPost<LocalSeoCreateRunResponse>(
     `/projects/${projectId}/locations/${locationId}/runs`,
-    { radius_m: radiusM, expected_credits: expectedCredits },
+    { radius_m: radiusM, expected_credits: expectedCredits }
   )
 }
 
@@ -522,7 +507,7 @@ export function localSeoLocationsQueryKey(projectId: string) {
 
 export function localSeoLatestListingLookupQueryKey(
   projectId: string,
-  locationId: string,
+  locationId: string
 ) {
   return ["local-seo-listing-lookup-latest", projectId, locationId] as const
 }
@@ -543,16 +528,18 @@ export type LocalSeoCreateLocationInput = {
 /** Creates an unbound location; place_id is never submitted. */
 export function createLocalSeoLocation(
   projectId: string,
-  input: LocalSeoCreateLocationInput,
+  input: LocalSeoCreateLocationInput
 ) {
   return clientApiPost<LocalSeoLocation>(
     `/projects/${projectId}/locations`,
-    input,
+    input
   )
 }
 
 export function deleteLocalSeoLocation(projectId: string, locationId: string) {
-  return clientApiDelete<unknown>(`/projects/${projectId}/locations/${locationId}`)
+  return clientApiDelete<unknown>(
+    `/projects/${projectId}/locations/${locationId}`
+  )
 }
 
 /** Split a service field on commas so one box holds several services. */
@@ -565,33 +552,38 @@ export function splitLocalSeoServices(serviceText: string): string[] {
 
 export function generateLocalSeoQueries(
   projectId: string,
-  input: { service: string; services?: string[]; locality: string; localities?: string[] },
+  input: {
+    service: string
+    services?: string[]
+    locality: string
+    localities?: string[]
+  }
 ) {
   return clientApiPost<{ queries: string[] }>(
     `/projects/${projectId}/locations/queries/generate`,
-    input,
+    input
   )
 }
 
 /** Free Nominatim search; call only on explicit user action, never per keystroke. */
 export function searchLocalSeoAddresses(
   projectId: string,
-  input: { address: string; refresh?: boolean },
+  input: { address: string; refresh?: boolean }
 ) {
   return clientApiPost<LocalSeoGeographyEnvelope>(
     `/projects/${projectId}/locations/address-search`,
-    input,
+    input
   )
 }
 
 /** Free reverse lookup used to confirm locality for accepted coordinates. */
 export function reverseLocalSeoAddress(
   projectId: string,
-  input: { latitude: number; longitude: number; refresh?: boolean },
+  input: { latitude: number; longitude: number; refresh?: boolean }
 ) {
   return clientApiPost<LocalSeoGeographyEnvelope>(
     `/projects/${projectId}/locations/reverse-address`,
-    input,
+    input
   )
 }
 
@@ -599,22 +591,24 @@ export function reverseLocalSeoAddress(
 export function createLocalSeoListingLookup(
   projectId: string,
   locationId: string,
-  input: { search_query: string; latitude: number; longitude: number } | Record<string, never> = {},
+  input:
+    | { search_query: string; latitude: number; longitude: number }
+    | Record<string, never> = {}
 ) {
   return clientApiPost<LocalSeoListingLookup>(
     `/projects/${projectId}/locations/${locationId}/listing-lookups`,
-    { ...input, expected_credits: LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS },
+    { ...input, expected_credits: LOCAL_SEO_LISTING_LOOKUP_EXPECTED_CREDITS }
   )
 }
 
 /** Latest stored lookup, or null when none exists yet (backend 404). Free. */
 export async function fetchLocalSeoLatestListingLookup(
   projectId: string,
-  locationId: string,
+  locationId: string
 ): Promise<LocalSeoListingLookup | null> {
   try {
     return await clientApiFetch<LocalSeoListingLookup>(
-      `/projects/${projectId}/locations/${locationId}/listing-lookups/latest`,
+      `/projects/${projectId}/locations/${locationId}/listing-lookups/latest`
     )
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null
@@ -626,18 +620,18 @@ export async function fetchLocalSeoLatestListingLookup(
 export function bindLocalSeoListing(
   projectId: string,
   locationId: string,
-  input: { lookup_id: string; place_id: string },
+  input: { lookup_id: string; place_id: string }
 ) {
   return clientApiPost<LocalSeoLocation>(
     `/projects/${projectId}/locations/${locationId}/listing`,
-    input,
+    input
   )
 }
 
 /** Free explicit unbinding; historical runs keep their frozen identity and coordinates. */
 export function unbindLocalSeoListing(projectId: string, locationId: string) {
   return clientApiDelete<LocalSeoLocation>(
-    `/projects/${projectId}/locations/${locationId}/listing`,
+    `/projects/${projectId}/locations/${locationId}/listing`
   )
 }
 
@@ -648,20 +642,23 @@ export function localSeoProjectServicesQueryKey(projectId: string) {
 
 export function fetchLocalSeoProjectServices(projectId: string) {
   return clientApiFetch<LocalSeoProjectService[]>(
-    `/projects/${projectId}/services`,
+    `/projects/${projectId}/services`
   )
 }
 
 export function createLocalSeoProjectService(projectId: string, label: string) {
-  return clientApiPost<LocalSeoProjectService>(`/projects/${projectId}/services`, {
-    label,
-  })
+  return clientApiPost<LocalSeoProjectService>(
+    `/projects/${projectId}/services`,
+    {
+      label,
+    }
+  )
 }
 
 export function renameLocalSeoProjectService(
   projectId: string,
   serviceId: string,
-  label: string,
+  label: string
 ) {
   return clientApiFetch<LocalSeoProjectService>(
     `/projects/${projectId}/services/${serviceId}`,
@@ -669,77 +666,94 @@ export function renameLocalSeoProjectService(
       method: "PATCH",
       headers: new Headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ label }),
-    },
+    }
   )
 }
 
-export function deleteLocalSeoProjectService(projectId: string, serviceId: string) {
-  return clientApiDelete<unknown>(`/projects/${projectId}/services/${serviceId}`)
+export function deleteLocalSeoProjectService(
+  projectId: string,
+  serviceId: string
+) {
+  return clientApiDelete<unknown>(
+    `/projects/${projectId}/services/${serviceId}`
+  )
 }
 
 export function localSeoLocationServicesQueryKey(
   projectId: string,
-  locationId: string,
+  locationId: string
 ) {
   return ["local-seo-location-services", projectId, locationId] as const
 }
 
-export function fetchLocalSeoLocationServices(projectId: string, locationId: string) {
+export function fetchLocalSeoLocationServices(
+  projectId: string,
+  locationId: string
+) {
   return clientApiFetch<LocalSeoLocationServices>(
-    `/projects/${projectId}/locations/${locationId}/services`,
+    `/projects/${projectId}/locations/${locationId}/services`
   )
 }
 
 export function updateLocalSeoLocationServices(
   projectId: string,
   locationId: string,
-  overrides: LocalSeoServiceOverride[],
+  overrides: LocalSeoServiceOverride[]
 ) {
   return clientApiPut<LocalSeoLocationServices>(
     `/projects/${projectId}/locations/${locationId}/services`,
-    { overrides },
+    { overrides }
   )
 }
 
 export function localSeoLocationQueryRecordsQueryKey(
   projectId: string,
-  locationId: string,
+  locationId: string
 ) {
   return ["local-seo-location-query-records", projectId, locationId] as const
 }
 
 /** Server query records for a location, ordered by ordinal. */
-export function fetchLocalSeoLocationQueryRecords(projectId: string, locationId: string) {
+export function fetchLocalSeoLocationQueryRecords(
+  projectId: string,
+  locationId: string
+) {
   return clientApiFetch<LocalSeoLocationQueryRecord[]>(
-    `/projects/${projectId}/locations/${locationId}/queries`,
+    `/projects/${projectId}/locations/${locationId}/queries`
   )
 }
 
-export function localSeoLandmarksQueryKey(projectId: string, locationId: string) {
+export function localSeoLandmarksQueryKey(
+  projectId: string,
+  locationId: string
+) {
   return ["local-seo-landmarks", projectId, locationId] as const
 }
 
 export function fetchLocalSeoLandmarks(projectId: string, locationId: string) {
   return clientApiFetch<LocalSeoLandmark[]>(
-    `/projects/${projectId}/locations/${locationId}/landmarks`,
+    `/projects/${projectId}/locations/${locationId}/landmarks`
   )
 }
 
-export function refreshLocalSeoLandmarks(projectId: string, locationId: string) {
+export function refreshLocalSeoLandmarks(
+  projectId: string,
+  locationId: string
+) {
   return clientApiPost<LocalSeoLandmark[]>(
     `/projects/${projectId}/locations/${locationId}/landmarks/refresh`,
-    {},
+    {}
   )
 }
 
 export function updateLocalSeoLandmarkSelection(
   projectId: string,
   locationId: string,
-  selectedIds: string[],
+  selectedIds: string[]
 ) {
   return clientApiPut<LocalSeoLandmark[]>(
     `/projects/${projectId}/locations/${locationId}/landmarks/selection`,
-    { selected_ids: selectedIds },
+    { selected_ids: selectedIds }
   )
 }
 
@@ -759,7 +773,7 @@ Serper provider account balance; a missing or unauthorized project stays a 404
 error rather than defaulting to a synthetic allowance. */
 export function fetchLocalSeoMapsBudget(projectId: string) {
   return clientApiFetch<LocalSeoMapsBudget>(
-    `/projects/${projectId}/maps-budget`,
+    `/projects/${projectId}/maps-budget`
   )
 }
 
@@ -769,12 +783,16 @@ export type LocalSeoRunCompetitor = {
   title: string
   address: string
   query_points_seen: number
+  /** Retained for compatibility; the UI neither displays nor orders by it. */
   best_rank: number | null
+  /** Mean of valid positive observed ranks only; absent on older payloads. */
+  average_position?: number | null
+  /** Mean result-list size over the same sightings; absent on older payloads. */
+  average_result_count?: number | null
   /** True when the row shares the frozen target website host; false when the website is missing. */
   same_brand_domain: boolean
   query_indexes: number[]
 }
-
 
 /** Frozen competitor evidence for one recorded run; target is excluded by the backend. */
 export type LocalSeoRunCompetitors = {
@@ -798,7 +816,7 @@ export function localSeoRunCompetitorsQueryKey(
   locationId: string,
   runId: string,
   status: LocalSeoRunStatus,
-  completedCells: number | null | undefined,
+  completedCells: number | null | undefined
 ) {
   return [
     "local-seo-run-competitors",
@@ -814,10 +832,10 @@ export function localSeoRunCompetitorsQueryKey(
 export function fetchLocalSeoRunCompetitors(
   projectId: string,
   locationId: string,
-  runId: string,
+  runId: string
 ) {
   return clientApiFetch<LocalSeoRunCompetitors>(
-    `/projects/${projectId}/locations/${locationId}/runs/${runId}/competitors`,
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}/competitors`
   )
 }
 
@@ -828,7 +846,7 @@ export function localSeoRunPointCompetitorsQueryKey(
   runId: string,
   pointIndex: number,
   status: LocalSeoRunStatus,
-  completedCells: number | null | undefined,
+  completedCells: number | null | undefined
 ) {
   return [
     "local-seo-run-point-competitors",
@@ -846,9 +864,54 @@ export function fetchLocalSeoRunPointCompetitors(
   projectId: string,
   locationId: string,
   runId: string,
-  pointIndex: number,
+  pointIndex: number
 ) {
   return clientApiFetch<LocalSeoRunCompetitors>(
-    `/projects/${projectId}/locations/${locationId}/runs/${runId}/points/${pointIndex}/competitors`,
+    `/projects/${projectId}/locations/${locationId}/runs/${runId}/points/${pointIndex}/competitors`
+  )
+}
+
+/**
+ * One explicit Google Places search. The returned id names immutable
+ * server-side evidence the bound create validates, so the client never has to
+ * trust a candidate's own title or coordinates.
+ */
+export type LocationListingSearchResponse = {
+  id: string
+  candidates: LocalSeoListingCandidate[]
+  expected_credits: number
+}
+
+export function searchLocationListings(projectId: string, query: string) {
+  return clientApiPost<LocationListingSearchResponse>(
+    `/projects/${projectId}/location-listing-search`,
+    { query }
+  )
+}
+
+export type LocationBoundWebsiteScopeMatch = "none" | "exact" | "subtree"
+
+/** Initial branch scope submitted on creation; mirrored by the PUT scope endpoint. */
+export type LocationBoundWebsiteScope = {
+  match: LocationBoundWebsiteScopeMatch
+  url: string | null
+}
+
+export type LocationBoundCreate = {
+  search_id: string
+  place_id: string
+  radius_m: number
+  /** The creation wizard always sends this; older callers may omit it. */
+  website_scope: LocationBoundWebsiteScope
+}
+
+/** Atomic verified create; no location row exists before this call succeeds. */
+export function createBoundLocation(
+  projectId: string,
+  input: LocationBoundCreate
+) {
+  return clientApiPost<LocalSeoLocation>(
+    `/projects/${projectId}/locations/bound`,
+    input
   )
 }

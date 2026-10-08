@@ -12,6 +12,8 @@ export type UsePdfExportOptions = {
   crawlId: string | null
   projectName: string
   currentCrawl: CrawlResponse | null
+  /** Optional parent project override; defaults to currentCrawl.project_id. */
+  projectId?: string
   /** Optional site URL shown in the report header. */
   baseUrl?: string
   // ponytail: legacy screenshot-export handles below, kept so app.tsx
@@ -32,7 +34,7 @@ export type UsePdfExportOptions = {
   onDone: () => void
 }
 
-export function usePdfExport({ crawlId, projectName, currentCrawl, baseUrl, onDone }: UsePdfExportOptions) {
+export function usePdfExport({ crawlId, projectName, currentCrawl, baseUrl, projectId, onDone }: UsePdfExportOptions) {
   const [isExporting, setIsExporting] = useState(false)
   // ponytail: ref guard — state alone still allows double-click races.
   const exportingRef = useRef(false)
@@ -63,6 +65,14 @@ export function usePdfExport({ crawlId, projectName, currentCrawl, baseUrl, onDo
         baseUrl,
         currentCrawl,
       })
+
+      // Read-only appendix: saved location runs load here, never started.
+      stage = "load saved location results"
+      const parentProjectId = projectId ?? currentCrawl?.project_id ?? null
+      if (parentProjectId) {
+        const { fetchAuditPdfLocations } = await import("./build-audit-pdf-locations")
+        data.locations = await fetchAuditPdfLocations(parentProjectId)
+      }
 
       stage = "load the PDF renderer"
       const { renderAuditPdf } = await import("../audit-pdf/AuditPdfDocument")

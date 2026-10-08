@@ -2,7 +2,15 @@ import { describe, expect, test } from "bun:test"
 import { createMemoryRouter } from "react-router"
 
 import { revbotHashTarget } from "./types"
-import { getCrawlSelectionTarget, getWorkspaceNavigationTarget } from "./utils"
+import {
+  getCrawlSelectionTarget,
+  getInitialWorkspaceView,
+  getProjectBackTarget,
+  getProjectSwitchTarget,
+  getVisibilityMode,
+  getVisibilityModeTarget,
+  getWorkspaceNavigationTarget,
+} from "./utils"
 
 describe("crawl selection navigation", () => {
   test("selects the crawl and Overview in one URL without losing other parameters", () => {
@@ -138,5 +146,78 @@ describe("crawl selection navigation", () => {
     expect(target.pathname).toBe("/app")
     expect(target.hash).toBe("#keywords")
     expect(new URLSearchParams(target.search).get("project")).toBe("p-9")
+  })
+})
+
+describe("location workspace navigation", () => {
+  test("crawl switch keeps the location param", () => {
+    const params = new URLSearchParams({ project: "p-1", location: "l-9", crawl: "c-1" })
+    const target = getCrawlSelectionTarget({ pathname: "/app", search: `?${params}` }, "c-2")
+    const next = new URLSearchParams(target.search)
+    expect(next.get("location")).toBe("l-9")
+    expect(next.get("crawl")).toBe("c-2")
+    expect(next.get("project")).toBe("p-1")
+  })
+
+  test("view switch keeps the location param", () => {
+    const params = new URLSearchParams({ project: "p-1", location: "l-9" })
+    const scoped = { pathname: "/app", search: `?${params}` }
+    const target = getWorkspaceNavigationTarget(scoped, "keywords", "seo")
+    expect(target.search).toBe(scoped.search)
+  })
+
+  test("back to project always lands on parent shell", () => {
+    expect(getProjectBackTarget("p-1")).toBe("/app?project=p-1")
+  })
+
+  test("project switch clears location, crawl and revbot params", () => {
+    const params = new URLSearchParams({ project: "p-1", location: "l-9", crawl: "c-1", revbotConversation: "c-9" })
+    const target = getProjectSwitchTarget({ pathname: "/app", search: `?${params}` }, "p-2")
+    expect(target.startsWith("/app?")).toBe(true)
+    const next = new URLSearchParams(target.slice(5))
+    expect(next.get("project")).toBe("p-2")
+    expect(next.get("location")).toBeNull()
+    expect(next.get("crawl")).toBeNull()
+    expect(next.get("revbotConversation")).toBeNull()
+  })
+})
+
+describe("visibility mode", () => {
+  test("absent or unknown mode reads as maps", () => {
+    expect(getVisibilityMode("")).toBe("maps")
+    expect(getVisibilityMode("?project=p-1")).toBe("maps")
+    expect(getVisibilityMode("?visibility=grid")).toBe("maps")
+    expect(getVisibilityMode("?visibility=ai")).toBe("ai")
+  })
+
+  test("mode switch keeps the location param", () => {
+    const params = new URLSearchParams({ project: "p-1", location: "l-9" })
+    const target = getVisibilityModeTarget(
+      { pathname: "/app", search: `?${params}` },
+      "ai"
+    )
+    const next = new URLSearchParams(target.split("?")[1] ?? "")
+    expect(next.get("visibility")).toBe("ai")
+    expect(next.get("location")).toBe("l-9")
+    expect(next.get("project")).toBe("p-1")
+  })
+})
+
+describe("visibility mode defaults", () => {
+  test("explicit choice wins over a saved run link", () => {
+    expect(getVisibilityMode("?visibility=maps&audit=a-1")).toBe("maps")
+    expect(getVisibilityMode("?visibility=ai&audit=a-1")).toBe("ai")
+  })
+
+  test("saved AI run deep link without a choice lands on AI", () => {
+    expect(getVisibilityMode("?project=p-1&audit=a-1")).toBe("ai")
+    expect(getInitialWorkspaceView("?project=p-1&audit=a-1")).toBe(
+      "revserp-visibility"
+    )
+  })
+
+  test("plain shell defaults to maps and audit", () => {
+    expect(getVisibilityMode("?project=p-1")).toBe("maps")
+    expect(getInitialWorkspaceView("?project=p-1")).toBe("revserp-audit")
   })
 })

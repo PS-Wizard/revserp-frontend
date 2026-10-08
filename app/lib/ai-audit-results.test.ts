@@ -13,7 +13,8 @@ describe("AI audit result navigation", () => {
       crawl_id: "crawl-1",
     })
     const url = new URL(path, "http://localhost")
-    expect(url.pathname).toBe("/app/projects/project-1/locations")
+    expect(url.pathname).toBe("/app")
+    expect(url.searchParams.get("project")).toBe("project-1")
     expect(url.searchParams.get("location")).toBe("branch-2")
     expect(url.searchParams.get("audit")).toBe("old-audit")
     expect(url.searchParams.has("crawl")).toBe(false)
