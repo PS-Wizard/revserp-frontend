@@ -546,6 +546,17 @@ export type AdminFeaturesResponse = {
   ai_tools: AIToolInfo[]
 }
 
+export type AdminSkillResponse = {
+  id: string
+  name: string
+  description: string
+  files: string[]
+}
+
+export type AdminSkillsResponse = {
+  skills: AdminSkillResponse[]
+}
+
 // --- Auto-crawl types ---
 
 export type AutoCrawlConfigSnapshot = {

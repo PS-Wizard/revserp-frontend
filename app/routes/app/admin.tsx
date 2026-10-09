@@ -69,6 +69,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog"
 import { FeaturesTab } from "~/components/admin/features-tab"
+import { SkillsTab } from "~/components/admin/skills-tab"
 import { requirePlatformAdmin } from "~/lib/auth.server"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
 
@@ -1172,6 +1173,7 @@ export default function AdminPage() {
             <TabsTrigger value="ai-config">AI Config</TabsTrigger>
             <TabsTrigger value="accounts">Accounts</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
+            <TabsTrigger value="skills">Skills</TabsTrigger>
             <TabsTrigger value="crawl-config">Crawl Config</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -1181,6 +1183,7 @@ export default function AdminPage() {
         {tab === "ai-config" && <AIConfigTab />}
         {tab === "accounts" && <AccountsTab />}
         {tab === "features" && <FeaturesTab />}
+        {tab === "skills" && <SkillsTab />}
         {tab === "crawl-config" && <CrawlConfigTab />}
       </div>
     </div>
