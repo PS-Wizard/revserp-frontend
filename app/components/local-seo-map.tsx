@@ -44,7 +44,7 @@ const HATCH_PATTERN_ID = "local-seo-hatch"
 
 /** A blank canvas with no error event is the failure that ships, so the style must
  * actually finish loading inside this window or we say so. */
-const MAP_LOAD_TIMEOUT_MS = 12_000
+const MAP_LOAD_TIMEOUT_MS = 30_000
 
 const DEFAULT_CENTER: [number, number] = [85.3123, 27.6942]
 
@@ -400,6 +400,7 @@ export function LocalSeoMap({
   })
   const [basemapFailed, setBasemapFailed] = useState(false)
   const [mapUnavailable, setMapUnavailable] = useState(false)
+  const [unavailableReason, setUnavailableReason] = useState("")
 
   onMapClickRef.current = onMapClick
   onReadyRef.current = onReady
@@ -412,6 +413,7 @@ export function LocalSeoMap({
     if (!container) return
     if (container.dataset.mapInitialized) return
     if (!supportsWebGL()) {
+      setUnavailableReason("WebGL is unavailable in this browser.")
       setMapUnavailable(true)
       return
     }
@@ -428,7 +430,11 @@ export function LocalSeoMap({
         scrollZoom: disableScrollZoom ? false : undefined,
         attributionControl: false,
       })
-    } catch {
+    } catch (error) {
+      console.warn("[LocalSeoMap] map failed to start", error)
+      setUnavailableReason(
+        error instanceof Error ? error.message : "Map initialisation failed."
+      )
       setMapUnavailable(true)
       return
     }
@@ -454,11 +460,16 @@ export function LocalSeoMap({
 
     let settled = false
     const watchdog = setTimeout(() => {
-      if (!settled) setMapUnavailable(true)
+      if (settled) return
+      setUnavailableReason("The basemap took too long to load.")
+      setMapUnavailable(true)
     }, MAP_LOAD_TIMEOUT_MS)
     instance.on("load", () => {
       settled = true
       clearTimeout(watchdog)
+      // A slow style that finishes after the watchdog must not leave the
+      // failure banner stuck over a working map.
+      setMapUnavailable(false)
     })
     instance.on("click", (event) => {
       const layers = [
@@ -544,7 +555,7 @@ export function LocalSeoMap({
         >
           <p>
             {mapUnavailable
-              ? "Map could not start."
+              ? `Map could not start${unavailableReason ? `: ${unavailableReason}` : "."}`
               : "Basemap could not be reached."}{" "}
             Recorded results remain available in the report table.
           </p>

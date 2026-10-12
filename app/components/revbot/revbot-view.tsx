@@ -67,6 +67,11 @@ import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotMessageActions } from "./revbot-message-actions"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
 import { MCPApprovalCard } from "./mcp-approval-card"
+import {
+  RevbotQuestionHistory,
+  RevbotQuestionWizard,
+} from "./revbot-question-card"
+import { resolvedQuestionRequests } from "./revbot-user-questions"
 import { pendingApprovalsForTurn } from "./mcp-approval-copy"
 import { isTurnActiveStatus } from "./use-revbot"
 import { isActiveAssistantMessage } from "./revbot-replay-state"
@@ -144,9 +149,11 @@ const StreamingWordBlock = memo(function StreamingWordBlock({
 function StreamingAssistantMessage({
   content,
   messageId,
+  showCursor,
 }: {
   content: string
   messageId: string
+  showCursor: boolean
 }) {
   const shouldReduceMotion = useReducedMotion() ?? false
   const isReduced = shouldReduceMotion
@@ -379,10 +386,12 @@ function StreamingAssistantMessage({
         />
       ))}
       {shownWords >= totalWords ? trailingWhitespace : null}
-      <span
-        aria-hidden="true"
-        className="ml-0.5 inline-block h-[1.1em] w-px animate-pulse bg-current align-[-0.15em]"
-      />
+      {showCursor ? (
+        <span
+          aria-hidden="true"
+          className="ml-0.5 inline-block h-[1.1em] w-px animate-pulse bg-current align-[-0.15em]"
+        />
+      ) : null}
     </div>
   )
 }
@@ -635,8 +644,14 @@ export function RevbotViewContent({
   }, [defaultHistoryOpen])
   const active = isTurnActiveStatus(revbot.status)
   const pendingApprovals = useMemo(
-    () => pendingApprovalsForTurn(revbot.approvals, active),
+    () => pendingApprovalsForTurn(revbot.approvals ?? [], active),
     [active, revbot.approvals]
+  )
+  const pendingQuestion = revbot.pendingQuestion ?? null
+  const waitingForQuestion = revbot.waitingForQuestion ?? false
+  const resolvedQuestions = useMemo(
+    () => resolvedQuestionRequests(revbot.questions ?? []),
+    [revbot.questions]
   )
   const approvalsSignature = useMemo(
     () =>
@@ -658,8 +673,40 @@ export function RevbotViewContent({
     revbot.toolCalls.length,
     revbot.phase,
     activeAssistantContent.length,
+    revbot.messages
+      .map((message) =>
+        (message.activity ?? [])
+          .map((round) => `${round.round}${round.status}:${round.text.length}`)
+          .join(",")
+      )
+      .join(";"),
     approvalsSignature,
+    pendingQuestion?.id ?? "",
+    pendingQuestion?.status ?? "",
+    resolvedQuestions.map((item) => `${item.id}:${item.status}`).join(","),
   ].join(":")
+  const ownedQuestionIds = useMemo(() => {
+    const callIds = new Set<string>()
+    for (const message of revbot.messages ?? []) {
+      const calls =
+        message.id === activeAssistantMessageId
+          ? revbot.toolCalls
+          : (message.toolCalls ?? [])
+      for (const call of calls ?? []) callIds.add(call.callId)
+    }
+    const owned = new Set<string>()
+    for (const item of revbot.questions ?? []) {
+      if (item.status !== "pending" && callIds.has(item.tool_call_id))
+        owned.add(item.id)
+    }
+    return owned
+  }, [
+    activeAssistantMessageId,
+    revbot.messages,
+    revbot.questions,
+    revbot.toolCalls,
+  ])
+  const orphanQuestions = resolvedQuestions.filter((item) => !ownedQuestionIds.has(item.id))
   useEffect(() => {
     onActivityChange?.(active)
   }, [active, onActivityChange])
@@ -755,7 +802,7 @@ export function RevbotViewContent({
             <RevbotScrollFollow followKey={scrollFollowKey} />
             <MessageScrollerViewport aria-label="Conversation">
               <MessageScrollerContent
-                aria-busy={active && !revbot.waitingForApproval}
+                aria-busy={active && !revbot.waitingForApproval && !waitingForQuestion}
                 className={cn(
                   "w-full gap-5 pt-1",
                   revbot.messages.length > 0 ? "pb-24" : "min-h-full"
@@ -769,7 +816,8 @@ export function RevbotViewContent({
                     />
                   </MessageScrollerItem>
                 ) : (
-                  revbot.messages.map((message) => (
+                  <>
+                  {revbot.messages.map((message) => (
                     <MessageScrollerItem
                       className="w-full"
                       key={message.id}
@@ -799,13 +847,16 @@ export function RevbotViewContent({
                             const hasPersistedActivity =
                               messageActivityStartedAt !== null &&
                               messageActivityEndedAt !== null
+                            const messageActivity = message.activity ?? []
                             const showActivity =
                               (isActiveMessage &&
                                 (active ||
                                   revbot.phase ||
                                   revbot.toolCalls.length > 0 ||
+                                  messageActivity.length > 0 ||
                                   revbot.activityStartedAt)) ||
                               (messageToolCalls?.length ?? 0) > 0 ||
+                              messageActivity.length > 0 ||
                               hasPersistedActivity
                             const hasToolCalls =
                               (messageToolCalls?.length ?? 0) > 0
@@ -847,7 +898,8 @@ export function RevbotViewContent({
                                     active={
                                       isActiveMessage &&
                                       active &&
-                                      !revbot.waitingForApproval
+                                      !revbot.waitingForApproval &&
+                                      !waitingForQuestion
                                     }
                                     className="sticky top-3 self-start"
                                   />
@@ -855,10 +907,13 @@ export function RevbotViewContent({
                                 <div className="min-w-0">
                                   {showActivity &&
                                   !(
-                                    isActiveMessage && revbot.waitingForApproval
+                                    isActiveMessage &&
+                                    (revbot.waitingForApproval || waitingForQuestion)
                                   ) ? (
                                     <RevbotTurnActivity
-                                      active={isActiveMessage && active}
+                                      active={isActiveMessage && active && !waitingForQuestion}
+                                      activity={messageActivity}
+                                      approvals={revbot.approvals ?? []}
                                       endedAt={messageActivityEndedAt}
                                       phase={
                                         isActiveMessage ? revbot.phase : null
@@ -876,6 +931,7 @@ export function RevbotViewContent({
                                     <StreamingAssistantMessage
                                       content={message.content}
                                       messageId={message.id}
+                                      showCursor={!waitingForQuestion}
                                     />
                                   ) : (
                                     <RevbotMarkdown
@@ -923,6 +979,20 @@ export function RevbotViewContent({
                                     }
                                     variant={variant}
                                   />
+                                  {(() => {
+                                    const owned = (revbot.questions ?? []).filter(
+                                      (item) =>
+                                        item.status !== "pending" &&
+                                        (messageToolCalls ?? []).some(
+                                          (call) => call.callId === item.tool_call_id
+                                        )
+                                    )
+                                    return owned.length > 0 ? (
+                                      <div className="mt-2">
+                                        <RevbotQuestionHistory requests={owned} />
+                                      </div>
+                                    ) : null
+                                  })()}
                                   {showMessageActions ? (
                                     <div className="mt-2">
                                       <RevbotMessageActions
@@ -979,8 +1049,18 @@ export function RevbotViewContent({
                         )}
                       </article>
                     </MessageScrollerItem>
-                  ))
-                )}
+                  ))}
+                  {orphanQuestions.length > 0 ? (
+                    <MessageScrollerItem
+                      className="w-full"
+                      messageId="revbot-questions-fallback"
+                    >
+                      <article className={cn(messageColumnClass, "flex w-full py-1")}>
+                        <RevbotQuestionHistory requests={orphanQuestions} />
+                      </article>
+                    </MessageScrollerItem>
+                  ) : null}
+                  </>)}
               </MessageScrollerContent>
             </MessageScrollerViewport>
             <MessageScrollerButton />
@@ -1001,19 +1081,38 @@ export function RevbotViewContent({
             isDark ? "from-[#0b0b0c]" : "from-background"
           )}
         />
+        {pendingQuestion ? (
+          <div className="pb-2">
+            <RevbotQuestionWizard
+              key={pendingQuestion.id}
+              conversationId={revbot.conversationId ?? ""}
+              request={pendingQuestion}
+              busy={revbot.answeringQuestion === pendingQuestion.id}
+              error={revbot.questionErrors?.[pendingQuestion.id] ?? null}
+              onSubmit={(answers) =>
+                revbot.submitQuestionAnswers?.(pendingQuestion.id, answers)
+              }
+            />
+          </div>
+        ) : null}
         <RevbotComposer
           key={revbot.conversationId ?? "new"}
           active={active}
           allowedEfforts={allowedEfforts}
-          disabled={revbot.loading || active || revbot.stopping}
+          disabled={
+            revbot.loading ||
+            revbot.stopping ||
+            (active && !revbot.waitingForQuestion)
+          }
           effort={revbot.effort}
           onEffortChange={revbot.setEffort}
-          onSend={(content, images) => void revbot.send(content, { images })}
+          onSend={(content, images) => revbot.send(content, { images })}
           onStop={() => void revbot.stop()}
           showMic={showMic}
           stopping={revbot.stopping}
           variant={variant}
           waitingForApproval={revbot.waitingForApproval}
+          waitingForQuestion={revbot.waitingForQuestion ?? false}
         />
       </div>
     </>

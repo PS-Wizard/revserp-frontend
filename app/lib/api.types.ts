@@ -741,6 +741,8 @@ export type AIConversationsResponse = {
 
 export type AIConversationDetailResponse = AIConversationResponse & {
   messages: AITurnMessageResponse[]
+  /** Resolved question sets for history summaries. Absent on older responses; use the list endpoint. */
+  question_requests?: UserQuestionRequest[]
 }
 
 export type AITurnImage = {
@@ -759,6 +761,9 @@ export type AITurnMessageResponse = {
   tool_calls?: AIToolCallResponse[]
   activity_started_at?: string | null
   activity_ended_at?: string | null
+  /** Public provider-round narration, projected from content_blocks only.
+   * Never reasoning. Absent on legacy messages; treat as no activity. */
+  activity?: AITurnMessageActivity[]
 }
 
 export type AITurnStatus =
@@ -809,6 +814,8 @@ export type AITurnResponse = {
   event_cursor?: number
   /** Turn-scoped approval cards from the same snapshot read. Missing on older responses. */
   approvals?: CMSApproval[]
+  /** Turn-scoped user question sets from the same snapshot read. Missing on older responses. */
+  question_requests?: UserQuestionRequest[]
 }
 
 export type AITurnSubmissionResponse = {
@@ -827,6 +834,9 @@ export type AIStreamPhasePayload = {
 
 export type AIStreamTextDeltaPayload = {
   text: string
+  /** Provider round for new turns. Tagged deltas are provisional progress,
+   * never final-answer text. Absent on legacy untagged deltas. */
+  round?: number
 }
 
 export type AIStreamToolCallPayload = {
@@ -844,6 +854,74 @@ export type AIStreamToolResultPayload = {
 
 export type AIStreamTerminalPayload = {
   error_code?: string | null
+}
+
+export type AITurnMessageActivity = {
+  round: number
+  text: string
+  status: "running" | "complete"
+}
+
+export type AIStreamAssistantRoundPayload = {
+  round: number
+  kind: "activity" | "answer"
+  text: string
+}
+
+export type UserQuestionOption = {
+  id: string
+  label: string
+  description?: string
+  url?: string
+  recommended?: boolean
+}
+
+export type UserQuestion = {
+  id: string
+  /** Required short step-navigation chip (max 12 code points, no line breaks). */
+  header: string
+  prompt: string
+  description?: string
+  mode: "single" | "multiple"
+  allow_custom: boolean
+  options: UserQuestionOption[]
+}
+
+export type UserQuestionRequestStatus =
+  "pending" | "answered" | "skipped" | "cancelled"
+
+export type UserQuestionAnswer = {
+  question_id: string
+  selected_option_ids: string[]
+  custom_text?: string
+  skipped?: boolean
+}
+
+export type UserQuestionRequest = {
+  id: string
+  turn_id: string
+  tool_call_id: string
+  status: UserQuestionRequestStatus
+  questions: UserQuestion[]
+  answers?: UserQuestionAnswer[]
+  reply?: string
+  created_at: string
+  answered_at?: string
+}
+
+export type UserQuestionListResponse = {
+  question_requests: UserQuestionRequest[]
+}
+
+export type UserQuestionAnswerBody = {
+  decision: "answer" | "skip"
+  answers?: UserQuestionAnswer[]
+  reply?: string
+}
+
+export type UserQuestionAnswerResponse = {
+  question_request: UserQuestionRequest
+  turn_id: string
 }
 
 // ── Score potential (project summary) ───────────────────────────────────────

@@ -25,6 +25,11 @@ import type {
   AIToolCallResponse,
   AIToolCallStatus,
   AITurnImage,
+  UserQuestionAnswer,
+  UserQuestionAnswerBody,
+  UserQuestionAnswerResponse,
+  UserQuestionListResponse,
+  UserQuestionRequest,
   AITurnMessageResponse,
   AITurnResponse,
   AITurnSubmissionResponse,
@@ -37,17 +42,30 @@ import { invalidateBusinessProfile } from "~/lib/business-profile-query"
 import { invalidateProjectKeywordLists } from "~/lib/project-keywords-query"
 import { mcpConnectionsQueryKey } from "~/components/marketplace/marketplace-api"
 import {
+  isActivityRoundId,
+  isAssistantRoundPayload,
   isSameTurnMessage,
   isTurnActiveStatus,
   isTurnTerminalStatus,
   isTurnWaitingStatus,
   mergeApprovalCard,
+  mergeAssistantActivityRound,
+  parseAssistantActivityRounds,
+  removeAssistantActivityRound,
   resolveStreamResume,
   resolveTurnObserverStart,
+  sameAssistantActivityRounds,
   turnIdToResyncOnRefocus,
+  type RevbotActivityRound,
   type TurnObserver,
 } from "./revbot-replay-state"
 import { normalizeToolCallStatus } from "./tool-call-status"
+import {
+  clearQuestionDraft,
+  mergeQuestionRequest,
+  mergeQuestionRequests,
+  pendingQuestionRequest,
+} from "./revbot-user-questions"
 import type { MCPApprovalDecision } from "./mcp-approval-copy"
 
 export { isTurnActiveStatus, isTurnWaitingStatus } from "./revbot-replay-state"
@@ -102,6 +120,10 @@ type RevbotState = {
   stopping: boolean
   loading: boolean
   approvals: CMSApproval[]
+  questions: UserQuestionRequest[]
+  answeringQuestion: string | null
+  questionErrors: Record<string, string>
+  turnId: string | null
   decidingApproval: { id: string; decision: MCPApprovalDecision } | null
   approvalDecisionErrors: Record<string, string>
 }
@@ -440,6 +462,10 @@ export function useRevbot({
     stopping: false,
     loading: false,
     approvals: [],
+    questions: [],
+    answeringQuestion: null,
+    questionErrors: {},
+    turnId: null,
     decidingApproval: null,
     approvalDecisionErrors: {},
   })
@@ -460,6 +486,7 @@ export function useRevbot({
   const lastEventIdRef = useRef(0)
   const seenEventIdsRef = useRef<Set<number>>(new Set())
   const assistantTextRef = useRef("")
+  const assistantActivityRef = useRef<RevbotActivityRound[]>([])
   const assistantMessageIdRef = useRef<string | null>(null)
   const messagesRef = useRef<LocalMessage[]>([])
   const autoRetryAttemptsRef = useRef(0)
@@ -469,6 +496,8 @@ export function useRevbot({
     (turn: AITurnResponse, generation: number) => boolean
   >(() => false)
   const decidingApprovalRef = useRef<string | null>(null)
+  const answeringQuestionRef = useRef<string | null>(null)
+  const questionsRef = useRef<UserQuestionRequest[]>([])
   /** Latest turn-snapshot sync; assigned after observe (observe calls it via ref). */
   const syncTurnSnapshotRef = useRef(
     (_turnId: string, _generation: number) => {}
@@ -492,6 +521,19 @@ export function useRevbot({
   useEffect(() => {
     messagesRef.current = state.messages
   }, [state.messages])
+
+  useEffect(() => {
+    questionsRef.current = state.questions
+  }, [state.questions])
+
+  useEffect(() => {
+    const conversationId = state.conversationId
+    if (!conversationId) return
+    for (const request of state.questions) {
+      if (request.status !== "pending")
+        clearQuestionDraft(conversationId, request.id)
+    }
+  }, [state.conversationId, state.questions])
 
   const notifyConversationChange = useCallback(
     (conversationId: string | null) => {
@@ -619,6 +661,15 @@ export function useRevbot({
     })
   }, [])
 
+  const upsertQuestionRequest = useCallback((request: UserQuestionRequest) => {
+    if (!mountedRef.current) return
+    setState((current) => {
+      const questions = mergeQuestionRequest(current.questions, request)
+      if (questions === current.questions) return current
+      return { ...current, questions }
+    })
+  }, [])
+
   const applyConversation = useCallback(
     (conversation: AIConversationDetailResponse, loading = false) => {
       const scope = locationIdRef.current
@@ -638,6 +689,8 @@ export function useRevbot({
         if (message.role === "assistant") {
           const toolCalls = mapToolCallResponses(message.tool_calls)
           if (toolCalls.length) mapped.toolCalls = toolCalls
+          const activity = parseAssistantActivityRounds(message.activity)
+          if (activity.length) mapped.activity = activity
           const startedAt = parseActivityTimestamp(message.activity_started_at)
           const endedAt = parseActivityTimestamp(message.activity_ended_at)
           if (startedAt !== null) mapped.activityStartedAt = startedAt
@@ -650,12 +703,16 @@ export function useRevbot({
         .find((message) => message.role === "assistant")
       assistantMessageIdRef.current = assistant?.id ?? null
       assistantTextRef.current = assistant?.content ?? ""
+      assistantActivityRef.current = parseAssistantActivityRounds(
+        assistant?.activity
+      )
       const conversationStatus =
         (conversation.turn_status as RevbotStatus) ?? "idle"
       if (mountedRef.current) {
         setState((current) => ({
           ...current,
           conversationId: conversation.id,
+          turnId: null,
           messages,
           status: "idle",
           phase: null,
@@ -664,6 +721,11 @@ export function useRevbot({
           stopping: false,
           loading,
           approvals: [],
+          questions: Array.isArray(conversation.question_requests)
+            ? conversation.question_requests
+            : [],
+          answeringQuestion: null,
+          questionErrors: {},
 
           decidingApproval: null,
           approvalDecisionErrors: {},
@@ -688,36 +750,52 @@ export function useRevbot({
       updateStatus(turn.status)
       if (!mountedRef.current) return
 
-      const messages = turn.messages.map((message) => ({ ...message }))
+      const messages: LocalMessage[] = turn.messages.map((message) => ({
+        ...message,
+        activity: parseAssistantActivityRounds(message.activity),
+      }))
       const assistant = [...messages]
         .reverse()
         .find((message) => message.role === "assistant")
       assistantMessageIdRef.current = assistant?.id ?? null
       const snapshotText = assistant?.content ?? ""
+      const snapshotActivity = parseAssistantActivityRounds(assistant?.activity)
       const liveSameTurn = !terminal && observerRef.current?.turnId === turn.id
       let nextText: string
+      let nextActivity: RevbotActivityRound[]
       if (terminal) {
         assistantTextRef.current = snapshotText
+        assistantActivityRef.current = snapshotActivity
         nextText = snapshotText
+        nextActivity = snapshotActivity
       } else if (liveSameTurn) {
+        // Live stream owns newer deltas than this snapshot; keep them.
         nextText = assistantTextRef.current
+        nextActivity = assistantActivityRef.current
       } else if (typeof turn.event_cursor === "number") {
         assistantTextRef.current = snapshotText
+        assistantActivityRef.current = snapshotActivity
         lastEventIdRef.current = turn.event_cursor
         seenEventIdsRef.current = new Set()
         lastObservedTurnRef.current = turn.id
         nextText = snapshotText
+        nextActivity = snapshotActivity
       } else {
         assistantTextRef.current = ""
+        assistantActivityRef.current = []
         lastEventIdRef.current = 0
         seenEventIdsRef.current = new Set()
         lastObservedTurnRef.current = turn.id
         nextText = ""
+        nextActivity = []
       }
       const toolCalls = mapToolCallResponses(turn.tool_calls)
       const turnActivity = turnActivityTimestamps(turn)
       const snapshotApprovals = Array.isArray(turn.approvals)
         ? turn.approvals.filter((approval) => approval.turn_id === turn.id)
+        : []
+      const snapshotQuestions = Array.isArray(turn.question_requests)
+        ? turn.question_requests.filter((request) => request.turn_id === turn.id)
         : []
 
       setState((current) => {
@@ -725,14 +803,18 @@ export function useRevbot({
           ? current.messages.find((message) => message.id === assistant.id)
           : null
         const mergedMessages = mergeTurnMessages(current.messages, messages)
-        const mergedMessagesWithStreamedText =
-          !assistant?.id || nextText === snapshotText
-            ? mergedMessages
-            : mergedMessages.map((message) =>
-                message.id === assistant.id
-                  ? { ...message, content: nextText }
-                  : message
-              )
+        const assistantId = assistant?.id
+        const overlayStreamedState =
+          assistantId &&
+          (nextText !== snapshotText ||
+            !sameAssistantActivityRounds(nextActivity, snapshotActivity))
+        const mergedMessagesWithStreamedText = !overlayStreamedState
+          ? mergedMessages
+          : mergedMessages.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: nextText, activity: nextActivity }
+                : message
+            )
         const mergedApprovals = snapshotApprovals.reduce(
           (acc, approval) => mergeApprovalCard(acc, approval),
           current.approvals.filter(
@@ -744,6 +826,7 @@ export function useRevbot({
         return {
           ...current,
           conversationId: turn.conversation_id,
+          turnId: turn.id,
           messages: attachTurnActivityToAssistant(
             mergedMessagesWithStreamedText,
             assistant?.id ?? null,
@@ -768,6 +851,17 @@ export function useRevbot({
           stopping: turn.cancel_requested && !isTurnTerminal(turn.status),
           loading: false,
           approvals: mergedApprovals,
+          questions: mergeQuestionRequests(
+            current.questions.filter(
+              (request) =>
+                request.status !== "pending" || request.turn_id === turn.id
+            ),
+            snapshotQuestions
+          ),
+          answeringQuestion:
+            snapshotQuestions.some((request) => request.status !== "pending")
+              ? null
+              : current.answeringQuestion,
         }
       })
     },
@@ -828,6 +922,7 @@ export function useRevbot({
         lastEventIdRef.current = 0
         seenEventIdsRef.current = new Set()
         assistantTextRef.current = ""
+        assistantActivityRef.current = []
       }
       try {
         while (
@@ -936,17 +1031,94 @@ export function useRevbot({
                   event === "text_delta" &&
                   isTextDeltaPayload(payload)
                 ) {
-                  const assistantText = assistantTextRef.current + payload.text
-                  assistantTextRef.current = assistantText
+                  const round = (payload as { round?: unknown }).round
+                  if (isActivityRoundId(round)) {
+                    const existing = assistantActivityRef.current.find(
+                      (item) => item.round === round
+                    )
+                    const provisional = (existing?.text ?? "") + payload.text
+                    assistantActivityRef.current = mergeAssistantActivityRound(
+                      assistantActivityRef.current,
+                      { round, text: provisional, status: "running" }
+                    )
+                    const assistantMessageId = assistantMessageIdRef.current
+                    setState((current) => ({
+                      ...current,
+                      messages: current.messages.map((message) =>
+                        message.id === assistantMessageId
+                          ? {
+                              ...message,
+                              activity: mergeAssistantActivityRound(
+                                parseAssistantActivityRounds(message.activity),
+                                { round, text: provisional, status: "running" }
+                              ),
+                            }
+                          : message
+                      ),
+                    }))
+                  } else {
+                    const assistantText = assistantTextRef.current + payload.text
+                    assistantTextRef.current = assistantText
+                    const assistantMessageId = assistantMessageIdRef.current
+                    setState((current) => ({
+                      ...current,
+                      messages: current.messages.map((message) =>
+                        message.id === assistantMessageId
+                          ? { ...message, content: assistantText }
+                          : message
+                      ),
+                    }))
+                  }
+                } else if (
+                  event === "assistant_round" &&
+                  isAssistantRoundPayload(payload)
+                ) {
                   const assistantMessageId = assistantMessageIdRef.current
-                  setState((current) => ({
-                    ...current,
-                    messages: current.messages.map((message) =>
-                      message.id === assistantMessageId
-                        ? { ...message, content: assistantText }
-                        : message
-                    ),
-                  }))
+                  if (payload.kind === "activity") {
+                    assistantActivityRef.current = mergeAssistantActivityRound(
+                      assistantActivityRef.current,
+                      { round: payload.round, text: payload.text, status: "complete" }
+                    )
+                    setState((current) => ({
+                      ...current,
+                      messages: current.messages.map((message) =>
+                        message.id === assistantMessageId
+                          ? {
+                              ...message,
+                              activity: mergeAssistantActivityRound(
+                                parseAssistantActivityRounds(message.activity),
+                                {
+                                  round: payload.round,
+                                  text: payload.text,
+                                  status: "complete",
+                                }
+                              ),
+                            }
+                          : message
+                      ),
+                    }))
+                  } else {
+                    assistantActivityRef.current = removeAssistantActivityRound(
+                      assistantActivityRef.current,
+                      payload.round
+                    )
+                    assistantTextRef.current = payload.text
+                    setState((current) => ({
+                      ...current,
+                      messages: current.messages.map((message) =>
+                        message.id === assistantMessageId
+                          ? {
+                              ...message,
+                              content: payload.text,
+                              activity: removeAssistantActivityRound(
+                                parseAssistantActivityRounds(message.activity),
+                                payload.round
+                              ),
+                            }
+                          : message
+                      ),
+                    }))
+                  }
                 } else if (event === "approval_required") {
                   // Cards stay scoped to the observed turn: a historical replay
                   // for another turn must not touch this stream's cards.
@@ -957,6 +1129,18 @@ export function useRevbot({
                   const approval = cmsApprovalFromEventPayload(payload)
                   if (approval && approval.turn_id === turnId) {
                     upsertApproval(approval)
+                    void syncTurnSnapshotRef.current(turnId, generation)
+                  }
+                } else if (event === "question_required") {
+                  const request = userQuestionFromEventPayload(payload)
+                  if (request && request.turn_id === turnId) {
+                    upsertQuestionRequest(request)
+                    void syncTurnSnapshotRef.current(turnId, generation)
+                  }
+                } else if (event === "question_resolved") {
+                  const request = userQuestionFromEventPayload(payload)
+                  if (request && request.turn_id === turnId) {
+                    upsertQuestionRequest(request)
                     void syncTurnSnapshotRef.current(turnId, generation)
                   }
                 } else if (event === "waiting_for_user") {
@@ -1067,6 +1251,7 @@ export function useRevbot({
       stopObserver,
       updateStatus,
       upsertApproval,
+      upsertQuestionRequest,
     ]
   )
 
@@ -1176,6 +1361,106 @@ export function useRevbot({
     [queryClient, upsertApproval]
   )
 
+  const syncQuestions = useCallback(
+    async (conversationId: string, generation: number) => {
+      try {
+        const response = await clientApiFetch<UserQuestionListResponse>(
+          `/ai/conversations/${conversationId}/questions`
+        )
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          conversationIdRef.current !== conversationId
+        )
+          return
+        const incoming = Array.isArray(response.question_requests)
+          ? response.question_requests
+          : []
+        setState((current) => ({
+          ...current,
+          questions: mergeQuestionRequests(current.questions, incoming),
+        }))
+      } catch {}
+    },
+    []
+  )
+
+  const answerQuestions = useCallback(
+    async (requestId: string, body: UserQuestionAnswerBody): Promise<boolean> => {
+      const conversationId = conversationIdRef.current
+      if (!conversationId) return false
+      const generation = generationRef.current
+      if (answeringQuestionRef.current) return false
+      answeringQuestionRef.current = requestId
+      setState((current) => ({
+        ...current,
+        answeringQuestion: requestId,
+        questionErrors: { ...current.questionErrors, [requestId]: "" },
+      }))
+      try {
+        const response = await clientApiPost<UserQuestionAnswerResponse>(
+          `/ai/conversations/${conversationId}/questions/${requestId}/answer`,
+          body
+        )
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          conversationIdRef.current !== conversationId
+        )
+          return false
+        upsertQuestionRequest(response.question_request)
+        void syncTurnSnapshotRef.current(response.turn_id, generation)
+        return true
+      } catch (error) {
+        if (
+          generation !== generationRef.current ||
+          !mountedRef.current ||
+          conversationIdRef.current !== conversationId
+        )
+          return false
+        const message =
+          error instanceof ApiError && error.status === 409
+            ? "Already answered — refreshed to the latest state."
+            : error instanceof ApiError && error.status === 404
+              ? "Question no longer available — refreshed."
+              : error instanceof ApiError && error.status === 403
+                ? "Only the turn initiator can answer."
+                : simpleError(error, "Unable to send the answers.")
+        setState((current) => ({
+          ...current,
+          questionErrors: { ...current.questionErrors, [requestId]: message },
+        }))
+        reportRevbotError(message)
+        void syncQuestions(conversationId, generation)
+        return false
+      } finally {
+        if (answeringQuestionRef.current === requestId)
+          answeringQuestionRef.current = null
+        if (mountedRef.current) {
+          setState((current) => ({
+            ...current,
+            answeringQuestion:
+              current.answeringQuestion === requestId
+                ? null
+                : current.answeringQuestion,
+          }))
+        }
+      }
+    },
+    [syncQuestions, upsertQuestionRequest]
+  )
+
+  const submitQuestionAnswers = useCallback(
+    (requestId: string, answers: UserQuestionAnswer[]) => {
+      const skipped = answers.length > 0 && answers.every((a) => a.skipped)
+      void answerQuestions(
+        requestId,
+        skipped ? { decision: "skip" } : { decision: "answer", answers }
+      )
+    },
+    [answerQuestions]
+  )
+
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -1213,6 +1498,7 @@ export function useRevbot({
     lastEventIdRef.current = 0
     seenEventIdsRef.current = new Set()
     assistantTextRef.current = ""
+    assistantActivityRef.current = []
     assistantMessageIdRef.current = null
     conversationCacheRef.current.clear()
     setState({
@@ -1227,6 +1513,10 @@ export function useRevbot({
       stopping: false,
       loading: Boolean(projectId),
       approvals: [],
+      questions: [],
+      answeringQuestion: null,
+      questionErrors: {},
+      turnId: null,
 
       decidingApproval: null,
       approvalDecisionErrors: {},
@@ -1259,7 +1549,10 @@ export function useRevbot({
           }
           return
         }
-        if (!stored.turnId) return
+        if (!stored.turnId) {
+          void syncQuestions(stored.conversationId, generation)
+          return
+        }
 
         try {
           const turn = await clientApiFetch<AITurnResponse>(
@@ -1272,6 +1565,7 @@ export function useRevbot({
           )
             return
           applyTurn(turn)
+          void syncQuestions(stored.conversationId, generation)
           if (!isTurnTerminal(turn.status)) void observe(turn.id, generation)
         } catch (error) {
           if (
@@ -1331,6 +1625,7 @@ export function useRevbot({
     observe,
     refreshConversations,
     stopObserver,
+    syncQuestions,
   ])
 
   const selectConversation = useCallback(
@@ -1367,6 +1662,7 @@ export function useRevbot({
       lastEventIdRef.current = 0
       seenEventIdsRef.current = new Set()
       assistantTextRef.current = ""
+      assistantActivityRef.current = []
       assistantMessageIdRef.current = null
       if (cachedConversation) {
         applyConversation(cachedConversation, true)
@@ -1379,6 +1675,10 @@ export function useRevbot({
           activityStartedAt: null,
           stopping: false,
           loading: true,
+          questions: [],
+          answeringQuestion: null,
+          questionErrors: {},
+          turnId: null,
         }))
       }
 
@@ -1402,6 +1702,7 @@ export function useRevbot({
           return
         }
         saveStoredConversation(projectId, { conversationId }, scopeLocationId)
+        void syncQuestions(conversationId, generation)
         if (
           conversation.turn_id &&
           (conversation.turn_status === "queued" ||
@@ -1456,7 +1757,7 @@ export function useRevbot({
         }))
       }
     },
-    [applyConversation, applyTurn, observe, stopObserver]
+    [applyConversation, applyTurn, observe, stopObserver, syncQuestions]
   )
 
   const newChat = useCallback(() => {
@@ -1473,10 +1774,12 @@ export function useRevbot({
     lastEventIdRef.current = 0
     seenEventIdsRef.current = new Set()
     assistantTextRef.current = ""
+    assistantActivityRef.current = []
     assistantMessageIdRef.current = null
     clearStoredConversation(projectId, locationIdRef.current)
     notifyConversationChange(null)
     decidingApprovalRef.current = null
+    answeringQuestionRef.current = null
     setState((current) => ({
       ...current,
       conversationId: null,
@@ -1488,6 +1791,10 @@ export function useRevbot({
       stopping: false,
       loading: false,
       approvals: [],
+      questions: [],
+      answeringQuestion: null,
+      questionErrors: {},
+      turnId: null,
 
       decidingApproval: null,
       approvalDecisionErrors: {},
@@ -1544,6 +1851,23 @@ export function useRevbot({
       const trimmed = content.trim()
       const images = options?.images
       const hasImages = Boolean(images?.length)
+      const pending = pendingQuestionRequest(
+        questionsRef.current,
+        turnIdRef.current
+      )
+      if (
+        pending &&
+        projectId &&
+        conversationIdRef.current &&
+        turnIdRef.current === pending.turn_id
+      ) {
+        if (hasImages) {
+          reportRevbotError("Images can't be sent while answering a question.")
+          return false
+        }
+        if (!trimmed || answeringQuestionRef.current) return false
+        return answerQuestions(pending.id, { decision: "answer", reply: trimmed })
+      }
       if (
         !projectId ||
         (!trimmed && !hasImages) ||
@@ -1563,6 +1887,7 @@ export function useRevbot({
       const optimisticAssistant = assistantMessage()
       assistantMessageIdRef.current = optimisticAssistant.id
       assistantTextRef.current = ""
+      assistantActivityRef.current = []
       activeRequestRef.current = true
       setState((current) => {
         const withoutFailedAssistant = retryAssistantId
@@ -1698,6 +2023,7 @@ export function useRevbot({
           ),
           status: turn.status,
           loading: false,
+          turnId: turn.turn_id,
           conversationStatus: {
             ...current.conversationStatus,
             [conversationId]: turn.status,
@@ -1729,6 +2055,7 @@ export function useRevbot({
     },
     [
       allowedEfforts,
+      answerQuestions,
       clearAutoRetryTimer,
       effort,
       notifyConversationChange,
@@ -1861,6 +2188,8 @@ export function useRevbot({
       )
         return
       applyTurn(turn)
+      if (conversationIdRef.current)
+        void syncQuestions(conversationIdRef.current, generation)
 
       if (isTurnTerminal(turn.status)) {
         stopObserver()
@@ -1880,7 +2209,7 @@ export function useRevbot({
         stopping: false,
       }))
     }
-  }, [applyTurn, clearAutoRetryTimer, stopObserver])
+  }, [applyTurn, clearAutoRetryTimer, stopObserver, syncQuestions])
 
   useEffect(() => {
     if (!isTurnTerminal(statusRef.current)) return
@@ -1938,6 +2267,9 @@ export function useRevbot({
     }
   }, [])
 
+  const pendingQuestion = pendingQuestionRequest(state.questions, state.turnId)
+  const waitingForQuestion = pendingQuestion !== null
+
   return {
     activityStartedAt: state.activityStartedAt,
     conversationActive: (conversationId: string) => {
@@ -1961,6 +2293,13 @@ export function useRevbot({
     stop,
     toolCalls: state.toolCalls,
     approvals: state.approvals,
+    questions: state.questions,
+    pendingQuestion,
+    waitingForQuestion,
+    answeringQuestion: state.answeringQuestion,
+    questionErrors: state.questionErrors,
+    submitQuestionAnswers,
+    syncQuestions,
 
     decidingApproval: state.decidingApproval,
     approvalDecisionErrors: state.approvalDecisionErrors,
@@ -1987,6 +2326,23 @@ function cmsApprovalFromEventPayload(payload: unknown): CMSApproval | null {
   )
     return null
   return approval as CMSApproval
+}
+
+function userQuestionFromEventPayload(
+  payload: unknown
+): UserQuestionRequest | null {
+  if (!payload || typeof payload !== "object") return null
+  const request = (payload as { question_request?: unknown }).question_request
+  if (!request || typeof request !== "object") return null
+  const record = request as Record<string, unknown>
+  if (
+    typeof record.id !== "string" ||
+    typeof record.turn_id !== "string" ||
+    typeof record.status !== "string" ||
+    !Array.isArray(record.questions)
+  )
+    return null
+  return request as UserQuestionRequest
 }
 
 function waitingTurnIdFromEventPayload(payload: unknown): string | null {

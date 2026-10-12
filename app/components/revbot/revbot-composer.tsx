@@ -180,12 +180,13 @@ type RevbotComposerProps = {
   disabled: boolean
   effort: AIReasoningEffort
   onEffortChange: (effort: AIReasoningEffort) => void
-  onSend: (content: string, images?: AITurnImage[]) => void
+  onSend: (content: string, images?: AITurnImage[]) => Promise<boolean | void> | void
   onStop: () => void
   showMic?: boolean
   stopping: boolean
   variant?: "default" | "dark"
   waitingForApproval?: boolean
+  waitingForQuestion?: boolean
 }
 
 export function RevbotComposer({
@@ -200,6 +201,7 @@ export function RevbotComposer({
   stopping,
   variant = "default",
   waitingForApproval = false,
+  waitingForQuestion = false,
 }: RevbotComposerProps) {
   const [prompt, setPrompt] = useState("")
   const [autocomplete, setAutocomplete] = useState<Autocomplete | null>(null)
@@ -266,7 +268,12 @@ export function RevbotComposer({
     !listening &&
     (prompt.trim().length > 0 || attachments.length > 0)
   const showEffort = allowedEfforts.length > 1
-  const activity = composerActivity(active, stopping, waitingForApproval)
+  const activity = composerActivity(
+    active,
+    stopping,
+    waitingForApproval,
+    waitingForQuestion
+  )
   const inputColClass = expanded
     ? "col-span-full col-start-1 row-start-1"
     : showMic
@@ -406,6 +413,7 @@ export function RevbotComposer({
   }
 
   function addImageFiles(files: File[]) {
+    if (waitingForQuestion) return
     setAttachments((current) => {
       const remaining = MAX_IMAGES - current.length
       if (remaining <= 0) return current
@@ -469,7 +477,8 @@ export function RevbotComposer({
         if (compressed) images.push(compressed)
       }
       if (!content && images.length === 0) return
-      onSend(content, images.length ? images : undefined)
+      const sent = await onSend(content, images.length ? images : undefined)
+      if (sent === false) return
       setPrompt("")
       setAutocomplete(null)
       promptRef.current = ""
@@ -989,12 +998,17 @@ export function RevbotComposer({
         >
           <Button
             aria-label="Attach images"
+            title={
+              waitingForQuestion
+                ? "Images can't be sent while answering a question"
+                : undefined
+            }
             className={cn(
               "size-7 justify-self-start rounded-[8px] text-muted-foreground hover:bg-accent hover:text-foreground",
               isDark && "hover:bg-white/10",
               expanded ? "col-start-1 row-start-2" : "col-start-1 row-start-1"
             )}
-            disabled={disabled}
+            disabled={disabled || waitingForQuestion}
             onClick={() => {
               setEffortOpen(false)
               setAutocomplete(null)
@@ -1044,7 +1058,7 @@ export function RevbotComposer({
               />
             </Button>
           ) : null}
-          {activity !== "idle" ? (
+          {activity !== "idle" && activity !== "answering" ? (
             <div
               className={cn(
                 "flex min-h-7 min-w-0 items-center gap-2 px-1 py-[5px] text-xs leading-[18px]",
@@ -1142,7 +1156,11 @@ export function RevbotComposer({
               }
               onKeyDown={handlePromptKeyDown}
               onPaste={handlePaste}
-              placeholder="Ask Revbot anything…"
+              placeholder={
+                waitingForQuestion
+                  ? "Reply directly, or answer above…"
+                  : "Ask Revbot anything…"
+              }
               ref={textareaRef}
               rows={1}
               value={prompt}
@@ -1179,7 +1197,31 @@ export function RevbotComposer({
               </span>
             </button>
           ) : null}
-          {active ? (
+          {waitingForQuestion ? (
+            <div className={cn("flex items-center gap-1", sendColClass)}>
+              <Button
+                aria-label={stopping ? "Stopping Revbot" : "Stop Revbot"}
+                className="size-7 rounded-[8px] text-foreground"
+                disabled={stopping}
+                onClick={onStop}
+                size="icon-sm"
+                type="button"
+                variant="outline"
+              >
+                <SquareIcon aria-hidden="true" />
+              </Button>
+              <Button
+                aria-label="Send reply to Revbot"
+                className="size-7 rounded-[8px]"
+                disabled={!canSend}
+                onClick={handleSend}
+                size="icon-sm"
+                type="button"
+              >
+                <ArrowUpIcon aria-hidden="true" />
+              </Button>
+            </div>
+          ) : active ? (
             <Button
               aria-label={stopping ? "Stopping Revbot" : "Stop Revbot"}
               className={cn(

@@ -48,18 +48,107 @@ export function resolveStreamResume({
     : { kind: "restart" }
 }
 
+export type RevbotActivityRound = {
+  round: number
+  text: string
+  status: "running" | "complete"
+}
+
+export function isActivityRoundId(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+}
+
+export function parseAssistantActivityRounds(
+  value: unknown
+): RevbotActivityRound[] {
+  if (!Array.isArray(value)) return []
+  const rounds: RevbotActivityRound[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue
+    const record = entry as Record<string, unknown>
+    if (!isActivityRoundId(record.round)) continue
+    if (typeof record.text !== "string") continue
+    if (record.status !== "running" && record.status !== "complete") continue
+    rounds.push({
+      round: record.round,
+      text: record.text,
+      status: record.status,
+    })
+  }
+  return rounds.sort((a, b) => a.round - b.round)
+}
+
+export function mergeAssistantActivityRound(
+  rounds: RevbotActivityRound[],
+  incoming: RevbotActivityRound
+): RevbotActivityRound[] {
+  const index = rounds.findIndex((item) => item.round === incoming.round)
+  if (index === -1)
+    return [...rounds, incoming].sort((a, b) => a.round - b.round)
+  const existing = rounds[index]!
+  if (
+    existing.text === incoming.text &&
+    existing.status === incoming.status
+  )
+    return rounds
+  const next = [...rounds]
+  next[index] = incoming
+  return next
+}
+
+export function removeAssistantActivityRound(
+  rounds: RevbotActivityRound[],
+  round: number
+): RevbotActivityRound[] {
+  if (!rounds.some((item) => item.round === round)) return rounds
+  return rounds.filter((item) => item.round !== round)
+}
+
+export function sameAssistantActivityRounds(
+  current: RevbotActivityRound[],
+  incoming: RevbotActivityRound[]
+): boolean {
+  if (current.length !== incoming.length) return false
+  return current.every((item, index) => {
+    const other = incoming[index]!
+    return (
+      item.round === other.round &&
+      item.text === other.text &&
+      item.status === other.status
+    )
+  })
+}
+
+export function isAssistantRoundPayload(payload: unknown): payload is {
+  round: number
+  kind: "activity" | "answer"
+  text: string
+} {
+  if (!payload || typeof payload !== "object") return false
+  const record = payload as Record<string, unknown>
+  return (
+    isActivityRoundId(record.round) &&
+    (record.kind === "activity" || record.kind === "answer") &&
+    typeof record.text === "string"
+  )
+}
+
 /** True when a turn snapshot changed nothing visible, so the row keeps its identity. */
 export function isSameTurnMessage(
   current: AITurnMessageResponse,
   incoming: AITurnMessageResponse
-) {
+): boolean {
   return (
     current.role === incoming.role &&
     current.status === incoming.status &&
     current.content === incoming.content &&
     current.updated_at === incoming.updated_at &&
     (current.images?.length ?? 0) === (incoming.images?.length ?? 0) &&
-    (current.tool_calls?.length ?? 0) === (incoming.tool_calls?.length ?? 0)
+    (current.tool_calls?.length ?? 0) === (incoming.tool_calls?.length ?? 0) &&
+    sameAssistantActivityRounds(
+      parseAssistantActivityRounds(current.activity),
+      parseAssistantActivityRounds(incoming.activity)
+    )
   )
 }
 

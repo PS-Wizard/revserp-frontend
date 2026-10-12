@@ -556,7 +556,7 @@ describe("local SEO map fallback", () => {
   test("WebGL failure keeps the manual setup link reachable", () => {
     FakeMap.failConstruction = true
     renderMap({ fallbackHref: "/app/projects/proj-1/locations?view=list" })
-    expect(host?.textContent).toContain("Map could not start.")
+    expect(host?.textContent).toContain("Map could not start: WebGL is unavailable")
     expect(host?.querySelector("a")?.getAttribute("href")).toBe(
       "/app/projects/proj-1/locations?view=list"
     )

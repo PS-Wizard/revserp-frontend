@@ -23,6 +23,13 @@ describe("composerActivity", () => {
   test("is awaiting while paused for approval", () => {
     expect(composerActivity(true, false, true)).toBe("awaiting")
   })
+
+  test("is answering while parked for a question, without a spinner", () => {
+    expect(composerActivity(true, false, false, true)).toBe("answering")
+    expect(composerActivity(true, true, false, true)).toBe("stopping")
+    expect(composerActivityLabel("answering")).toBe("Waiting for your answer")
+    expect(composerActivityAnimated("answering")).toBe(false)
+  })
 })
 
 describe("composerActivityLabel", () => {

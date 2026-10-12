@@ -1,13 +1,23 @@
 import { describe, expect, test } from "bun:test"
-import type { CMSApproval, CMSApprovalStatus } from "~/lib/api.types"
+import type {
+  AITurnMessageResponse,
+  CMSApproval,
+  CMSApprovalStatus,
+} from "~/lib/api.types"
 import {
   isActiveAssistantMessage,
+  isAssistantRoundPayload,
   isSameTurnMessage,
   mergeApprovalCard,
+  mergeAssistantActivityRound,
+  parseAssistantActivityRounds,
+  removeAssistantActivityRound,
   resolveStreamResume,
   resolveTurnObserverStart,
+  sameAssistantActivityRounds,
   shouldReplaceApprovalCard,
   turnIdToResyncOnRefocus,
+  type RevbotActivityRound,
   type TurnObserver,
 } from "./revbot-replay-state"
 
@@ -300,5 +310,85 @@ describe("approval turn lifecycle", () => {
     ).toEqual({ kind: "resume" })
     expect(renderer("m-1")).toBe("streaming")
     expect(renderer(null)).toBe("markdown")
+  })
+})
+
+describe("assistant activity rounds", () => {
+  const running: RevbotActivityRound = { round: 0, text: "Checking", status: "running" }
+
+  test("parse keeps valid blocks sorted, drops decimals and junk", () => {
+    expect(
+      parseAssistantActivityRounds([
+        { round: 1, text: "b", status: "complete" },
+        { round: 0, text: "a", status: "running" },
+        { round: 0.5, text: "decimal", status: "running" },
+        { round: -1, text: "negative", status: "running" },
+        { round: "0", text: "string", status: "running" },
+        { round: 2, text: 7, status: "complete" },
+        { round: 3, text: "bad status", status: "done" },
+        null,
+      ])
+    ).toEqual([
+      { round: 0, text: "a", status: "running" },
+      { round: 1, text: "b", status: "complete" },
+    ])
+    expect(parseAssistantActivityRounds(undefined)).toEqual([])
+  })
+
+  test("merge upserts by round id without duplicates", () => {
+    const merged = mergeAssistantActivityRound([], running)
+    expect(mergeAssistantActivityRound(merged, { ...running })).toBe(merged)
+    expect(
+      mergeAssistantActivityRound(merged, { ...running, text: "Checking now" })
+    ).toEqual([{ round: 0, text: "Checking now", status: "running" }])
+    expect(
+      mergeAssistantActivityRound(merged, {
+        round: 1,
+        text: "next",
+        status: "running",
+      })
+    ).toEqual([running, { round: 1, text: "next", status: "running" }])
+  })
+
+  test("remove drops one round, same compares entry by entry", () => {
+    const rounds = [
+      running,
+      { round: 1, text: "done", status: "complete" } as RevbotActivityRound,
+    ]
+    expect(removeAssistantActivityRound(rounds, 9)).toBe(rounds)
+    expect(removeAssistantActivityRound(rounds, 0)).toEqual([rounds[1]])
+    expect(sameAssistantActivityRounds(rounds, [...rounds])).toBe(true)
+    expect(sameAssistantActivityRounds(rounds, [running])).toBe(false)
+  })
+
+  test("round payloads need an integer id, a kind, and text", () => {
+    expect(
+      isAssistantRoundPayload({ round: 1, kind: "answer", text: "hi" })
+    ).toBe(true)
+    expect(
+      isAssistantRoundPayload({ round: 1.5, kind: "answer", text: "hi" })
+    ).toBe(false)
+    expect(isAssistantRoundPayload({ round: 0, kind: "nope", text: "hi" })).toBe(
+      false
+    )
+  })
+
+  test("message identity includes activity", () => {
+    const base: AITurnMessageResponse = {
+      id: "m-1",
+      role: "assistant",
+      status: "partial",
+      content: "Hello",
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:01Z",
+    }
+    expect(isSameTurnMessage(base, { ...base })).toBe(true)
+    expect(isSameTurnMessage(base, { ...base, activity: [] })).toBe(true)
+    expect(
+      isSameTurnMessage(base, { ...base, activity: [running] })
+    ).toBe(false)
+    expect(
+      isSameTurnMessage({ ...base, activity: [running] }, { ...base, activity: [{ ...running }] })
+    ).toBe(true)
   })
 })
