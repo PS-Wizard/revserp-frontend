@@ -11,7 +11,12 @@ import {
   mcpConnectionsQueryKey,
 } from "./marketplace-api"
 import {
+  CLAUDE_OUTBOUND_CATALOG_ITEM,
+  CLAUDE_SETUP_PROMPT,
+} from "./marketplace-catalog"
+import {
   CatalogCard,
+  ClaudeSetupCatalogCard,
   ConfigureToolsContent,
   ConnectionCard,
   ConnectForm,
@@ -719,6 +724,7 @@ describe("MarketplaceView catalogue", () => {
         (node.textContent ?? "").replace(/\d+/g, "").trim()
       )
       expect(labels).toEqual([
+        "LLMs",
         "SEO and visibility",
         "Content and publishing",
         "Analytics and ads",
@@ -920,6 +926,99 @@ describe("MarketplaceView catalogue", () => {
         false
       )
     } finally {
+      await unmountElement(root)
+    }
+  })
+
+  test("Claude setup guide ships in Catalog as an outbound row", async () => {
+    connectionsFixture = []
+    const { root } = await mountView()
+    try {
+      expect(catalogText().includes("Claude")).toBe(true)
+      const guide = document.querySelector(
+        '[aria-label="Open Claude setup guide"]'
+      ) as HTMLAnchorElement | null
+      expect(guide?.tagName).toBe("A")
+      expect(guide?.getAttribute("target")).toBe("_blank")
+      const href = guide?.getAttribute("href") ?? ""
+      const prefix = "https://claude.ai/new?q="
+      expect(href.startsWith(prefix)).toBe(true)
+      expect(decodeURIComponent(href.slice(prefix.length))).toBe(
+        CLAUDE_SETUP_PROMPT
+      )
+      const appLink = document.querySelector(
+        '[aria-label="Open Claude setup guide in app"]'
+      ) as HTMLAnchorElement | null
+      const appUrl = new URL(appLink?.getAttribute("href") ?? "")
+      expect(appUrl.protocol).toBe("claude:")
+      expect(appUrl.hostname).toBe("claude.ai")
+      expect(appUrl.pathname).toBe("/new")
+      expect(appUrl.searchParams.get("q")).toBe(CLAUDE_SETUP_PROMPT)
+      expect(appLink?.textContent).toContain("Open in app")
+      expect(guide?.textContent).toContain("Open in browser")
+      expect(
+        document.querySelector('[aria-label="Connect Claude"]') === null
+      ).toBe(true)
+      expect(
+        document.querySelector('[aria-label="Copy Claude setup prompt"]') !==
+          null
+      ).toBe(true)
+    } finally {
+      await unmountElement(root)
+    }
+  })
+
+  test("Claude setup row renders standalone without a connection dialog", async () => {
+    const { root } = await mountElement(
+      <ClaudeSetupCatalogCard item={CLAUDE_OUTBOUND_CATALOG_ITEM} />
+    )
+    try {
+      const guide = document.querySelector(
+        '[aria-label="Open Claude setup guide"]'
+      ) as HTMLAnchorElement | null
+      expect(guide?.getAttribute("target")).toBe("_blank")
+      expect(
+        (guide?.getAttribute("href") ?? "").startsWith(
+          "https://claude.ai/new?q="
+        )
+      ).toBe(true)
+      expect(
+        document.querySelector('[aria-label="Connect Claude"]') === null
+      ).toBe(true)
+    } finally {
+      await unmountElement(root)
+    }
+  })
+
+  test("Claude copy fallback writes the exact setup prompt", async () => {
+    const originalClipboard = navigator.clipboard
+    let written: string | null = null
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          written = text
+        },
+      },
+    })
+    const { root } = await mountElement(
+      <ClaudeSetupCatalogCard item={CLAUDE_OUTBOUND_CATALOG_ITEM} />
+    )
+    try {
+      const copy = document.querySelector(
+        '[aria-label="Copy Claude setup prompt"]'
+      ) as HTMLButtonElement | null
+      if (!copy) throw new Error("copy prompt button missing")
+      await act(async () => {
+        press(copy)
+        await flushTestDom()
+      })
+      expect(written).toBe(CLAUDE_SETUP_PROMPT)
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: originalClipboard,
+      })
       await unmountElement(root)
     }
   })

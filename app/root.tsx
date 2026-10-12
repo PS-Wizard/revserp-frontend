@@ -1,9 +1,11 @@
 import {
   Links,
+  Link,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
   isRouteErrorResponse,
 } from "react-router"
 
@@ -40,6 +42,7 @@ if (
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const isHandbook = /^\/handbook(?:\/|$)/i.test(useLocation().pathname)
   return (
     <html className="dark" lang="en" suppressHydrationWarning>
       <head>
@@ -73,7 +76,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <div aria-hidden="true" className="app-noise" />
+        {!isHandbook && <div aria-hidden="true" className="app-noise" />}
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster offset={24} position="bottom-left" />
         <ScrollRestoration />
@@ -98,6 +101,7 @@ export default function App() {
 
 // react-doctor-disable-next-line react-doctor/no-multi-comp
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+  const isHandbook = /^\/handbook(?:\/|$)/i.test(useLocation().pathname)
   let message = "Oops!"
   let details = "An unexpected error occurred."
   let stack: string | undefined
@@ -117,6 +121,14 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="container mx-auto p-4 pt-16">
       <h1>{message}</h1>
       <p>{details}</p>
+      {isHandbook && (
+        <Link
+          className="mt-6 inline-block underline underline-offset-4"
+          to="/handbook"
+        >
+          Back to the handbook
+        </Link>
+      )}
       {stack && (
         <pre className="w-full overflow-x-auto p-4">
           <code>{stack}</code>

@@ -19,8 +19,36 @@ export const DEFAULT_AUTO_CRAWL_CONFIG: AutoCrawlConfig = {
   delayMs: "",
   jitterMs: "",
   fetchTimeoutSeconds: "10",
-  frequencyDays: "1",
+  frequencyDays: "7",
   runAt: "03:00",
+}
+
+/** Auto crawl schedules. Every month is a fixed 30 days, not a calendar month. */
+export const autoCrawlScheduleOptions = [
+  { value: "7", label: "Every week" },
+  { value: "14", label: "Every 2 weeks" },
+  { value: "30", label: "Every month" },
+]
+
+/** Display fallback for auto crawl schedule: unsupported stored values show weekly without persisting. */
+export function normalizeAutoCrawlFrequencyDaysForDisplay(
+  value: string | number | null | undefined
+): string {
+  const text = value === null || value === undefined ? "" : String(value)
+  return autoCrawlScheduleOptions.some((option) => option.value === text)
+    ? text
+    : DEFAULT_AUTO_CRAWL_CONFIG.frequencyDays
+}
+
+/** Auto crawl schedule validation: only weekly, biweekly, and monthly schedules are allowed. */
+export function getAutoCrawlFrequencyValidationError(
+  frequencyDays: string
+): string | null {
+  return autoCrawlScheduleOptions.some(
+    (option) => option.value === frequencyDays
+  )
+    ? null
+    : "Crawl frequency must be Every week, Every 2 weeks, or Every month."
 }
 
 export function useAutoCrawlSettings(activeProjectId?: string | null) {
@@ -45,9 +73,9 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
       )
       setEnabled(data.enabled)
       setNextRunAt(data.next_run_at ?? "")
-      const frequencyDays = data.frequency_days
-        ? String(data.frequency_days)
-        : DEFAULT_AUTO_CRAWL_CONFIG.frequencyDays
+      const frequencyDays = normalizeAutoCrawlFrequencyDaysForDisplay(
+        data.frequency_days
+      )
       const runAt = data.run_at || DEFAULT_AUTO_CRAWL_CONFIG.runAt
       if (data.config_snapshot) {
         setConfig({
@@ -150,14 +178,10 @@ export function useAutoCrawlSettings(activeProjectId?: string | null) {
       }
     }
 
-    const parsedFrequencyDays = Number(cfg.frequencyDays)
-    if (
-      !Number.isInteger(parsedFrequencyDays) ||
-      parsedFrequencyDays < 1 ||
-      parsedFrequencyDays > 30
-    ) {
-      return "Crawl frequency must be between 1 and 30 days."
-    }
+    const frequencyError = getAutoCrawlFrequencyValidationError(
+      cfg.frequencyDays
+    )
+    if (frequencyError) return frequencyError
 
     if (!/^\d{2}:\d{2}$/.test(cfg.runAt)) {
       return "Crawl time must be a valid time of day."

@@ -7,6 +7,7 @@
     "dev": "react-router dev",
     "start": "node ./node_modules/.bin/react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc",
+    "handbook:check": "bun scripts/check-handbook-detectors.ts",
     "format": "prettier --write \"**/*.{ts,tsx}\""
   },
   "dependencies": {

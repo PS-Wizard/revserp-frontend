@@ -4,8 +4,13 @@ import { describe, expect, test } from "bun:test"
 import {
   catalogConnectionsForItem,
   catalogEntryConnectionSupported,
+  catalogEntryEndpoint,
   catalogEntryService,
   catalogGroupId,
+  CLAUDE_OUTBOUND_CATALOG_ITEM,
+  CLAUDE_SETUP_PROMPT,
+  claudeDesktopSetupUrl,
+  claudeSetupUrl,
   connectionBrandLogo,
   CUSTOM_MCP_CATALOG_ITEM,
   groupCatalogItems,
@@ -309,5 +314,41 @@ describe("business catalogue presets", () => {
       catalogItems
     ).map((match) => match.id)
     expect(matches).toEqual(["c-w"])
+  })
+})
+
+describe("claudeSetupUrl", () => {
+  test("opens a browser new chat with the URL-encoded setup prompt", () => {
+    const prefix = "https://claude.ai/new?q="
+    const url = claudeSetupUrl()
+    expect(url.startsWith(prefix)).toBe(true)
+    const encoded = url.slice(prefix.length)
+    expect(decodeURIComponent(encoded)).toBe(CLAUDE_SETUP_PROMPT)
+    expect(encoded).toContain(encodeURIComponent("https://revserp.ai/mcp"))
+    expect(encoded.includes(" ")).toBe(false)
+  })
+
+  test("opens Claude Chat in the desktop app with the setup prompt", () => {
+    const url = new URL(claudeDesktopSetupUrl())
+    expect(url.protocol).toBe("claude:")
+    expect(url.hostname).toBe("claude.ai")
+    expect(url.pathname).toBe("/new")
+    expect(url.searchParams.get("q")).toBe(CLAUDE_SETUP_PROMPT)
+  })
+
+  test("the outbound row stays out of inbound connection matching", () => {
+    expect(
+      MARKETPLACE_CATALOG_PRESETS.some(
+        (item) => item.id === CLAUDE_OUTBOUND_CATALOG_ITEM.id
+      )
+    ).toBe(false)
+    expect(catalogEntryEndpoint(CLAUDE_OUTBOUND_CATALOG_ITEM)).toBeNull()
+    expect(catalogGroupId(CLAUDE_OUTBOUND_CATALOG_ITEM.id)).toBe("llms")
+    expect(groupCatalogItems([CLAUDE_OUTBOUND_CATALOG_ITEM])).toEqual([
+      { id: "llms", title: "LLMs", items: [CLAUDE_OUTBOUND_CATALOG_ITEM] },
+    ])
+    expect(MARKETPLACE_BRAND_LOGOS[CLAUDE_OUTBOUND_CATALOG_ITEM.id]).toBe(
+      "/brands/claude.svg"
+    )
   })
 })

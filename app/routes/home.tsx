@@ -99,6 +99,13 @@ function Header() {
 
         <nav className="flex items-center gap-6 text-sm">
           <Link
+            to="/handbook"
+            prefetch="intent"
+            className="text-white/55 transition-colors hover:text-white/90"
+          >
+            Handbook
+          </Link>
+          <Link
             to="/terms"
             prefetch="intent"
             className="hidden text-white/55 transition-colors hover:text-white/90 sm:inline"
@@ -264,6 +271,13 @@ function Footer() {
               className="text-white/45 transition-colors hover:text-white/80"
             >
               Sign up
+            </Link>
+            <Link
+              to="/handbook"
+              prefetch="intent"
+              className="text-white/45 transition-colors hover:text-white/80"
+            >
+              Handbook
             </Link>
             <Link
               to="/terms"

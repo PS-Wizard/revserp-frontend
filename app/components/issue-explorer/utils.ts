@@ -82,7 +82,7 @@ export function urlFromRowKey(key: string) {
   return separatorIndex === -1 ? key : key.slice(separatorIndex + 2)
 }
 
-export const MAX_RECOMMEND_FIXES_URLS = 10
+export const MAX_RECOMMEND_FIXES_URLS = 50
 
 export function buildRecommendFixesPrompt({
   pillarLabel,

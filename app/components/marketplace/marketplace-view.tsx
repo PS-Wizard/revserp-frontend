@@ -3,7 +3,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  CopyIcon,
   EllipsisIcon,
+  ExternalLinkIcon,
   Loader2Icon,
   LockIcon,
   PlugIcon,
@@ -13,9 +15,10 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react"
+import { toast } from "sonner"
 
 import { Badge } from "~/components/ui/badge"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import {
   Dialog,
@@ -87,6 +90,10 @@ import {
   catalogConnectionsForItem,
   catalogEntryConnectionSupported,
   catalogEntryService,
+  CLAUDE_OUTBOUND_CATALOG_ITEM,
+  CLAUDE_SETUP_PROMPT,
+  claudeDesktopSetupUrl,
+  claudeSetupUrl,
   connectionBrandId,
   connectionBrandLogo,
   CUSTOM_MCP_CATALOG_ITEM,
@@ -253,7 +260,12 @@ export const MarketplaceView = memo(function MarketplaceView({
     )
   }
 
-  const catalogItems = mergeCatalogPresets(catalogQuery.data?.items)
+  const mergedCatalogItems = mergeCatalogPresets(catalogQuery.data?.items)
+  const catalogItems = mergedCatalogItems.some(
+    (item) => item.id === CLAUDE_OUTBOUND_CATALOG_ITEM.id
+  )
+    ? mergedCatalogItems
+    : [...mergedCatalogItems, CLAUDE_OUTBOUND_CATALOG_ITEM]
   const catalogGroups = groupCatalogItems(catalogItems)
   const connections = connectionsQuery.data?.connections ?? []
   const loading =
@@ -281,6 +293,9 @@ export const MarketplaceView = memo(function MarketplaceView({
   }
 
   function renderCatalogCard(item: MCPCatalogItem) {
+    if (item.id === CLAUDE_OUTBOUND_CATALOG_ITEM.id) {
+      return <ClaudeSetupCatalogCard key={item.id} item={item} />
+    }
     return (
       <CatalogCard
         key={item.id}
@@ -689,6 +704,64 @@ export function CatalogCard({
           </Button>
         )
       ) : null}
+    </div>
+  )
+}
+
+export function ClaudeSetupCatalogCard({ item }: { item: MCPCatalogItem }) {
+  async function copySetupPrompt() {
+    try {
+      if (!navigator.clipboard) throw new Error("Clipboard API is unavailable")
+      await navigator.clipboard.writeText(CLAUDE_SETUP_PROMPT)
+      toast.success("Setup prompt copied")
+    } catch {
+      toast.error("Unable to copy the setup prompt.")
+    }
+  }
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-border px-3 py-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
+        <MarketplaceBrandIcon
+          id={item.id}
+          logo={marketplaceBrandLogo(item.id, item.logo)}
+        />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium">{item.title}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {item.description}
+        </span>
+      </div>
+      <div className="flex w-full flex-wrap items-center gap-1">
+        <a
+          aria-label="Open Claude setup guide in app"
+          className={buttonVariants({ variant: "ghost", size: "sm" })}
+          href={claudeDesktopSetupUrl()}
+        >
+          Open in app
+        </a>
+        <a
+          aria-label="Open Claude setup guide"
+          className={buttonVariants({ variant: "ghost", size: "sm" })}
+          href={claudeSetupUrl()}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          <ExternalLinkIcon className="size-4" />
+          Open in browser
+        </a>
+        <Button
+          aria-label="Copy Claude setup prompt"
+          onClick={() => void copySetupPrompt()}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <CopyIcon className="size-4" />
+          Copy setup prompt
+        </Button>
+      </div>
     </div>
   )
 }

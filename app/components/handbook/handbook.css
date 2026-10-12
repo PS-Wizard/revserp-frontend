@@ -1,0 +1,865 @@
+.handbook {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  min-height: 100svh;
+}
+
+.handbook a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.handbook :focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+.handbook-skip {
+  background: var(--primary);
+  border-radius: 0 0 6px 0;
+  color: var(--primary-foreground);
+  font-size: 0.875rem;
+  left: 0;
+  padding: 1rem;
+  position: absolute;
+  top: -4rem;
+  z-index: 60;
+}
+
+.handbook-skip:focus-visible {
+  top: 0;
+}
+
+.handbook-header {
+  background: color-mix(in srgb, var(--background) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.handbook-header-inner {
+  align-items: center;
+  display: flex;
+  gap: 1rem 1.5rem;
+  margin-inline: auto;
+  max-width: 96rem;
+  padding: 1rem clamp(1.25rem, 4vw, 3rem);
+}
+
+.handbook-brand {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.handbook-header-actions {
+  align-items: center;
+  display: flex;
+  gap: 1rem 1.5rem;
+  margin-left: auto;
+}
+
+.handbook-header-nav {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: 0.25rem 1.25rem;
+}
+
+.handbook-header-nav a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.handbook-header-nav a[aria-current="page"] {
+  color: var(--foreground);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .handbook-header-nav a:hover {
+    color: var(--foreground);
+  }
+}
+
+.handbook-browse {
+  border-bottom: 1px solid var(--border);
+  display: none;
+  font-size: 0.95rem;
+}
+
+.handbook-browse summary {
+  cursor: pointer;
+  font-weight: 500;
+  padding: 1rem clamp(1.25rem, 4vw, 3rem);
+}
+
+.handbook-browse nav {
+  border-top: 1px solid var(--border);
+  padding: 1rem clamp(1.25rem, 4vw, 3rem) 1.5rem;
+}
+
+.handbook-shell {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 42.5rem) minmax(
+      12rem,
+      1fr
+    );
+  gap: 3rem;
+  margin-inline: auto;
+  max-width: 96rem;
+  padding: 3rem clamp(1.25rem, 4vw, 3rem) 4rem;
+}
+
+.handbook-main {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: subgrid;
+  min-width: 0;
+  outline: none;
+}
+
+.handbook-overview {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.handbook-guide-page {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  min-width: 0;
+}
+
+.handbook-guide-page > .handbook-crumbs {
+  grid-column: 1 / -1;
+}
+
+.handbook-sidebar {
+  font-size: 0.875rem;
+  grid-column: 1;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.handbook-sidebar-stick {
+  position: sticky;
+  top: 5rem;
+}
+
+.handbook-chapters,
+.handbook-chapter-buckets,
+.handbook-chapter-guides {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-chapters > li + li {
+  margin-top: 0.5rem;
+}
+
+.handbook-chapter-link {
+  border-left: 2px solid transparent;
+  color: var(--muted-foreground);
+  display: block;
+  padding: 0.5rem 0 0.5rem 1rem;
+  text-decoration: none;
+}
+
+.handbook-chapter-link[aria-current="page"] {
+  border-left-color: var(--foreground);
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.handbook-chapter-buckets {
+  border-left: 1px solid var(--border);
+  margin: 0.5rem 0 1rem 1rem;
+  padding-left: 1rem;
+}
+
+.handbook-chapter-buckets a {
+  color: var(--muted-foreground);
+  display: block;
+  padding: 0.5rem 0;
+  text-decoration: none;
+}
+
+.handbook-chapter-buckets a[aria-current="page"] {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.handbook-chapter-guides {
+  margin: 0.5rem 0;
+}
+
+.handbook-chapter-guides a {
+  display: block;
+  font-size: 0.82rem;
+  padding: 0.5rem 0;
+}
+
+.handbook-title {
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+
+.handbook-lede {
+  color: var(--muted-foreground);
+  font-size: 1.125rem;
+  line-height: 1.65;
+  margin: 1.5rem 0 0;
+  max-width: 42rem;
+}
+
+.handbook-rule {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 3rem 0;
+}
+
+.handbook-chapter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-chapter-row {
+  border-top: 1px solid var(--border);
+  padding: 2rem 0;
+}
+
+.handbook-chapter-row:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.handbook-chapter-row h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.handbook-chapter-row h2 a {
+  text-decoration: none;
+}
+
+.handbook-chapter-row p.handbook-chapter-desc {
+  color: var(--muted-foreground);
+  margin: 1rem 0 0;
+  max-width: 44rem;
+}
+
+.handbook-bucket-links {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: 0.5rem 1rem;
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.handbook-bucket-links a {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .handbook-bucket-links a:hover {
+    border-color: var(--foreground);
+    color: var(--foreground);
+  }
+}
+
+.handbook-count {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  margin: 1rem 0 0;
+}
+
+.handbook-read-link {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+.handbook-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.handbook-crumbs li + li::before {
+  color: var(--muted-foreground);
+  content: "/";
+  margin-right: 0.5rem;
+}
+
+.handbook-crumbs a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.handbook-crumbs [aria-current="page"] {
+  color: var(--foreground);
+}
+
+.handbook-article-head {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2rem;
+  padding-bottom: 2rem;
+}
+
+.handbook-article-title {
+  font-size: clamp(2rem, 4.5vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0;
+  max-width: 22ch;
+  text-wrap: balance;
+}
+
+.handbook-article-summary {
+  color: var(--muted-foreground);
+  font-size: 1.125rem;
+  line-height: 1.65;
+  margin: 1.5rem 0 0;
+  max-width: 42rem;
+}
+
+.handbook-meta {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: 0.5rem 1.5rem;
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+}
+
+.handbook-meta dt {
+  color: var(--muted-foreground);
+  display: inline;
+  white-space: nowrap;
+}
+
+.handbook-meta dd {
+  display: inline;
+  margin: 0 0 0 0.5rem;
+  min-width: 0;
+}
+
+.handbook-meta-details {
+  font-size: 0.875rem;
+  margin: 1.5rem 0 0;
+}
+
+.handbook-meta-details summary {
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.handbook-meta-details code {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  display: inline-block;
+  font-family: var(--font-geist-mono);
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  overflow-wrap: anywhere;
+  padding: 0.5rem 1rem;
+}
+
+.handbook-article-grid {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.handbook-article {
+  grid-column: 1;
+  max-width: 42.5rem;
+  min-width: 0;
+}
+
+.handbook-toc {
+  font-size: 0.875rem;
+  grid-column: 2;
+  line-height: 1.55;
+  min-width: 0;
+}
+
+.handbook-toc-stick {
+  border-left: 1px solid var(--border);
+  padding-left: 1.5rem;
+  position: sticky;
+  top: 5rem;
+}
+
+.handbook-toc-heading {
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.handbook-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-toc-list li + li {
+  margin-top: 0.5rem;
+}
+
+.handbook-toc-list a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .handbook-toc-list a:hover {
+    color: var(--foreground);
+  }
+}
+
+.handbook-toc-details {
+  display: none;
+  grid-column: 1 / -1;
+}
+
+.handbook-toc-details summary {
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: 1rem 0;
+}
+
+.handbook-toc-details nav {
+  border-top: 1px solid var(--border);
+  padding: 1rem 0 1.5rem;
+}
+
+.handbook-section {
+  scroll-margin-top: 5.5rem;
+}
+
+.handbook-section + .handbook-section {
+  border-top: 1px solid var(--border);
+  margin-top: 3rem;
+  padding-top: 2rem;
+}
+
+.handbook-section h2 {
+  font-size: clamp(1.375rem, 2vw, 1.5rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  margin: 0 0 1rem;
+}
+
+.handbook-section ul,
+.handbook-section ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.handbook-section li {
+  margin-bottom: 0.5rem;
+}
+
+.handbook-section li p {
+  margin: 0;
+}
+
+.handbook-section p {
+  margin: 0 0 1rem;
+  overflow-wrap: break-word;
+}
+
+.handbook-section strong {
+  font-weight: 600;
+}
+
+.handbook-section code {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-geist-mono);
+  font-size: 0.85em;
+  padding: 0.125rem 0.5rem;
+}
+
+.handbook-example {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin: 1.5rem 0 0;
+  overflow: hidden;
+}
+
+.handbook-example figcaption {
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  padding: 1rem;
+}
+
+.handbook-example pre {
+  font-family: var(--font-geist-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 100%;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 1rem;
+  white-space: pre-wrap;
+}
+
+.handbook-example code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.handbook-refs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-refs li {
+  margin-bottom: 0.5rem;
+}
+
+.handbook-refs a {
+  font-size: 0.95rem;
+}
+
+.handbook-note {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+  margin: 3rem 0 0;
+  padding: 1rem 1.5rem;
+}
+
+.handbook-related {
+  border-top: 1px solid var(--border);
+  margin-top: 3rem;
+  padding-top: 2rem;
+}
+
+.handbook-related h2 {
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 1rem;
+}
+
+.handbook-related ul {
+  font-size: 0.95rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-related li + li {
+  margin-top: 0.5rem;
+}
+
+.handbook-guide-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.handbook-guide-row {
+  border-top: 1px solid var(--border);
+  padding: 1.5rem 0;
+}
+
+.handbook-guide-row:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.handbook-guide-row a.handbook-guide-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  text-decoration: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .handbook-guide-row a.handbook-guide-title:hover {
+    text-decoration: underline;
+  }
+}
+
+.handbook-guide-row p {
+  color: var(--muted-foreground);
+  margin: 0.5rem 0 0;
+  max-width: 44rem;
+}
+
+.handbook-guide-code {
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  font-family: var(--font-geist-mono);
+  font-size: 0.75rem;
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.handbook-bucket-block {
+  margin-top: 3rem;
+}
+
+.handbook-bucket-block > h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0;
+}
+
+.handbook-bucket-block > h2 a {
+  text-decoration: none;
+}
+
+.handbook-bucket-block > p {
+  color: var(--muted-foreground);
+  margin: 1rem 0 1.5rem;
+  max-width: 44rem;
+}
+
+.handbook-search {
+  margin-top: 2rem;
+  max-width: 38rem;
+}
+
+.handbook-search label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.handbook-search-box {
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.handbook-search-box:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.handbook-search-box svg {
+  color: var(--muted-foreground);
+  flex: none;
+}
+
+.handbook-search-box input {
+  background: none;
+  border: 0;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  min-width: 0;
+  outline: none;
+  padding: 0;
+  width: 100%;
+}
+
+.handbook-search-box input:focus-visible {
+  outline: none;
+}
+
+.handbook-search-count {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  margin: 1rem 0 0;
+}
+
+.handbook-search-results {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.handbook-search-results li {
+  border-top: 1px solid var(--border);
+  padding: 1rem 0;
+}
+
+.handbook-search-results li:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.handbook-search-results a {
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.handbook-search-results p {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  margin: 0.5rem 0 0;
+}
+
+.handbook-search-results code {
+  font-family: var(--font-geist-mono);
+  font-size: 0.8rem;
+}
+
+.handbook-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  margin-inline: auto;
+  max-width: 96rem;
+  padding: 2rem clamp(1.25rem, 4vw, 3rem) 3rem;
+}
+
+.handbook-footer p {
+  margin: 0;
+  max-width: 46rem;
+}
+
+.handbook-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-top: 1rem;
+}
+
+.handbook-missing {
+  padding: 3rem 0;
+}
+
+.handbook-missing h1 {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.handbook-missing p {
+  color: var(--muted-foreground);
+  margin: 1rem 0 0;
+  max-width: 38rem;
+}
+
+.handbook-missing a {
+  display: inline-block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 1.5rem;
+  text-decoration: none;
+}
+
+@media (max-width: 72rem) {
+  .handbook-shell {
+    grid-template-columns: minmax(0, 42.5rem);
+    justify-content: center;
+    padding-top: 2rem;
+  }
+
+  .handbook-sidebar {
+    display: none;
+  }
+
+  .handbook-browse {
+    display: block;
+  }
+
+  .handbook-main {
+    display: block;
+    grid-column: 1 / -1;
+  }
+
+  .handbook-guide-page,
+  .handbook-article-grid {
+    display: block;
+  }
+
+  nav.handbook-toc {
+    display: none;
+  }
+
+  .handbook-toc-details {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handbook,
+  .handbook *,
+  .handbook *::before,
+  .handbook *::after {
+    animation: none;
+    scroll-behavior: auto;
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .handbook-header {
+    background: var(--background);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .handbook a {
+    text-decoration: underline;
+  }
+}

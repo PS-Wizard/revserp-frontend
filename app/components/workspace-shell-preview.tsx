@@ -18,7 +18,6 @@ import {
   FolderPlusIcon,
   PlayIcon,
   PlusIcon,
-  SettingsIcon,
   SparklesIcon,
 } from "lucide-react"
 import {
@@ -928,22 +927,6 @@ export function WorkspaceShellPreview({
                                   : void autoCrawl.openDialog(),
                             },
                           ]),
-                      ...(features.integrations !== false
-                        ? [
-                            {
-                              key: "integrations",
-                              icon: (
-                                <SettingsIcon
-                                  aria-hidden="true"
-                                  className="size-4"
-                                />
-                              ),
-                              label: "Integrations",
-                              onSelect: () =>
-                                navigate("/app/settings/integrations"),
-                            },
-                          ]
-                        : []),
                       {
                         key: "business-profile",
                         icon: (

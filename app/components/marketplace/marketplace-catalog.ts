@@ -130,6 +130,7 @@ export const MARKETPLACE_BRAND_LOGOS: Record<string, string> = {
   semrush: "/brands/semrush.svg",
   "se-ranking": "/brands/se-ranking.ico",
   ahrefs: "/brands/ahrefs.ico",
+  "claude-ai": "/brands/claude.svg",
 }
 
 /** Known providers with no self-hosted mark render their initials instead. */
@@ -139,7 +140,7 @@ export const MARKETPLACE_BRAND_INITIALS: Record<string, string> = {
   deepwiki: "DW",
 }
 
-export type CatalogGroupId = "seo" | "content" | "analytics" | "others"
+export type CatalogGroupId = "seo" | "content" | "analytics" | "llms" | "others"
 
 const CATALOG_GROUP_IDS: Record<string, CatalogGroupId> = {
   "se-ranking": "seo",
@@ -150,9 +151,11 @@ const CATALOG_GROUP_IDS: Record<string, CatalogGroupId> = {
   sanity: "content",
   storyblok: "content",
   "windsor-ai": "analytics",
+  "claude-ai": "llms",
 }
 
 export const CATALOG_GROUP_ORDER: CatalogGroupId[] = [
+  "llms",
   "seo",
   "content",
   "analytics",
@@ -163,6 +166,7 @@ export const CATALOG_GROUP_TITLES: Record<CatalogGroupId, string> = {
   seo: "SEO and visibility",
   content: "Content and publishing",
   analytics: "Analytics and ads",
+  llms: "LLMs",
   others: "Others",
 }
 
@@ -276,4 +280,29 @@ export function catalogConnectionsForItem(
     (connection) =>
       !presetEndpoints.has(normalizePresetEndpoint(connection.endpoint_url))
   )
+}
+
+/** Outbound Claude setup guide. Opens claude.ai in a new tab, never an inbound MCP connection dialog. */
+export const CLAUDE_OUTBOUND_CATALOG_ID = "claude-ai"
+
+/** Setup prompt sent via the Claude new-chat q parameter. If Claude ignores the prefill, the card offers a copy fallback. */
+export const CLAUDE_SETUP_PROMPT =
+  "Help the user set up RevSERP MCP. The endpoint is https://revserp.ai/mcp. It uses OAuth 2.1 with automatic discovery. Guide the user through adding it as a custom connector in Claude and signing in to authorize access."
+
+/** Browser new-chat URL with the setup prompt URL-encoded. The web shape mirrors the documented claude://claude.ai/new?q= desktop deep link; browser prefill is not guaranteed. */
+export function claudeSetupUrl(prompt: string = CLAUDE_SETUP_PROMPT): string {
+  return `https://claude.ai/new?q=${encodeURIComponent(prompt)}`
+}
+
+export function claudeDesktopSetupUrl() {
+  return `claude://claude.ai/new?q=${encodeURIComponent(CLAUDE_SETUP_PROMPT)}`
+}
+
+/** Frontend-only outbound catalogue row. Kept out of MARKETPLACE_CATALOG_PRESETS so connection matching never treats it as an inbound server. */
+export const CLAUDE_OUTBOUND_CATALOG_ITEM: MCPCatalogItem = {
+  id: CLAUDE_OUTBOUND_CATALOG_ID,
+  title: "Claude",
+  description:
+    "Set up RevSERP MCP in Claude. Requires the desktop app for app links; browser prompt prefill may not work.",
+  service: "custom",
 }

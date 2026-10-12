@@ -23,17 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select"
-import type { AutoCrawlConfig } from "./use-auto-crawl-settings"
-
-const frequencyOptions = [
-  { value: "1", label: "Every day" },
-  { value: "2", label: "Every 2 days" },
-  { value: "3", label: "Every 3 days" },
-  { value: "4", label: "Every 4 days" },
-  { value: "5", label: "Every 5 days" },
-  { value: "7", label: "Every week" },
-  { value: "14", label: "Every 2 weeks" },
-]
+import {
+  autoCrawlScheduleOptions,
+  type AutoCrawlConfig,
+} from "./use-auto-crawl-settings"
 
 type AutoCrawlDialogProps = {
   isOpen: boolean
@@ -88,10 +81,10 @@ export function AutoCrawlDialog({
                   value={config.frequencyDays}
                 >
                   <SelectTrigger className="w-full" id="auto-frequency-days">
-                    <SelectValue placeholder="Every day" />
+                    <SelectValue placeholder="Every week" />
                   </SelectTrigger>
                   <SelectContent>
-                    {frequencyOptions.map((option) => (
+                    {autoCrawlScheduleOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
