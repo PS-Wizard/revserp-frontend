@@ -7,10 +7,13 @@ import {
 } from "~/components/cancel-crawl-dialog"
 import { useQueryClient } from "@tanstack/react-query"
 import { clientApiFetch } from "~/lib/api"
+import { describeCrawlAnalysisProgress } from "~/lib/crawl"
 import { isSetupManagedCrawl } from "~/lib/setup-crawl"
 import type {
   ActiveCrawlsResponse,
+  CrawlAnalysisStage,
   CrawlEventPayload,
+  CrawlPhase,
   CrawlResponse,
   CrawlStatus,
   OrganizationEventFrame,
@@ -23,6 +26,7 @@ type CrawlStatusSnapshot = Pick<
   CrawlResponse,
   | "status"
   | "phase"
+  | "analysis_progress"
   | "project_id"
   | "urls_discovered"
   | "urls_crawled"
@@ -113,10 +117,18 @@ export function useCrawlTracking({
   const trackedIdsRef = useRef<Set<string>>(new Set())
   const suppressedSetupCrawlIdsRef = useRef<Set<string>>(new Set())
   const scopeEpochRef = useRef(0)
-  // Last status seen per tracked crawl, so a status change (e.g. queued ->
-  // running -> terminal) refetches the loader and keeps the navbar in sync
-  // with live events instead of showing stale loader data.
-  const lastStatusRef = useRef<Map<string, string>>(new Map())
+  // Why: the navbar reads loader data, so phase/stage changes while running
+  // only reach it via refetch; per-batch counts ride the toast instead.
+  const lastCrawlStateRef = useRef<
+    Map<
+      string,
+      {
+        status: CrawlStatus
+        phase: CrawlPhase | null
+        stage: CrawlAnalysisStage | null
+      }
+    >
+  >(new Map())
   const [cancelTarget, setCancelTarget] = useState<CancelCrawlTarget | null>(
     null
   )
@@ -137,12 +149,20 @@ export function useCrawlTracking({
 
   const applyCrawlStatus = useCallback(
     (id: string, crawl: CrawlStatusSnapshot) => {
-      // Refetch loader-backed data (which the navbar reads) whenever the
-      // authoritative status changes, so it never lags the live toast.
-      if (lastStatusRef.current.get(id) !== crawl.status) {
-        lastStatusRef.current.set(id, crawl.status)
+      // Why: a missing phase/stage means the frame carries no new info, so
+      // the last seen value carries forward and count-only frames refetch nothing.
+      const seen = lastCrawlStateRef.current.get(id)
+      const phase = crawl.phase ?? seen?.phase ?? null
+      const stage = crawl.analysis_progress?.stage ?? seen?.stage ?? null
+      if (
+        seen?.status !== crawl.status ||
+        (crawl.phase != null && crawl.phase !== seen?.phase) ||
+        (crawl.analysis_progress?.stage != null &&
+          crawl.analysis_progress.stage !== seen?.stage)
+      ) {
         revalidateRef.current()
       }
+      lastCrawlStateRef.current.set(id, { status: crawl.status, phase, stage })
       const projectName = projectNameByIdRef.current.get(crawl.project_id)
       const competitorLabel = crawl.competitor_label?.trim() || undefined
       const competitor = isCompetitorCrawl(crawl)
@@ -216,20 +236,33 @@ export function useCrawlTracking({
           break
         case "running":
           if (crawl.phase === "analyzing") {
+            const analysis = describeCrawlAnalysisProgress(
+              crawl.analysis_progress
+            )
+            let description: string | undefined = competitor
+              ? competitorLabel
+                ? `${competitorLabel} is being analyzed.`
+                : undefined
+              : projectName
+                ? `${projectName} crawl is being analyzed.`
+                : undefined
+            // A confirmed count replaces the generic copy; otherwise the
+            // legacy description stays so nothing is fabricated.
+            if (analysis?.countText) {
+              const subject = competitor ? competitorLabel : projectName
+              description = subject
+                ? `${subject} · ${analysis.countText}`
+                : analysis.countText
+            }
             toast.loading(
               <span className="shimmer text-muted-foreground">
-                {competitor ? "Analyzing competitor…" : "Analyzing issues…"}
+                {analysis?.title ??
+                  (competitor ? "Analyzing competitor…" : "Analyzing issues…")}
               </span>,
               {
                 id,
                 duration: Infinity,
-                description: competitor
-                  ? competitorLabel
-                    ? `${competitorLabel} is being analyzed.`
-                    : undefined
-                  : projectName
-                    ? `${projectName} crawl is being analyzed.`
-                    : undefined,
+                description,
                 action: cancellableAction,
               }
             )
@@ -275,7 +308,7 @@ export function useCrawlTracking({
           break
         case "completed":
           trackedIdsRef.current.delete(id)
-          lastStatusRef.current.delete(id)
+          lastCrawlStateRef.current.delete(id)
           if (competitor) {
             toast.success("Competitor crawl complete", {
               id,
@@ -314,7 +347,7 @@ export function useCrawlTracking({
           break
         case "failed":
           trackedIdsRef.current.delete(id)
-          lastStatusRef.current.delete(id)
+          lastCrawlStateRef.current.delete(id)
           toast.error(competitor ? "Competitor crawl failed" : "Crawl failed", {
             id,
             description: competitor
@@ -328,7 +361,7 @@ export function useCrawlTracking({
           break
         case "cancelled":
           trackedIdsRef.current.delete(id)
-          lastStatusRef.current.delete(id)
+          lastCrawlStateRef.current.delete(id)
           toast.dismiss(id)
           break
       }
@@ -348,6 +381,7 @@ export function useCrawlTracking({
         project_id: event.project_id ?? "",
         status,
         phase: payload.phase ?? null,
+        analysis_progress: payload.analysis_progress ?? null,
         urls_discovered: payload.urls_discovered ?? 0,
         urls_crawled: payload.urls_crawled ?? 0,
         source: payload.source,
@@ -378,6 +412,10 @@ export function useCrawlTracking({
   const confirmCancel = useCallback(async (id: string) => {
     try {
       await clientApiFetch(`/crawls/${id}/cancel`, { method: "POST" })
+      // A fast terminal event can land before the POST resolves and dismiss
+      // the toast; only show the interim state while still tracked, or the
+      // response recreates an immortal spinner.
+      if (!trackedIdsRef.current.has(id)) return
       toast.loading(
         <span className="shimmer text-muted-foreground">Cancelling…</span>,
         { id, duration: Infinity }
@@ -400,7 +438,7 @@ export function useCrawlTracking({
       // next org.
       trackedIdsRef.current.clear()
       suppressedSetupCrawlIdsRef.current.clear()
-      lastStatusRef.current.clear()
+      lastCrawlStateRef.current.clear()
     }
   }, [orgId, syncActiveCrawls])
 

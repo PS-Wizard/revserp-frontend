@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test"
-import { act } from "react"
+import { act, type ReactElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { toast } from "sonner"
@@ -7,6 +7,10 @@ import { toast } from "sonner"
 import { useCrawlTracking } from "./use-crawl-tracking"
 import { projectSetupQueryKey } from "./use-project-setup"
 import { flushTestDom, installTestDom } from "~/lib/dom-test-setup"
+import {
+  describeCrawlAnalysisProgress,
+  formatResolvedLinkCount,
+} from "~/lib/crawl"
 import type {
   OrganizationEventFrame,
   ProjectSetupResponse,
@@ -191,6 +195,68 @@ async function settle() {
 
 function successes(message: string) {
   return toastCalls.filter((call) => call.kind === "success" && call.message === message)
+}
+
+function toastTitle(call: ToastRecord) {
+  const message = call.message as { props?: { children?: unknown } } | string
+  return typeof message === "string" ? message : message?.props?.children
+}
+
+function lastLoadingToast(id: string) {
+  const found = toastCalls.filter(
+    (call) => call.kind === "loading" && call.options.id === id
+  )
+  return found[found.length - 1]!
+}
+
+function analysisPayload(stage: string, links_resolved?: number) {
+  return {
+    status: "running",
+    phase: "analyzing",
+    source: "manual",
+    analysis_progress: { stage, links_resolved },
+  }
+}
+
+let cancelGate: { resolve: (response: Response) => void } | null = null
+
+function stubActiveAndDeferredCancel(activeCrawls: unknown[] = []) {
+  cancelGate = null
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes("/crawls/active")) {
+      return Promise.resolve(Response.json({ crawls: activeCrawls }))
+    }
+    if (url.includes("/crawls/crawl-1/cancel")) {
+      return new Promise<Response>((resolve) => {
+        cancelGate = { resolve }
+      })
+    }
+    return Promise.reject(new Error(`unexpected request ${url}`))
+  }) as typeof fetch
+}
+
+async function clickToastCancelButton(crawlId: string) {
+  const action = lastLoadingToast(crawlId).options.action as ReactElement
+  const actionHost = document.createElement("div")
+  document.body.appendChild(actionHost)
+  const actionRoot = createRoot(actionHost)
+  await act(async () => {
+    actionRoot.render(action)
+    await flushTestDom()
+  })
+  const cancelButton = [...actionHost.querySelectorAll("button")].find(
+    (button) => button.textContent === "Cancel"
+  )!
+  await act(async () => {
+    cancelButton.click()
+    await flushTestDom()
+  })
+  await act(async () => {
+    actionRoot.unmount()
+    await flushTestDom()
+  })
+  actionHost.remove()
 }
 
 test("setup crawl success is suppressed and its loading toast dismissed", async () => {
@@ -412,4 +478,223 @@ test("unmounted setup lookup rejection stays silent", async () => {
   })
   expect(successes("Crawl complete")).toEqual([])
   expect(dismissCalls).toEqual([])
+})
+
+test("analysis stages show stage titles with real confirmed counts", async () => {
+  await mountHook()
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", analysisPayload("checking_links", 640000))
+    )
+    await flushTestDom()
+  })
+  let toast = lastLoadingToast("crawl-1")
+  expect(toastTitle(toast)).toBe("Checking links…")
+  expect(toast.options.description).toBe("Demo · 640,000 link statuses resolved")
+
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", analysisPayload("deriving_issues"))
+    )
+    await flushTestDom()
+  })
+  toast = lastLoadingToast("crawl-1")
+  expect(toastTitle(toast)).toBe("Finding issues…")
+
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", analysisPayload("scoring"))
+    )
+    await flushTestDom()
+  })
+  toast = lastLoadingToast("crawl-1")
+  expect(toastTitle(toast)).toBe("Calculating scores…")
+})
+
+test("count-only progress never refetches the loader, stage changes do", async () => {
+  await mountHook()
+  const progress = (payload: Record<string, unknown>) =>
+    crawlFrame("crawl.progress", "crawl-1", payload)
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      progress({ status: "running", source: "manual", urls_discovered: 100, urls_crawled: 10 })
+    )
+    await flushTestDom()
+  })
+  expect(revalidates.length).toBe(1)
+  await act(async () => {
+    seen!.handleCrawlEvent(progress(analysisPayload("checking_links", 20000)))
+    await flushTestDom()
+  })
+  expect(revalidates.length).toBe(2)
+  await act(async () => {
+    seen!.handleCrawlEvent(progress(analysisPayload("checking_links", 40000)))
+    await flushTestDom()
+  })
+  expect(revalidates.length).toBe(2)
+  expect(lastLoadingToast("crawl-1").options.description).toBe(
+    "Demo · 40,000 link statuses resolved"
+  )
+  await act(async () => {
+    seen!.handleCrawlEvent(progress(analysisPayload("deriving_issues")))
+    await flushTestDom()
+  })
+  expect(revalidates.length).toBe(3)
+  expect(toastTitle(lastLoadingToast("crawl-1"))).toBe("Finding issues…")
+})
+
+test("legacy analyzing without progress keeps the old copy", async () => {
+  await mountHook()
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", {
+        status: "running",
+        phase: "analyzing",
+        source: "manual",
+      })
+    )
+    await flushTestDom()
+  })
+  const toast = lastLoadingToast("crawl-1")
+  expect(toastTitle(toast)).toBe("Analyzing issues…")
+  expect(toast.options.description).toBe("Demo crawl is being analyzed.")
+})
+
+test("competitor analysis shows the stage with the competitor label", async () => {
+  await mountHook()
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "comp-1", {
+        status: "running",
+        phase: "analyzing",
+        source: "competitor",
+        competitor_label: "Rival",
+        analysis_progress: { stage: "checking_links", links_resolved: 640000 },
+      })
+    )
+    await flushTestDom()
+  })
+  const toast = lastLoadingToast("comp-1")
+  expect(toastTitle(toast)).toBe("Checking links…")
+  expect(toast.options.description).toBe("Rival · 640,000 link statuses resolved")
+})
+
+test("active snapshot restores real analysis progress on reconnect", async () => {
+  await mountHook()
+  stubActiveAndDeferredCancel([
+    {
+      id: "crawl-1",
+      project_id: "proj-1",
+      status: "running",
+      phase: "analyzing",
+      analysis_progress: { stage: "checking_links", links_resolved: 640000 },
+      urls_discovered: 6028,
+      urls_crawled: 6028,
+      created_at: "2026-10-07T00:00:00Z",
+      source: "manual",
+    },
+  ])
+  await act(async () => {
+    await seen!.syncActiveCrawls()
+    await flushTestDom()
+  })
+  const toast = lastLoadingToast("crawl-1")
+  expect(toastTitle(toast)).toBe("Checking links…")
+  expect(toast.options.description).toBe("Demo · 640,000 link statuses resolved")
+})
+
+test("terminal cancellation clears the analyzing toast", async () => {
+  await mountHook()
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", analysisPayload("checking_links", 640000))
+    )
+    await flushTestDom()
+  })
+  expect(toastTitle(lastLoadingToast("crawl-1"))).toBe("Checking links…")
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.cancelled", "crawl-1", { status: "cancelled", source: "manual" })
+    )
+    await flushTestDom()
+  })
+  expect(dismissCalls).toContain("crawl-1")
+})
+
+test("cancel resolving after a terminal event creates no immortal spinner", async () => {
+  await mountHook()
+  stubActiveAndDeferredCancel()
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", analysisPayload("checking_links", 640000))
+    )
+    await flushTestDom()
+  })
+  await clickToastCancelButton("crawl-1")
+  const dialog = seen!.cancelDialog as ReactElement<any>
+  expect(dialog.props.target).toEqual({ id: "crawl-1", projectName: "Demo" })
+  await act(async () => {
+    const pending = dialog.props.onConfirm("crawl-1")
+    await flushTestDom()
+    expect(cancelGate === null).toBe(false)
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.cancelled", "crawl-1", { status: "cancelled", source: "manual" })
+    )
+    await flushTestDom()
+    cancelGate!.resolve(Response.json({ ok: true }))
+    await pending
+    await flushTestDom()
+  })
+  expect(dismissCalls).toContain("crawl-1")
+  expect(
+    toastCalls.some((call) => toastTitle(call) === "Cancelling…")
+  ).toBe(false)
+})
+
+test("cancel without a terminal event still shows the interim state", async () => {
+  await mountHook()
+  stubActiveAndDeferredCancel()
+  await act(async () => {
+    seen!.handleCrawlEvent(
+      crawlFrame("crawl.progress", "crawl-1", analysisPayload("checking_links", 640000))
+    )
+    await flushTestDom()
+  })
+  await clickToastCancelButton("crawl-1")
+  const dialog = seen!.cancelDialog as ReactElement<any>
+  await act(async () => {
+    const pending = dialog.props.onConfirm("crawl-1")
+    await flushTestDom()
+    cancelGate!.resolve(Response.json({ ok: true }))
+    await pending
+    await flushTestDom()
+  })
+  const toast = lastLoadingToast("crawl-1")
+  expect(toastTitle(toast)).toBe("Cancelling…")
+})
+
+test("analysis progress copy stays honest without fabricated numbers", () => {
+  expect(describeCrawlAnalysisProgress(null)).toBeNull()
+  expect(describeCrawlAnalysisProgress(undefined)).toBeNull()
+  expect(
+    describeCrawlAnalysisProgress({ stage: "checking_links" })
+  ).toEqual({ title: "Checking links…", countText: null })
+  expect(
+    describeCrawlAnalysisProgress({ stage: "deriving_issues", links_resolved: 5 })
+  ).toEqual({ title: "Finding issues…", countText: null })
+  expect(
+    describeCrawlAnalysisProgress({ stage: "scoring", links_resolved: 5 })
+  ).toEqual({ title: "Calculating scores…", countText: null })
+  expect(
+    describeCrawlAnalysisProgress({ stage: "bogus" as never })
+  ).toBeNull()
+  expect(formatResolvedLinkCount(undefined)).toBeNull()
+  expect(formatResolvedLinkCount(null)).toBeNull()
+  expect(formatResolvedLinkCount(Number.NaN)).toBeNull()
+  expect(formatResolvedLinkCount(640000)).toBe("640,000 link statuses resolved")
+  expect(formatResolvedLinkCount(1)).toBe("1 link status resolved")
+  expect(formatResolvedLinkCount(0)).toBe("0 link statuses resolved")
+  expect(formatResolvedLinkCount(-12)).toBeNull()
+  expect(formatResolvedLinkCount(10.9)).toBeNull()
+  expect(formatResolvedLinkCount(Number.MAX_SAFE_INTEGER + 1)).toBeNull()
 })

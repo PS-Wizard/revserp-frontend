@@ -91,7 +91,10 @@ import {
   PageAuditContext,
   type SelectedAuditPage,
 } from "~/components/page-audit/page-audit-context"
-import { getCrawlTimestamp } from "~/lib/crawl"
+import {
+  describeCrawlAnalysisProgress,
+  getCrawlTimestamp,
+} from "~/lib/crawl"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   CrawlResponse,
@@ -631,6 +634,10 @@ export function WorkspaceShellPreview({
       )
     : []
   const currentCrawlCompleted = currentCrawl?.status === "completed"
+  const runningStageTitle =
+    currentCrawl?.status === "running" && currentCrawl.phase === "analyzing"
+      ? describeCrawlAnalysisProgress(currentCrawl.analysis_progress)?.title
+      : null
   const isExportingCrawl = projectActions.exportingCrawlId !== null
 
   function selectProject(projectId: string, crawlId?: string) {
@@ -1069,7 +1076,9 @@ export function WorkspaceShellPreview({
                           type="button"
                         >
                           <PlayIcon aria-hidden="true" className="size-4" />
-                          {isCrawlRunning ? crawlStatusLabel : "Run crawl"}
+                          {isCrawlRunning
+                            ? (runningStageTitle ?? crawlStatusLabel)
+                            : "Run crawl"}
                         </button>
                       )
                     }

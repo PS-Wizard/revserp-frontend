@@ -139,11 +139,23 @@ export type CrawlStatus =
 
 export type CrawlPhase = "crawling" | "analyzing"
 
+/** Post-fetch analysis stage. Counts only completed SQL affected rows. */
+export type CrawlAnalysisStage =
+  | "checking_links"
+  | "deriving_issues"
+  | "scoring"
+
+export type CrawlAnalysisProgress = {
+  stage: CrawlAnalysisStage
+  links_resolved?: number
+}
+
 export type CrawlResponse = {
   id: string
   project_id: string
   status: CrawlStatus
   phase?: CrawlPhase | null
+  analysis_progress?: CrawlAnalysisProgress | null
   config_snapshot?: unknown
   urls_discovered: number
   urls_crawled: number
@@ -180,6 +192,7 @@ export type ActiveCrawlResponse = {
   project_id: string
   status: CrawlStatus
   phase?: CrawlPhase | null
+  analysis_progress?: CrawlAnalysisProgress | null
   urls_discovered: number
   urls_crawled: number
   page_count?: number
@@ -973,6 +986,7 @@ export type CompetitorCrawlResponse = {
   project_id: string
   status: CrawlStatus
   phase?: CrawlPhase | null
+  analysis_progress?: CrawlAnalysisProgress | null
   urls_discovered: number
   urls_crawled: number
   page_count?: number
@@ -1377,6 +1391,7 @@ export type CMSApprovalDecisionResponse = {
 export type CrawlEventPayload = {
   status?: CrawlStatus
   phase?: CrawlPhase | null
+  analysis_progress?: CrawlAnalysisProgress | null
   urls_discovered?: number
   urls_crawled?: number
   page_count?: number

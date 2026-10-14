@@ -45,6 +45,7 @@ import {
   clientApiPost,
 } from "~/lib/api"
 import { cn } from "~/lib/utils"
+import { describeCrawlAnalysisProgress } from "~/lib/crawl"
 import type {
   CompetitorCrawlResponse,
   CompetitorResponse,
@@ -80,7 +81,11 @@ function crawlProgressLabel(crawl: CompetitorCrawlResponse) {
     return "Waiting to start"
   }
   if (crawl.phase === "analyzing") {
-    return "Analyzing crawled pages…"
+    const analysis = describeCrawlAnalysisProgress(crawl.analysis_progress)
+    if (!analysis) return "Analyzing crawled pages…"
+    return analysis.countText
+      ? `${analysis.title} ${analysis.countText}`
+      : analysis.title
   }
   if (crawl.urls_discovered === 0) {
     return "Discovering pages…"

@@ -73,6 +73,7 @@ import { OrganizationEventsProvider } from "~/hooks/use-organization-events"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { getAIAuditResultsPath } from "~/lib/ai-audit-results"
+import { describeCrawlAnalysisProgress } from "~/lib/crawl"
 import { isAccountSuspended } from "~/lib/auth.server"
 import type {
   AIAuditResponse,
@@ -642,6 +643,10 @@ export default function AppPage() {
   // once it completes, so normally this stays false during a background crawl.
   const isViewingRunningCrawl =
     currentCrawl?.status === "running" || currentCrawl?.status === "queued"
+  const viewingStageTitle =
+    currentCrawl?.status === "running" && currentCrawl.phase === "analyzing"
+      ? describeCrawlAnalysisProgress(currentCrawl.analysis_progress)?.title
+      : null
 
   useEffect(() => {
     if (activeRunningCrawl) {
@@ -941,7 +946,7 @@ export default function AppPage() {
                             <h2 className="text-lg font-medium">
                               {crawlStatusLabel === "queued"
                                 ? "Queued"
-                                : "Crawl in progress"}
+                                : (viewingStageTitle ?? "Crawl in progress")}
                             </h2>
                             <p className="text-sm text-muted-foreground">
                               {activeProject?.name || "This project"} is
