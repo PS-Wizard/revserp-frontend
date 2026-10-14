@@ -5,11 +5,14 @@ import {
   Map as MapLibreMapInstance,
   NavigationControl,
   ScaleControl,
+  setWorkerUrl,
   type GeoJSONSource,
   type Map as MapLibreMap,
   type MapGeoJSONFeature,
 } from "maplibre-gl"
 import "maplibre-gl/dist/maplibre-gl.css"
+// Vite must bundle the worker dependencies; MapLibre's inferred path is not emitted.
+import mapLibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url"
 
 import type { FeatureCollection, Point, Polygon } from "geojson"
 
@@ -420,6 +423,7 @@ export function LocalSeoMap({
     container.replaceChildren()
     let instance: MapLibreMap
     try {
+      setWorkerUrl(mapLibreWorkerUrl)
       instance = new MapLibreMapInstance({
         container,
         style: BASEMAP_STYLE_URL,

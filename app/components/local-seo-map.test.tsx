@@ -43,10 +43,13 @@ class FakeGeoJSONSource {
   }
 }
 
+let configuredWorkerUrl: string | null = null
+
 class FakeMap {
   static instances: FakeMap[] = []
   static failConstruction = false
   options: Record<string, unknown>
+  workerUrl = configuredWorkerUrl
   controls: unknown[] = []
   sources = new Map<string, FakeGeoJSONSource>()
   layers: Array<Record<string, unknown>> = []
@@ -121,6 +124,9 @@ class FakeScaleControl {
 
 mock.module("maplibre-gl", () => ({
   Map: FakeMap,
+  setWorkerUrl: (url: string) => {
+    configuredWorkerUrl = url
+  },
   Marker: class {
     setLngLat() {
       return this
@@ -135,6 +141,9 @@ mock.module("maplibre-gl", () => ({
   ScaleControl: FakeScaleControl,
 }))
 mock.module("maplibre-gl/dist/maplibre-gl.css", () => ({}))
+mock.module("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url", () => ({
+  default: "/assets/maplibre-worker-test.js",
+}))
 
 const { LocalSeoMap } = await import("~/components/local-seo-map")
 type MapProps = Parameters<typeof LocalSeoMap>[0]
@@ -174,6 +183,7 @@ const getCanvasContext = HTMLCanvasElement.prototype.getContext
 beforeEach(() => {
   teardown()
   FakeMap.failConstruction = false
+  configuredWorkerUrl = null
   HTMLCanvasElement.prototype.getContext =
     (() => ({})) as unknown as typeof getCanvasContext
 })
@@ -201,6 +211,11 @@ function rankedOverlay(): MapProps["overlayData"] {
 }
 
 describe("local SEO map lifecycle", () => {
+  test("sets the bundled worker URL before starting the map", () => {
+    const map = renderMap({ center: CENTRE })
+    expect(map.workerUrl).toBe("/assets/maplibre-worker-test.js")
+  })
+
   test("container positioning wins over MapLibre's unlayered relative rule", () => {
     renderMap({ center: CENTRE })
     const container = host?.querySelector<HTMLElement>("[role=application]")

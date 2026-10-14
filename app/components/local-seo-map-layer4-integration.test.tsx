@@ -26,6 +26,7 @@ if (typeof globalThis.ResizeObserver === "undefined") {
 // the tab, services, and generation wiring under test stays real.
 mock.module("maplibre-gl", () => ({
   Map: class {},
+  setWorkerUrl: () => {},
   Marker: class {
     setLngLat() {
       return this
@@ -40,6 +41,9 @@ mock.module("maplibre-gl", () => ({
   ScaleControl: class {},
 }))
 mock.module("maplibre-gl/dist/maplibre-gl.css", () => ({}))
+mock.module("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url", () => ({
+  default: "/assets/maplibre-worker-test.js",
+}))
 
 const { LocalSeoMapPage } = await import("~/components/local-seo-map-page")
 
