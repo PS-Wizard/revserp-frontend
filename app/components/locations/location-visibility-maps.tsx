@@ -510,7 +510,7 @@ export function LocationVisibilityMapsView({
         />
       ) : (
         <p className="text-sm text-muted-foreground">
-          Only organization owners can start a Maps run.
+          Only workspace managers can start a Maps run.
         </p>
       )}
     </div>

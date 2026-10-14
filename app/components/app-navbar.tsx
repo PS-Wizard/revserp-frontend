@@ -111,12 +111,14 @@ export function AppNavbarDialogs({
         inviteExpiresAt={workspaceActions.inviteExpiresAt}
         inviteLink={workspaceActions.inviteLink}
         inviteMaxUses={workspaceActions.inviteMaxUses}
+        inviteRole={workspaceActions.inviteRole}
         isCreatingInvite={workspaceActions.isCreatingInvite}
         isOpen={workspaceActions.isInviteDialogOpen}
         profileActionError={workspaceActions.profileActionError}
         onCopyInviteLink={() => void workspaceActions.handleCopyInviteLink()}
         onExpiresAtChange={workspaceActions.setInviteExpiresAt}
         onMaxUsesChange={workspaceActions.setInviteMaxUses}
+        onRoleChange={workspaceActions.setInviteRole}
         onOpenChange={workspaceActions.closeInviteDialog}
         onSubmit={workspaceActions.handleCreateInvite}
       />

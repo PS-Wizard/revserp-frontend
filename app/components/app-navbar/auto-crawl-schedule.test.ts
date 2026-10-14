@@ -11,11 +11,12 @@ describe("auto crawl schedule", () => {
     expect(DEFAULT_AUTO_CRAWL_CONFIG.frequencyDays).toBe("7")
   })
 
-  test("only weekly, biweekly, and monthly schedules are offered", () => {
-    expect(autoCrawlScheduleOptions.map((o) => o.value)).toEqual([
-      "7",
-      "14",
-      "30",
+  test("offers weekly, biweekly, monthly, and two-month schedules", () => {
+    expect(autoCrawlScheduleOptions).toEqual([
+      { value: "7", label: "Every week" },
+      { value: "14", label: "Every 2 weeks" },
+      { value: "30", label: "Every month" },
+      { value: "60", label: "Every 2 months" },
     ])
   })
 
@@ -25,14 +26,18 @@ describe("auto crawl schedule", () => {
     }
     expect(normalizeAutoCrawlFrequencyDaysForDisplay("14")).toBe("14")
     expect(normalizeAutoCrawlFrequencyDaysForDisplay(30)).toBe("30")
+    expect(normalizeAutoCrawlFrequencyDaysForDisplay("60")).toBe("60")
+    expect(normalizeAutoCrawlFrequencyDaysForDisplay(60)).toBe("60")
   })
 
-  test("validation only accepts the three schedules", () => {
-    expect(getAutoCrawlFrequencyValidationError("7")).toBeNull()
-    expect(getAutoCrawlFrequencyValidationError("14")).toBeNull()
-    expect(getAutoCrawlFrequencyValidationError("30")).toBeNull()
-    expect(getAutoCrawlFrequencyValidationError("1")).toBe(
-      "Crawl frequency must be Every week, Every 2 weeks, or Every month."
-    )
+  test("validation only accepts the four schedules", () => {
+    for (const frequency of ["7", "14", "30", "60"]) {
+      expect(getAutoCrawlFrequencyValidationError(frequency)).toBeNull()
+    }
+    for (const frequency of ["1", "0", "31", "61", "", "-7"]) {
+      expect(getAutoCrawlFrequencyValidationError(frequency)).toBe(
+        "Crawl frequency must be Every week, Every 2 weeks, Every month, or Every 2 months."
+      )
+    }
   })
 })

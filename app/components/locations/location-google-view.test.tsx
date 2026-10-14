@@ -514,7 +514,7 @@ describe("location google view", () => {
       workspace: makeWorkspace({ canManage: false }),
     })
     await flushUntil(() =>
-      container.innerHTML.includes("Only organization owners")
+      container.innerHTML.includes("Only workspace managers")
     )
     expect(container.innerHTML.includes("Connect Search Console")).toBe(false)
   })

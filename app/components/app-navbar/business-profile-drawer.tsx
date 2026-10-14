@@ -31,6 +31,7 @@ import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
 import { BusinessProfileServicesEditor } from "~/components/business-profile-services-editor"
 import { LocationProfileServicesField } from "~/components/app-navbar/location-profile-services-field"
+import { ProjectProfileCompetitorRoster } from "~/components/app-navbar/project-profile-competitor-roster"
 import type { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import type { ProjectAIQuestionsResponse } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
@@ -398,7 +399,7 @@ export function BusinessProfileDrawer({
                           description="Businesses you compete with."
                           icon={Swords}
                           label="Competitors"
-                          meta={`${countList(businessCompetitors)}`}
+                          meta={isLocationScoped ? `${countList(businessCompetitors)}` : undefined}
                           onOpen={() => setCompetitorsOpen(true)}
                         />
                         <SectionRow
@@ -417,8 +418,8 @@ export function BusinessProfileDrawer({
 
                     {!canManageBusinessProfile ? (
                       <p className={SECTION_DESCRIPTION_CLASS}>
-                        View-only access. Workspace owners can update this
-                        profile.
+                        View-only access. Workspace owners and managers can
+                        update this profile.
                       </p>
                     ) : null}
 
@@ -462,28 +463,38 @@ export function BusinessProfileDrawer({
             <DrawerHeader>
               <DrawerTitle>Competitors</DrawerTitle>
               <DrawerDescription>
-                Names used to ground comparison questions.
+                {isLocationScoped
+                  ? "Names used to ground comparison questions."
+                  : "Canonical roster from the Competitors tab. Research and Revbot additions appear here."}
               </DrawerDescription>
             </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
-              <Field>
-                <FieldLabel htmlFor="business-competitors">
-                  Business competitors
-                </FieldLabel>
-                <Textarea
-                  className="min-h-40 resize-none"
-                  disabled={fieldsDisabled}
-                  id="business-competitors"
-                  onChange={(event) =>
-                    setBusinessCompetitors(event.target.value)
-                  }
-                  placeholder={"Ahrefs\nSemrush\nSurfer SEO"}
-                  value={businessCompetitors}
+              {isLocationScoped || !businessProfileProject ? (
+                <Field>
+                  <FieldLabel htmlFor="business-competitors">
+                    Business competitors
+                  </FieldLabel>
+                  <Textarea
+                    className="min-h-40 resize-none"
+                    disabled={fieldsDisabled}
+                    id="business-competitors"
+                    onChange={(event) =>
+                      setBusinessCompetitors(event.target.value)
+                    }
+                    placeholder={"Ahrefs\nSemrush\nSurfer SEO"}
+                    value={businessCompetitors}
+                  />
+                  <FieldDescription className={HINT_CLASS}>
+                    One per line, or separated by commas.
+                  </FieldDescription>
+                </Field>
+              ) : (
+                <ProjectProfileCompetitorRoster
+                  key={businessProfileProject.id}
+                  projectId={businessProfileProject.id}
+                  onManageInCompetitors={closeAllDrawers}
                 />
-                <FieldDescription className={HINT_CLASS}>
-                  One per line, or separated by commas.
-                </FieldDescription>
-              </Field>
+              )}
             </div>
             <DrawerFooter className="flex-row justify-end">
               <Button

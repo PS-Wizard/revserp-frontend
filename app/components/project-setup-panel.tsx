@@ -335,7 +335,7 @@ export function ProjectSetupPanel({
               </Button>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Only an organization owner can start or retry setup.
+                Only a workspace manager can start or retry setup.
               </p>
             )
           ) : null}

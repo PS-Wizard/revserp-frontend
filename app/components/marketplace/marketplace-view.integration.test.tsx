@@ -199,7 +199,7 @@ async function mountView() {
   const root = createRoot(container)
   const element = (
     <QueryClientProvider client={queryClient}>
-      <MarketplaceView activeProject={PROJECT} isOrganizationOwner />
+      <MarketplaceView activeProject={PROJECT} canManageOrganization />
     </QueryClientProvider>
   )
   await act(async () => {
@@ -792,7 +792,7 @@ describe("MarketplaceView catalogue", () => {
         <QueryClientProvider client={queryClient}>
           <MarketplaceView
             activeProject={PROJECT}
-            isOrganizationOwner={false}
+            canManageOrganization={false}
           />
         </QueryClientProvider>
       )

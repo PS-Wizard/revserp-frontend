@@ -234,7 +234,7 @@ export function LocationMapsCompetitorsPage({
         />
       ) : (
         <p className="text-sm text-muted-foreground">
-          Only organization owners can start a Maps run.
+          Only workspace managers can start a Maps run.
         </p>
       )}
       </div>
@@ -407,7 +407,7 @@ export function LocationMapsCompetitorsPage({
               />
             ) : (
               <p className="text-sm text-muted-foreground">
-                Only organization owners can start a Maps run.
+                Only workspace managers can start a Maps run.
               </p>
             )}
           </EmptyContent>

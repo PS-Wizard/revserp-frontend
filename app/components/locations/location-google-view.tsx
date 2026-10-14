@@ -342,7 +342,7 @@ export function LocationGoogleView({
               </Button>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Only organization owners can change Google bindings.
+                Only workspace managers can change Google bindings.
               </p>
             )}
           </EmptyContent>
@@ -395,7 +395,7 @@ export function LocationGoogleView({
           ) : (
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Only organization owners can change Google bindings.
+                Only workspace managers can change Google bindings.
               </p>
             </CardContent>
           )}

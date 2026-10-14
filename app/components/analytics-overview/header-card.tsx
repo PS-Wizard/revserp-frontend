@@ -26,7 +26,7 @@ export function AnalyticsHeaderCard({
   accountEmail,
   accountName,
   activeNow,
-  isOwner,
+  canManageOrganization,
   isRefreshing,
   isSaving,
   errorMessage,
@@ -40,7 +40,7 @@ export function AnalyticsHeaderCard({
   accountEmail?: string
   accountName?: string
   activeNow?: number
-  isOwner: boolean
+  canManageOrganization: boolean
   isRefreshing: boolean
   isSaving: boolean
   errorMessage: string
@@ -75,7 +75,7 @@ export function AnalyticsHeaderCard({
           </CardDescription>
         </div>
         <div className="flex w-full flex-col gap-3 xl:max-w-md">
-          {isOwner ? (
+          {canManageOrganization ? (
             <Select
               disabled={isSaving}
               onValueChange={(value) => value && onPropertyChange(value)}

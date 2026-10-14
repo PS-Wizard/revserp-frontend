@@ -5,6 +5,11 @@ import type { FormEvent } from "react"
 import type { MeResponse } from "~/lib/api.types"
 import { clientApiPost } from "~/lib/api"
 import { clearSupabaseBrowserSession } from "~/lib/auth.client"
+import {
+  canManageOrganization,
+  DEFAULT_ORGANIZATION_INVITE_ROLE,
+  type OrganizationInviteRole,
+} from "~/lib/organization-access"
 import { getDefaultInviteExpiryValue, getInviteValidationError } from "./utils"
 
 // --- State ---
@@ -17,6 +22,7 @@ type WorkspaceActionState = {
   isInviteDialogOpen: boolean
   inviteExpiresAt: string
   inviteMaxUses: string
+  inviteRole: OrganizationInviteRole
   inviteLink: string
   hasCopiedInviteLink: boolean
   isCreatingInvite: boolean
@@ -30,6 +36,7 @@ function initialWorkspaceState(): WorkspaceActionState {
     isInviteDialogOpen: false,
     inviteExpiresAt: getDefaultInviteExpiryValue(),
     inviteMaxUses: "10",
+    inviteRole: DEFAULT_ORGANIZATION_INVITE_ROLE,
     inviteLink: "",
     hasCopiedInviteLink: false,
     isCreatingInvite: false,
@@ -49,6 +56,7 @@ type WorkspaceActionEvent =
   | { type: "SET_CREATING_INVITE"; value: boolean }
   | { type: "SET_INVITE_EXPIRES_AT"; value: string }
   | { type: "SET_INVITE_MAX_USES"; value: string }
+  | { type: "SET_INVITE_ROLE"; value: OrganizationInviteRole }
   | { type: "SET_INVITE_LINK"; value: string }
   | { type: "SET_COPIED_INVITE_LINK"; value: boolean }
   | { type: "OPEN_LEAVE_DIALOG" }
@@ -85,6 +93,8 @@ function workspaceActionReducer(
       return { ...state, inviteExpiresAt: event.value }
     case "SET_INVITE_MAX_USES":
       return { ...state, inviteMaxUses: event.value }
+    case "SET_INVITE_ROLE":
+      return { ...state, inviteRole: event.value }
     case "SET_INVITE_LINK":
       return { ...state, inviteLink: event.value }
     case "SET_COPIED_INVITE_LINK":
@@ -101,6 +111,7 @@ function workspaceActionReducer(
         isCreatingInvite: false,
         inviteExpiresAt: getDefaultInviteExpiryValue(),
         inviteMaxUses: "10",
+        inviteRole: DEFAULT_ORGANIZATION_INVITE_ROLE,
       }
   }
 }
@@ -110,6 +121,7 @@ function workspaceActionReducer(
 type UseWorkspaceActionsParams = {
   organizationId: string
   organizations: MeResponse["organizations"]
+  isPlatformAdmin?: boolean
   navigate: ReturnType<typeof import("react-router").useNavigate>
   revalidator: ReturnType<typeof import("react-router").useRevalidator>
 }
@@ -117,6 +129,7 @@ type UseWorkspaceActionsParams = {
 export function useWorkspaceActions({
   organizationId,
   organizations,
+  isPlatformAdmin = false,
   navigate,
   revalidator,
 }: UseWorkspaceActionsParams) {
@@ -197,6 +210,7 @@ export function useWorkspaceActions({
       }>(`/organizations/${organizationId}/invites`, {
         expires_at: expiresAtDate.toISOString(),
         max_uses: maxUses,
+        role: state.inviteRole,
       })
       dispatch({
         type: "SET_INVITE_LINK",
@@ -279,12 +293,17 @@ export function useWorkspaceActions({
     isInviteDialogOpen: state.isInviteDialogOpen,
     inviteExpiresAt: state.inviteExpiresAt,
     inviteMaxUses: state.inviteMaxUses,
+    inviteRole: state.inviteRole,
     inviteLink: state.inviteLink,
     hasCopiedInviteLink: state.hasCopiedInviteLink,
     isCreatingInvite: state.isCreatingInvite,
     isLeaveWorkspaceOpen: state.isLeaveWorkspaceOpen,
     activeOrganization,
     isActiveOrganizationOwner: activeOrganization?.role === "owner",
+    canManageActiveOrganization: canManageOrganization(
+      activeOrganization?.role,
+      isPlatformAdmin
+    ),
     handleSelectOrganization,
     openInviteDialog,
     closeInviteDialog,
@@ -297,6 +316,8 @@ export function useWorkspaceActions({
       dispatch({ type: "SET_INVITE_EXPIRES_AT", value }),
     setInviteMaxUses: (value: string) =>
       dispatch({ type: "SET_INVITE_MAX_USES", value }),
+    setInviteRole: (value: OrganizationInviteRole) =>
+      dispatch({ type: "SET_INVITE_ROLE", value }),
     setLeaveWorkspaceOpen: (open: boolean) => {
       dispatch(
         open ? { type: "OPEN_LEAVE_DIALOG" } : { type: "CLOSE_LEAVE_DIALOG" }

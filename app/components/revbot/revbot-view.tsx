@@ -537,7 +537,7 @@ export function RevbotViewContent({
   defaultHistoryOpen,
   hideCompactHeader,
   hideHistory,
-  isOrganizationOwner,
+  canManageOrganization,
   onActivityChange,
   onEditorLink,
   onInternalLink,
@@ -553,7 +553,7 @@ export function RevbotViewContent({
   defaultHistoryOpen: boolean
   hideCompactHeader: boolean
   hideHistory: boolean
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   onActivityChange?: (active: boolean) => void
   onEditorLink?: (url: string) => void
   onInternalLink?: (hash: string) => void
@@ -946,8 +946,8 @@ export function RevbotViewContent({
                                       {pendingApprovals.map((approval) => (
                                         <MCPApprovalCard
                                           approval={approval}
-                                          isOrganizationOwner={
-                                            isOrganizationOwner
+                                          canManageOrganization={
+                                            canManageOrganization
                                           }
                                           deciding={
                                             revbot.decidingApproval?.id ===

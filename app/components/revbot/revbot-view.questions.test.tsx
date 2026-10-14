@@ -111,7 +111,7 @@ async function mountView(handle: RevbotHandle, showMessageAvatar = false) {
         defaultHistoryOpen={false}
         hideCompactHeader
         hideHistory
-        isOrganizationOwner
+        canManageOrganization
         showMessageAvatar={showMessageAvatar}
         showMic={false}
         variant="default"
@@ -133,7 +133,7 @@ async function rerenderView(root: Root, container: HTMLDivElement, handle: Revbo
         defaultHistoryOpen={false}
         hideCompactHeader
         hideHistory
-        isOrganizationOwner
+        canManageOrganization
         showMic={false}
         variant="default"
       />

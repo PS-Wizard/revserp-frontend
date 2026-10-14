@@ -134,6 +134,7 @@ export default function IntegrationsPage() {
         onRevbotConversationChange={() => {}}
         userEmail={me.user.email}
         userName={me.user.name}
+        userId={me.user.id}
         view="revserp-audit"
       >
         <main className="@container/main flex w-full flex-col gap-6 py-6">

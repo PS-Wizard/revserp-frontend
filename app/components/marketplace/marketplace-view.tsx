@@ -155,12 +155,12 @@ function formatCheckedAt(value?: string) {
 
 type MarketplaceViewProps = {
   activeProject: ProjectResponse | null
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
 }
 
 export const MarketplaceView = memo(function MarketplaceView({
   activeProject,
-  isOrganizationOwner,
+  canManageOrganization,
 }: MarketplaceViewProps) {
   const queryClient = useQueryClient()
   const projectId = activeProject?.id
@@ -301,7 +301,7 @@ export const MarketplaceView = memo(function MarketplaceView({
         key={item.id}
         item={item}
         connections={catalogConnectionsForItem(item, connections, catalogItems)}
-        canManage={isOrganizationOwner}
+        canManage={canManageOrganization}
         checkingId={checkingId}
         actions={catalogActions(item)}
       />
@@ -345,11 +345,11 @@ export const MarketplaceView = memo(function MarketplaceView({
         </p>
       ) : null}
 
-      {!isOrganizationOwner ? (
+      {!canManageOrganization ? (
         <p className="flex items-start gap-2 text-sm leading-relaxed text-muted-foreground">
           <LockIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
-            You have read-only access. Only the organization owner can manage
+            You have read-only access. Only workspace managers can manage
             connections.
           </span>
         </p>
@@ -363,7 +363,7 @@ export const MarketplaceView = memo(function MarketplaceView({
           </span>
         </h2>
         <div className="flex flex-col gap-4">
-          {isOrganizationOwner ? (
+          {canManageOrganization ? (
             <CatalogCard
               tone="action"
               item={CUSTOM_MCP_CATALOG_ITEM}
@@ -396,7 +396,7 @@ export const MarketplaceView = memo(function MarketplaceView({
                 <ConnectionCard
                   key={connection.id}
                   connection={connection}
-                  canManage={isOrganizationOwner}
+                  canManage={canManageOrganization}
                   checking={checkingId === connection.id}
                   onConfigure={() => setConfigureId(connection.id)}
                   onEdit={() => {
@@ -462,7 +462,7 @@ export const MarketplaceView = memo(function MarketplaceView({
           key={configureId}
           connection={connections.find((c) => c.id === configureId) ?? null}
           projectId={projectId!}
-          canManage={isOrganizationOwner}
+          canManage={canManageOrganization}
           onClose={() => setConfigureId(null)}
           onSaved={() => {
             setConfigureId(null)
@@ -499,7 +499,7 @@ function areMarketplaceViewPropsEqual(
   return (
     previous.activeProject?.id === next.activeProject?.id &&
     previous.activeProject?.name === next.activeProject?.name &&
-    previous.isOrganizationOwner === next.isOrganizationOwner
+    previous.canManageOrganization === next.canManageOrganization
   )
 }
 

@@ -19,6 +19,10 @@ import {
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
+import {
+  ORGANIZATION_INVITE_ROLES,
+  type OrganizationInviteRole,
+} from "~/lib/organization-access"
 
 import { formatCrawlDateTime } from "./utils"
 
@@ -236,12 +240,14 @@ type InviteMembersDialogProps = {
   inviteExpiresAt: string
   inviteLink: string
   inviteMaxUses: string
+  inviteRole: OrganizationInviteRole
   isCreatingInvite: boolean
   isOpen: boolean
   profileActionError: string
   onCopyInviteLink: () => void
   onExpiresAtChange: (value: string) => void
   onMaxUsesChange: (value: string) => void
+  onRoleChange: (value: OrganizationInviteRole) => void
   onOpenChange: (open: boolean) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
 }
@@ -252,12 +258,14 @@ export function InviteMembersDialog({
   inviteExpiresAt,
   inviteLink,
   inviteMaxUses,
+  inviteRole,
   isCreatingInvite,
   isOpen,
   profileActionError,
   onCopyInviteLink,
   onExpiresAtChange,
   onMaxUsesChange,
+  onRoleChange,
   onOpenChange,
   onSubmit,
 }: InviteMembersDialogProps) {
@@ -293,6 +301,38 @@ export function InviteMembersDialog({
                 type="number"
                 value={inviteMaxUses}
               />
+            </Field>
+            <Field>
+              <FieldLabel id="invite-role-label">Role</FieldLabel>
+              <div
+                aria-labelledby="invite-role-label"
+                className="flex flex-col gap-2"
+                role="radiogroup"
+              >
+                {(ORGANIZATION_INVITE_ROLES as ReadonlyArray<string>).map(
+                  (role) => (
+                    <label
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                      key={role}
+                    >
+                      <input
+                        checked={inviteRole === role}
+                        name="invite-role"
+                        onChange={() =>
+                          onRoleChange(role as OrganizationInviteRole)
+                        }
+                        type="radio"
+                        value={role}
+                      />
+                      <span className="font-medium capitalize">{role}</span>
+                    </label>
+                  )
+                )}
+              </div>
+              <FieldDescription>
+                Managers can manage workspace settings and connections, but
+                never platform admin settings.
+              </FieldDescription>
             </Field>
           </FieldGroup>
 

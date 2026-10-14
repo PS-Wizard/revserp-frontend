@@ -39,10 +39,12 @@ type RadialChartModel = {
   id?: string
   label?: string
   centerValue?: number | null
+  previousCenterValue?: number | null
   segments: Array<{
     key: string
     label: string
     value?: number | null
+    previousValue?: number | null
     color: string
   }>
 }
@@ -70,6 +72,7 @@ export const OverviewPillarScoresSection = memo(
       <div data-tour="onboarding-overview">
         <PillarScoresRow
           breakdown={currentBreakdown}
+          previousBreakdown={crawlBreakdowns[currentIndex + 1]?.breakdown}
           onSelectPillar={onSelectPillar}
         />
       </div>
@@ -79,16 +82,18 @@ export const OverviewPillarScoresSection = memo(
 
 export const PillarScoresRow = memo(function PillarScoresRow({
   breakdown,
+  previousBreakdown,
   colorSource = "pillar",
   onSelectPillar,
 }: {
   breakdown?: PillarScoresBreakdown | null
+  previousBreakdown?: PillarScoresBreakdown | null
   colorSource?: PillarScoresColorSource
   onSelectPillar?: (pillarId: OverviewPillarId) => void
 }) {
   const charts = useMemo(
-    () => buildCharts(breakdown, colorSource),
-    [breakdown, colorSource]
+    () => buildCharts(breakdown, colorSource, previousBreakdown),
+    [breakdown, colorSource, previousBreakdown]
   )
 
   if (!charts.hasScores) {
@@ -99,6 +104,7 @@ export const PillarScoresRow = memo(function PillarScoresRow({
     <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,9fr)_repeat(3,minmax(0,7fr))]">
       <ScoreRadialChart
         centerValue={charts.overall.centerValue}
+        previousCenterValue={charts.overall.previousCenterValue}
         description="Current crawl pillar scores"
         segments={charts.overall.segments}
         title="Overall Score"
@@ -111,6 +117,7 @@ export const PillarScoresRow = memo(function PillarScoresRow({
           <ScoreRadialChart
             centerLabel={pillar.label}
             centerValue={pillar.centerValue}
+            previousCenterValue={pillar.previousCenterValue}
             description="Current crawl bucket scores"
             onSelect={
               onSelectPillar
@@ -221,16 +228,19 @@ function NoPillarScores() {
 
 function buildCharts(
   breakdown: PillarScoresBreakdown | null | undefined,
-  colorSource: PillarScoresColorSource
+  colorSource: PillarScoresColorSource,
+  previousBreakdown?: PillarScoresBreakdown | null
 ) {
   const overall: RadialChartModel = {
     centerValue: breakdown?.overall_score,
+    previousCenterValue: previousBreakdown?.overall_score,
     segments: OVERVIEW_PILLARS.map((pillar, index) => {
       const entry = breakdown?.pillars.find((item) => item.id === pillar.id)
       return {
         key: pillar.id,
         label: pillar.label,
         value: entry?.score,
+        previousValue: previousBreakdown?.pillars.find((item) => item.id === pillar.id)?.score,
         color: chartColor(colorSource, pillar.id, index),
       }
     }),
@@ -238,15 +248,18 @@ function buildCharts(
 
   const pillars = OVERVIEW_PILLARS.map((pillar) => {
     const entry = breakdown?.pillars.find((item) => item.id === pillar.id)
+    const previousPillar = previousBreakdown?.pillars.find((item) => item.id === pillar.id)
     return {
       id: pillar.id,
       label: pillar.label,
       centerValue: entry?.score,
+      previousCenterValue: previousPillar?.score,
       segments:
         entry?.buckets.map((bucket, index) => ({
           key: bucket.id,
           label: formatBucketLabel(bucket.id, bucket.label),
           value: bucket.score,
+          previousValue: previousPillar?.buckets.find((item) => item.id === bucket.id)?.score,
           color: chartColor(colorSource, pillar.id, index),
         })) ?? [],
     }

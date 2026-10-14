@@ -66,11 +66,11 @@ export function analyticsRealtimeQueryKey(
 
 type Props = {
   activeProject: ProjectResponse | null
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
 }
 
 export const AnalyticsView = memo(
-  function AnalyticsView({ activeProject, isOrganizationOwner }: Props) {
+  function AnalyticsView({ activeProject, canManageOrganization }: Props) {
     const queryClient = useQueryClient()
     const projectId = activeProject?.id
     const {
@@ -94,6 +94,10 @@ export const AnalyticsView = memo(
       !status.needs_reconnect &&
       status.connected
     )
+    // The status flag is canonical once loaded; the membership capability
+    // only gates the pre-load affordances so nothing is fabricated.
+    const canManageConnection =
+      status?.can_manage_connection ?? canManageOrganization
     const connectedPropertyId = status?.selected_property?.property_id
     const {
       data: overview,
@@ -323,7 +327,7 @@ export const AnalyticsView = memo(
       status.has_google_connection &&
       (!status.has_analytics_scope || status.needs_reconnect)
     )
-      return isOrganizationOwner ? (
+      return canManageConnection ? (
         <AnalyticsStateCard
           title="Grant Analytics access"
           description="Google is connected for this workspace, but Analytics access needs to be granted again."
@@ -350,8 +354,8 @@ export const AnalyticsView = memo(
         />
       ) : (
         <AnalyticsStateCard
-          title="Google Analytics access needs owner approval"
-          description="Let the organization owner know they need to grant Google Analytics access before this view is available."
+          title="Google Analytics access needs manager approval"
+          description="Let a workspace manager know they need to grant Google Analytics access before this view is available."
         />
       )
     if (connected)
@@ -369,7 +373,7 @@ export const AnalyticsView = memo(
               googleAccountEmail={status.google_account_email}
               googleConnectionId={status.google_connection_id}
               googleConnections={status.google_connections}
-              isOrganizationOwner={isOrganizationOwner}
+              canManageOrganization={canManageConnection}
               needsReconnect={status.needs_reconnect}
               onChanged={() => void refresh()}
               projectId={activeProject.id}
@@ -390,7 +394,7 @@ export const AnalyticsView = memo(
             key={status.selected_property?.property_id}
             activeProjectId={activeProject.id}
             isLoading={loadingOverview}
-            isOrganizationOwner={isOrganizationOwner}
+            canManageOrganization={canManageConnection}
             onRefreshOverview={refresh}
             overviewErrorMessage={errorMessage}
             realtimeActiveUsers={realtime?.active_users}
@@ -399,7 +403,7 @@ export const AnalyticsView = memo(
           />
         </>
       )
-    if (status.has_google_connection && isOrganizationOwner)
+    if (status.has_google_connection && canManageConnection)
       return (
         <AnalyticsStateCard
           title="Select the Google Analytics property for this project"
@@ -567,11 +571,11 @@ export const AnalyticsView = memo(
     if (status.has_google_connection)
       return (
         <AnalyticsStateCard
-          title="Google Analytics is connected, but the owner is yet to select a project"
-          description="Let the organization owner know they still need to pick the Analytics property for this project."
+          title="Google Analytics is connected, but a manager is yet to select a project"
+          description="Let a workspace manager know they still need to pick the Analytics property for this project."
         />
       )
-    return isOrganizationOwner ? (
+    return canManageConnection ? (
       <AnalyticsStateCard
         title="Google Analytics isn't connected yet"
         description="Connect Google Analytics for this workspace to start wiring a project into the Analytics view."
@@ -587,13 +591,13 @@ export const AnalyticsView = memo(
     ) : (
       <AnalyticsStateCard
         title="Google Analytics is currently not connected"
-        description="Let the organization owner know they need to connect Google Analytics before this view is available."
+        description="Let a workspace manager know they need to connect Google Analytics before this view is available."
       />
     )
   },
   (previous, next) =>
     previous.activeProject?.id === next.activeProject?.id &&
-    previous.isOrganizationOwner === next.isOrganizationOwner
+    previous.canManageOrganization === next.canManageOrganization
 )
 
 function AnalyticsStateCard({

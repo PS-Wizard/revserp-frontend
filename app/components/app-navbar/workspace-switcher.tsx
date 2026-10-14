@@ -26,6 +26,8 @@ import { getWorkspaceInitials } from "./utils"
 type WorkspaceSwitcherProps = {
   activeOrganizationName?: string
   isActiveOrganizationOwner: boolean
+  /** Workspace-management capability (owner, manager, or admin member). */
+  canManageOrganization?: boolean
   workspaceState: "idle" | "switching" | "leaving" | "logging-out"
   organizationId: string
   organizations: MeResponse["organizations"]
@@ -37,6 +39,7 @@ type WorkspaceSwitcherProps = {
 export function WorkspaceSwitcher({
   activeOrganizationName,
   isActiveOrganizationOwner,
+  canManageOrganization = isActiveOrganizationOwner,
   workspaceState,
   organizationId,
   organizations,
@@ -47,7 +50,8 @@ export function WorkspaceSwitcher({
   const pillMenu = useHoverPill()
   const hoverMenu = useHoverMenu()
   const switchItemProps = pillMenu.getItemProps(0)
-  const workspaceActionItemProps = pillMenu.getItemProps(1)
+  const inviteItemProps = pillMenu.getItemProps(1)
+  const leaveItemProps = pillMenu.getItemProps(canManageOrganization ? 2 : 1)
   const isSwitchingWorkspace = workspaceState === "switching"
   const isLeavingWorkspace = workspaceState === "leaving"
 
@@ -112,18 +116,19 @@ export function WorkspaceSwitcher({
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          {isActiveOrganizationOwner ? (
+          {canManageOrganization ? (
             <DropdownMenuItem
               className={DROPDOWN_PILL_ITEM_CLASS}
               onClick={onInviteOpen}
-              onMouseEnter={workspaceActionItemProps.onMouseEnter}
-              ref={workspaceActionItemProps.ref}
+              onMouseEnter={inviteItemProps.onMouseEnter}
+              ref={inviteItemProps.ref}
               variant="default"
             >
               <SendIcon />
               Invite members
             </DropdownMenuItem>
-          ) : (
+          ) : null}
+          {!isActiveOrganizationOwner ? (
             <DropdownMenuItem
               className={cn(
                 DROPDOWN_PILL_ITEM_CLASS,
@@ -131,8 +136,8 @@ export function WorkspaceSwitcher({
               )}
               disabled={isLeavingWorkspace}
               onClick={onLeaveWorkspaceOpen}
-              onMouseEnter={workspaceActionItemProps.onMouseEnter}
-              ref={workspaceActionItemProps.ref}
+              onMouseEnter={leaveItemProps.onMouseEnter}
+              ref={leaveItemProps.ref}
               variant="destructive"
             >
               {isLeavingWorkspace ? (
@@ -148,7 +153,7 @@ export function WorkspaceSwitcher({
               )}
               Leave workspace
             </DropdownMenuItem>
-          )}
+          ) : null}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

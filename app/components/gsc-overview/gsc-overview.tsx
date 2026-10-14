@@ -163,7 +163,7 @@ export function GSCOverview({
   overviewResponse,
   overviewErrorMessage,
   isLoading,
-  isOrganizationOwner,
+  canManageOrganization,
   onRefreshOverview,
   completedCrawls,
   queriesBasePath,
@@ -177,7 +177,7 @@ export function GSCOverview({
   overviewResponse: ProjectGSCOverviewResponse | null
   overviewErrorMessage: string
   isLoading: boolean
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   onRefreshOverview: () => Promise<void>
   completedCrawls: CrawlResponse[]
   queriesBasePath?: string
@@ -405,7 +405,7 @@ export function GSCOverview({
   const handleSelectedSiteChange = async (nextSiteURL: string) => {
     dispatch({ type: "SET_SELECTED_SITE_URL", value: nextSiteURL })
     if (
-      !isOrganizationOwner ||
+      !canManageOrganization ||
       !activeProjectID ||
       !nextSiteURL ||
       nextSiteURL === status.selected_site?.site_url
@@ -460,7 +460,7 @@ export function GSCOverview({
       <GSCHeaderCard
         availableSites={status.available_sites}
         gscProjectSelectionErrorMessage={state.gscProjectSelectionErrorMessage}
-        isOrganizationOwner={isOrganizationOwner}
+        canManageOrganization={canManageOrganization}
         isRefreshingOverview={state.isRefreshingOverview}
         isSavingGSCProjectSelection={state.isSavingGSCProjectSelection}
         onRefreshOverview={handleRefreshOverview}

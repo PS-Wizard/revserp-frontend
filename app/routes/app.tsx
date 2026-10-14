@@ -85,6 +85,7 @@ import type {
 } from "~/lib/api.types"
 import { OnboardingTour } from "~/components/onboarding/onboarding-tour"
 import { isOnboardingSetupRunning } from "~/lib/onboarding-state"
+import { canManageOrganization } from "~/lib/organization-access"
 
 // Lazy so d3-force and the canvas renderer stay out of the main bundle
 // until the Site-Graph tab is opened.
@@ -610,7 +611,10 @@ export default function AppPage() {
   const activeOrganization = me.organizations.find(
     (organization) => organization.id === me.active_org_id
   )
-  const isOrganizationOwner = activeOrganization?.role === "owner"
+  const canManageActiveOrganization = canManageOrganization(
+    activeOrganization?.role,
+    me.is_platform_admin
+  )
 
   // Backend-persisted onboarding tour; fetched separately from bootstrap.
   const {
@@ -846,6 +850,7 @@ export default function AppPage() {
             revbotConversationId={revbotConversationId}
             userEmail={me.user.email}
             userName={me.user.name}
+            userId={me.user.id}
             view={view}
             visibilityMode={getVisibilityMode(location.search)}
             fullBleed={false}
@@ -892,7 +897,7 @@ export default function AppPage() {
             ) : view === "revserp-audit" ? (
               showProjectSetup ? (
                 <ProjectSetupPanel
-                  canStart={isOrganizationOwner}
+                  canStart={canManageActiveOrganization}
                   isLoading={projectSetup.isLoading}
                   isStarting={projectSetup.isStarting}
                   onStart={() => void projectSetup.start()}
@@ -978,20 +983,20 @@ export default function AppPage() {
                 key={activeProject?.id}
                 activeProject={activeProject}
                 completedCrawls={stableSortedCompletedCrawls}
-                isOrganizationOwner={isOrganizationOwner}
+                canManageOrganization={canManageActiveOrganization}
               />
             ) : view === "analytics" && me.features?.gsc_connector !== false ? (
               <AnalyticsView
                 key={activeProject?.id}
                 activeProject={activeProject}
-                isOrganizationOwner={isOrganizationOwner}
+                canManageOrganization={canManageActiveOrganization}
               />
             ) : view === "marketplace" &&
               me.features?.integrations !== false ? (
               <MarketplaceView
                 key={activeProject?.id}
                 activeProject={activeProject}
-                isOrganizationOwner={isOrganizationOwner}
+                canManageOrganization={canManageActiveOrganization}
               />
             ) : (
               <div className="p-6">

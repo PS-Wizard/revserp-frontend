@@ -47,6 +47,17 @@ import {
   SidebarTrigger,
 } from "~/components/ui/sidebar"
 import { RunCrawlDialog } from "~/components/app-navbar/run-crawl-dialog"
+import {
+  addExcludedUrlPatternTokens,
+  buildRunCrawlConfigSnapshot,
+  DEFAULT_EXCLUDED_URL_PATTERNS,
+  describeExcludedUrlPatternRejection,
+  getExcludedUrlPatternsStorage,
+  loadExcludedUrlPatterns,
+  resolveExcludedUrlPatternsUserId,
+  saveExcludedUrlPatterns,
+  validateExcludedUrlPatterns,
+} from "~/components/app-navbar/crawl-exclusions"
 import { useAutoCrawlSettings } from "~/components/app-navbar/use-auto-crawl-settings"
 import { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
@@ -148,6 +159,9 @@ type RunCrawlState = {
   fetchTimeoutSeconds: string
   error: string
   starting: boolean
+  excludedUrlPatterns: string[]
+  exclusionDraft: string
+  exclusionError: string
 }
 type RunCrawlEvent =
   | { type: "OPEN" | "CLOSE" | "STARTING" | "STARTED" }
@@ -155,6 +169,7 @@ type RunCrawlEvent =
       type: "FORCE_FULL_CRAWL" | "HONOUR_ROBOTS_TXT" | "RENDER_JAVASCRIPT"
       value: boolean
     }
+  | { type: "EXCLUDED_PATTERNS"; value: string[] }
   | {
       type:
         | "MAX_DEPTH"
@@ -163,6 +178,8 @@ type RunCrawlEvent =
         | "JITTER_MS"
         | "FETCH_TIMEOUT"
         | "ERROR"
+        | "EXCLUSION_DRAFT"
+        | "EXCLUSION_ERROR"
       value: string
     }
 
@@ -191,6 +208,12 @@ function runCrawlReducer(
       return { ...state, jitterMs: event.value }
     case "FETCH_TIMEOUT":
       return { ...state, fetchTimeoutSeconds: event.value }
+    case "EXCLUDED_PATTERNS":
+      return { ...state, excludedUrlPatterns: event.value }
+    case "EXCLUSION_DRAFT":
+      return { ...state, exclusionDraft: event.value }
+    case "EXCLUSION_ERROR":
+      return { ...state, exclusionError: event.value }
     case "ERROR":
       return { ...state, error: event.value, starting: false }
     case "STARTING":
@@ -203,6 +226,8 @@ function runCrawlReducer(
         forceFullCrawl: false,
         honourRobotsTxt: false,
         renderJavaScript: false,
+        exclusionDraft: "",
+        exclusionError: "",
       }
   }
 }
@@ -226,6 +251,9 @@ const initialRunCrawlState: RunCrawlState = {
   fetchTimeoutSeconds: "60",
   error: "",
   starting: false,
+  excludedUrlPatterns: [...DEFAULT_EXCLUDED_URL_PATTERNS],
+  exclusionDraft: "",
+  exclusionError: "",
 }
 
 /** Insights fills the navbar center while a competitor comparison is open. */
@@ -241,6 +269,8 @@ export type WorkspaceShellPreviewProps = AppNavbarProps & {
   fullBleed?: boolean
   /** Stable slot outside the view-keyed transition; view switches remount children. */
   tour?: ReactNode
+  /** Stable user scope for per-user crawl preferences; falls back to userEmail. */
+  userId?: string | null
 }
 
 export function WorkspaceShellPreview({
@@ -258,6 +288,7 @@ export function WorkspaceShellPreview({
   projects,
   userEmail,
   userName,
+  userId,
   view,
   onViewChange,
   visibilityMode = "maps",
@@ -298,6 +329,43 @@ export function WorkspaceShellPreview({
     runCrawlReducer,
     initialRunCrawlState
   )
+  const exclusionStorageUserId = resolveExcludedUrlPatternsUserId(
+    userId,
+    userEmail
+  )
+
+  // Saved choices win; defaults only fill a first open. Reloads on open
+  // and on user/project change so one scope never leaks into another.
+  useEffect(() => {
+    if (!runCrawl.isOpen) return
+    const stored = loadExcludedUrlPatterns(
+      getExcludedUrlPatternsStorage(),
+      exclusionStorageUserId,
+      activeProjectId ?? null
+    )
+    runCrawlDispatch({
+      type: "EXCLUDED_PATTERNS",
+      value: stored ?? [...DEFAULT_EXCLUDED_URL_PATTERNS],
+    })
+    runCrawlDispatch({ type: "EXCLUSION_DRAFT", value: "" })
+    runCrawlDispatch({ type: "EXCLUSION_ERROR", value: "" })
+  }, [runCrawl.isOpen, activeProjectId, exclusionStorageUserId])
+
+  function commitExclusionTokens(value: string) {
+    const commit = addExcludedUrlPatternTokens(
+      runCrawl.excludedUrlPatterns,
+      value
+    )
+    runCrawlDispatch({ type: "EXCLUDED_PATTERNS", value: commit.patterns })
+    runCrawlDispatch({
+      type: "EXCLUSION_DRAFT",
+      value: commit.invalid.join(" "),
+    })
+    runCrawlDispatch({
+      type: "EXCLUSION_ERROR",
+      value: describeExcludedUrlPatternRejection(commit.invalid, commit.capped),
+    })
+  }
   const fetchedProjectCrawls = useRef<Record<string, CrawlResponse[]>>({})
   const fetchingProjectIds = useRef(new Set<string>())
   const [, setFetchedCrawlsVersion] = useState(0)
@@ -496,6 +564,7 @@ export function WorkspaceShellPreview({
   const workspaceActions = useWorkspaceActions({
     organizationId,
     organizations,
+    isPlatformAdmin,
     navigate,
     revalidator,
   })
@@ -691,20 +760,67 @@ export function WorkspaceShellPreview({
       const maxPages = optionalPositiveInteger(runCrawl.maxPages, "Max pages")
       const delayMs = optionalPositiveInteger(runCrawl.delayMs, "Delay")
       const jitterMs = optionalPositiveInteger(runCrawl.jitterMs, "Jitter")
+      // A typed but unsplit URL still counts: commit the pending draft first.
+      const pendingExclusions = addExcludedUrlPatternTokens(
+        runCrawl.excludedUrlPatterns,
+        runCrawl.exclusionDraft
+      )
+      if (pendingExclusions.invalid.length > 0 || pendingExclusions.capped) {
+        runCrawlDispatch({
+          type: "EXCLUDED_PATTERNS",
+          value: pendingExclusions.patterns,
+        })
+        runCrawlDispatch({
+          type: "EXCLUSION_DRAFT",
+          value: pendingExclusions.invalid.join(" "),
+        })
+        runCrawlDispatch({
+          type: "EXCLUSION_ERROR",
+          value: describeExcludedUrlPatternRejection(
+            pendingExclusions.invalid,
+            pendingExclusions.capped
+          ),
+        })
+        return
+      }
+      const excludedUrlPatterns = pendingExclusions.patterns
+      const exclusionPatternsError =
+        validateExcludedUrlPatterns(excludedUrlPatterns)
+      if (exclusionPatternsError) {
+        runCrawlDispatch({ type: "EXCLUSION_ERROR", value: exclusionPatternsError })
+        return
+      }
+      if (pendingExclusions.added.length > 0) {
+        runCrawlDispatch({
+          type: "EXCLUDED_PATTERNS",
+          value: excludedUrlPatterns,
+        })
+      }
+      runCrawlDispatch({ type: "EXCLUSION_DRAFT", value: "" })
+      runCrawlDispatch({ type: "EXCLUSION_ERROR", value: "" })
+      saveExcludedUrlPatterns(
+        getExcludedUrlPatternsStorage(),
+        exclusionStorageUserId,
+        activeProjectId,
+        excludedUrlPatterns
+      )
       runCrawlDispatch({ type: "STARTING" })
       const crawl = await clientApiPost<CrawlResponse>(
         `/projects/${activeProjectId}/crawls`,
         {
-          config_snapshot: {
-            max_depth: maxDepth,
-            fetch_timeout_seconds: fetchTimeoutSeconds,
-            force_full_crawl: runCrawl.forceFullCrawl,
-            honour_robots_txt: runCrawl.honourRobotsTxt,
-            render_javascript: runCrawl.renderJavaScript,
-            ...(maxPages === undefined ? {} : { max_pages: maxPages }),
-            ...(delayMs === undefined ? {} : { request_delay_ms: delayMs }),
-            ...(jitterMs === undefined ? {} : { request_jitter_ms: jitterMs }),
-          },
+          config_snapshot: buildRunCrawlConfigSnapshot(
+            {
+              max_depth: maxDepth,
+              fetch_timeout_seconds: fetchTimeoutSeconds,
+              force_full_crawl: runCrawl.forceFullCrawl,
+              honour_robots_txt: runCrawl.honourRobotsTxt,
+              render_javascript: runCrawl.renderJavaScript,
+              ...(maxPages === undefined ? {} : { max_pages: maxPages }),
+              ...(delayMs === undefined ? {} : { request_delay_ms: delayMs }),
+              ...(jitterMs === undefined ? {} : { request_jitter_ms: jitterMs }),
+            },
+            excludedUrlPatterns
+          ),
         }
       )
       onCrawlStart(crawl)
@@ -882,6 +998,9 @@ export function WorkspaceShellPreview({
                     }
                     isActiveOrganizationOwner={
                       workspaceActions.isActiveOrganizationOwner
+                    }
+                    canManageOrganization={
+                      workspaceActions.canManageActiveOrganization
                     }
                     onInviteOpen={workspaceActions.openInviteDialog}
                     onLeaveWorkspaceOpen={
@@ -1117,8 +1236,8 @@ export function WorkspaceShellPreview({
                         defaultHistoryOpen={false}
                         hideCompactHeader
                         hideHistory={islandState !== "maximized"}
-                        isOrganizationOwner={
-                          workspaceActions.isActiveOrganizationOwner
+                        canManageOrganization={
+                          workspaceActions.canManageActiveOrganization
                         }
                         onActivityChange={setIsIslandThinking}
                         onEditorLink={handleRevbotEditorLink}
@@ -1198,6 +1317,9 @@ export function WorkspaceShellPreview({
         <RunCrawlDialog
           activeProject={activeProject}
           activeProjectId={activeProjectId}
+          excludedUrlPatterns={runCrawl.excludedUrlPatterns}
+          exclusionDraft={runCrawl.exclusionDraft}
+          exclusionError={runCrawl.exclusionError}
           delayMs={runCrawl.delayMs}
           fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
           forceFullCrawl={runCrawl.forceFullCrawl}
@@ -1227,6 +1349,18 @@ export function WorkspaceShellPreview({
           }
           onJitterMsChange={(value) =>
             runCrawlDispatch({ type: "JITTER_MS", value })
+          }
+          onExclusionDraftChange={(value) =>
+            runCrawlDispatch({ type: "EXCLUSION_DRAFT", value })
+          }
+          onExclusionCommit={commitExclusionTokens}
+          onExclusionRemove={(pattern) =>
+            runCrawlDispatch({
+              type: "EXCLUDED_PATTERNS",
+              value: runCrawl.excludedUrlPatterns.filter(
+                (entry) => entry !== pattern
+              ),
+            })
           }
           onMaxDepthChange={(value) =>
             runCrawlDispatch({ type: "MAX_DEPTH", value })

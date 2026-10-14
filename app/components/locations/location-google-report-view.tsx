@@ -576,7 +576,7 @@ function LocationGscReport({
         activeProjectID={projectId}
         completedCrawls={[]}
         isLoading={overviewQuery.isLoading}
-        isOrganizationOwner={false}
+        canManageOrganization={false}
         onRefreshOverview={() => handleRefresh()}
         overviewErrorMessage={refreshError}
         overviewResponse={overviewResponse}
@@ -815,7 +815,7 @@ function LocationAnalyticsReport({
         key={`${report.propertyId}:${query.scopeRevision}:${query.pageFilter}:${refreshCount}`}
         activeProjectId={projectId}
         isLoading={overviewQuery.isLoading}
-        isOrganizationOwner={false}
+        canManageOrganization={false}
         onRefreshOverview={() => handleRefresh()}
         overviewErrorMessage={refreshError}
         overviewResponse={overviewResponse}

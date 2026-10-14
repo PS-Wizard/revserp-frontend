@@ -56,7 +56,7 @@ function renderBar(overrides: Record<string, unknown> = {}) {
           google_connection_id: googleConnectionId,
         })}
         disconnectPath={`/projects/${PROJECT}/gsc/disconnect`}
-        isOrganizationOwner
+        canManageOrganization
         onChanged={() => {
           changed += 1
         }}
@@ -130,7 +130,7 @@ describe("project google account bar", () => {
   test("non-owners see the account without management actions", () => {
     installFetch()
     const container = renderBar({
-      isOrganizationOwner: false,
+      canManageOrganization: false,
       disconnectPath: null,
     })
     expect(container.innerHTML).toContain("owner@example.com")

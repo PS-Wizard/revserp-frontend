@@ -1,4 +1,5 @@
 import { Navigate, useMatches, useParams, useSearchParams } from "react-router"
+import { canManageOrganization } from "~/lib/organization-access"
 
 import { LocationListView } from "~/components/locations/location-list-view"
 import {
@@ -13,6 +14,7 @@ type AppRouteData = {
   me?: {
     active_org_id?: string
     organizations?: Array<{ id: string; role: string }>
+    is_platform_admin?: boolean
   }
 }
 
@@ -35,8 +37,9 @@ export function parentWebsiteUrlFromMatches(
 }
 
 /**
- * Trash is owner-gated, mirroring the backend location workspace can_manage
- * semantics (role == "owner"). Unknown defaults to hidden, never to members.
+ * Trash is manager-gated, mirroring the backend location workspace
+ * can_manage semantics (owner, manager, or a platform-admin member).
+ * Unknown defaults to hidden, never to members.
  */
 export function locationListCanManageFromMatches(
   matches: ReadonlyArray<{ id: string; data?: unknown }>
@@ -45,11 +48,10 @@ export function locationListCanManageFromMatches(
     AppRouteData | undefined
   const me = data?.me
   if (!me) return false
-  return (
-    me.organizations?.find(
-      (organization) => organization.id === me.active_org_id
-    )?.role === "owner"
-  )
+  const role = me.organizations?.find(
+    (organization) => organization.id === me.active_org_id
+  )?.role
+  return canManageOrganization(role, me.is_platform_admin === true)
 }
 
 export default function ProjectLocationsRoute() {

@@ -28,7 +28,7 @@ import {
  * Shared Google account row for the parent project GSC/Analytics views.
  *
  * Shows which shared account backs the project binding (a picker when the
- * organization connected more than one), plus owner actions: add another
+ * organization connected more than one), plus manager actions: add another
  * account, reconnect the selected account, and disconnect the property
  * binding. Disconnect removes only the project property binding — never
  * the shared OAuth account row or stored history.
@@ -46,7 +46,7 @@ export function ProjectGoogleAccountBar({
   selectPath,
   selectBody,
   disconnectPath,
-  isOrganizationOwner,
+  canManageOrganization,
   onChanged,
 }: {
   projectId: string
@@ -61,7 +61,7 @@ export function ProjectGoogleAccountBar({
   selectPath: string
   selectBody: (googleConnectionId: string) => Record<string, string>
   disconnectPath: string | null
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   onChanged: () => Promise<void> | void
 }) {
   const connections = projectGoogleConnections({
@@ -119,9 +119,9 @@ export function ProjectGoogleAccountBar({
   const boundUnverified =
     boundAccountId !== "" &&
     (!boundConnection || !describeGoogleAccount(boundConnection).verified)
-  const showPicker = connections.length > 1 && isOrganizationOwner
+  const showPicker = connections.length > 1 && canManageOrganization
   const showReconnect =
-    isOrganizationOwner &&
+    canManageOrganization &&
     boundAccountId !== "" &&
     (needsReconnect || Boolean(tokenError) || boundUnverified)
   const propertyList = useAccountPropertyList(projectId, service, "")
@@ -283,7 +283,7 @@ export function ProjectGoogleAccountBar({
         {busy === "switch" ? (
           <span className="text-xs text-muted-foreground">Switching…</span>
         ) : null}
-        {isOrganizationOwner ? (
+        {canManageOrganization ? (
           <span className="flex flex-wrap items-center gap-2">
             <Button
               disabled={busy !== null}

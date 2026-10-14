@@ -23,11 +23,12 @@ export const DEFAULT_AUTO_CRAWL_CONFIG: AutoCrawlConfig = {
   runAt: "03:00",
 }
 
-/** Auto crawl schedules. Every month is a fixed 30 days, not a calendar month. */
+/** Auto crawl schedules use fixed 30-day months, not calendar months. */
 export const autoCrawlScheduleOptions = [
   { value: "7", label: "Every week" },
   { value: "14", label: "Every 2 weeks" },
   { value: "30", label: "Every month" },
+  { value: "60", label: "Every 2 months" },
 ]
 
 /** Display fallback for auto crawl schedule: unsupported stored values show weekly without persisting. */
@@ -40,7 +41,6 @@ export function normalizeAutoCrawlFrequencyDaysForDisplay(
     : DEFAULT_AUTO_CRAWL_CONFIG.frequencyDays
 }
 
-/** Auto crawl schedule validation: only weekly, biweekly, and monthly schedules are allowed. */
 export function getAutoCrawlFrequencyValidationError(
   frequencyDays: string
 ): string | null {
@@ -48,7 +48,7 @@ export function getAutoCrawlFrequencyValidationError(
     (option) => option.value === frequencyDays
   )
     ? null
-    : "Crawl frequency must be Every week, Every 2 weeks, or Every month."
+    : "Crawl frequency must be Every week, Every 2 weeks, Every month, or Every 2 months."
 }
 
 export function useAutoCrawlSettings(activeProjectId?: string | null) {

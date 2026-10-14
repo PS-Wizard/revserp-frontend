@@ -88,7 +88,7 @@ export function AnalyticsOverview({
   realtimeActiveUsers,
   overviewErrorMessage,
   isLoading,
-  isOrganizationOwner,
+  canManageOrganization,
   onRefreshOverview,
   actions,
 }: {
@@ -98,7 +98,7 @@ export function AnalyticsOverview({
   realtimeActiveUsers?: number
   overviewErrorMessage: string
   isLoading: boolean
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   onRefreshOverview: () => Promise<void>
   actions?: import("react").ReactNode
 }) {
@@ -166,7 +166,7 @@ export function AnalyticsOverview({
         accountName={status.selected_property?.account_display_name}
         activeNow={realtimeActiveUsers}
         errorMessage={selectionError || overviewErrorMessage}
-        isOwner={isOrganizationOwner}
+        canManageOrganization={canManageOrganization}
         isRefreshing={isRefreshing}
         isSaving={isSaving}
         onPropertyChange={selectProperty}

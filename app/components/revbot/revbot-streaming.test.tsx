@@ -87,7 +87,7 @@ function viewElement(messages: AITurnMessageResponse[]) {
       defaultHistoryOpen={false}
       hideCompactHeader
       hideHistory
-      isOrganizationOwner
+      canManageOrganization
       showMic={false}
       variant="default"
     />

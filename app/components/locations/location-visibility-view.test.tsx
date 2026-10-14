@@ -1036,7 +1036,7 @@ describe("run history content", () => {
       container.querySelector('[aria-label="Nine-point grid results"]') !== null
     )
     expect(document.body.textContent).toContain(
-      "Only organization owners can start a Maps run."
+      "Only workspace managers can start a Maps run."
     )
     expect(document.body.textContent?.includes("Start run")).toBe(false)
     expect(fetchCalls.filter((call) => call.method === "POST")).toEqual([])

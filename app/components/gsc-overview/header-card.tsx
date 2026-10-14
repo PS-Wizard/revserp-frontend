@@ -20,7 +20,7 @@ import {
 import type { ProjectGSCSiteResponse } from "~/lib/api.types"
 
 export function GSCHeaderCard({
-  isOrganizationOwner,
+  canManageOrganization,
   selectedGSCSiteURL,
   availableSites,
   selectedSite,
@@ -32,7 +32,7 @@ export function GSCHeaderCard({
   onSelectedSiteChange,
   actions,
 }: {
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   selectedGSCSiteURL: string
   availableSites: ProjectGSCSiteResponse[]
   selectedSite: ProjectGSCSiteResponse | null
@@ -58,7 +58,7 @@ export function GSCHeaderCard({
         </div>
 
         <div className="flex w-full flex-col gap-3 xl:max-w-md">
-          {isOrganizationOwner ? (
+          {canManageOrganization ? (
             <Select
               disabled={isSavingGSCProjectSelection}
               onValueChange={(value) => value && onSelectedSiteChange(value)}

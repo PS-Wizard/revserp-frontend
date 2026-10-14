@@ -1,5 +1,6 @@
-import { MonitorPlayIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react"
+import { MonitorPlayIcon, RefreshCwIcon, ShieldCheckIcon, XIcon } from "lucide-react"
 import { ThinkingOrb } from "thinking-orbs"
+import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import {
   Dialog,
@@ -22,6 +23,9 @@ import type { ProjectResponse } from "~/lib/api.types"
 type RunCrawlDialogProps = {
   activeProject: ProjectResponse | null
   activeProjectId?: string | null
+  excludedUrlPatterns: string[]
+  exclusionDraft: string
+  exclusionError: string
   fetchTimeoutSeconds: string
   forceFullCrawl: boolean
   honourRobotsTxt: boolean
@@ -42,12 +46,18 @@ type RunCrawlDialogProps = {
   onMaxPagesChange: (value: string) => void
   onDelayMsChange: (value: string) => void
   onJitterMsChange: (value: string) => void
+  onExclusionDraftChange: (value: string) => void
+  onExclusionCommit: (value: string) => void
+  onExclusionRemove: (pattern: string) => void
   onOpenChange: (open: boolean) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
 }
 
 export function RunCrawlDialog({
   activeProject,
+  excludedUrlPatterns,
+  exclusionDraft,
+  exclusionError,
   activeProjectId,
   fetchTimeoutSeconds,
   forceFullCrawl,
@@ -69,6 +79,9 @@ export function RunCrawlDialog({
   onMaxPagesChange,
   onDelayMsChange,
   onJitterMsChange,
+  onExclusionDraftChange,
+  onExclusionCommit,
+  onExclusionRemove,
   onOpenChange,
   onSubmit,
 }: RunCrawlDialogProps) {
@@ -204,6 +217,66 @@ export function RunCrawlDialog({
                   <MonitorPlayIcon data-icon="inline-start" />
                   Render JavaScript
                 </Button>
+              </Field>
+              <Field data-invalid={exclusionError ? true : undefined}>
+                <FieldLabel htmlFor="excluded-url-patterns">
+                  Excluded URL patterns
+                </FieldLabel>
+                {excludedUrlPatterns.length > 0 ? (
+                  <ul
+                    aria-label="Excluded URL patterns"
+                    className="flex flex-wrap gap-1.5"
+                  >
+                    {excludedUrlPatterns.map((pattern) => (
+                      <li key={pattern}>
+                        <Badge className="gap-1 pr-1" variant="secondary">
+                          <span className="max-w-44 truncate">{pattern}</span>
+                          <button
+                            aria-label={`Remove ${pattern}`}
+                            className="flex size-4 items-center justify-center rounded-full hover:bg-foreground/10"
+                            onClick={() => onExclusionRemove(pattern)}
+                            type="button"
+                          >
+                            <XIcon aria-hidden="true" className="size-3" />
+                          </button>
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No exclusions. The crawl covers the whole site.
+                  </p>
+                )}
+                <Input
+                  aria-invalid={exclusionError ? true : undefined}
+                  autoComplete="off"
+                  id="excluded-url-patterns"
+                  onChange={(event) => onExclusionDraftChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Space and Enter add tokens; Enter must not submit the form.
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault()
+                      if (exclusionDraft.trim()) onExclusionCommit(exclusionDraft)
+                    }
+                  }}
+                  onPaste={(event) => {
+                    const pasted = event.clipboardData.getData("text")
+                    if (!/\s/.test(pasted)) return
+                    event.preventDefault()
+                    onExclusionCommit(`${exclusionDraft} ${pasted}`)
+                  }}
+                  placeholder="Full URL or /path/* — Space or Enter adds"
+                  spellCheck={false}
+                  value={exclusionDraft}
+                />
+                <FieldDescription>
+                  Skip login and admin pages. Full https:// URL or path
+                  starting with /. Only * is a wildcard.
+                </FieldDescription>
+                {exclusionError ? (
+                  <FieldError>{exclusionError}</FieldError>
+                ) : null}
               </Field>
             </FieldGroup>
 

@@ -104,9 +104,14 @@ export const PillarAuditView = memo(function PillarAuditView({
         : currentBreakdown,
     [currentBreakdown, unsupported]
   )
-  const currentEntry =
-    displayBreakdowns.find(({ crawl }) => crawl.id === currentCrawlId) ??
-    displayBreakdowns[0]
+  const currentIndex = Math.max(
+    0,
+    displayBreakdowns.findIndex(({ crawl }) => crawl.id === currentCrawlId)
+  )
+  const currentEntry = displayBreakdowns[currentIndex]
+  const previousPillar = displayBreakdowns[currentIndex + 1]?.breakdown.pillars.find(
+    (pillar) => pillar.id === pillarId
+  )
   const currentPillar = displayBreakdown?.pillars.find(
     (pillar) => pillar.id === pillarId
   )
@@ -115,6 +120,7 @@ export const PillarAuditView = memo(function PillarAuditView({
       key: bucket.id,
       label: formatBucketLabel(bucket.id, bucket.label),
       value: bucket.score,
+      previousValue: previousPillar?.buckets.find((item) => item.id === bucket.id)?.score,
       color: getPillarChartColor(pillarId, index),
     })) ?? []
   const removedBucketCount =
@@ -188,6 +194,7 @@ export const PillarAuditView = memo(function PillarAuditView({
             <ScoreRadialChart
               centerLabel={title}
               centerValue={currentPillar?.score}
+              previousCenterValue={previousPillar?.score}
               description="Current crawl bucket scores"
               segments={radialSegments}
               title={`${title} Score`}

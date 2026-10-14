@@ -61,13 +61,13 @@ export function gscOverviewQueryKey(projectId: string) {
 
 type SearchConsoleViewProps = {
   activeProject: ProjectResponse | null
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   completedCrawls: CrawlResponse[]
 }
 
 export const SearchConsoleView = memo(function SearchConsoleView({
   activeProject,
-  isOrganizationOwner,
+  canManageOrganization,
   completedCrawls,
 }: SearchConsoleViewProps) {
   const queryClient = useQueryClient()
@@ -110,6 +110,10 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     placeholderData: (prev) => prev,
   })
 
+  // The status flag is canonical once loaded; the membership capability
+  // only gates the pre-load affordances so nothing is fabricated.
+  const canManageConnection =
+    gscStatus?.can_manage_connection ?? canManageOrganization
   const isLoadingGSC = isLoadingStatus || (overviewEnabled && isLoadingOverview)
 
   const gscLoadErrorMessage =
@@ -342,7 +346,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
             googleAccountEmail={gscStatus.google_account_email}
             googleConnectionId={gscStatus.google_connection_id}
             googleConnections={gscStatus.google_connections}
-            isOrganizationOwner={isOrganizationOwner}
+            canManageOrganization={canManageConnection}
             needsReconnect={gscStatus.needs_reconnect}
             onChanged={() => void handleRefreshGSCState()}
             projectId={activeProject.id}
@@ -362,7 +366,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
         <GSCOverview
           activeProjectID={activeProject.id}
           completedCrawls={completedCrawls}
-          isOrganizationOwner={isOrganizationOwner}
+          canManageOrganization={canManageConnection}
           isLoading={isLoadingOverview}
           onRefreshOverview={handleRefreshOverview}
           overviewErrorMessage={gscLoadErrorMessage}
@@ -373,7 +377,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
     )
   }
 
-  if (gscStatus?.has_google_connection && isOrganizationOwner) {
+  if (gscStatus?.has_google_connection && canManageConnection) {
     return (
       <GSCStateCard
         action={
@@ -538,13 +542,13 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   if (gscStatus?.has_google_connection) {
     return (
       <GSCStateCard
-        description="Let the organization owner know they still need to pick the Search Console property for this project."
-        title="GSC is connected, but the owner is yet to select a project"
+        description="Let a workspace manager know they still need to pick the Search Console property for this project."
+        title="GSC is connected, but a manager is yet to select a project"
       />
     )
   }
 
-  if (isOrganizationOwner) {
+  if (canManageConnection) {
     return (
       <GSCStateCard
         action={
@@ -574,7 +578,7 @@ export const SearchConsoleView = memo(function SearchConsoleView({
 
   return (
     <GSCStateCard
-      description="Let the organization owner know they need to connect Google Search Console before this view is available."
+      description="Let a workspace manager know they need to connect Google Search Console before this view is available."
       title="Google Search Console is currently not connected"
     />
   )
@@ -586,7 +590,7 @@ function areSearchConsoleViewPropsEqual(
 ) {
   return (
     previous.activeProject?.id === next.activeProject?.id &&
-    previous.isOrganizationOwner === next.isOrganizationOwner &&
+    previous.canManageOrganization === next.canManageOrganization &&
     previous.completedCrawls === next.completedCrawls
   )
 }

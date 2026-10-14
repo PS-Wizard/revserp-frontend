@@ -16,19 +16,19 @@ import {
 export type { MCPApprovalDecision }
 
 /** Inline approval card for one pending MCP tool call. Plain untrusted text only.
- * `isOrganizationOwner` gates Always allow: that decision also saves a shared
- * project tool rule, which the server accepts from the organization owner only. */
+ * `canManageOrganization` gates Always allow: that decision also saves a shared
+ * project tool rule, which the server accepts from workspace managers only. */
 export function MCPApprovalCard({
   approval,
   deciding,
   decisionError,
-  isOrganizationOwner,
+  canManageOrganization,
   onDecide,
 }: {
   approval: CMSApproval
   deciding: MCPApprovalDecision | null
   decisionError: string | null
-  isOrganizationOwner: boolean
+  canManageOrganization: boolean
   onDecide: (decision: MCPApprovalDecision) => void
 }) {
   const busy = deciding !== null
@@ -95,7 +95,7 @@ export function MCPApprovalCard({
           ) : null}
           {deciding === "approve" ? "Allowing…" : "Allow once"}
         </Button>
-        {isOrganizationOwner ? (
+        {canManageOrganization ? (
           <Button
             disabled={busy}
             onClick={() => onDecide("always_allow")}
@@ -114,11 +114,11 @@ export function MCPApprovalCard({
           </Button>
         ) : null}
       </div>
-      {isOrganizationOwner ? null : (
+      {canManageOrganization ? null : (
         <p className="flex items-start gap-1.5 text-xs leading-relaxed text-pretty text-muted-foreground">
           <LockIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
           Always allow changes shared settings for everyone in this project, so
-          only the organization owner can use it.
+          only workspace managers can use it.
         </p>
       )}
     </Card>

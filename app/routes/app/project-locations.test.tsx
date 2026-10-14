@@ -128,32 +128,43 @@ describe("project locations route", () => {
 })
 
 describe("location delete permission", () => {
-  test("delete is owner-gated with deny-by-default", () => {
-    const owner = [
+  test("delete is manager-gated with deny-by-default", () => {
+    const matchesFor = (role: string, is_platform_admin = false) => [
       {
         id: "routes/app",
         data: {
           me: {
             active_org_id: "org-1",
-            organizations: [{ id: "org-1", role: "owner" }],
+            is_platform_admin,
+            organizations: [{ id: "org-1", role }],
           },
         },
       },
     ]
-    expect(locationListCanManageFromMatches(owner)).toBe(true)
-
-    const member = [
-      {
-        id: "routes/app",
-        data: {
-          me: {
-            active_org_id: "org-1",
-            organizations: [{ id: "org-1", role: "member" }],
+    expect(locationListCanManageFromMatches(matchesFor("owner"))).toBe(true)
+    expect(locationListCanManageFromMatches(matchesFor("manager"))).toBe(
+      true
+    )
+    expect(
+      locationListCanManageFromMatches(matchesFor("member", true))
+    ).toBe(true)
+    expect(locationListCanManageFromMatches(matchesFor("member"))).toBe(
+      false
+    )
+    expect(
+      locationListCanManageFromMatches([
+        {
+          id: "routes/app",
+          data: {
+            me: {
+              active_org_id: "org-1",
+              is_platform_admin: true,
+              organizations: [{ id: "org-2", role: "member" }],
+            },
           },
         },
-      },
-    ]
-    expect(locationListCanManageFromMatches(member)).toBe(false)
+      ])
+    ).toBe(false)
     expect(locationListCanManageFromMatches([])).toBe(false)
     expect(
       locationListCanManageFromMatches([{ id: "routes/app" }])

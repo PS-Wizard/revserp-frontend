@@ -94,7 +94,7 @@ function userMessage(): AITurnMessageResponse {
   }
 }
 
-async function mountView(handle: RevbotHandle, isOrganizationOwner = true) {
+async function mountView(handle: RevbotHandle, canManageOrganization = true) {
   const container = document.createElement("div")
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -108,7 +108,7 @@ async function mountView(handle: RevbotHandle, isOrganizationOwner = true) {
         defaultHistoryOpen={false}
         hideCompactHeader
         hideHistory
-        isOrganizationOwner={isOrganizationOwner}
+        canManageOrganization={canManageOrganization}
         showMic={false}
         variant="default"
       />
@@ -122,7 +122,7 @@ async function rerenderView(
   root: Root,
   container: HTMLDivElement,
   handle: RevbotHandle,
-  isOrganizationOwner = true
+  canManageOrganization = true
 ) {
   await act(async () => {
     root.render(
@@ -134,7 +134,7 @@ async function rerenderView(
         defaultHistoryOpen={false}
         hideCompactHeader
         hideHistory
-        isOrganizationOwner={isOrganizationOwner}
+        canManageOrganization={canManageOrganization}
         showMic={false}
         variant="default"
       />
@@ -275,12 +275,12 @@ describe("MCPApprovalCard always allow owner gate", () => {
     }
   })
 
-  test("a non-owner keeps once-only decisions and sees why", async () => {
+  test("a non-manager keeps once-only decisions and sees why", async () => {
     const { root, container } = await mountView(waitingHandle(), false)
     try {
       expect(approvalActions(container)).toEqual(["Deny once", "Allow once"])
       expect(container.textContent ?? "").toContain(
-        "only the organization owner can use it"
+        "only workspace managers can use it"
       )
     } finally {
       await act(async () => {

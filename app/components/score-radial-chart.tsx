@@ -15,11 +15,13 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "~/components/ui/chart"
+import { TrendBadge, getRoundedDelta, isNumber } from "~/components/trend-sparkline"
 import { cn } from "~/lib/utils"
 export type ScoreRadialSegment = {
   key: string
   label: string
   value?: number | null
+  previousValue?: number | null
   color?: string
   contribution?: number | null
 }
@@ -31,6 +33,7 @@ const DEFAULT_OUTER_RADIUS = 108
 type ScoreRadialChartProps = {
   centerLabel?: string
   centerValue?: number | null
+  previousCenterValue?: number | null
   chartSize?: number
   description?: string
   /** Skip the Card chrome so this chart can sit inside another card. */
@@ -43,6 +46,7 @@ type ScoreRadialChartProps = {
 
 export const ScoreRadialChart = memo(function ScoreRadialChart({
   centerValue,
+  previousCenterValue,
   chartSize = DEFAULT_CHART_SIZE,
   description,
   embed = false,
@@ -177,8 +181,17 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
                   />
                   <span className="truncate">{segment.label}</span>
                 </span>
-                <span className="font-mono font-medium tabular-nums">
-                  {segment.value}%
+                <span className="flex shrink-0 items-center gap-2">
+                  <TrendBadge
+                    delta={getRoundedDelta(
+                      segment.value,
+                      isNumber(segment.previousValue) ? segment.previousValue : undefined
+                    )}
+                    inline
+                  />
+                  <span className="font-mono font-medium tabular-nums">
+                    {segment.value}%
+                  </span>
                 </span>
               </div>
             ))}
@@ -216,6 +229,12 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
     >
       <CardHeader>
         <CardTitle>{title}</CardTitle>
+        <TrendBadge
+          delta={getRoundedDelta(
+            isNumber(centerValue) ? centerValue : undefined,
+            isNumber(previousCenterValue) ? previousCenterValue : undefined
+          )}
+        />
         {description ? <CardDescription>{description}</CardDescription> : null}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">{body}</CardContent>
