@@ -1150,6 +1150,7 @@ export function RevbotComposer({
                   : "dark:bg-transparent"
               )}
               disabled={disabled}
+              data-tour="onboarding-revbot-input"
               id={REVBOT_PROMPT_INPUT_ID}
               onChange={(event) =>
                 updatePrompt(event.target.value, event.target.selectionStart)

@@ -11,6 +11,7 @@ import {
 import { BucketScoreHistoryChart } from "~/components/bucket-score-history-chart"
 
 import { IssueExplorer } from "~/components/issue-explorer"
+import { dispatchOnboardingBucketDrill } from "~/components/onboarding/onboarding-ui"
 import { IssueTreemap } from "~/components/issue-treemap"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
 import {
@@ -144,12 +145,21 @@ export const PillarAuditView = memo(function PillarAuditView({
         autoSelect,
         token: focusTokenRef.current,
       })
+      // Real drill signal for the onboarding tour: empty buckets drill
+      // nowhere, so the tour explains the empty result instead.
+      const bucket = displayBreakdown?.pillars
+        .find((pillar) => pillar.id === pillarId)
+        ?.buckets.find((entry) => entry.id === bucketId)
+      dispatchOnboardingBucketDrill({
+        bucketId,
+        hasIssues: (bucket?.issue_row_count ?? 0) > 0,
+      })
       issueExplorerRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       })
     },
-    []
+    [displayBreakdown, pillarId],
   )
 
   return (
@@ -170,7 +180,10 @@ export const PillarAuditView = memo(function PillarAuditView({
         <div>
           <div className="border-t border-border" />
         </div>
-        <div className="grid items-stretch gap-3 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:pt-4">
+        <div
+          className="grid items-stretch gap-3 pt-3 lg:grid-cols-[minmax(260px,0.3fr)_minmax(0,0.7fr)] lg:pt-4"
+          data-tour="onboarding-bucket-scores"
+        >
           {!hideRadialForUnsupported && (
             <ScoreRadialChart
               centerLabel={title}
@@ -213,7 +226,11 @@ export const PillarAuditView = memo(function PillarAuditView({
             }}
           />
           <Separator />
-          <div className="scroll-mt-4" ref={issueExplorerRef}>
+          <div
+            className="scroll-mt-4"
+            data-tour="onboarding-issue-table"
+            ref={issueExplorerRef}
+          >
             <IssueExplorer
               breakdown={displayBreakdown}
               focusRequest={bucketFocus}

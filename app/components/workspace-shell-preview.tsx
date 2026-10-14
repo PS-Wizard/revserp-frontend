@@ -90,6 +90,10 @@ import type {
 import { useFeatures } from "~/lib/features"
 import { toast } from "sonner"
 import { WorkspaceDockNav } from "~/components/workspace-dock-nav"
+import {
+  OnboardingUiContext,
+  requestOnboardingReplay,
+} from "~/components/onboarding/onboarding-ui"
 import { LocationWebsiteScopeSettingsButton } from "~/components/locations/location-website-scope-settings"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 
@@ -235,10 +239,13 @@ export type WorkspaceShellPreviewProps = AppNavbarProps & {
   revbotConversationId: string | null
   onRevbotConversationChange: (conversationId: string | null) => void
   fullBleed?: boolean
+  /** Stable slot outside the view-keyed transition; view switches remount children. */
+  tour?: ReactNode
 }
 
 export function WorkspaceShellPreview({
   children,
+  tour,
   activeProjectId,
   currentCrawl,
   projectCrawls,
@@ -494,6 +501,44 @@ export function WorkspaceShellPreview({
   })
   const autoCrawl = useAutoCrawlSettings(activeProjectId)
   const businessProfile = useBusinessProfile(locationProfileScope)
+  // Tour-held dock menu (audit/business-profile steps); undefined = hover state.
+  const [lockedDockItem, setLockedDockItem] = useState<string | null | undefined>(undefined)
+  const lockDockItem = useCallback((key: string | null) => {
+    setLockedDockItem(key ?? undefined)
+  }, [])
+  const openRevbotForTour = useCallback(() => setIslandState("minimized"), [])
+  const maximizeRevbotForTour = useCallback(() => setIslandState("maximized"), [])
+  const dockRevbotForTour = useCallback(() => setIslandState("docked"), [])
+  const openBusinessProfileForTour = useCallback(() => {
+    if (activeProject) businessProfile.openBusinessProfileDrawer(activeProject)
+  }, [activeProject, businessProfile])
+  const closeBusinessProfileForTour = useCallback(() => {
+    businessProfile.closeBusinessProfileDrawer()
+  }, [businessProfile])
+  const onboardingUi = useMemo(
+    () => ({
+      islandState,
+      openRevbot: openRevbotForTour,
+      maximizeRevbot: maximizeRevbotForTour,
+      dockRevbot: dockRevbotForTour,
+      openBusinessProfile: openBusinessProfileForTour,
+      closeBusinessProfile: closeBusinessProfileForTour,
+      isBusinessProfileOpen: businessProfile.businessProfileProject !== null,
+      isCreateProjectOpen: createProject.isOpen,
+      lockDockItem,
+    }),
+    [
+      islandState,
+      openRevbotForTour,
+      maximizeRevbotForTour,
+      dockRevbotForTour,
+      openBusinessProfileForTour,
+      closeBusinessProfileForTour,
+      businessProfile.businessProfileProject,
+      createProject.isOpen,
+      lockDockItem,
+    ]
+  )
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
     return getInitials(source, "R")
@@ -599,6 +644,8 @@ export function WorkspaceShellPreview({
       )
       createProjectDispatch({ type: "CREATED" })
       selectProject(project.id)
+      onViewChange("revserp-audit")
+      onAuditTabChange("overview")
     } catch (error) {
       if (
         error instanceof ApiError &&
@@ -673,6 +720,7 @@ export function WorkspaceShellPreview({
   }
 
   return (
+    <OnboardingUiContext.Provider value={onboardingUi}>
     <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
       <LayoutGroup id="workspace-preview">
         <SidebarProvider
@@ -741,8 +789,8 @@ export function WorkspaceShellPreview({
                     fullBleed
                       ? "flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
                       : islandState === "maximized"
-                        ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
-                        : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3"
+                        ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background tour-scroll-lock"
+                        : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3 tour-scroll-lock"
                   }
                 >
                   <AnimatePresence initial={false} mode="wait">
@@ -792,6 +840,7 @@ export function WorkspaceShellPreview({
                                   </EmptyHeader>
                                   <EmptyContent>
                                     <Button
+                                      data-tour="onboarding-new-project"
                                       onClick={() =>
                                         createProjectDispatch({ type: "OPEN" })
                                       }
@@ -815,6 +864,7 @@ export function WorkspaceShellPreview({
                     </motion.div>
                   </AnimatePresence>
                 </div>
+                {tour}
               </section>
             </div>
             <div
@@ -880,6 +930,7 @@ export function WorkspaceShellPreview({
                     onSelectCrawl={selectCrawl}
                     onSelectProject={selectProject}
                     onSelectWorkspace={selectWorkspace}
+                    lockedOpenItem={lockedDockItem}
                     pathname={location.pathname}
                     projectId={activeProject?.id}
                     projects={projects}
@@ -1020,6 +1071,7 @@ export function WorkspaceShellPreview({
                     initials={initials}
                     isPlatformAdmin={isPlatformAdmin}
                     onLogout={() => void workspaceActions.handleLogout()}
+                    onTakeTour={requestOnboardingReplay}
                     profileActionError={workspaceActions.profileActionError}
                     userName={userName}
                     workspaceState={workspaceActions.workspaceState}
@@ -1224,5 +1276,6 @@ export function WorkspaceShellPreview({
         />
       </LayoutGroup>
     </SetInsightsNavbarLabel.Provider>
+    </OnboardingUiContext.Provider>
   )
 }

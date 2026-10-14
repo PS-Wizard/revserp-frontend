@@ -91,6 +91,9 @@ type WorkspaceDockNavProps = {
   projectId?: string | null
   view: DashboardView
   visibilityMode?: VisibilityMode
+  /** Tour-held open menu; undefined keeps the internal hover state. */
+  lockedOpenItem?: string | null
+  onLockedOpenItemChange?: (next: string | null) => void
 }
 
 /**
@@ -125,6 +128,8 @@ export function WorkspaceDockNav({
   trailing,
   view,
   visibilityMode = "maps",
+  lockedOpenItem,
+  onLockedOpenItemChange,
 }: WorkspaceDockNavProps) {
   const navigate = useNavigate()
   // Controlled so a click can dismiss the mega menu before the project panel
@@ -150,13 +155,18 @@ export function WorkspaceDockNav({
         closeDelay={180}
         delay={0}
         onValueChange={(next: string | null) => {
+          if (lockedOpenItem !== undefined) {
+            // Tour-held menu stays open; the overlay owns pointer control.
+            onLockedOpenItemChange?.(next)
+            return
+          }
           if (clickLocked) return
           if (next === null && contextOpen) return
           setOpenItem(next)
         }}
         side="bottom"
         sideOffset={10}
-        value={openItem}
+        value={lockedOpenItem ?? openItem}
       >
         <NavigationMenuList onPointerLeave={() => setClickLocked(false)}>
           <NavigationMenuItem value="projects">
@@ -246,6 +256,7 @@ export function WorkspaceDockNav({
             return (
               <NavigationMenuItem key={group.key} value={group.key}>
                 <NavigationMenuTrigger
+                  data-tour={group.key === "audit" ? "onboarding-audit-nav" : undefined}
                   // Clicking the group name goes to that group's landing tab. The
                   // groups are built in landing order, so the first tab is the one
                   // to land on: Overview, Search Console, Competitors, CMS.
@@ -467,6 +478,11 @@ function DockActions({ actions }: { actions: DockActionItem[] }) {
         ) : (
           <li key={action.key}>
             <button
+              data-tour={
+                action.key === "business-profile"
+                  ? "onboarding-business-profile-row"
+                  : undefined
+              }
               className={cn(
                 "relative z-10 flex w-full cursor-pointer items-center gap-2 rounded-md bg-transparent px-2 py-1.5 text-left text-sm transition-colors duration-150 hover:bg-transparent disabled:pointer-events-none disabled:opacity-40",
                 action.destructive ? "text-destructive" : "text-foreground"

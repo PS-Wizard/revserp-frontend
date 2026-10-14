@@ -47,6 +47,10 @@ import {
   workFromUndoResponse,
   type WorkStatusFilter,
 } from "~/components/issue-explorer/utils"
+import {
+  dispatchOnboardingBucketDrill,
+  dispatchOnboardingIssueDrill,
+} from "~/components/onboarding/onboarding-ui"
 import { useRevbotStartPrompt } from "~/components/revbot/revbot-start-prompt-context"
 import { useDragSelection } from "~/components/issue-explorer/use-drag-selection"
 import { formatBucketLabel } from "~/lib/utils"
@@ -847,6 +851,8 @@ export const IssueExplorer = memo(function IssueExplorer({
       const row = bucketRows.find((r) => r.key === key)
       if (!row || row.bucket.issue_row_count === 0) return
       dispatch({ type: "DRILL_BUCKET", payload: key })
+      // Real drill signal for the onboarding tour.
+      dispatchOnboardingBucketDrill({ bucketId: row.bucket.id, hasIssues: true })
     },
     [bucketRows]
   )
@@ -856,6 +862,8 @@ export const IssueExplorer = memo(function IssueExplorer({
       const row = issueTypeRows.find((r) => r.id === key)
       if (!row || row.issue_row_count === 0) return
       dispatch({ type: "DRILL_ISSUE_TYPE", payload: key })
+      // Real drill signal for the onboarding tour.
+      dispatchOnboardingIssueDrill({ issueTypeId: key })
     },
     [issueTypeRows]
   )
@@ -1215,6 +1223,11 @@ export const IssueExplorer = memo(function IssueExplorer({
 
 <div className="px-(--card-spacing)">
         {drilledBucket && drilledIssueType ? (
+          <div
+            data-tour="onboarding-issue-detail"
+            data-tour-bucket={drilledBucket.bucket.id}
+            data-tour-issue={drilledIssueTypeId ?? ""}
+          >
           <UrlIssueTable
             checkedKeys={checkedUrlKeys}
             crawlId={scopedIssueUrls?.pageCrawlId ?? crawlId}
@@ -1231,7 +1244,12 @@ export const IssueExplorer = memo(function IssueExplorer({
             onUndo={undo}
             isPending={isPending}
           />
+          </div>
         ) : drilledBucket ? (
+          <div
+            data-tour="onboarding-issue-bucket"
+            data-tour-bucket={drilledBucket.bucket.id}
+          >
           <IssueTypeTable
             checkedKeys={checkedIssueTypeKeys}
             getRowProps={issueTypeDrag.getRowProps}
@@ -1241,6 +1259,7 @@ export const IssueExplorer = memo(function IssueExplorer({
             rows={paginatedIssueTypeRows}
             totalRows={issueTypeRows.length}
           />
+          </div>
         ) : effectivePillar ? (
           <BucketTable
             checkedKeys={checkedBucketKeys}

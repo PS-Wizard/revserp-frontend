@@ -16,7 +16,7 @@ mock.module("apexcharts", () => ({
 
 mock.module("~/components/ui/dialog", () => ({
   Dialog: ({ open, children }: any) => (open ? <>{children}</> : null),
-  DialogContent: ({ children }: any) => <div>{children}</div>,
+  DialogContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <div>{children}</div>,
   DialogDescription: ({ children }: any) => <div>{children}</div>,

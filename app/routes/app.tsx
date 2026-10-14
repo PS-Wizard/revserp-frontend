@@ -67,6 +67,7 @@ import {
 import { Tabs, TabsContent } from "~/components/ui/tabs"
 
 import { useCrawlTracking } from "~/hooks/use-crawl-tracking"
+import { useOnboardingState } from "~/hooks/use-onboarding-state"
 import { useProjectSetup } from "~/hooks/use-project-setup"
 import { OrganizationEventsProvider } from "~/hooks/use-organization-events"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
@@ -82,6 +83,8 @@ import type {
   ProjectResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
+import { OnboardingTour } from "~/components/onboarding/onboarding-tour"
+import { isOnboardingSetupRunning } from "~/lib/onboarding-state"
 
 // Lazy so d3-force and the canvas renderer stay out of the main bundle
 // until the Site-Graph tab is opened.
@@ -609,6 +612,18 @@ export default function AppPage() {
   )
   const isOrganizationOwner = activeOrganization?.role === "owner"
 
+  // Backend-persisted onboarding tour; fetched separately from bootstrap.
+  const {
+    onboarding,
+    onboardingScopeKey,
+    saveOnboardingCheckpoint,
+    skipOnboardingTour,
+    completeOnboardingTour,
+  } = useOnboardingState({
+    orgId: me.active_org_id,
+    userId: me.user.id,
+  })
+
   const activeRunningCrawl =
     sortedCrawls.find(
       (crawl) => crawl.status === "queued" || crawl.status === "running"
@@ -685,6 +700,23 @@ export default function AppPage() {
     stableSortedCompletedCrawls.find(
       (crawl) => crawl.id === previousCrawl?.id
     ) ?? previousCrawl
+
+  // Onboarding tour inputs: real readiness, never timers or clicks alone.
+  const onboardingResultsReady =
+    stableCurrentCrawl?.status === "completed" &&
+    (stableCurrentBreakdown?.pillars.length ?? 0) > 0
+  const onboardingBucketCount = useMemo(
+    () =>
+      stableCurrentBreakdown?.pillars.find((pillar) => pillar.id === "seo")
+        ?.buckets.length ??
+      stableCurrentBreakdown?.pillars.reduce(
+        (total, pillar) => total + pillar.buckets.length,
+        0,
+      ) ??
+      0,
+    [stableCurrentBreakdown]
+  )
+  const onboardingSetupRunning = isOnboardingSetupRunning(activeSetup?.status)
 
   const coverRef = useRef<HTMLDivElement>(null)
   const overallRef = useRef<HTMLDivElement>(null)
@@ -817,9 +849,35 @@ export default function AppPage() {
             view={view}
             visibilityMode={getVisibilityMode(location.search)}
             fullBleed={false}
+            tour={
+              <OnboardingTour
+                auditTab={auditTab}
+                bucketCount={onboardingBucketCount}
+                businessProfileAvailable
+                completeOnboardingTour={completeOnboardingTour}
+                crawlId={stableCurrentCrawl?.id}
+                hasProjects={projects.length > 0}
+                integrationsAvailable={
+                  me.features?.gsc_connector !== false &&
+                  me.features?.integrations !== false
+                }
+                locationScoped={locationWorkspace !== null}
+                onAuditTabChange={handleAuditTabChange}
+                onViewChange={handleViewChange}
+                onboarding={onboarding}
+                onboardingScopeKey={onboardingScopeKey}
+                projectId={activeProject?.id}
+                resultsReady={onboardingResultsReady}
+                revbotAvailable={me.features?.ai_chat === true}
+                saveOnboardingCheckpoint={saveOnboardingCheckpoint}
+                setupPanelVisible={showProjectSetup}
+                setupRunning={onboardingSetupRunning}
+                skipOnboardingTour={skipOnboardingTour}
+                view={view}
+              />
+            }
           >
             {cancelDialog}
-
             {outlet ?? (locationWorkspace ? (
               <Suspense fallback={null}>
                 <LocationWorkspaceView

@@ -611,6 +611,7 @@ export type AIAuditResponse = {
   id: string
   project_id: string
   crawl_id?: string
+  project_setup_id?: string
   location_id?: string
   status:
     "queued" | "running" | "completed" | "completed_with_failures" | "failed"

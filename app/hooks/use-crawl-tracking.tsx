@@ -5,7 +5,9 @@ import {
   CancelCrawlDialog,
   type CancelCrawlTarget,
 } from "~/components/cancel-crawl-dialog"
+import { useQueryClient } from "@tanstack/react-query"
 import { clientApiFetch } from "~/lib/api"
+import { isSetupManagedCrawl } from "~/lib/setup-crawl"
 import type {
   ActiveCrawlsResponse,
   CrawlEventPayload,
@@ -109,6 +111,8 @@ export function useCrawlTracking({
   cancelDialog: React.ReactNode
 } {
   const trackedIdsRef = useRef<Set<string>>(new Set())
+  const suppressedSetupCrawlIdsRef = useRef<Set<string>>(new Set())
+  const scopeEpochRef = useRef(0)
   // Last status seen per tracked crawl, so a status change (e.g. queued ->
   // running -> terminal) refetches the loader and keeps the navbar in sync
   // with live events instead of showing stale loader data.
@@ -118,6 +122,7 @@ export function useCrawlTracking({
   )
 
   const orgIdRef = useRef(orgId)
+  const queryClient = useQueryClient()
   orgIdRef.current = orgId
   const projectNameByIdRef = useRef(projectNameById)
   projectNameByIdRef.current = projectNameById
@@ -147,6 +152,15 @@ export function useCrawlTracking({
           return
         }
         goToCrawlRef.current(crawl.project_id, id)
+      }
+      const notifyCrawlComplete = () => {
+        toast.success("Crawl complete", {
+          id,
+          description: projectName
+            ? `${projectName} is ready to review.`
+            : undefined,
+          action: { label: "View", onClick: openTrackedCrawl },
+        })
       }
       // In-flight crawls get View + Cancel side by side. Rendered as a raw
       // element (not sonner's {label,onClick}) so the Cancel click opens the
@@ -262,21 +276,39 @@ export function useCrawlTracking({
         case "completed":
           trackedIdsRef.current.delete(id)
           lastStatusRef.current.delete(id)
-          toast.success(
-            competitor ? "Competitor crawl complete" : "Crawl complete",
-            {
+          if (competitor) {
+            toast.success("Competitor crawl complete", {
               id,
-              description: competitor
-                ? competitorLabel
-                  ? `${competitorLabel} is ready to review.`
-                  : "Ready to review."
-                : projectName
-                  ? `${projectName} is ready to review.`
-                  : undefined,
-              action: {
-                label: "View",
-                onClick: openTrackedCrawl,
-              },
+              description: competitorLabel
+                ? `${competitorLabel} is ready to review.`
+                : "Ready to review.",
+              action: { label: "View", onClick: openTrackedCrawl },
+            })
+            break
+          }
+          if (suppressedSetupCrawlIdsRef.current.has(id)) {
+            toast.dismiss(id)
+            break
+          }
+          const epoch = scopeEpochRef.current
+          void isSetupManagedCrawl(
+            queryClient,
+            orgIdRef.current,
+            crawl.project_id,
+            id
+          ).then(
+            (setupManaged) => {
+              if (epoch !== scopeEpochRef.current) return
+              if (setupManaged || suppressedSetupCrawlIdsRef.current.has(id)) {
+                suppressedSetupCrawlIdsRef.current.add(id)
+                toast.dismiss(id)
+              } else {
+                notifyCrawlComplete()
+              }
+            },
+            () => {
+              if (epoch !== scopeEpochRef.current) return
+              notifyCrawlComplete()
             }
           )
           break
@@ -301,7 +333,7 @@ export function useCrawlTracking({
           break
       }
     },
-    []
+    [queryClient]
   )
 
   const handleCrawlEvent = useCallback(
@@ -360,12 +392,14 @@ export function useCrawlTracking({
     void syncActiveCrawls()
 
     return () => {
+      scopeEpochRef.current += 1
       for (const id of trackedIdsRef.current) {
         toast.dismiss(id)
       }
       // Org switch: drop old-org ids so they are never applied under the
       // next org.
       trackedIdsRef.current.clear()
+      suppressedSetupCrawlIdsRef.current.clear()
       lastStatusRef.current.clear()
     }
   }, [orgId, syncActiveCrawls])

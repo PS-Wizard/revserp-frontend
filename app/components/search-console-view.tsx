@@ -330,7 +330,10 @@ export const SearchConsoleView = memo(function SearchConsoleView({
   if (gscStatus?.has_google_connection && gscStatus.connected) {
     return (
       <>
-        <div className="mx-4 mt-6 sm:mx-6 lg:mx-4">
+        <div
+          className="mx-4 mt-6 sm:mx-6 lg:mx-4"
+          data-tour="onboarding-integrations-gsc"
+        >
           <ProjectGoogleAccountBar
             currentPropertyId={
               gscStatus.selected_site?.site_url ?? selectedGSCSiteURL
@@ -600,7 +603,7 @@ function GSCStateCard({
   action?: React.ReactNode
 }) {
   return (
-    <div className="p-6">
+    <div className="p-6" data-tour="onboarding-integrations-gsc">
       <Card className="bg-gradient-to-br from-card via-card to-muted/30">
         <CardHeader>
           <CardTitle className="text-4xl font-medium tracking-[-0.06em] sm:text-5xl">

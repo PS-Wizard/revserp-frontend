@@ -86,6 +86,7 @@ export function DynamicIslandDockedChrome({
         render={
           <motion.button
             aria-label="Chat with Revbot (Command or Control + K)"
+            data-tour="onboarding-revbot-launcher"
             className={cn(
               "revbot-docked-launcher surface-dialog pointer-events-auto flex items-center justify-center overflow-hidden rounded-full border border-border",
               islandDockedSizeClass
@@ -222,7 +223,7 @@ export function DynamicIslandPanel({
                 render={
                   <button
                     aria-label="Switch conversation"
-                    className="flex max-w-full min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1 text-foreground hover:bg-white/10 data-[popup-open]:bg-white/10"
+                    data-tour="onboarding-revbot-history"
                     title={title}
                     type="button"
                   />

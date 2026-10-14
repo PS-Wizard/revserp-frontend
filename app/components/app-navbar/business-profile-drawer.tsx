@@ -144,6 +144,7 @@ export function BusinessProfileDrawer({
       }}
     >
       <DrawerContent
+        data-tour="onboarding-business-profile-panel"
         className={cn(FULLSCREEN_SHEET, SIDE_DRAWER_LAYER)}
         overlayClassName={SIDE_DRAWER_LAYER}
       >

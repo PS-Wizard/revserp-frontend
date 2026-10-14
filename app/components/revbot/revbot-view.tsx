@@ -1142,6 +1142,7 @@ export function RevbotViewContent({
       {compact && !hideHistory ? (
         <aside
           aria-label="Conversation history"
+          data-tour="onboarding-revbot-history"
           className={cn(
             "flex min-h-0 flex-col pr-3",
             isDark

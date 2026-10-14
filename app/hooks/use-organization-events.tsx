@@ -150,6 +150,8 @@ export function OrganizationEventsProvider({
   const listenersRef = useRef(new Set<OrganizationEventListener>())
   // Infinite loading toasts this provider owns; dismissed on org switch/unmount.
   const activeLoadingToastsRef = useRef(new Set<string>())
+  const suppressedSetupAuditIdsRef = useRef(new Set<string>())
+  const scopeEpochRef = useRef(0)
 
   const subscribe = useCallback((listener: OrganizationEventListener) => {
     listenersRef.current.add(listener)
@@ -226,15 +228,55 @@ export function OrganizationEventsProvider({
               queryKey: ["ai-audit", auditId],
             })
           }
-          if (!toastId) return
+          if (!auditId || !toastId) return
           activeLoadingToastsRef.current.delete(toastId)
-          if (type === "ai_audit.completed") {
+          const notifyVisibilityComplete = () => {
             toast.success("Visibility test complete", {
               description: "Open the results to review your rankings.",
               id: toastId,
               action,
             })
-          } else if (type === "ai_audit.completed_with_failures") {
+          }
+          if (type === "ai_audit.completed") {
+            if (suppressedSetupAuditIdsRef.current.has(auditId)) {
+              toast.dismiss(toastId)
+              return
+            }
+            const setupId = event.payload.project_setup_id
+            if (typeof setupId === "string" && setupId.trim()) {
+              suppressedSetupAuditIdsRef.current.add(auditId)
+              toast.dismiss(toastId)
+              return
+            }
+            const epoch = scopeEpochRef.current
+            void queryClient
+              .fetchQuery({
+                queryKey: ["ai-audit", auditId],
+                queryFn: () =>
+                  clientApiFetch<AIAuditResponse>(`/ai-audits/${auditId}`),
+              })
+              .then(
+                (audit) => {
+                  if (epoch !== scopeEpochRef.current) return
+                  const marker = audit?.project_setup_id
+                  if (
+                    typeof marker === "string" &&
+                    marker.trim()
+                  ) {
+                    suppressedSetupAuditIdsRef.current.add(auditId)
+                    toast.dismiss(toastId)
+                  } else {
+                    notifyVisibilityComplete()
+                  }
+                },
+                () => {
+                  if (epoch !== scopeEpochRef.current) return
+                  notifyVisibilityComplete()
+                }
+              )
+            return
+          }
+          if (type === "ai_audit.completed_with_failures") {
             toast.warning("Visibility test finished with issues", {
               description:
                 "Some questions could not be answered. Review the results for details.",
@@ -466,10 +508,12 @@ export function OrganizationEventsProvider({
     void connect()
 
     return () => {
+      scopeEpochRef.current += 1
       cancelled = true
       controller.abort()
       for (const id of activeLoadingToastsRef.current) toast.dismiss(id)
       activeLoadingToastsRef.current.clear()
+      suppressedSetupAuditIdsRef.current.clear()
     }
   }, [orgId, dispatchEvent])
 

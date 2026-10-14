@@ -67,7 +67,7 @@ export const OverviewPillarScoresSection = memo(
     const currentBreakdown = crawlBreakdowns[currentIndex]?.breakdown
 
     return (
-      <div>
+      <div data-tour="onboarding-overview">
         <PillarScoresRow
           breakdown={currentBreakdown}
           onSelectPillar={onSelectPillar}
@@ -104,20 +104,24 @@ export const PillarScoresRow = memo(function PillarScoresRow({
         title="Overall Score"
       />
       {charts.pillars.map((pillar) => (
-        <ScoreRadialChart
+        <div
+          data-tour={pillar.id === "seo" ? "onboarding-score-card-seo" : undefined}
           key={pillar.id}
-          centerLabel={pillar.label}
-          centerValue={pillar.centerValue}
-          description="Current crawl bucket scores"
-          onSelect={
-            onSelectPillar
-              ? () => onSelectPillar(pillar.id as OverviewPillarId)
-              : undefined
-          }
-          selectLabel={`Open ${pillar.label} tab`}
-          segments={pillar.segments}
-          title={`${pillar.label} Score`}
-        />
+        >
+          <ScoreRadialChart
+            centerLabel={pillar.label}
+            centerValue={pillar.centerValue}
+            description="Current crawl bucket scores"
+            onSelect={
+              onSelectPillar
+                ? () => onSelectPillar(pillar.id as OverviewPillarId)
+                : undefined
+            }
+            selectLabel={`Open ${pillar.label} tab`}
+            segments={pillar.segments}
+            title={`${pillar.label} Score`}
+          />
+        </div>
       ))}
     </div>
   )

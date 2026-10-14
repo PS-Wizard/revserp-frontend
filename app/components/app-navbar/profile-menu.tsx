@@ -1,7 +1,13 @@
 import { useNavigate } from "react-router"
 import { useEffect, useRef, useState } from "react"
 
-import { DownloadIcon, LogOutIcon, MoonIcon, ShieldIcon } from "lucide-react"
+import {
+  DownloadIcon,
+  LogOutIcon,
+  MoonIcon,
+  RouteIcon,
+  ShieldIcon,
+} from "lucide-react"
 
 import { toast } from "sonner"
 import { ThinkingOrb } from "thinking-orbs"
@@ -33,6 +39,8 @@ type ProfileMenuProps = {
   userName?: string
   isPlatformAdmin: boolean
   onLogout: () => void
+  /** Manual replay entry; the tour never auto-shows after dismiss. */
+  onTakeTour?: () => void
 }
 
 function isStandaloneMode() {
@@ -65,6 +73,7 @@ export function ProfileMenu({
   userName,
   isPlatformAdmin,
   onLogout,
+  onTakeTour,
 }: ProfileMenuProps) {
   const navigate = useNavigate()
   const isLoggingOut = workspaceState === "logging-out"
@@ -193,6 +202,20 @@ export function ProfileMenu({
             <MoonIcon />
             Dark mode
           </DropdownMenuCheckboxItem>
+          {onTakeTour ? (
+            <DropdownMenuItem
+              className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+              onClick={onTakeTour}
+              onMouseEnter={() => showProfilePill(4)}
+              ref={(element) => {
+                profileItemRefs.current[4] = element
+              }}
+              variant="default"
+            >
+              <RouteIcon />
+              Take the tour
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuGroup>
         {isStandalone ? null : (
           <>

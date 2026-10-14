@@ -23,15 +23,18 @@ type ToastRecord = {
 type ToastAction = { label: string; onClick: () => void | Promise<void> }
 
 const toastCalls: ToastRecord[] = []
+const dismissCalls: unknown[] = []
 let restoreToast: () => void = () => {}
-
 beforeEach(() => {
   toastCalls.length = 0
+  dismissCalls.length = 0
+  auditGate = null
   const originals = {
     success: toast.success,
     error: toast.error,
     warning: toast.warning,
     loading: toast.loading,
+    dismiss: toast.dismiss,
   }
   const capture =
     (kind: ToastKind) => (message: unknown, options?: Record<string, unknown>) => {
@@ -42,11 +45,15 @@ beforeEach(() => {
   toast.error = capture("error") as typeof toast.error
   toast.warning = capture("warning") as typeof toast.warning
   toast.loading = capture("loading") as typeof toast.loading
+  toast.dismiss = ((id?: string | number) => {
+    dismissCalls.push(id)
+  }) as typeof toast.dismiss
   restoreToast = () => {
     toast.success = originals.success
     toast.error = originals.error
     toast.warning = originals.warning
     toast.loading = originals.loading
+    toast.dismiss = originals.dismiss
   }
 })
 
@@ -78,20 +85,21 @@ async function mountEvent(
   payload: Record<string, unknown>,
   audit: AIAuditResponse,
   viewed: string[],
-  auditFetchFails = false
+  auditFetchFails = false,
+  repeat = 1,
 ) {
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input)
     if (url.includes("/organizations/org-1/events")) {
-      return new Response(
-        `event: ${type}\nid: 1\ndata: ${JSON.stringify({
-          organization_id: "org-1",
-          project_id: audit.project_id,
-          resource_id: audit.id,
-          payload,
-        })}\n\n`,
-        { headers: { "Content-Type": "text/event-stream" } }
-      )
+      const frame = `event: ${type}\nid: 1\ndata: ${JSON.stringify({
+        organization_id: "org-1",
+        project_id: audit.project_id,
+        resource_id: audit.id,
+        payload,
+      })}\n\n`
+      return new Response(frame.repeat(Math.max(1, repeat)), {
+        headers: { "Content-Type": "text/event-stream" },
+      })
     }
     if (url.endsWith(`/ai-audits/${audit.id}`)) {
       if (auditFetchFails) {
@@ -123,20 +131,79 @@ async function mountEvent(
       </QueryClientProvider>
     )
     await flushTestDom()
-    await flushTestDom()
+    for (let i = 0; i < 8; i++) await flushTestDom()
   })
 }
 
-function audit(locationId?: string): AIAuditResponse {
+function audit(locationId?: string, setupId?: string): AIAuditResponse {
   return {
     id: "audit-1",
     project_id: "project-1",
     crawl_id: "crawl-1",
+    ...(setupId ? { project_setup_id: setupId } : {}),
     location_id: locationId,
     status: "completed",
     created_at: "2026-10-07T00:00:00Z",
     updated_at: "2026-10-07T00:00:00Z",
   }
+}
+
+let auditGate: {
+  resolve: (response: Response) => void
+  reject: (reason: unknown) => void
+} | null = null
+
+function stubDeferredAuditStream(framedOrg: string) {
+  globalThis.fetch = ((input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes("/events")) {
+      if (url.includes(`/organizations/${framedOrg}/events`)) {
+        return Promise.resolve(
+          new Response(
+            `event: ai_audit.completed\nid: 1\ndata: ${JSON.stringify({
+              organization_id: framedOrg,
+              project_id: "project-1",
+              resource_id: "audit-1",
+              payload: {},
+            })}\n\n`,
+            { headers: { "Content-Type": "text/event-stream" } },
+          )
+        )
+      }
+      return Promise.resolve(new Response("", { headers: { "Content-Type": "text/event-stream" } }))
+    }
+    if (url.endsWith("/ai-audits/audit-1")) {
+      return new Promise<Response>((resolve, reject) => {
+        auditGate = { resolve, reject }
+      })
+    }
+    return Promise.reject(new Error(`unexpected request ${url}`))
+  }) as typeof fetch
+}
+
+async function renderStreamProvider(orgId: string) {
+  if (!client) client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  if (!host) {
+    host = document.createElement("div")
+    document.body.appendChild(host)
+    root = createRoot(host)
+  }
+  await act(async () => {
+    root?.render(
+      <QueryClientProvider client={client!}>
+        <OrganizationEventsProvider
+          orgId={orgId}
+          onReady={() => {}}
+          onCrawlEvent={() => {}}
+          onViewVisibility={() => {}}
+          revalidate={() => {}}
+        >
+          {null}
+        </OrganizationEventsProvider>
+      </QueryClientProvider>,
+    )
+    for (let i = 0; i < 8; i++) await flushTestDom()
+  })
 }
 
 test("location completion toast resolves audit scope before opening results", async () => {
@@ -203,4 +270,94 @@ test("metadata fetch failure keeps visibility on a safe scope", async () => {
     (call) => call.message === "Could not open visibility results"
   )
   expect(error).toBeTruthy()
+})
+
+test("setup visibility success from the event marker is dismissed", async () => {
+  await mountEvent("ai_audit.completed", { project_setup_id: "setup-1" }, audit(), [])
+  expect(toastCalls.filter((call) => call.kind === "success")).toEqual([])
+  expect(dismissCalls).toContain("ai-audit-audit-1")
+})
+
+test("old payload without the marker falls back to the fetched audit", async () => {
+  await mountEvent("ai_audit.completed", {}, audit(undefined, "setup-1"), [])
+  expect(toastCalls.filter((call) => call.kind === "success")).toEqual([])
+  expect(dismissCalls).toContain("ai-audit-audit-1")
+})
+
+test("standalone audit on the same crawl keeps its success", async () => {
+  await mountEvent("ai_audit.completed", {}, audit(), [])
+  const done = toastCalls.filter(
+    (call) => call.kind === "success" && call.message === "Visibility test complete"
+  )
+  expect(done.length).toBe(1)
+  expect(dismissCalls).toEqual([])
+})
+
+test("unmarked audit with a failed metadata fetch fails open to success", async () => {
+  await mountEvent("ai_audit.completed", {}, audit(), [], true)
+  expect(
+    toastCalls.filter((call) => call.kind === "success" && call.message === "Visibility test complete").length
+  ).toBe(1)
+})
+
+test("setup visibility warnings and failures stay visible", async () => {
+  await mountEvent("ai_audit.completed_with_failures", { project_setup_id: "setup-1" }, audit(), [])
+  expect(
+    toastCalls.filter((call) => call.kind === "warning").length
+  ).toBe(1)
+  await mountEvent("ai_audit.failed", { project_setup_id: "setup-1", error: "x" }, audit(), [])
+  expect(toastCalls.filter((call) => call.kind === "error").length).toBe(1)
+  expect(dismissCalls).toEqual([])
+})
+
+test("replayed setup completion stays dismissed", async () => {
+  await mountEvent("ai_audit.completed", { project_setup_id: "setup-1" }, audit(), [], false, 2)
+  expect(toastCalls.filter((call) => call.kind === "success")).toEqual([])
+  expect(dismissCalls.filter((id) => id === "ai-audit-audit-1").length).toBe(2)
+})
+
+test("visibility progress toasts are unchanged for setup audits", async () => {
+  await mountEvent("ai_audit.started", { project_setup_id: "setup-1" }, audit(), [])
+  expect(toastCalls.filter((call) => call.kind === "loading").length).toBe(1)
+})
+
+test("unmounted visibility lookup resolves silently", async () => {
+  stubDeferredAuditStream("org-1")
+  await renderStreamProvider("org-1")
+  expect(auditGate === null).toBe(false)
+  await act(async () => {
+    root?.unmount()
+    root = null
+    await flushTestDom()
+  })
+  await act(async () => {
+    auditGate!.resolve(Response.json(audit(undefined, "setup-1")))
+    for (let i = 0; i < 8; i++) await flushTestDom()
+  })
+  expect(toastCalls.filter((call) => call.kind === "success")).toEqual([])
+  expect(dismissCalls).toEqual([])
+})
+
+test("stale visibility resolve across org switches stays silent", async () => {
+  stubDeferredAuditStream("org-1")
+  await renderStreamProvider("org-1")
+  expect(auditGate === null).toBe(false)
+  await renderStreamProvider("org-2")
+  await act(async () => {
+    auditGate!.resolve(Response.json(audit(undefined, "setup-1")))
+    for (let i = 0; i < 8; i++) await flushTestDom()
+  })
+  expect(toastCalls.filter((call) => call.kind === "success")).toEqual([])
+  expect(dismissCalls).toEqual([])
+  await renderStreamProvider("org-1")
+  expect(auditGate === null).toBe(false)
+  await act(async () => {
+    auditGate!.resolve(Response.json(audit()))
+    for (let i = 0; i < 8; i++) await flushTestDom()
+  })
+  expect(
+    toastCalls.filter((call) => call.kind === "success" && call.message === "Visibility test complete")
+      .length
+  ).toBe(1)
+  expect(dismissCalls).toEqual([])
 })

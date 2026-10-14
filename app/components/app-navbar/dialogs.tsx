@@ -47,7 +47,7 @@ export function CreateProjectDialog({
 }: CreateProjectDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
-      <DialogContent>
+      <DialogContent data-tour="onboarding-create-form">
         <DialogHeader>
           <DialogTitle>Create project</DialogTitle>
           <DialogDescription>
