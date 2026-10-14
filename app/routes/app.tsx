@@ -71,6 +71,7 @@ import { useOnboardingState } from "~/hooks/use-onboarding-state"
 import { useProjectSetup } from "~/hooks/use-project-setup"
 import { OrganizationEventsProvider } from "~/hooks/use-organization-events"
 import { useSessionRenewal } from "~/hooks/use-session-renewal"
+import { useLastActiveProject } from "~/hooks/use-last-active-project"
 import { ApiError, clientApiFetch, serverApiFetch } from "~/lib/api"
 import { getAIAuditResultsPath } from "~/lib/ai-audit-results"
 import { describeCrawlAnalysisProgress } from "~/lib/crawl"
@@ -357,6 +358,11 @@ export default function AppPage() {
   const navigationLocation = navigation.location ?? location
   const outlet = useOutlet()
   useSessionRenewal(sessionExpiresAt, sessionRenewAfter)
+  useLastActiveProject({
+    userId: me.user.id,
+    activeProjectId: activeProject?.id ?? null,
+    projects,
+  })
   const [view, setView] = useState<DashboardView>(() =>
     getInitialWorkspaceView(location.search)
   )
