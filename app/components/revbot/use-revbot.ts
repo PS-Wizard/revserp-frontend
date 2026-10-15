@@ -88,6 +88,7 @@ type SendOptions = {
   retryAfterAssistantMessageId?: string
   /** Keep the auto-retry counter; a fresh send resets it. */
   autoRetry?: boolean
+  crawlId?: string
 }
 
 type StoredConversation = { conversationId: string; turnId?: string }
@@ -497,6 +498,7 @@ export function useRevbot({
   >(() => false)
   const decidingApprovalRef = useRef<string | null>(null)
   const answeringQuestionRef = useRef<string | null>(null)
+  const sendCrawlIdRef = useRef<string | null>(null)
   const questionsRef = useRef<UserQuestionRequest[]>([])
   /** Latest turn-snapshot sync; assigned after observe (observe calls it via ref). */
   const syncTurnSnapshotRef = useRef(
@@ -679,6 +681,7 @@ export function useRevbot({
       conversationIdRef.current = conversation.id
       notifyConversationChange(conversation.id)
       turnIdRef.current = null
+      sendCrawlIdRef.current = null
       statusRef.current = "idle"
       activeRequestRef.current = false
       lastObservedTurnRef.current = null
@@ -1492,6 +1495,7 @@ export function useRevbot({
     conversationLocationRef.current = null
     conversationIdRef.current = null
     turnIdRef.current = null
+    sendCrawlIdRef.current = null
     statusRef.current = "idle"
     activeRequestRef.current = false
     lastObservedTurnRef.current = null
@@ -1656,6 +1660,7 @@ export function useRevbot({
       const generation = generationRef.current
       stopObserver()
       turnIdRef.current = null
+      sendCrawlIdRef.current = null
       statusRef.current = "idle"
       activeRequestRef.current = false
       lastObservedTurnRef.current = null
@@ -1768,6 +1773,7 @@ export function useRevbot({
     stopObserver()
     conversationIdRef.current = null
     turnIdRef.current = null
+    sendCrawlIdRef.current = null
     statusRef.current = "idle"
     activeRequestRef.current = false
     lastObservedTurnRef.current = null
@@ -1882,6 +1888,10 @@ export function useRevbot({
       userStopRequestedRef.current = false
       stopObserver()
       const retryAssistantId = options?.retryAfterAssistantMessageId
+      const sendCrawlId = options?.crawlId?.trim()
+        ? options.crawlId
+        : undefined
+      sendCrawlIdRef.current = sendCrawlId ?? null
       if (!options?.autoRetry) autoRetryAttemptsRef.current = 0
       const optimisticUser = userMessage(trimmed, images)
       const optimisticAssistant = assistantMessage()
@@ -1980,6 +1990,7 @@ export function useRevbot({
             images: hasImages ? images : undefined,
             reasoning_effort: effort,
             client_request_id: crypto.randomUUID(),
+            crawl_id: sendCrawlId,
           }
         )
         if (
@@ -2132,6 +2143,7 @@ export function useRevbot({
           images: userMessageEntry.images,
           retryAfterAssistantMessageId: assistant.id,
           autoRetry: true,
+          crawlId: sendCrawlIdRef.current ?? undefined,
         })
       }, AUTO_RETRY_DELAY_MS)
       return true
@@ -2163,6 +2175,7 @@ export function useRevbot({
       void send(userMessage.content, {
         images: userMessage.images,
         retryAfterAssistantMessageId: assistantMessageId,
+        crawlId: sendCrawlIdRef.current ?? undefined,
       })
     },
     [send]

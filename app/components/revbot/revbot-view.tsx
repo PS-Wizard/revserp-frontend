@@ -65,6 +65,7 @@ import { RevbotComposer } from "./revbot-composer"
 import { RevbotExportableTable } from "./revbot-exportable-table"
 import { RevbotMarkdown } from "./revbot-markdown"
 import { RevbotMessageActions } from "./revbot-message-actions"
+import { RevbotAuditSuggestionStarters } from "./revbot-audit-suggestion-starters"
 import { RevbotTurnActivity } from "./revbot-turn-activity"
 import { MCPApprovalCard } from "./mcp-approval-card"
 import {
@@ -73,6 +74,7 @@ import {
 } from "./revbot-question-card"
 import { resolvedQuestionRequests } from "./revbot-user-questions"
 import { pendingApprovalsForTurn } from "./mcp-approval-copy"
+import type { RevbotAuditSuggestion } from "./revbot-audit-suggestions"
 import { isTurnActiveStatus } from "./use-revbot"
 import { isActiveAssistantMessage } from "./revbot-replay-state"
 import type { RevbotHandle } from "./use-revbot"
@@ -544,6 +546,7 @@ export function RevbotViewContent({
   onTitleChange,
   showMessageAvatar = false,
   showMic,
+  suggestions,
   variant,
 }: {
   activeProject: ProjectResponse
@@ -561,6 +564,7 @@ export function RevbotViewContent({
   showMessageAvatar?: boolean
   showMic: boolean
   variant: "default" | "dark"
+  suggestions?: RevbotAuditSuggestion[]
 }) {
   const [historyOpen, setHistoryOpen] = useState(defaultHistoryOpen)
   const [historySearch, setHistorySearch] = useState("")
@@ -649,6 +653,11 @@ export function RevbotViewContent({
   )
   const pendingQuestion = revbot.pendingQuestion ?? null
   const waitingForQuestion = revbot.waitingForQuestion ?? false
+  const suggestionsBusy =
+    revbot.loading ||
+    active ||
+    waitingForQuestion ||
+    pendingApprovals.length > 0
   const resolvedQuestions = useMemo(
     () => resolvedQuestionRequests(revbot.questions ?? []),
     [revbot.questions]
@@ -810,10 +819,21 @@ export function RevbotViewContent({
               >
                 {revbot.messages.length === 0 ? (
                   <MessageScrollerItem className="flex min-h-full items-center justify-center">
-                    <RevbotEmptyState
-                      isDark={isDark}
-                      projectName={activeProject.name}
-                    />
+                    <div className="flex w-full flex-col items-center">
+                      <RevbotEmptyState
+                        isDark={isDark}
+                        projectName={activeProject.name}
+                      />
+                      <RevbotAuditSuggestionStarters
+                        disabled={suggestionsBusy}
+                        onSelect={(suggestion) =>
+                          void revbot.send(suggestion.message, {
+                            crawlId: suggestion.crawlId,
+                          })
+                        }
+                        suggestions={suggestions ?? []}
+                      />
+                    </div>
                   </MessageScrollerItem>
                 ) : (
                   <>

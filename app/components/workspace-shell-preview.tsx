@@ -100,6 +100,7 @@ import type {
   CrawlResponse,
   CrawlsResponse,
   ProjectResponse,
+  ScoreBreakdownResponse,
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
 import { toast } from "sonner"
@@ -109,6 +110,7 @@ import {
   requestOnboardingReplay,
 } from "~/components/onboarding/onboarding-ui"
 import { LocationWebsiteScopeSettingsButton } from "~/components/locations/location-website-scope-settings"
+import { selectRevbotAuditSuggestions } from "~/components/revbot/revbot-audit-suggestion-starters"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
 
 type CreateProjectState = {
@@ -274,6 +276,7 @@ export type WorkspaceShellPreviewProps = AppNavbarProps & {
   tour?: ReactNode
   /** Stable user scope for per-user crawl preferences; falls back to userEmail. */
   userId?: string | null
+  currentBreakdown?: ScoreBreakdownResponse | null
 }
 
 export function WorkspaceShellPreview({
@@ -303,6 +306,7 @@ export function WorkspaceShellPreview({
   isPlatformAdmin,
   isExportingAudit,
   fullBleed = false,
+  currentBreakdown,
 }: WorkspaceShellPreviewProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -550,6 +554,16 @@ export function WorkspaceShellPreview({
   )
   const isRevbotTurnActive =
     islandRevbot.status === "queued" || islandRevbot.status === "running"
+  const revbotAuditSuggestions = useMemo(
+    () =>
+      selectRevbotAuditSuggestions({
+        breakdown: currentBreakdown,
+        currentCrawl,
+        activeProjectId,
+        isLocationScoped,
+      }),
+    [currentBreakdown, currentCrawl, activeProjectId, isLocationScoped]
+  )
   const revbotStartPromptValue = useMemo(
     () => ({
       startPrompt: startRevbotPrompt,
@@ -1253,6 +1267,7 @@ export function WorkspaceShellPreview({
                         onInternalLink={handleRevbotInternalLink}
                         onTitleChange={setIslandConversationTitle}
                         revbot={islandRevbot}
+                        suggestions={revbotAuditSuggestions}
                         showMessageAvatar={islandState === "maximized"}
                         showMic
                         variant="dark"

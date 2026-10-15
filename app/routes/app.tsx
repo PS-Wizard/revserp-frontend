@@ -844,6 +844,7 @@ export default function AppPage() {
               compareSides ? `vs ${compareSides.b.projectName}` : null
             }
             crawlStatusLabel={crawlStatusLabel}
+            currentBreakdown={stableCurrentBreakdown}
             currentCrawl={currentCrawl}
             isCrawlRunning={isCrawlRunning}
             isExportingAudit={isExporting}

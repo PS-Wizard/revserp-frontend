@@ -76,6 +76,7 @@ function pendingApproval(): CMSApproval {
 }
 
 let turnFixture: AITurnResponse
+let sentTurnFixture: AITurnResponse | null = null
 let conversationTwoDetail: AIConversationDetailResponse
 
 function resetFixtures() {
@@ -117,6 +118,7 @@ function resetFixtures() {
       { ...message("a-2", "assistant", "Done deal"), status: "complete" },
     ],
   }
+  sentTurnFixture = null
 }
 
 function conversationOneDetail(): AIConversationDetailResponse {
@@ -189,6 +191,38 @@ function installFetch() {
         conversations: [],
         pagination: { limit: 50, offset: 0, count: 0, total: 0 },
       })
+    }
+    if (
+      url.includes("/projects/p-1/ai/conversations") &&
+      method === "POST" &&
+      !url.includes("/turns")
+    ) {
+      return Response.json({
+        id: "c-9",
+        project_id: "p-1",
+        created_by_user_id: "user-1",
+        title: "New conversation",
+        created_at: T,
+        updated_at: T,
+        turn_status: null,
+        turn_id: null,
+      })
+    }
+    if (url.includes("/ai/conversations/c-9/turns") && method === "POST") {
+      return Response.json({
+        conversation_id: "c-9",
+        turn_id: "t-9",
+        user_message_id: "u-9",
+        assistant_message_id: "a-9",
+        status: "queued",
+      })
+    }
+    if (
+      url.includes("/ai/turns/t-9") &&
+      !url.includes("/events") &&
+      sentTurnFixture
+    ) {
+      return Response.json(sentTurnFixture)
     }
     return Response.json({}, { status: 404 })
   }
@@ -503,6 +537,110 @@ describe("useRevbot snapshot and stream lifecycle", () => {
       expect(postCalls().length).toBe(0)
     } finally {
       await unmountHook(second.root)
+    }
+  })
+})
+
+describe("useRevbot crawl pinning", () => {
+  const FIX_PROMPT = "Help me fix the Meta Tags bucket under SEO."
+
+  function turnPosts() {
+    return fetchCalls.filter(
+      (call) =>
+        call.method === "POST" && call.url.includes("/ai/conversations/c-9/turns")
+    )
+  }
+
+  function failedSentTurn(): AITurnResponse {
+    return {
+      id: "t-9",
+      conversation_id: "c-9",
+      status: "failed",
+      requested_effort: "none",
+      effective_effort: "none",
+      model: "m",
+      attempt_count: 1,
+      cancel_requested: false,
+      prompt_tokens: null,
+      reasoning_tokens: null,
+      completion_tokens: null,
+      total_tokens: null,
+      error_code: "provider_timeout",
+      queued_at: T,
+      started_at: T,
+      completed_at: T,
+      created_at: T,
+      updated_at: T,
+      messages: [
+        message("u-9", "user", FIX_PROMPT),
+        message("a-9", "assistant", "Hello"),
+      ],
+      tool_calls: [],
+      event_cursor: 4,
+      approvals: [],
+    }
+  }
+
+  test("send with a crawl pins crawl_id on the turn", async () => {
+    const { root, handleRef } = await mountHook(null)
+    try {
+      await act(async () => {
+        await handleRef.current?.send(FIX_PROMPT, { crawlId: "crawl-1" })
+        await flushRevbot()
+        await flushRevbot()
+      })
+      const posts = turnPosts()
+      expect(posts.length).toBe(1)
+      const firstBody = posts[0]?.body as Record<string, unknown>
+      expect(firstBody.content).toBe(FIX_PROMPT)
+      expect(firstBody.crawl_id).toBe("crawl-1")
+    } finally {
+      await unmountHook(root)
+    }
+  })
+
+  test("send without a crawl omits crawl_id for legacy turns", async () => {
+    const { root, handleRef } = await mountHook(null)
+    try {
+      await act(async () => {
+        await handleRef.current?.send("plain question")
+        await flushRevbot()
+        await flushRevbot()
+      })
+      const posts = turnPosts()
+      expect(posts.length).toBe(1)
+      const legacyBody = posts[0]?.body as Record<string, unknown>
+      expect(legacyBody.content).toBe("plain question")
+      expect("crawl_id" in legacyBody).toBe(false)
+    } finally {
+      await unmountHook(root)
+    }
+  })
+
+  test("auto-retry keeps the selected crawl instead of dropping it", async () => {
+    const { root, handleRef } = await mountHook(null)
+    try {
+      await act(async () => {
+        await handleRef.current?.send(FIX_PROMPT, { crawlId: "crawl-1" })
+        await flushRevbot()
+        await flushRevbot()
+      })
+      expect(turnPosts().length).toBe(1)
+      sentTurnFixture = failedSentTurn()
+      await act(async () => {
+        sseStreams[0]?.push(sseFrame(5, "failed", {}))
+        await flushRevbot()
+        await flushRevbot()
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        await flushRevbot()
+      })
+      const posts = turnPosts()
+      expect(posts.length).toBe(2)
+      const retryBody = posts[1]?.body as Record<string, unknown>
+      expect(retryBody.content).toBe(FIX_PROMPT)
+      expect(retryBody.crawl_id).toBe("crawl-1")
+    } finally {
+      await unmountHook(root)
     }
   })
 })
