@@ -22,15 +22,9 @@ import {
   DrawerNested,
   DrawerTitle,
 } from "~/components/ui/drawer"
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "~/components/ui/field"
+import { Field, FieldDescription, FieldLabel } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
 import { Textarea } from "~/components/ui/textarea"
-import { BusinessProfileServicesEditor } from "~/components/business-profile-services-editor"
-import { LocationProfileServicesField } from "~/components/app-navbar/location-profile-services-field"
 import { ProjectProfileCompetitorRoster } from "~/components/app-navbar/project-profile-competitor-roster"
 import type { useBusinessProfile } from "~/components/app-navbar/use-business-profile"
 import type { ProjectAIQuestionsResponse } from "~/lib/api.types"
@@ -77,10 +71,8 @@ export function BusinessProfileDrawer({
 }) {
   const {
     businessProfileProject,
-    businessProfileLocationId,
     businessProfileLocationName,
     isLocationScoped,
-    profileServices,
     brandName,
     websiteUrl,
     primaryCategory,
@@ -111,7 +103,6 @@ export function BusinessProfileDrawer({
     setProductDescription,
     setTargetAudience,
     setBusinessCompetitors,
-    setProfileServices,
   } = businessProfile
 
   const [competitorsOpen, setCompetitorsOpen] = useState(false)
@@ -331,7 +322,7 @@ export function BusinessProfileDrawer({
                         </Field>
                         <Field>
                           <FieldLabel htmlFor="business-product-description">
-                            Products the business sells
+                            Products and services
                           </FieldLabel>
                           <Textarea
                             className="field-sizing-content min-h-24 resize-none"
@@ -344,9 +335,8 @@ export function BusinessProfileDrawer({
                             value={productDescription}
                           />
                           <FieldDescription className={HINT_CLASS}>
-                            The products you sell, in plain terms. Services are
-                            managed separately in Services the business sells
-                            below.
+                            Describe the products and services this business
+                            sells.
                           </FieldDescription>
                         </Field>
                         <Field className="sm:col-span-2">
@@ -369,23 +359,6 @@ export function BusinessProfileDrawer({
                           </FieldDescription>
                         </Field>
                       </div>
-                      {businessProfileProject ? (
-                        isLocationScoped && businessProfileLocationId ? (
-                          <LocationProfileServicesField
-                            key={`${businessProfileProject.id}:${businessProfileLocationId}`}
-                            services={profileServices}
-                            disabled={fieldsDisabled}
-                            onChange={setProfileServices}
-                          />
-                        ) : (
-                          <BusinessProfileServicesEditor
-                            key={businessProfileProject.id}
-                            projectId={businessProfileProject.id}
-                            canManage={canManageBusinessProfile}
-                            disabled={fieldsDisabled}
-                          />
-                        )
-                      ) : null}
                     </section>
 
                     <section className="flex flex-col gap-4">
@@ -399,7 +372,11 @@ export function BusinessProfileDrawer({
                           description="Businesses you compete with."
                           icon={Swords}
                           label="Competitors"
-                          meta={isLocationScoped ? `${countList(businessCompetitors)}` : undefined}
+                          meta={
+                            isLocationScoped
+                              ? `${countList(businessCompetitors)}`
+                              : undefined
+                          }
                           onOpen={() => setCompetitorsOpen(true)}
                         />
                         <SectionRow

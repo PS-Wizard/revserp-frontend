@@ -8,6 +8,26 @@ export function getCrawlTimestamp(crawl: CrawlResponse) {
   return new Date(getCrawlReferenceTimestamp(crawl)).getTime()
 }
 
+/** Completed crawl duration excludes queue time; unavailable timestamps return null. */
+export function formatCrawlDuration(crawl: CrawlResponse): string | null {
+  if (crawl.status !== "completed" || !crawl.started_at || !crawl.completed_at) {
+    return null
+  }
+  const elapsedMs = Date.parse(crawl.completed_at) - Date.parse(crawl.started_at)
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return null
+  if (elapsedMs > 0 && elapsedMs < 1000) return "<1s"
+
+  const totalSeconds = Math.floor(elapsedMs / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor(totalSeconds / 60) % 60
+  const seconds = totalSeconds % 60
+  return [
+    hours ? `${hours}h` : "",
+    minutes ? `${minutes}m` : "",
+    seconds || totalSeconds === 0 ? `${seconds}s` : "",
+  ].filter(Boolean).join(" ")
+}
+
 // Why one mapping: the crawl toast and the competitor cards must read the same.
 export function describeCrawlAnalysisProgress(
   progress: CrawlAnalysisProgress | null | undefined

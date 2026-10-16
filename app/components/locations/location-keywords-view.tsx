@@ -22,7 +22,6 @@ import {
   KeywordCardSkeleton,
   KeywordCloudCard,
   KeywordCloudMessage,
-  KeywordSelectionCheckbox,
   keywordCardClass,
   keywordErrorMessage,
 } from "~/components/keyword-management/keyword-card-parts"
@@ -31,12 +30,11 @@ import { OverviewKeywordCloud } from "~/components/overview-keyword-cloud"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
 import { Card } from "~/components/ui/card"
-import { Separator } from "~/components/ui/separator"
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group"
 import {
   LOCATION_KEYWORD_MAX_PHRASE_RUNES,
-  buildLocationSelectedUnionRows,
-  isLocationSelectedUnionRowChecked,
+  buildLocationCombinedRows,
+  deselectLocationKeywords,
   locationKeywordCoverageQueryKey,
   locationKeywordKindPhrases,
   locationKeywordListsQueryKey,
@@ -46,12 +44,11 @@ import {
   putLocationKeywordLists,
   renameLocationKeyword,
   setLocationKeywordKindPhrases,
-  toggleLocationSelectedUnionRow,
   type LocationKeywordGroup,
   type LocationKeywordKind,
   type LocationKeywordListsWrite,
   type LocationKeywordSuggestionSource,
-  type LocationSelectedUnionRow,
+  type LocationCombinedRow,
 } from "~/lib/location-keywords-api"
 import { refreshLocalSeoLandmarks } from "~/lib/local-seo-api"
 import { useOptionalLocationWorkspace } from "~/lib/location-workspace"
@@ -102,27 +99,6 @@ function KeywordListToolbar({ children }: { children: ReactNode }) {
   )
 }
 
-function BulkKeywordButton({
-  label,
-  disabled,
-  onClick,
-}: {
-  label: string
-  disabled: boolean
-  onClick: () => void
-}) {
-  return (
-    <Button
-      disabled={disabled}
-      onClick={onClick}
-      size="xs"
-      type="button"
-      variant="ghost"
-    >
-      {label}
-    </Button>
-  )
-}
 
 function KeywordRemoveButton({
   phrase,
@@ -353,21 +329,23 @@ export function LocationKeywordsView({ projectId, locationId }: Props) {
     })
   }
 
+  const combinedRows = useMemo(
+    () =>
+      buildLocationCombinedRows(
+        lists.user_defined,
+        lists.revserp_suggested,
+        lists.selected
+      ),
+    [lists.user_defined, lists.revserp_suggested, lists.selected]
+  )
+
   const cloudItems = useMemo(() => {
     const items: CombinedProjectKeyword[] = []
-    const seen = new Set<string>()
-    const add = (kind: LocationKeywordKind, phrases: string[]) => {
-      for (const phrase of phrases) {
-        const key = `${kind}:${normalizeLocationKeywordKey(phrase)}`
-        if (seen.has(key)) continue
-        seen.add(key)
-        items.push({ keyword: phrase, kind, sources: [] })
-      }
+    for (const row of combinedRows) {
+      items.push({ keyword: row.phrase, kind: row.kind, sources: [] })
     }
-    add("brand", lists.selected.branded)
-    add("non_brand", lists.selected.non_branded)
     return items
-  }, [lists])
+  }, [combinedRows])
 
   async function saveLists(next: LocationKeywordListsWrite) {
     if (!projectId || !locationId || mutating) return
@@ -413,56 +391,6 @@ export function LocationKeywordsView({ projectId, locationId }: Props) {
     }
   }
 
-  const unionRows = useMemo(
-    () =>
-      buildLocationSelectedUnionRows(
-        lists.user_defined,
-        lists.revserp_suggested,
-        lists.selected
-      ),
-    [lists.user_defined, lists.revserp_suggested, lists.selected]
-  )
-
-  function toggleUnionRow(row: LocationSelectedUnionRow) {
-    if (disabled) return
-    void saveLists({
-      user_defined: lists.user_defined,
-      selected: toggleLocationSelectedUnionRow(lists.selected, row),
-    })
-  }
-
-  function selectAllUnion() {
-    if (disabled) return
-    const brand = unionRows
-      .filter(
-        (row) =>
-          row.kind === "brand" &&
-          !isLocationSelectedUnionRowChecked(lists.selected, row)
-      )
-      .map((row) => row.phrase)
-    const nonBrand = unionRows
-      .filter(
-        (row) =>
-          row.kind === "non_brand" &&
-          !isLocationSelectedUnionRowChecked(lists.selected, row)
-      )
-      .map((row) => row.phrase)
-    void saveLists({
-      user_defined: lists.user_defined,
-      selected: {
-        branded: [...lists.selected.branded, ...brand],
-        non_branded: [...lists.selected.non_branded, ...nonBrand],
-      },
-    })
-  }
-
-  function deselectAllUnion() {
-    if (disabled) return
-    void saveLists({
-      user_defined: lists.user_defined,
-      selected: { branded: [], non_branded: [] },
-    })
-  }
 
   function addUserKeyword(kind: LocationKeywordKind, rawPhrase: string) {
     if (disabled) return
@@ -493,7 +421,11 @@ export function LocationKeywordsView({ projectId, locationId }: Props) {
         kind,
         next
       ),
-      selected: lists.selected,
+      selected: deselectLocationKeywords(
+        deselectLocationKeywords(lists.selected, "brand", [phrase]),
+        "non_brand",
+        [phrase]
+      ),
     })
   }
 
@@ -584,18 +516,15 @@ export function LocationKeywordsView({ projectId, locationId }: Props) {
           />
         </div>
         <div className="min-h-0">
-          <SelectedKeywordsCard
-            key={`selected-${cardKey}`}
-            disabled={disabled}
+          <CombinedKeywordsCard
+            key={`combined-${cardKey}`}
             errorText={loadErrorMessage}
-            onDeselectAll={deselectAllUnion}
             onRetry={() => void listsQuery.refetch()}
-            onSelectAll={selectAllUnion}
-            onToggle={toggleUnionRow}
             origins={lists.suggested_origins}
-            rows={unionRows}
-            selected={lists.selected}
+            rows={combinedRows}
             status={status}
+            suggested={lists.revserp_suggested}
+            userDefined={lists.user_defined}
           />
         </div>
       </div>
@@ -603,17 +532,17 @@ export function LocationKeywordsView({ projectId, locationId }: Props) {
       <div className="grid min-w-0 gap-5 max-lg:auto-rows-[30rem] lg:h-[44rem] lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
         <div className="min-h-0">
           <KeywordsCoverage
-            emptyDescription="Select keywords in the cards above to measure whole-site coverage."
+            emptyDescription="Save keywords in the cards above to measure whole-site coverage."
             key={`coverage-${cardKey}`}
             locationId={locationId}
             projectId={projectId}
-            scopeNotice="Measured across the whole parent website using this location's selected keywords."
+            scopeNotice="Measured across the whole parent website using this location's combined keywords."
           />
         </div>
         <div className="min-h-0">
           <KeywordCloudCard>
             {cloudItems.length === 0 ? (
-              <KeywordCloudMessage text="Tick selected keywords to see them here." />
+              <KeywordCloudMessage text="Save keywords above to see them here." />
             ) : (
               <OverviewKeywordCloud items={cloudItems} />
             )}
@@ -912,102 +841,80 @@ function SuggestedKeywordsCard({
   )
 }
 
-const UNION_ORIGIN_LABELS: Record<LocationSelectedUnionRow["origin"], string> = {
-  user: "Yours",
-  suggested: "Suggested",
-  "selected-only": "Selected",
-}
-
-function SelectedKeywordsCard({
+function CombinedKeywordsCard({
   rows,
-  selected,
   origins,
+  suggested,
+  userDefined,
   status,
   errorText,
-  disabled,
-  onToggle,
-  onSelectAll,
-  onDeselectAll,
   onRetry,
 }: {
-  rows: LocationSelectedUnionRow[]
-  selected: LocationKeywordGroup
+  rows: LocationCombinedRow[]
   origins: Record<string, LocationKeywordSuggestionSource[]>
+  suggested: LocationKeywordGroup
+  userDefined: LocationKeywordGroup
   status: ListsStatus
   errorText: string
-  disabled: boolean
-  onToggle: (row: LocationSelectedUnionRow) => void
-  onSelectAll: () => void
-  onDeselectAll: () => void
   onRetry: () => void
 }) {
-  const selectedCount = rows.filter((row) =>
-    isLocationSelectedUnionRowChecked(selected, row)
-  ).length
+  const [tab, setTab] = useState<LocationKeywordKind>("brand")
+  const brandRows = rows.filter((row) => row.kind === "brand")
+  const nonBrandRows = rows.filter((row) => row.kind === "non_brand")
+  const visible = tab === "brand" ? brandRows : nonBrandRows
+  const userKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const phrase of [...userDefined.branded, ...userDefined.non_branded])
+      keys.add(normalizeLocationKeywordKey(phrase))
+    return keys
+  }, [userDefined])
+  const suggestedKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const phrase of [...suggested.branded, ...suggested.non_branded])
+      keys.add(normalizeLocationKeywordKey(phrase))
+    return keys
+  }, [suggested])
 
   return (
     <Card className={keywordCardClass}>
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-4">
-        <h3 className="font-heading text-base font-semibold tracking-tight">
-          Selected keywords
-        </h3>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {selectedCount} of {rows.length} selected
-        </span>
-      </div>
-      <Separator />
+      <KeywordCardHeader
+        brandCount={brandRows.length}
+        nonBrandCount={nonBrandRows.length}
+        onTab={setTab}
+        tab={tab}
+        title="Combined keywords"
+      />
       {status === "loading" ? (
         <KeywordCardSkeleton />
       ) : status === "error" ? (
         <KeywordCardError message={errorText} onRetry={onRetry} />
       ) : (
-        <>
-          <KeywordListToolbar>
-            <BulkKeywordButton
-              disabled={disabled || rows.length === 0}
-              label="Select all"
-              onClick={onSelectAll}
-            />
-            <BulkKeywordButton
-              disabled={disabled || selectedCount === 0}
-              label="Deselect all"
-              onClick={onDeselectAll}
-            />
-          </KeywordListToolbar>
-          <KeywordCardList
-            emptyMessage="No keyword candidates yet. Add your own keywords or run Find keywords to choose from."
-            getKey={(row) => row.key}
-            getPhrase={(row) => row.phrase}
-            items={rows}
-            leading={(row) => (
-              <KeywordSelectionCheckbox
-                checked={isLocationSelectedUnionRowChecked(selected, row)}
-                disabled={disabled}
-                onToggle={() => onToggle(row)}
-                phrase={row.phrase}
-              />
-            )}
-            trailing={(row) => (
-              <span className="flex shrink-0 flex-wrap items-center gap-1">
+        <KeywordCardList
+          emptyMessage={`No ${KEYWORD_KIND_LABELS[tab].toLowerCase()} keywords yet. Add your own keywords or run Find keywords.`}
+          getKey={(row) => row.key}
+          getPhrase={(row) => row.phrase}
+          items={visible}
+          rowClassName="flex-wrap items-center gap-x-2 gap-y-1"
+          trailing={(row) => (
+            <span className="flex shrink-0 flex-wrap items-center gap-1">
+              {userKeys.has(row.key) ? (
                 <Badge className="text-[0.65rem]" variant="secondary">
-                  {KEYWORD_KIND_LABELS[row.kind]}
+                  User-defined
                 </Badge>
+              ) : null}
+              {suggestedKeys.has(row.key) ? (
                 <Badge className="text-[0.65rem]" variant="outline">
-                  {UNION_ORIGIN_LABELS[row.origin]}
+                  Revserp suggested
                 </Badge>
-                {row.origin === "suggested" ? (
-                  <SuggestionSourceBadges
-                    sources={origins[row.key] ?? []}
-                  />
-                ) : null}
-              </span>
-            )}
-          />
-          <div className="flex shrink-0 items-center gap-2 border-t border-border/40 px-5 py-2.5 text-xs text-muted-foreground">
-            <TagsIcon aria-hidden="true" className="size-3.5 shrink-0" />
-            Only checked keywords persist as selected and feed future Maps runs.
-          </div>
-        </>
+              ) : null}
+              {suggestedKeys.has(row.key) ? (
+                <SuggestionSourceBadges
+                  sources={origins[row.key] ?? []}
+                />
+              ) : null}
+            </span>
+          )}
+        />
       )}
     </Card>
   )

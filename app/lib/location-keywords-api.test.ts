@@ -2,11 +2,9 @@ import { describe, expect, test } from "bun:test"
 
 import {
   LOCATION_KEYWORD_MAX_PHRASE_RUNES,
-  buildLocationSelectedUnionRows,
+  buildLocationCombinedRows,
   emptyLocationKeywordGroup,
   isLocationKeywordSelected,
-  isLocationSelectedUnionRowChecked,
-  toggleLocationSelectedUnionRow,
   locationKeywordGroupPhrases,
   locationKeywordKindPhrases,
   normalizeLocationKeywordKey,
@@ -90,11 +88,11 @@ describe("location keyword helpers", () => {
     expect(normalized.suggested_origins).toEqual({})
   })
 
-  test("union rows dedupe both sources and keep selected-only leftovers", () => {
-    const rows = buildLocationSelectedUnionRows(
+  test("combined rows dedupe sources, keep legacy leftovers, source kind wins", () => {
+    const rows = buildLocationCombinedRows(
       { branded: ["Acme"], non_branded: ["Plumber"] },
       { branded: ["acme", "Acme Plumbing"], non_branded: [] },
-      { branded: ["Old Pick"], non_branded: [] }
+      { branded: ["Old Pick"], non_branded: ["ACME"] }
     )
     expect(rows.map((row) => row.phrase)).toEqual([
       "Acme",
@@ -106,7 +104,7 @@ describe("location keyword helpers", () => {
       "user",
       "user",
       "suggested",
-      "selected-only",
+      "legacy",
     ])
     expect(rows.map((row) => row.kind)).toEqual([
       "brand",
@@ -116,29 +114,16 @@ describe("location keyword helpers", () => {
     ])
   })
 
-  test("union toggle clears either kind and adds back the stored kind", () => {
-    const rows = buildLocationSelectedUnionRows(
-      { branded: [], non_branded: [] },
-      { branded: [], non_branded: ["Plumber"] },
-      { branded: [], non_branded: ["Plumber"] }
-    )
-    expect(rows).toHaveLength(1)
-    expect(
-      isLocationSelectedUnionRowChecked(
-        { branded: [], non_branded: ["Plumber"] },
-        rows[0]!
-      )
-    ).toBe(true)
-    expect(
-      isLocationSelectedUnionRowChecked(emptyLocationKeywordGroup(), rows[0]!)
-    ).toBe(false)
-    const off = toggleLocationSelectedUnionRow(
-      { branded: ["Plumber"], non_branded: ["Plumber"] },
-      rows[0]!
-    )
-    expect(off).toEqual(emptyLocationKeywordGroup())
-    const on = toggleLocationSelectedUnionRow(emptyLocationKeywordGroup(), rows[0]!)
-    expect(on.non_branded).toEqual(["Plumber"])
-    expect(on.branded).toEqual([])
+  test("normalize promotes legacy saved terms into user-defined", () => {
+    const normalized = normalizeLocationKeywordLists({
+      can_manage_keywords: true,
+      user_defined: { branded: ["Acme"], non_branded: [] },
+      revserp_suggested: { branded: [], non_branded: ["Plumber"] },
+      selected: { branded: ["Old Pick", "acme"], non_branded: ["plumber"] },
+      suggested_origins: {},
+    })
+    expect(normalized.user_defined.branded).toEqual(["Acme", "Old Pick"])
+    expect(normalized.user_defined.non_branded).toEqual([])
+    expect(normalized.selected.branded).toEqual(["Old Pick", "acme"])
   })
 })

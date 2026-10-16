@@ -407,7 +407,9 @@ function LocalSeoRunOverview({
               ? ""
               : countLabel === "Count unknown"
                 ? ", returned count unknown"
-                : `, ${countLabel.replace("/query", "")} returned results per successful query`
+                : countLabel === "No results returned"
+                  ? ", no results returned"
+                  : `, ${countLabel.replace(" results/query", "")} returned results per successful query`
           return (
             <li key={sector} className="contents">
               <button

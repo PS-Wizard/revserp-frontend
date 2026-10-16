@@ -234,8 +234,8 @@ describe("location website audit view", () => {
 
   test("no scope renders a concise empty state with a settings action", () => {
     const html = renderView({ workspace: workspaceWith() })
-    expect(html).toContain("No branch website scope yet")
-    expect(html).toContain(">Set branch scope<")
+    expect(html).toContain("No dedicated website pages")
+    expect(html).toContain(">Add pages<")
     expect(html.includes("%")).toBe(false)
     expect(html.includes("Current crawl bucket scores")).toBe(false)
   })
@@ -244,9 +244,9 @@ describe("location website audit view", () => {
     const html = renderView({
       workspace: workspaceWith({ canManage: false }),
     })
-    expect(html).toContain("No branch website scope yet")
-    expect(html).toContain("Only managers can set the branch scope")
-    expect(html.includes(">Set branch scope<")).toBe(false)
+    expect(html).toContain("No dedicated website pages")
+    expect(html).toContain("Only managers can add website pages")
+    expect(html.includes(">Add pages<")).toBe(false)
   })
 
   test("scoped pillar tab shows derived scores with no inner chrome", () => {

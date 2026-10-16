@@ -185,10 +185,10 @@ export function LocationWebsiteAuditView({
           <EmptyMedia variant="icon">
             <GlobeIcon aria-hidden="true" className="size-8" />
           </EmptyMedia>
-          <EmptyTitle>No branch website scope yet</EmptyTitle>
+          <EmptyTitle>No dedicated website pages</EmptyTitle>
           <EmptyDescription>
-            Assign parent-site pages to this location to derive its audit
-            from stored crawl evidence.
+            Maps and AI visibility are available. Add location pages to enable
+            website audits.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
@@ -197,11 +197,11 @@ export function LocationWebsiteAuditView({
               projectId={projectId}
               locationId={locationId}
               workspace={workspace}
-              label="Set branch scope"
+              label="Add pages"
             />
           ) : (
             <p className="text-sm text-muted-foreground">
-              Only managers can set the branch scope.
+              Only managers can add website pages.
             </p>
           )}
         </EmptyContent>
@@ -312,7 +312,9 @@ function DerivedStatusSection({
   }
   if (isError) {
     const message =
-      error instanceof ApiError ? error.message : "Could not load the branch audit."
+      error instanceof ApiError
+        ? error.message
+        : "Could not load the branch audit."
     return (
       <Card>
         <CardHeader>

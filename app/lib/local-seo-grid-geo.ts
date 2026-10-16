@@ -48,7 +48,7 @@ export type GridGeoCellProperties = GridGeoCellStyle & {
   gridValue: string
   /** Map label rank line: Avg N for ranked means, otherwise the plain gridValue. */
   displayRank: string
-  /** Returned-results count line per successful query (N/query or min-max/query), Count unknown for recorded points, or empty for preview. */
+  /** Returned-results count line per successful query (No results returned for zero, else N results/query or min-max results/query), Count unknown for recorded points, or empty for preview. */
   resultCountLabel: string
   /** Exact frozen sample coordinates, or the spherical preview fallback. */
   latitude: number
@@ -396,12 +396,9 @@ function meanGridRank(cells: GridGeoCellSummary[]): number | null {
 }
 
 /**
- * Returned-results count per successful query for one grid point.
- * Only success_empty/success_nonempty cells count; failed/pending are ignored.
- * Returns null for preview points with no successful answers, Count unknown
- * when no successful cell has a known count or any successful count is
- * unknown, else N/query or min-max/query. Counts are stored raw places
- * entries (includes target/branches/duplicates), not distinct competitors.
+ * Returned business results per successful query, not distinct competitors.
+ * Failed/pending cells are excluded; unknown stored counts stay unknown.
+ * Returns null when no successful response is stored.
  */
 export function gridResultCountLabel(group: GridGeoCellSummary[]): string | null {
   const answered = group.filter((cell) => isGridSuccess(cell.call_status))
@@ -420,7 +417,8 @@ export function gridResultCountLabel(group: GridGeoCellSummary[]): string | null
   }
   const min = Math.min(...counts)
   const max = Math.max(...counts)
-  return min === max ? `${min}/query` : `${min}-${max}/query`
+  if (max === 0) return "No results returned"
+  return min === max ? `${min} results/query` : `${min}-${max} results/query`
 }
 
 /**

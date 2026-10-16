@@ -138,7 +138,7 @@ export function LocationWebsiteScopeSettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Website scope</DialogTitle>
+          <DialogTitle>Website pages</DialogTitle>
           <DialogDescription>
             {scope && scope.match !== "none" && scope.url
               ? `${describeLocationWebsiteScopeMatch(scope.match)} · ${scope.url} · Rev ${scope.revision}. Saving appends a revision; earlier revisions stay readable.`

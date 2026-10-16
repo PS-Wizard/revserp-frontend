@@ -759,7 +759,7 @@ describe("stored result counts per successful query", () => {
     return makeCell({ point_index, query_index, ...overrides })
   }
 
-  test("equal counts show Avg rank plus N/query, not a fraction of total", () => {
+  test("equal counts show Avg rank plus returned results/query, not a fraction of total", () => {
     const cells = [1, 6, 6, 15].map((rank, query_index) =>
       countCell(3, query_index, {
         call_status: "success_nonempty",
@@ -773,9 +773,9 @@ describe("stored result counts per successful query", () => {
     expect(properties.rank).toBe(7)
     expect(properties.gridValue).toBe("7")
     expect(properties.displayRank).toBe("Avg 7")
-    expect(properties.resultCountLabel).toBe("20/query")
+    expect(properties.resultCountLabel).toBe("20 results/query")
     expect(properties.label).toBe("D · 7")
-    expect(gridResultCountLabel(cells)).toBe("20/query")
+    expect(gridResultCountLabel(cells)).toBe("20 results/query")
   })
 
   test("unequal successful counts show an ASCII min-max range", () => {
@@ -783,9 +783,9 @@ describe("stored result counts per successful query", () => {
       countCell(3, 0, { call_status: "success_nonempty", match_status: "found", rank: 1, result_count: 15 }) ,
       countCell(3, 1, { call_status: "success_nonempty", match_status: "found", rank: 2, result_count: 20 }) ,
     ]
-    expect(gridResultCountLabel(cells)).toBe("15-20/query")
+    expect(gridResultCountLabel(cells)).toBe("15-20 results/query")
     const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[3].properties
-    expect(properties.resultCountLabel).toBe("15-20/query")
+    expect(properties.resultCountLabel).toBe("15-20 results/query")
     expect(properties.displayRank).toBe("Avg 1.5")
   })
 
@@ -801,7 +801,7 @@ describe("stored result counts per successful query", () => {
     const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[3].properties
     expect(properties.rank).toBe(7)
     expect(properties.meanRank).toBe(7)
-    expect(properties.resultCountLabel).toBe("20/query")
+    expect(properties.resultCountLabel).toBe("20 results/query")
   })
 
   test("missing or null counts read as Count unknown, failed rows ignored", () => {
@@ -819,21 +819,21 @@ describe("stored result counts per successful query", () => {
       countCell(3, 0, { call_status: "success_nonempty", match_status: "found", rank: 4, result_count: 20 }) ,
       countCell(3, 1, { call_status: "request_failed", match_status: "unknown", rank: null }) ,
     ]
-    expect(gridResultCountLabel(withFailed)).toBe("20/query")
+    expect(gridResultCountLabel(withFailed)).toBe("20 results/query")
     const collection = gridFeatureCollection(withFailed, FROZEN_CENTRE, FROZEN_RADIUS_M)
     expect(collection.features[3].properties.rank).toBe(4)
-    expect(collection.features[3].properties.resultCountLabel).toBe("20/query")
+    expect(collection.features[3].properties.resultCountLabel).toBe("20 results/query")
   })
 
-  test("empty successful answers with known zero still show a count", () => {
+  test("empty successful answers state that no results were returned", () => {
     const cells = [
       countCell(0, 0, { call_status: "success_empty", match_status: "absent", rank: null, result_count: 0 }) ,
     ]
-    expect(gridResultCountLabel(cells)).toBe("0/query")
+    expect(gridResultCountLabel(cells)).toBe("No results returned")
     const properties = gridFeatureCollection(cells, FROZEN_CENTRE, FROZEN_RADIUS_M).features[0].properties
     expect(properties.gridValue).toBe("Not found")
     expect(properties.displayRank).toBe("Not found")
-    expect(properties.resultCountLabel).toBe("0/query")
+    expect(properties.resultCountLabel).toBe("No results returned")
   })
 
   test("preview points with no successful answers keep empty counts", () => {
@@ -856,6 +856,6 @@ describe("stored result counts per successful query", () => {
     expect(properties.meanRank).toBe(4)
     expect(properties.gridValue).toBe("4")
     expect(properties.displayRank).toBe("Avg 4")
-    expect(properties.resultCountLabel).toBe("20/query")
+    expect(properties.resultCountLabel).toBe("20 results/query")
   })
 })

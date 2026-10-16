@@ -17,18 +17,18 @@ export const LOCATION_WEBSITE_SCOPE_MATCH_OPTIONS: ReadonlyArray<{
 }> = [
   {
     value: "exact",
-    title: "Exact page",
-    hint: "One page only, e.g. the location landing page.",
+    title: "One page on the main website",
+    hint: "Use only this location landing page.",
   },
   {
     value: "subtree",
-    title: "Page subtree",
-    hint: "The page and its descendants, e.g. /locations/springfield/.",
+    title: "A section of the main website",
+    hint: "Use this page and pages below it, such as /locations/parramatta/.",
   },
   {
     value: "none",
-    title: "No branch scope",
-    hint: "Removes the branch audit; keeps history readable.",
+    title: "No dedicated pages",
+    hint: "Maps and AI visibility still work. You can add pages later.",
   },
 ]
 

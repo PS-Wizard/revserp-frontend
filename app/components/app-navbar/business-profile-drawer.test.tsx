@@ -23,12 +23,10 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-const { BusinessProfileDrawer } = await import(
-  "~/components/app-navbar/business-profile-drawer"
-)
-const { projectProfileCompetitorsQueryKey } = await import(
-  "~/components/app-navbar/project-profile-competitor-roster"
-)
+const { BusinessProfileDrawer } =
+  await import("~/components/app-navbar/business-profile-drawer")
+const { projectProfileCompetitorsQueryKey } =
+  await import("~/components/app-navbar/project-profile-competitor-roster")
 const { localSeoProjectServicesQueryKey } = await import("~/lib/local-seo-api")
 import type { ProjectCompetitorsResponse } from "~/lib/api.types"
 
@@ -115,29 +113,26 @@ afterEach(() => {
 })
 
 describe("business profile drawer offer ownership", () => {
-  test("products field is renamed and preserves legacy text with separate-services help", async () => {
+  test("products and services share one field and preserve existing text", async () => {
     renderDrawer(makeBusinessProfile())
     await act(async () => {
       await flushTestDom()
     })
     const html = document.body.innerHTML
-    expect(html).toContain("Products the business sells")
+    expect(html).toContain("Products and services")
     expect(html).toContain("legacy combined text stays verbatim")
-    expect(html.includes("Products and services")).toBe(false)
-    expect(html).toContain("Services the business sells")
+    expect(html.includes("Services the business sells")).toBe(false)
   })
 
-  test("embedded service catalog buttons never submit the profile form", async () => {
+  test("profile form has no separate service editor", async () => {
     renderDrawer(makeBusinessProfile())
     await act(async () => {
       await flushTestDom()
     })
     const html = document.body.innerHTML
-    expect(html).toContain("Services the business sells")
-    expect(html).toContain("Add service")
-    const submits = html.match(/type="submit"/g) ?? []
-    // Only the Save profile button submits; catalog + Close/Done are buttons.
-    expect(submits.length).toBe(1)
+    expect(html.includes("Services the business sells")).toBe(false)
+    expect(html.includes("Add service")).toBe(false)
+    expect((html.match(/type="submit"/g) ?? []).length).toBe(1)
   })
 
   test("read-only users get no service mutation controls", async () => {
@@ -146,7 +141,7 @@ describe("business profile drawer offer ownership", () => {
       await flushTestDom()
     })
     const html = document.body.innerHTML
-    expect(html).toContain("Services the business sells")
+    expect(html).toContain("Products and services")
     expect(html.includes("Add service")).toBe(false)
     expect(html).toContain("View-only access")
     expect(html).toContain("Workspace owners and managers")
@@ -154,8 +149,8 @@ describe("business profile drawer offer ownership", () => {
 })
 
 function openCompetitorsSubdrawer() {
-  const trigger = Array.from(document.querySelectorAll("button")).find((button) =>
-    button.textContent?.includes("Competitors")
+  const trigger = Array.from(document.querySelectorAll("button")).find(
+    (button) => button.textContent?.includes("Competitors")
   )
   if (!trigger) throw new Error("competitors row missing")
   trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }))
@@ -221,6 +216,8 @@ describe("business profile competitor scope", () => {
       })
     }
     expect(document.querySelector("#business-competitors") !== null).toBe(true)
-    expect(document.body.innerHTML.includes("Manage in Competitors")).toBe(false)
+    expect(document.body.innerHTML.includes("Manage in Competitors")).toBe(
+      false
+    )
   })
 })

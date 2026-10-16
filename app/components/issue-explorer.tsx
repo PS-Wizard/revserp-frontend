@@ -25,6 +25,12 @@ import {
   PillarTable,
   UrlIssueTable,
 } from "~/components/issue-explorer/tables"
+import {
+  buildIssueTypeDiffHistory,
+  historicalIssueTypeIdsFor,
+} from "~/components/issue-explorer/issue-type-diff-history"
+import { IssueTypeChangeCards } from "~/components/issue-explorer/issue-type-change-cards"
+import { useIssueTypeDiffBaseline } from "~/components/issue-explorer/use-issue-type-diff"
 import type {
   BucketScope,
   MergedIssueUrlRow,
@@ -250,6 +256,8 @@ function reducer(state: State, action: Action): State {
 }
 
 const EMPTY_PILLARS: ScoreBreakdownResponse["pillars"] = []
+const EMPTY_HISTORICAL_IDS: ReadonlySet<string> = new Set()
+
 
 export const IssueExplorer = memo(function IssueExplorer({
   breakdown,
@@ -330,6 +338,19 @@ export const IssueExplorer = memo(function IssueExplorer({
   const crawlId = breakdown?.crawl_id ?? ""
   const isScopedUrls = Boolean(scopedIssueUrls)
 
+  const diffBaselineEnabled =
+    !isScopedUrls && !scopedUrl && crawlId.length > 0
+  const diffBaselineQuery = useIssueTypeDiffBaseline(
+    diffBaselineEnabled ? crawlId : undefined,
+    diffBaselineEnabled
+  )
+  const baselineBreakdown = diffBaselineQuery.data?.baseline_breakdown ?? null
+
+  const diffHistory = useMemo(
+    () => buildIssueTypeDiffHistory(breakdown, baselineBreakdown),
+    [breakdown, baselineBreakdown]
+  )
+
   // --- Sync selected pillars (default: initial pillar, else all) ---
   syncSelectedPillars({
     initialPillarId,
@@ -348,32 +369,44 @@ export const IssueExplorer = memo(function IssueExplorer({
   const soloPillarId =
     selectedPillars.length === 1 ? selectedPillars[0].id : null
   const effectivePillarId = drilledPillarId ?? soloPillarId
+  const historicalOnlyPillars = useMemo(
+    () =>
+      diffHistory.pillars.filter(
+        (pillar) =>
+          diffHistory.historicalPillarIds.has(pillar.id) &&
+          !selectedPillarIds.includes(pillar.id)
+      ),
+    [diffHistory, selectedPillarIds]
+  )
+  // Resolve through the current/previous catalog union so baseline-only
+  // buckets and issue types stay discoverable below; identical reference
+  // when the baseline adds nothing, so the current view is untouched.
   const effectivePillar = useMemo(
     () =>
-      selectedPillars.find((pillar) => pillar.id === effectivePillarId) ?? null,
-    [selectedPillars, effectivePillarId]
+      diffHistory.pillars.find((pillar) => pillar.id === effectivePillarId) ??
+      null,
+    [diffHistory, effectivePillarId]
   )
 
-  const pillarRows = useMemo<PillarScope[]>(
-    () =>
-      [...selectedPillars]
-        .sort((left, right) => {
-          const leftZero = left.issue_row_count === 0 ? 1 : 0
-          const rightZero = right.issue_row_count === 0 ? 1 : 0
-          if (leftZero !== rightZero) return leftZero - rightZero
-          if (right.total_penalty !== left.total_penalty)
-            return right.total_penalty - left.total_penalty
-          return (
-            left.label.localeCompare(right.label) ||
-            left.id.localeCompare(right.id)
-          )
-        })
-        .map((pillar) => ({
-          key: pillar.id,
-          pillarLabel: pillar.label,
-          pillar,
-        })),
-    [selectedPillars]
+  const pillarRows = useMemo<PillarScope[]>(() =>
+    [...selectedPillars, ...historicalOnlyPillars]
+      .sort((left, right) => {
+        const leftZero = left.issue_row_count === 0 ? 1 : 0
+        const rightZero = right.issue_row_count === 0 ? 1 : 0
+        if (leftZero !== rightZero) return leftZero - rightZero
+        if (right.total_penalty !== left.total_penalty)
+          return right.total_penalty - left.total_penalty
+        return (
+          left.label.localeCompare(right.label) ||
+          left.id.localeCompare(right.id)
+        )
+      })
+      .map((pillar) => ({
+        key: pillar.id,
+        pillarLabel: pillar.label,
+        pillar,
+      })),
+    [selectedPillars, historicalOnlyPillars]
   )
 
   const bucketScopes = useMemo<BucketScope[]>(() => {
@@ -409,6 +442,20 @@ export const IssueExplorer = memo(function IssueExplorer({
     [bucketScopes, drilledBucketKey]
   )
 
+  const historicalIssueTypeIds = useMemo(
+    () =>
+      drilledBucket
+        ? historicalIssueTypeIdsFor(
+            diffHistory,
+            drilledBucket.pillarId,
+            drilledBucket.bucketId
+          )
+        : EMPTY_HISTORICAL_IDS,
+    [diffHistory, drilledBucket]
+  )
+
+
+
   const drilledIssueType = useMemo(
     () =>
       drilledBucket && drilledIssueTypeId
@@ -436,6 +483,7 @@ export const IssueExplorer = memo(function IssueExplorer({
         : [],
     [drilledBucket]
   )
+
 
   // The URL pager iterates bucket.issues, so scoping it to the single drilled
   // issue type filters server-side (no over-fetch). Non-null only at the URL
@@ -466,6 +514,7 @@ export const IssueExplorer = memo(function IssueExplorer({
       workActionsEnabled: true,
     })
   }, [crawlId])
+
 
   // --- Apply an external pillar, bucket, or issue type focus. ---
   const lastFocusTokenRef = useRef<number | null>(null)
@@ -651,6 +700,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     dispatch({ type: "SET_URL_PAGE_INDEX", payload: 0 })
   }, [])
 
+
   const isCurrentUrlState = urlState.key === urlCacheKey
   const displayedUrls = isCurrentUrlState ? urlState.pageRows : []
   const loadedUrls = isCurrentUrlState ? urlState.loadedRows : []
@@ -683,6 +733,7 @@ export const IssueExplorer = memo(function IssueExplorer({
     selectedUrlCount > 0 &&
     !recommendFixesOverLimit
   )
+
 
   const onRecommendFixes = useCallback(() => {
     if (
@@ -840,32 +891,44 @@ export const IssueExplorer = memo(function IssueExplorer({
   const handleDrillPillar = useCallback(
     (key: string) => {
       const row = pillarRows.find((r) => r.key === key)
-      if (!row || row.pillar.issue_row_count === 0) return
+      if (!row) return
+      if (
+        row.pillar.issue_row_count === 0 &&
+        !diffHistory.historicalPillarIds.has(key)
+      )
+        return
       dispatch({ type: "DRILL_PILLAR", payload: key })
     },
-    [pillarRows]
+    [pillarRows, diffHistory]
   )
 
   const handleDrillBucket = useCallback(
     (key: string) => {
       const row = bucketRows.find((r) => r.key === key)
-      if (!row || row.bucket.issue_row_count === 0) return
+      if (!row) return
+      if (
+        row.bucket.issue_row_count === 0 &&
+        !diffHistory.historicalBucketKeys.has(key)
+      )
+        return
       dispatch({ type: "DRILL_BUCKET", payload: key })
       // Real drill signal for the onboarding tour.
       dispatchOnboardingBucketDrill({ bucketId: row.bucket.id, hasIssues: true })
     },
-    [bucketRows]
+    [bucketRows, diffHistory]
   )
 
   const handleDrillIssueType = useCallback(
     (key: string) => {
       const row = issueTypeRows.find((r) => r.id === key)
-      if (!row || row.issue_row_count === 0) return
+      if (!row) return
+      if (row.issue_row_count === 0 && !historicalIssueTypeIds.has(key))
+        return
       dispatch({ type: "DRILL_ISSUE_TYPE", payload: key })
       // Real drill signal for the onboarding tour.
       dispatchOnboardingIssueDrill({ issueTypeId: key })
     },
-    [issueTypeRows]
+    [issueTypeRows, historicalIssueTypeIds]
   )
 
   const pillarDrag = useDragSelection(
@@ -1228,22 +1291,22 @@ export const IssueExplorer = memo(function IssueExplorer({
             data-tour-bucket={drilledBucket.bucket.id}
             data-tour-issue={drilledIssueTypeId ?? ""}
           >
-          <UrlIssueTable
-            checkedKeys={checkedUrlKeys}
-            crawlId={scopedIssueUrls?.pageCrawlId ?? crawlId}
-            hideWorkActions={isScopedUrls}
-            error={urlError}
-            getRowProps={urlDrag.getRowProps}
-            isLoading={isLoadingUrls}
-            onToggleAll={onToggleAllUrls}
-            onToggleRow={onToggleUrl}
-            rows={displayedUrls}
-            totalRows={totalUrlRows}
-            workActionsEnabled={workActionsEnabled}
-            onMarkDone={markDone}
-            onUndo={undo}
-            isPending={isPending}
-          />
+            <UrlIssueTable
+              checkedKeys={checkedUrlKeys}
+              crawlId={scopedIssueUrls?.pageCrawlId ?? crawlId}
+              hideWorkActions={isScopedUrls}
+              error={urlError}
+              getRowProps={urlDrag.getRowProps}
+              isLoading={isLoadingUrls}
+              onToggleAll={onToggleAllUrls}
+              onToggleRow={onToggleUrl}
+              rows={displayedUrls}
+              totalRows={totalUrlRows}
+              workActionsEnabled={workActionsEnabled}
+              onMarkDone={markDone}
+              onUndo={undo}
+              isPending={isPending}
+            />
           </div>
         ) : drilledBucket ? (
           <div
@@ -1253,6 +1316,8 @@ export const IssueExplorer = memo(function IssueExplorer({
           <IssueTypeTable
             checkedKeys={checkedIssueTypeKeys}
             getRowProps={issueTypeDrag.getRowProps}
+            historicalIds={historicalIssueTypeIds}
+
             onDrill={handleDrillIssueType}
             onToggleAll={onToggleAllIssueTypes}
             onToggleRow={onToggleIssueType}
@@ -1264,6 +1329,7 @@ export const IssueExplorer = memo(function IssueExplorer({
           <BucketTable
             checkedKeys={checkedBucketKeys}
             getRowProps={bucketDrag.getRowProps}
+            historicalIds={diffHistory.historicalBucketKeys}
             onDrill={handleDrillBucket}
             onToggleAll={onToggleAllBuckets}
             onToggleRow={onToggleBucket}
@@ -1274,6 +1340,7 @@ export const IssueExplorer = memo(function IssueExplorer({
           <PillarTable
             checkedKeys={checkedPillarIds}
             getRowProps={pillarDrag.getRowProps}
+            historicalIds={diffHistory.historicalPillarIds}
             onDrill={handleDrillPillar}
             onToggleAll={onToggleAllPillars}
             onToggleRow={onTogglePillar}
@@ -1314,7 +1381,7 @@ export const IssueExplorer = memo(function IssueExplorer({
                   ? bucketPageSize
                   : pillarPageSize
           }
-          setPageIndex={(v) =>
+          setPageIndex={(v) => {
             dispatch({
               type: drilledIssueType
                 ? "SET_URL_PAGE_INDEX"
@@ -1325,8 +1392,8 @@ export const IssueExplorer = memo(function IssueExplorer({
                     : "SET_PILLAR_PAGE_INDEX",
               payload: v,
             })
-          }
-          setPageSize={(v) =>
+          }}
+          setPageSize={(v) => {
             dispatch({
               type: drilledIssueType
                 ? "SET_URL_PAGE_SIZE"
@@ -1337,7 +1404,7 @@ export const IssueExplorer = memo(function IssueExplorer({
                     : "SET_PILLAR_PAGE_SIZE",
               payload: v,
             })
-          }
+          }}
           totalRows={
             drilledIssueType
               ? totalUrlRows
@@ -1349,6 +1416,18 @@ export const IssueExplorer = memo(function IssueExplorer({
           }
         />
       </div>
+      {drilledBucket && drilledIssueType && !isScopedUrls && !scopedUrl ? (
+        <div className="mt-6 px-(--card-spacing)">
+          <IssueTypeChangeCards
+            key={`${crawlId}:${drilledBucket.pillarId}:${drilledBucket.bucketId}:${drilledIssueType.id}`}
+            crawlId={crawlId}
+            pillarId={drilledBucket.pillarId}
+            bucketId={drilledBucket.bucketId}
+            issueTypeId={drilledIssueType.id}
+            issueTypeLabel={drilledIssueType.label}
+          />
+        </div>
+      ) : null}
     </div>
   )
 })

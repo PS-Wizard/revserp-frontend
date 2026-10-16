@@ -186,13 +186,7 @@ function LocalSeoRecordedRun({ run }: { run: LocalSeoRun }) {
   )
 }
 
-function RunStat({
-  label,
-  children,
-}: {
-  label: string
-  children: ReactNode
-}) {
+function RunStat({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -208,6 +202,7 @@ export function LocalSeoRunControls({
   isRemote = false,
   onRunStarted,
   part = "full",
+  startBlockedReason,
 }: {
   projectId: string
   location: LocalSeoLocation
@@ -217,12 +212,14 @@ export function LocalSeoRunControls({
   /** "action" is just the start button for a toolbar; "recorded" is only the
    * latest-run summary; "full" is the standalone card. */
   part?: "full" | "action" | "recorded"
+  startBlockedReason?: string
 }) {
   const queryClient = useQueryClient()
   const enabledMapQueries = localSeoEnabledMapQueries(location.queries)
   const count = enabledMapQueries.length
   const cost = localSeoRunCost(location)
-  const queryError = validateLocalSeoQueries(enabledMapQueries)
+  const queryError =
+    startBlockedReason ?? validateLocalSeoQueries(enabledMapQueries)
   const radiusError = validateLocalSeoRadiusM(radiusM)
   const scopeKey = `${projectId}::${location.id}`
   const currentScopeRef = useRef(scopeKey)
@@ -430,7 +427,7 @@ export function LocalSeoRunControls({
           <div className="flex min-w-0 flex-col gap-1">
             <h2 className="text-sm font-medium">Next run</h2>
             <p
-              className="max-w-xl break-words text-xs text-muted-foreground"
+              className="max-w-xl text-xs break-words text-muted-foreground"
               title={enabledMapQueries.join(" · ")}
             >
               {count === 0 ? "No saved queries" : enabledMapQueries.join(" · ")}
@@ -456,7 +453,9 @@ export function LocalSeoRunControls({
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <RunStat label="Queries">{count}</RunStat>
           <RunStat label="Radius">{(radiusM / 1000).toFixed(1)} km</RunStat>
-          <RunStat label={`Cost · ${count} × ${LOCAL_SEO_POINT_COUNT} × ${LOCAL_SEO_PER_CALL_CREDITS}`}>
+          <RunStat
+            label={`Cost · ${count} × ${LOCAL_SEO_POINT_COUNT} × ${LOCAL_SEO_PER_CALL_CREDITS}`}
+          >
             {cost} credits
           </RunStat>
           <RunStat label="Allowance">

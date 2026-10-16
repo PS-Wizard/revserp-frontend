@@ -755,3 +755,33 @@ describe("location delete", () => {
     expect(document.body.textContent).toContain("Delete Main Street Cafe?")
   })
 })
+
+describe("location list header", () => {
+  test("empty project hides the header row and keeps a single create CTA", async () => {
+    await renderList({ list: () => [] })
+
+    expect(host!.querySelector("h1")).toBeNull()
+    const creates = [...(host?.querySelectorAll("button") ?? [])].filter((button) =>
+      button.textContent?.includes("New location")
+    )
+    expect(creates).toHaveLength(1)
+    expect(text()).toContain("No locations")
+  })
+
+  test("populated project keeps the header action", async () => {
+    await renderList({ list: () => [makeLocation()] })
+
+    expect(host!.querySelector("h1")?.textContent).toContain("Locations")
+    const creates = [...(host?.querySelectorAll("button") ?? [])].filter((button) =>
+      button.textContent?.includes("New location")
+    )
+    expect(creates).toHaveLength(1)
+  })
+
+  test("cards collapse to one column on narrow viewports", async () => {
+    await renderList({ list: () => [makeLocation()] })
+
+    const grid = host!.querySelector(".grid")
+    expect(grid?.className).toContain("minmax(min(100%,300px),1fr)")
+  })
+})

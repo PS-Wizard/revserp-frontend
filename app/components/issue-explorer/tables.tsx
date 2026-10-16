@@ -70,6 +70,8 @@ type PillarTableProps = {
   onToggleAll: (checked: boolean) => void
   onDrill: (key: string) => void
   getRowProps: (key: string) => RowSelectionProps
+  /** Baseline-only entries stay drillable for comparison but never selectable for work. */
+  historicalIds?: ReadonlySet<string>
 }
 
 export function PillarTable({
@@ -80,6 +82,7 @@ export function PillarTable({
   onToggleAll,
   onDrill,
   getRowProps,
+  historicalIds,
 }: PillarTableProps) {
   const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (!totalRows) {
@@ -116,7 +119,8 @@ export function PillarTable({
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => {
-            const isDisabled = row.pillar.issue_row_count === 0
+            const isHistorical = historicalIds?.has(row.key) ?? false
+            const isDisabled = row.pillar.issue_row_count === 0 && !isHistorical
             return (
               <TableRow
                 aria-disabled={isDisabled}
@@ -134,23 +138,28 @@ export function PillarTable({
                 title={
                   isDisabled
                     ? "No issues in this crawl"
-                    : "Double-click to view buckets · drag to select"
+                    : isHistorical
+                      ? "Previously detected \u2014 double-click to compare URLs"
+                      : "Double-click to view buckets \u00b7 drag to select"
                 }
-                {...(isDisabled ? {} : getRowProps(row.key))}
+                {...(isDisabled || isHistorical ? {} : getRowProps(row.key))}
               >
                 <TableCell>
                   <Checkbox
                     aria-label={`Select ${row.pillarLabel}`}
                     checked={checkedSet.has(row.key)}
-                    disabled={isDisabled}
+                    disabled={isDisabled || isHistorical}
                     onCheckedChange={() => onToggleRow(row.key)}
                   />
                 </TableCell>
                 <TableCell className="font-medium whitespace-normal text-foreground">
-                  {row.pillarLabel}
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    {row.pillarLabel}
+                    {isHistorical ? <HistoricalBadge /> : null}
+                  </span>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {formatScore(row.pillar.score)}
+                  {isHistorical ? "—" : formatScore(row.pillar.score)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {row.pillar.bucket_count}
@@ -181,6 +190,8 @@ type BucketTableProps = {
   onToggleAll: (checked: boolean) => void
   onDrill: (key: string) => void
   getRowProps: (key: string) => RowSelectionProps
+  /** Baseline-only entries stay drillable for comparison but never selectable for work. */
+  historicalIds?: ReadonlySet<string>
 }
 
 export function BucketTable({
@@ -191,6 +202,7 @@ export function BucketTable({
   onToggleAll,
   onDrill,
   getRowProps,
+  historicalIds,
 }: BucketTableProps) {
   const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (!totalRows) {
@@ -226,7 +238,8 @@ export function BucketTable({
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => {
-            const isDisabled = row.bucket.issue_row_count === 0
+            const isHistorical = historicalIds?.has(row.key) ?? false
+            const isDisabled = row.bucket.issue_row_count === 0 && !isHistorical
             return (
               <TableRow
                 aria-disabled={isDisabled}
@@ -244,23 +257,28 @@ export function BucketTable({
                 title={
                   isDisabled
                     ? "No issues in this crawl"
-                    : "Double-click to view affected URLs · drag to select"
+                    : isHistorical
+                      ? "Previously detected \u2014 double-click to compare URLs"
+                      : "Double-click to view affected URLs \u00b7 drag to select"
                 }
-                {...(isDisabled ? {} : getRowProps(row.key))}
+                {...(isDisabled || isHistorical ? {} : getRowProps(row.key))}
               >
                 <TableCell>
                   <Checkbox
                     aria-label={`Select ${row.bucketLabel}`}
                     checked={checkedSet.has(row.key)}
-                    disabled={isDisabled}
+                    disabled={isDisabled || isHistorical}
                     onCheckedChange={() => onToggleRow(row.key)}
                   />
                 </TableCell>
                 <TableCell className="font-medium whitespace-normal text-foreground">
-                  {row.bucketLabel}
+                  <span className="inline-flex flex-wrap items-center gap-2">
+                    {row.bucketLabel}
+                    {isHistorical ? <HistoricalBadge /> : null}
+                  </span>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {formatScore(row.bucket.score)}
+                  {isHistorical ? "—" : formatScore(row.bucket.score)}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {row.bucket.issue_type_count}
@@ -288,6 +306,8 @@ type IssueTypeTableProps = {
   onToggleAll: (checked: boolean) => void
   onDrill: (key: string) => void
   getRowProps: (key: string) => RowSelectionProps
+  /** Baseline-only entries stay drillable for comparison but never selectable for work. */
+  historicalIds?: ReadonlySet<string>
 }
 
 export function IssueTypeTable({
@@ -298,6 +318,7 @@ export function IssueTypeTable({
   onToggleAll,
   onDrill,
   getRowProps,
+  historicalIds,
 }: IssueTypeTableProps) {
   const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
   if (!totalRows) {
@@ -334,7 +355,8 @@ export function IssueTypeTable({
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => {
-            const isDisabled = row.issue_row_count === 0
+            const isHistorical = historicalIds?.has(row.id) ?? false
+            const isDisabled = row.issue_row_count === 0 && !isHistorical
             return (
               <TableRow
                 aria-disabled={isDisabled}
@@ -352,23 +374,27 @@ export function IssueTypeTable({
                 title={
                   isDisabled
                     ? "No issues in this crawl"
-                    : "Double-click to view affected URLs · drag to select"
+                    : isHistorical
+                      ? "Previously detected \u2014 double-click to compare URLs"
+                      : "Double-click to view affected URLs \u00b7 drag to select"
                 }
-                {...(isDisabled ? {} : getRowProps(row.id))}
+                {...(isDisabled || isHistorical ? {} : getRowProps(row.id))}
               >
                 <TableCell>
                   <Checkbox
                     aria-label={`Select ${row.label}`}
                     checked={checkedSet.has(row.id)}
-                    disabled={isDisabled}
+                    disabled={isDisabled || isHistorical}
                     onCheckedChange={() => onToggleRow(row.id)}
                   />
                 </TableCell>
-                <TableCell
-                  className="max-w-[20rem] truncate font-medium text-foreground"
-                  title={row.label}
-                >
-                  {row.label}
+                <TableCell className="max-w-[20rem] font-medium text-foreground">
+                  <span className="inline-flex max-w-full items-center gap-2">
+                    <span className="truncate" title={row.label}>
+                      {row.label}
+                    </span>
+                    {isHistorical ? <HistoricalBadge /> : null}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <SeverityBadge severity={row.severity} />
@@ -891,6 +917,16 @@ function EmptyMessage({ message }: { message: string }) {
   )
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
+function HistoricalBadge() {
+  return (
+    <Badge variant="outline" className="text-muted-foreground">
+      Previously detected
+    </Badge>
+  )
+}
+
+
+/** Severity label shared by the current and comparison URL tables. */
+export function SeverityBadge({ severity }: { severity: string }) {
   return <Badge variant="outline">{severity || "Unknown"}</Badge>
 }

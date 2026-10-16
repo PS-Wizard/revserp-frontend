@@ -30,6 +30,7 @@ import {
   summarizeLocalSeoGridCells,
   type LocalSeoPointSummary,
 } from "~/lib/local-seo-directional"
+import { LocationMapsQueriesPanel } from "~/components/locations/location-maps-queries"
 import { LocationSavedRunPicker } from "~/components/locations/location-saved-run-picker"
 import { locationSavedRadiusM } from "~/components/locations/location-maps-run-history"
 import { LocalSeoRunControls } from "~/components/local-seo-run-controls"
@@ -412,6 +413,7 @@ export function LocationVisibilityMapsView({
 
   return (
     <div className="flex flex-1 flex-col gap-4">
+      <LocationMapsQueriesPanel projectId={projectId} locationId={location.id} />
       <LocationSavedRunPicker
         projectId={projectId}
         locationId={location.id}

@@ -21,6 +21,7 @@ import {
   ContextMenuTrigger,
 } from "~/components/ui/context-menu"
 import type { CrawlResponse } from "~/lib/api.types"
+import { formatCrawlDuration } from "~/lib/crawl"
 
 import type { ExportFormat } from "./types"
 import { formatCrawlDateTime, formatCrawlStats } from "./utils"
@@ -63,6 +64,7 @@ export function CrawlContextRow({
   const canExport = crawl.status === "completed"
   const canCancel = crawl.status === "queued" || crawl.status === "running"
   const canDelete = crawl.status !== "queued" && crawl.status !== "running"
+  const duration = formatCrawlDuration(crawl)
 
   return (
     <ContextMenu>
@@ -79,8 +81,13 @@ export function CrawlContextRow({
           >
             {isActive ? <CheckIcon className="size-4" /> : null}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">
-                {formatCrawlDateTime(crawl)}
+              <p className="flex items-baseline gap-1.5 text-sm font-medium">
+                <span className="truncate">{formatCrawlDateTime(crawl)}</span>
+                {duration ? (
+                  <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                    · {duration}
+                  </span>
+                ) : null}
               </p>
               <p className="truncate text-xs text-muted-foreground">
                 {formatCrawlStats(crawl)}

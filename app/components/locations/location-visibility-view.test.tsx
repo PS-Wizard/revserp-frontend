@@ -240,6 +240,16 @@ function installVisibilityFetch(scenario: MapsScenario) {
     let body: unknown = null
     if (typeof init?.body === "string") body = JSON.parse(init.body)
     fetchCalls.push({ url, method, body })
+    // Map query panel reads: idle generation status plus the location's
+    // saved query records, mirrored from the scenario location.
+    if (method === "GET" && url.endsWith("/maps-queries/status")) {
+      return Response.json({ status: "idle" })
+    }
+    const queriesMatch = url.match(/\/locations\/([^/?]+)\/queries$/)
+    if (queriesMatch && method === "GET") {
+      const scoped = scenario.locations[queriesMatch[1]]
+      return Response.json(scoped ? scoped.queries : [])
+    }
     if (method === "POST" && /\/locations\/[^/]+\/runs$/.test(url)) {
       return Response.json({
         id: "run-9",
@@ -552,10 +562,20 @@ describe("stored snapshots only", () => {
     await act(async () => {
       root.render(
         <QueryClientProvider client={client}>
-          <LocationVisibilityView
-            projectId={PROJECT}
-            locationId={locationId}
-          />
+          <LocationWorkspaceProvider
+            workspace={{
+              projectId: PROJECT,
+              location: makeLocation(),
+              canManage: true,
+              websiteScope: null,
+              websiteScopeRevisions: [],
+            }}
+          >
+            <LocationVisibilityView
+              projectId={PROJECT}
+              locationId={locationId}
+            />
+          </LocationWorkspaceProvider>,
         </QueryClientProvider>
       )
       await flushTestDom()
@@ -706,7 +726,17 @@ describe("run history content", () => {
     await act(async () => {
       root.render(
         <QueryClientProvider client={client}>
-          <LocationVisibilityView projectId={PROJECT} locationId={LOCATION} />
+          <LocationWorkspaceProvider
+            workspace={{
+              projectId: PROJECT,
+              location: makeLocation(),
+              canManage: true,
+              websiteScope: null,
+              websiteScopeRevisions: [],
+            }}
+          >
+            <LocationVisibilityView projectId={PROJECT} locationId={LOCATION} />
+          </LocationWorkspaceProvider>,
         </QueryClientProvider>
       )
       await flushTestDom()

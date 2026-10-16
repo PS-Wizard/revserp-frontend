@@ -190,13 +190,6 @@ function buttonByText(host: HTMLElement, text: string) {
   )
 }
 
-/** The first matching button that is not disabled, for labels repeated per card. */
-function enabledButtonByText(host: HTMLElement, text: string) {
-  return Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
-    (button) => (button.textContent ?? "").includes(text) && !button.disabled
-  )
-}
-
 /** Text of the keyword cloud card only, so list rows cannot satisfy an assertion. */
 function cloudText(host: HTMLElement) {
   const heading = Array.from(host.querySelectorAll("h3")).find(
@@ -312,7 +305,7 @@ describe("location keywords view", () => {
     unmount()
   })
 
-  test("selecting a suggestion writes it to this location's selected list", async () => {
+  test("suggested terms are read-only and join the combined card", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         revserp_suggested: { branded: ["acme plumbing"], non_branded: [] },
@@ -322,28 +315,13 @@ describe("location keywords view", () => {
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
-    const checkbox = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select keyword acme plumbing"]'
-    )!
-    expect(checkbox.getAttribute("aria-checked")).toBe("false")
-
-    await act(async () => {
-      checkbox.click()
-      await flushTestDom()
-      await flushTestDom()
-    })
-
-    const put = fetchCalls.find((call) => call.method === "PUT")
-    expect(put).toBeTruthy()
-    expect((put!.body as { selected: Group }).selected.branded).toEqual([
-      "acme plumbing",
-    ])
-    expect(fetchCalls.every((call) => call.method !== "POST")).toBe(true)
-
-    const checked = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select keyword acme plumbing"]'
-    )!
-    expect(checked.getAttribute("aria-checked")).toBe("true")
+    expect(
+      host.querySelector('button[aria-label^="Select keyword"]')
+    ).toBeNull()
+    expect(host.textContent).toContain("Combined keywords")
+    expect(host.textContent).toContain("acme plumbing")
+    expect(host.textContent).toContain("Revserp suggested")
+    expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
 
     unmount()
   })
@@ -380,22 +358,22 @@ describe("location keywords view", () => {
     expect(listsGetsAfter > listsGetsBefore).toBe(true)
 
     expect(host.textContent).toContain("nearby landmark")
-    const checkbox = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select keyword nearby landmark"]'
-    )!
-    expect(checkbox.getAttribute("aria-checked")).toBe("false")
+    expect(host.textContent).toContain("Combined keywords")
+    expect(
+      host.querySelector('button[aria-label^="Select keyword"]')
+    ).toBeNull()
     expect(host.textContent?.includes("Google may bill")).toBe(false)
 
     unmount()
   })
 
-  test("selected keywords stay isolated when the location changes", async () => {
+  test("combined keywords stay isolated when the location changes", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
-        selected: { branded: ["pizza"], non_branded: [] },
+        user_defined: { branded: ["pizza"], non_branded: [] },
       }),
       [LOCATION_B]: emptyLists({
-        selected: { branded: ["sushi"], non_branded: [] },
+        user_defined: { branded: ["sushi"], non_branded: [] },
       }),
     })
     const client = makeClient()
@@ -412,10 +390,11 @@ describe("location keywords view", () => {
     second.unmount()
   })
 
-  test("a read-only workspace hides add and disables selection", async () => {
+  test("a read-only workspace hides add actions and never writes", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         can_manage_keywords: true,
+        user_defined: { branded: ["acme"], non_branded: [] },
         revserp_suggested: { branded: ["acme plumbing"], non_branded: [] },
       }),
     })
@@ -427,17 +406,17 @@ describe("location keywords view", () => {
 
     expect(buttonByText(host, "New keyword")).toBeUndefined()
     expect(buttonByText(host, "Find nearby keywords")).toBeUndefined()
-    const checkbox = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Select keyword acme plumbing"]'
-    )
-    expect(checkbox).toBeTruthy()
-    expect(checkbox!.disabled).toBe(true)
+    expect(host.textContent).toContain("Combined keywords")
+    expect(host.textContent).toContain("acme plumbing")
+    expect(
+      host.querySelector('button[aria-label^="Select keyword"]')
+    ).toBeNull()
     expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
 
     unmount()
   })
 
-  test("any number of selected keywords is allowed with no local cap", async () => {
+  test("any number of saved keywords is allowed with no local cap", async () => {
     const phrases = Array.from(
       { length: 12 },
       (_, index) => `suggested ${index + 1}`
@@ -452,19 +431,12 @@ describe("location keywords view", () => {
     await flush()
 
     for (const phrase of phrases) {
-      const checkbox = host.querySelector<HTMLButtonElement>(
-        `button[aria-label="Select keyword ${phrase}"]`
-      )!
-      await act(async () => {
-        checkbox.click()
-        await flushTestDom()
-        await flushTestDom()
-      })
+      expect(host.textContent).toContain(phrase)
     }
-
-    const puts = fetchCalls.filter((call) => call.method === "PUT")
-    const finalBody = puts[puts.length - 1]!.body as { selected: Group }
-    expect(finalBody.selected.branded).toHaveLength(12)
+    expect(
+      host.querySelector('button[aria-label^="Select keyword"]')
+    ).toBeNull()
+    expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
     expect((host.textContent ?? "").includes("Select up to")).toBe(false)
 
     unmount()
@@ -492,7 +464,7 @@ describe("location keywords view", () => {
     unmount()
   })
 
-  test("Select all then Deselect all moves every suggestion of the kind", async () => {
+  test("there are no bulk select actions; the combined card is read-only", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         revserp_suggested: {
@@ -505,23 +477,15 @@ describe("location keywords view", () => {
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
-    await act(async () => {
-      enabledButtonByText(host, "Select all")!.click()
-      await flushTestDom()
-      await flushTestDom()
-    })
-    let puts = fetchCalls.filter((call) => call.method === "PUT")
-    let body = puts[puts.length - 1]!.body as { selected: Group }
-    expect(body.selected.branded).toEqual(["acme plumbing", "acme drain"])
-
-    await act(async () => {
-      enabledButtonByText(host, "Deselect all")!.click()
-      await flushTestDom()
-      await flushTestDom()
-    })
-    puts = fetchCalls.filter((call) => call.method === "PUT")
-    body = puts[puts.length - 1]!.body as { selected: Group }
-    expect(body.selected.branded).toEqual([])
+    expect(buttonByText(host, "Select all")).toBeUndefined()
+    expect(buttonByText(host, "Deselect all")).toBeUndefined()
+    expect(
+      host.querySelector('button[aria-label^="Select keyword"]')
+    ).toBeNull()
+    expect(host.textContent).toContain("Combined keywords")
+    expect(host.textContent).toContain("acme plumbing")
+    expect(host.textContent).toContain("acme drain")
+    expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
 
     unmount()
   })
@@ -566,7 +530,7 @@ describe("location keywords view", () => {
     unmount()
   })
 
-  test("changing selection refetches coverage and updates the cloud", async () => {
+  test("saving a user keyword refetches coverage and updates the cloud", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         revserp_suggested: { branded: ["acme plumbing"], non_branded: [] },
@@ -579,31 +543,36 @@ describe("location keywords view", () => {
     expect(
       client.getQueryData(locationKeywordCoverageQueryKey(PROJECT, LOCATION_A))
     ).toBeTruthy()
+    expect(cloudText(host)).toContain("acme plumbing")
     const before = coverageReads()
     expect(before > 0).toBe(true)
 
     await act(async () => {
-      host
-        .querySelector<HTMLButtonElement>(
-          'button[aria-label="Select keyword acme plumbing"]'
-        )!
-        .click()
+      buttonByText(host, "New keyword")!.click()
+      await flushTestDom()
+    })
+    await act(async () => {
+      setInputValue(
+        host.querySelector<HTMLInputElement>(
+          'input[aria-label="New location keyword"]'
+        )!,
+        "coffee shop"
+      )
+      await flushTestDom()
+    })
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
       await flushTestDom()
       await flushTestDom()
     })
 
     expect(coverageReads() > before).toBe(true)
-    const lists = client.getQueryData(
-      locationKeywordListsQueryKey(PROJECT, LOCATION_A)
-    ) as {
-      selected: Group
-    }
-    expect(lists.selected.branded).toEqual(["acme plumbing"])
     expect(cloudText(host)).toContain("acme plumbing")
+    expect(cloudText(host)).toContain("coffee shop")
     unmount()
   })
 
-  test("the cloud shows only selected keywords, never the unselected union", async () => {
+  test("the cloud shows the combined user and suggested terms", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         user_defined: { branded: ["acme"], non_branded: [] },
@@ -616,39 +585,45 @@ describe("location keywords view", () => {
 
     const cloud = cloudText(host)
     expect(cloud).toContain("Keyword cloud")
-    expect(cloud.includes("acme plumbing")).toBe(false)
-    expect(cloud.includes("acme")).toBe(false)
+    expect(cloud).toContain("acme plumbing")
+    expect(cloud).toContain("acme")
     unmount()
   })
 
-  test("bulk Select all refreshes coverage and the cloud", async () => {
+  test("a legacy saved term is promoted with a remove path", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
-        revserp_suggested: {
-          branded: ["acme plumbing", "acme drain"],
-          non_branded: [],
-        },
+        selected: { branded: ["Old Pick"], non_branded: [] },
       }),
     })
     const client = makeClient()
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
-    const before = coverageReads()
+    expect(host.textContent).toContain("Old Pick")
+    expect((host.textContent ?? "").includes("Selected keywords")).toBe(false)
+    const remove = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove keyword Old Pick"]'
+    )
+    expect(remove).toBeTruthy()
+
     await act(async () => {
-      enabledButtonByText(host, "Select all")!.click()
+      remove!.click()
       await flushTestDom()
       await flushTestDom()
     })
 
-    expect(coverageReads() > before).toBe(true)
-    const cloud = cloudText(host)
-    expect(cloud).toContain("acme plumbing")
-    expect(cloud).toContain("acme drain")
+    const puts = fetchCalls.filter((call) => call.method === "PUT")
+    const body = puts[puts.length - 1]!.body as {
+      user_defined: Group
+      selected: Group
+    }
+    expect(body.user_defined.branded).toEqual([])
+    expect(body.selected.branded).toEqual([])
     unmount()
   })
 
-  test("renaming a selected keyword refreshes coverage and the cloud", async () => {
+  test("renaming a user keyword refreshes coverage and the cloud", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         user_defined: { branded: ["acme"], non_branded: [] },
@@ -788,7 +763,7 @@ describe("location keywords view", () => {
     unmount()
   })
 
-  test("source cards have no selection controls; only the union checklist selects", async () => {
+  test("no card has selection controls; the combined card is read-only", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
         user_defined: { branded: ["acme"], non_branded: [] },
@@ -799,33 +774,23 @@ describe("location keywords view", () => {
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
-    expect(buttonByText(host, "Select all")).toBeTruthy()
-    expect(buttonByText(host, "Deselect all")).toBeTruthy()
-    const boxes = Array.from(
-      host.querySelectorAll('button[aria-label^="Select keyword "]')
-    )
-    expect(boxes).toHaveLength(2)
-    expect(host.textContent).toContain("Only checked keywords persist")
-    expect(host.textContent).toContain("0 of 2 selected")
-
-    await act(async () => {
-      ;(boxes[0] as HTMLButtonElement).click()
-      await flushTestDom()
-      await flushTestDom()
-    })
-    const put = fetchCalls.find((call) => call.method === "PUT")
-    expect(put).toBeTruthy()
-    expect((put!.body as { selected: Group }).selected.branded).toEqual([
-      "acme",
-    ])
+    expect(buttonByText(host, "Select all")).toBeUndefined()
+    expect(buttonByText(host, "Deselect all")).toBeUndefined()
+    expect(
+      host.querySelectorAll('button[aria-label^="Select keyword"]')
+    ).toHaveLength(0)
+    expect(host.textContent).toContain("Combined keywords")
+    expect(host.textContent).toContain("User-defined")
+    expect(host.textContent).toContain("Revserp suggested")
+    expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
 
     unmount()
   })
 
-  test("the selected checklist unions sources with leftovers and no kind tabs", async () => {
+  test("the combined card unions sources with Brand and Non-brand tabs", async () => {
     installFetch({
       [LOCATION_A]: emptyLists({
-        user_defined: { branded: ["Acme"], non_branded: [] },
+        user_defined: { branded: ["Acme"], non_branded: ["Drain"] },
         revserp_suggested: { branded: ["acme", "Acme Plumbing"], non_branded: [] },
         selected: { branded: ["Old Pick"], non_branded: [] },
       }),
@@ -834,17 +799,19 @@ describe("location keywords view", () => {
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
-    const selectedHeading = Array.from(host.querySelectorAll("h3")).find(
-      (element) => element.textContent?.trim() === "Selected keywords"
+    const combinedHeading = Array.from(host.querySelectorAll("h3")).find(
+      (element) => element.textContent?.trim() === "Combined keywords"
     )!
-    const card = selectedHeading.closest('[data-slot="card"]')!
-    expect(card.textContent).toContain("1 of 3 selected")
+    const card = combinedHeading.closest('[data-slot="card"]')!
+    expect(card.querySelectorAll('[role="tab"]').length).toBe(2)
+    expect(card.textContent).toContain("Acme Plumbing")
     expect(card.textContent).toContain("Old Pick")
-    expect(card.querySelectorAll('[role="tab"]').length).toBe(0)
-    const boxes = Array.from(
-      card.querySelectorAll('button[aria-label^="Select keyword "]')
-    )
-    expect(boxes).toHaveLength(3)
+    expect(card.textContent).toContain("User-defined")
+    expect(card.textContent).toContain("Revserp suggested")
+    expect(card.textContent?.includes("Selected keywords")).toBe(false)
+    expect(
+      card.querySelectorAll('button[aria-label^="Select keyword"]')
+    ).toHaveLength(0)
 
     unmount()
   })

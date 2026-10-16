@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test"
 import { act } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { createRoot, type Root } from "react-dom/client"
-import { MemoryRouter } from "react-router"
+import { MemoryRouter, useLocation } from "react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import { LocationWorkspaceView } from "~/components/locations/location-workspace-view"
 import { LocationWorkspaceProvider } from "~/lib/location-workspace"
+import {
+  locationSetupQueryKey,
+  type LocationSetupResponse,
+} from "~/lib/location-setup-api"
 import { flushTestDom, installTestDom } from "~/lib/dom-test-setup"
 
 installTestDom()
@@ -134,5 +138,75 @@ describe("location site-graph normalization", () => {
     } finally {
       client.clear()
     }
+  })
+})
+
+describe("location home routing", () => {
+  function seedSetup(client: QueryClient, setup: LocationSetupResponse) {
+    client.setQueryData(locationSetupQueryKey("p-1", "l-9"), setup)
+  }
+
+  async function renderHome(client: QueryClient, seen: string[]) {
+    const host = document.createElement("div")
+    document.body.appendChild(host)
+    const root: Root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <MemoryRouter initialEntries={["/app?project=p-1&location=l-9"]}>
+            <PathProbe seen={seen} />
+            <QueryClientProvider client={client}>
+              <LocationWorkspaceProvider workspace={WORKSPACE}>
+                <LocationWorkspaceView
+                  view="revserp-audit"
+                  visibilityMode="maps"
+                  auditTab="overview"
+                  currentCrawlId={null}
+                  onAuditTabChange={() => undefined}
+                />
+              </LocationWorkspaceProvider>
+            </QueryClientProvider>
+          </MemoryRouter>
+        )
+        await flushTestDom()
+        await flushTestDom()
+      })
+      return host.innerHTML
+    } finally {
+      act(() => root.unmount())
+      host.remove()
+      document.body.innerHTML = ""
+    }
+  }
+
+  function PathProbe({ seen }: { seen: string[] }) {
+    seen.push(`${useLocation().pathname}${useLocation().search}${useLocation().hash}`)
+    return null
+  }
+
+  function newClient() {
+    return new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+    })
+  }
+
+  test("completed setup replaces the root with Maps", async () => {
+    const client = newClient()
+    seedSetup(client, { status: "completed", differences: "", steps: [] })
+    const seen: string[] = []
+    const html = await renderHome(client, seen)
+    expect(seen.at(-1)).toBe("/app?project=p-1&location=l-9&location_view=maps&visibility=maps#maps")
+    expect(html.includes("Location overview")).toBe(false)
+    client.clear()
+  })
+
+  test("fresh setup stays on Initialize Location", async () => {
+    const client = newClient()
+    seedSetup(client, { status: "ready", differences: "", steps: [] })
+    const seen: string[] = []
+    const html = await renderHome(client, seen)
+    expect(seen.at(-1)).toBe("/app?project=p-1&location=l-9")
+    expect(html).toContain("Initialize Location")
+    client.clear()
   })
 })

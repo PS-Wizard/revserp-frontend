@@ -19,6 +19,7 @@ const { ONBOARDING_BUCKET_DRILL_EVENT } = await import(
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type {
   CrawlResponse,
   ScoreBreakdownResponse,
@@ -126,15 +127,18 @@ async function renderAudit(
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   await act(async () => {
     root?.render(
-      <PillarAuditView
-        crawlBreakdowns={[crawlBreakdown(cardBucket) as never]}
-        currentBreakdown={breakdown}
-        currentCrawlId="crawl-1"
-        pillarId="seo"
-        title="SEO"
-      />,
+      <QueryClientProvider client={client}>
+        <PillarAuditView
+          crawlBreakdowns={[crawlBreakdown(cardBucket) as never]}
+          currentBreakdown={breakdown}
+          currentCrawlId="crawl-1"
+          pillarId="seo"
+          title="SEO"
+        />
+      </QueryClientProvider>,
     )
   })
 }

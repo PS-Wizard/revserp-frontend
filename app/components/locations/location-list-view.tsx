@@ -272,8 +272,9 @@ export function LocationListView({
       )
       setDialogOpen(false)
       toast.success("Location created")
+      navigate(locationOpenPath(projectId, location.id))
     },
-    [projectId, queryClient]
+    [projectId, queryClient, navigate]
   )
 
   const handleDeleteRequest = useCallback((location: LocalSeoLocation) => {
@@ -342,29 +343,31 @@ export function LocationListView({
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 py-6 md:gap-6 md:py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-medium tracking-tight">
-            Locations
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Each location tracks one verified listing against the shared project
-            crawl.
-          </p>
+      {locations.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h1 className="font-heading text-2xl font-medium tracking-tight">
+              Locations
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Each location tracks one verified listing against the shared project
+              crawl.
+            </p>
+          </div>
+          <Button
+            disabled={locationsQuery.isPending}
+            onClick={() => setDialogOpen(true)}
+            type="button"
+            variant="outline"
+          >
+            <PlusIcon aria-hidden="true" data-icon="inline-start" />
+            New location
+          </Button>
         </div>
-        <Button
-          disabled={locationsQuery.isPending}
-          onClick={() => setDialogOpen(true)}
-          type="button"
-          variant="outline"
-        >
-          <PlusIcon aria-hidden="true" data-icon="inline-start" />
-          New location
-        </Button>
-      </div>
+      ) : null}
 
       {locationsQuery.isPending ? (
-        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4">
           {[0, 1, 2].map((index) => (
             <LocationCardSkeleton key={index} />
           ))}
@@ -414,7 +417,7 @@ export function LocationListView({
           </Empty>
         </div>
       ) : (
-        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+        <div className="grid auto-rows-min grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4">
           {locations.map((location, index) => (
             <LocationCard
               canManage={canManage}

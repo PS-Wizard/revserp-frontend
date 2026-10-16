@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react"
-import { Link } from "react-router"
+import { Link, useLocation } from "react-router"
 import type {
   AuditTab,
   DashboardView,
@@ -10,6 +10,7 @@ import { LocationMapsCompetitorsPage } from "~/components/locations/location-map
 import { LocationKeywordsView } from "~/components/locations/location-keywords-view"
 import { LocationVisibilityView } from "~/components/locations/location-visibility-view"
 import { LocationWebsiteAuditView } from "~/components/locations/location-website-audit-view"
+import { LocationHomeView } from "~/components/locations/location-overview-view"
 import { useOptionalLocationWorkspace } from "~/lib/location-workspace"
 
 const LocationGoogleView = lazy(() =>
@@ -17,6 +18,12 @@ const LocationGoogleView = lazy(() =>
     default: module.LocationGoogleView,
   }))
 )
+
+// ?location_view=website forces the website audit on the overview tab;
+// otherwise the location home (setup, then Maps). Non-overview tabs are website.
+export function isLocationWebsiteView(search: string): boolean {
+  return new URLSearchParams(search).get("location_view") === "website"
+}
 
 export function LocationWorkspaceView({
   view,
@@ -33,6 +40,7 @@ export function LocationWorkspaceView({
   onAuditTabChange: (tab: AuditTab) => void
   visibilityMode: VisibilityMode
 }) {
+  const rawSearch = useLocation().search
   const workspace = useOptionalLocationWorkspace()
   if (!workspace) return null
   const projectId = workspace.projectId
@@ -53,12 +61,24 @@ export function LocationWorkspaceView({
         />
       )
     case "keywords":
-      return <LocationKeywordsView key={locationId} projectId={projectId} locationId={locationId} />
+      return (
+        <LocationKeywordsView
+          key={locationId}
+          projectId={projectId}
+          locationId={locationId}
+        />
+      )
     case "competitors":
     case "compare":
       // Location competitors merged into the combined Maps page: the old
       // competitors navigation renders the same shared-run page.
-      return <LocationMapsCompetitorsPage key={locationId} projectId={projectId} locationId={locationId} />
+      return (
+        <LocationMapsCompetitorsPage
+          key={locationId}
+          projectId={projectId}
+          locationId={locationId}
+        />
+      )
     case "search-console":
     case "analytics":
       return (
@@ -86,14 +106,23 @@ export function LocationWorkspaceView({
         </div>
       )
     default:
+      if (auditTab !== "overview" || isLocationWebsiteView(rawSearch)) {
+        return (
+          <LocationWebsiteAuditView
+            key={locationId}
+            projectId={projectId}
+            locationId={locationId}
+            auditTab={effectiveAuditTab}
+            currentCrawlId={currentCrawlId}
+            onAuditTabChange={onAuditTabChange}
+          />
+        )
+      }
       return (
-        <LocationWebsiteAuditView
+        <LocationHomeView
           key={locationId}
           projectId={projectId}
           locationId={locationId}
-          auditTab={effectiveAuditTab}
-          currentCrawlId={currentCrawlId}
-          onAuditTabChange={onAuditTabChange}
         />
       )
   }

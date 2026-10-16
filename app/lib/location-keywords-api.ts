@@ -92,11 +92,31 @@ function normalizeSuggestedOrigins(
 export function normalizeLocationKeywordLists(
   data: LocationKeywordListsResponse | null | undefined
 ): LocationKeywordListsResponse {
+  const userDefined = normalizeGroup(data?.user_defined)
+  const suggested = normalizeGroup(data?.revserp_suggested)
+  const selected = normalizeGroup(data?.selected)
+  const known = new Set<string>()
+  for (const phrase of [...userDefined.branded, ...userDefined.non_branded])
+    known.add(normalizeLocationKeywordKey(phrase))
+  for (const phrase of [...suggested.branded, ...suggested.non_branded])
+    known.add(normalizeLocationKeywordKey(phrase))
+  for (const phrase of selected.branded) {
+    const key = normalizeLocationKeywordKey(phrase)
+    if (!key || known.has(key)) continue
+    known.add(key)
+    userDefined.branded.push(phrase)
+  }
+  for (const phrase of selected.non_branded) {
+    const key = normalizeLocationKeywordKey(phrase)
+    if (!key || known.has(key)) continue
+    known.add(key)
+    userDefined.non_branded.push(phrase)
+  }
   return {
     can_manage_keywords: data?.can_manage_keywords === true,
-    user_defined: normalizeGroup(data?.user_defined),
-    revserp_suggested: normalizeGroup(data?.revserp_suggested),
-    selected: normalizeGroup(data?.selected),
+    user_defined: userDefined,
+    revserp_suggested: suggested,
+    selected,
     suggested_origins: normalizeSuggestedOrigins(data?.suggested_origins),
   }
 }
@@ -124,45 +144,39 @@ export function locationKeywordGroupPhrases(
   return [...group.branded, ...group.non_branded]
 }
 
-/** Where one Selected-checklist row comes from. "selected-only" rows persist
-from earlier selections even though no source list contains them anymore. */
-export type LocationKeywordCandidateOrigin = "user" | "suggested" | "selected-only"
+/** Where one combined row comes from. "legacy" rows persist from earlier
+ * saved selections even though neither source list contains them anymore;
+ * client normalization promotes them into user-defined so they stay editable. */
+export type LocationCombinedRowOrigin = "user" | "suggested" | "legacy"
 
-/** One row of the Selected checklist: the deduplicated union of both source
-lists plus selected-only leftovers. Kind is internal metadata for the PUT. */
-export type LocationSelectedUnionRow = {
+/** One row of the read-only combined list: the deduplicated union of both
+ * source lists plus legacy leftovers. First-seen text and kind win, so saved
+ * selection flags never change Brand/Non-brand classification. */
+export type LocationCombinedRow = {
   key: string
   phrase: string
   kind: LocationKeywordKind
-  origin: LocationKeywordCandidateOrigin
+  origin: LocationCombinedRowOrigin
 }
 
-/** Deduplicated union of user-defined and suggested candidates plus any
-selected phrases neither source contains. First-seen text wins; a selected
-phrase keeps its stored kind so toggling it off removes the right entry. */
-export function buildLocationSelectedUnionRows(
+/** Deduplicated union of user-defined and suggested phrases plus any saved
+ * phrases neither source contains. */
+export function buildLocationCombinedRows(
   userDefined: LocationKeywordGroup,
   suggested: LocationKeywordGroup,
   selected: LocationKeywordGroup
-): LocationSelectedUnionRow[] {
-  const selectedKind = new Map<string, LocationKeywordKind>()
-  for (const kind of ["brand", "non_brand"] as const) {
-    for (const phrase of locationKeywordKindPhrases(selected, kind)) {
-      const key = normalizeLocationKeywordKey(phrase)
-      if (key && !selectedKind.has(key)) selectedKind.set(key, kind)
-    }
-  }
-  const rows: LocationSelectedUnionRow[] = []
+): LocationCombinedRow[] {
+  const rows: LocationCombinedRow[] = []
   const seen = new Set<string>()
   const add = (
     phrase: string,
     kind: LocationKeywordKind,
-    origin: LocationKeywordCandidateOrigin
+    origin: LocationCombinedRowOrigin
   ) => {
     const key = normalizeLocationKeywordKey(phrase)
     if (!key || seen.has(key)) return
     seen.add(key)
-    rows.push({ key, phrase, kind: selectedKind.get(key) ?? kind, origin })
+    rows.push({ key, phrase, kind, origin })
   }
   for (const kind of ["brand", "non_brand"] as const) {
     for (const phrase of locationKeywordKindPhrases(userDefined, kind))
@@ -174,31 +188,9 @@ export function buildLocationSelectedUnionRows(
   }
   for (const kind of ["brand", "non_brand"] as const) {
     for (const phrase of locationKeywordKindPhrases(selected, kind))
-      add(phrase, kind, "selected-only")
+      add(phrase, kind, "legacy")
   }
   return rows
-}
-
-/** A union row reads checked when selected under either kind. */
-export function isLocationSelectedUnionRowChecked(
-  selected: LocationKeywordGroup,
-  row: LocationSelectedUnionRow
-): boolean {
-  return (
-    isLocationKeywordSelected(selected, "brand", row.phrase) ||
-    isLocationKeywordSelected(selected, "non_brand", row.phrase)
-  )
-}
-
-/** Toggles one union row: off removes it from both kinds, on adds its kind. */
-export function toggleLocationSelectedUnionRow(
-  selected: LocationKeywordGroup,
-  row: LocationSelectedUnionRow
-): LocationKeywordGroup {
-  if (isLocationSelectedUnionRowChecked(selected, row)) {
-    return deselectLocationKeywords(deselectLocationKeywords(selected, "brand", [row.phrase]), "non_brand", [row.phrase])
-  }
-  return toggleLocationKeyword(selected, row.kind, row.phrase)
 }
 
 export function isLocationKeywordSelected(

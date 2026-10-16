@@ -33,6 +33,7 @@ export function revbotHashTarget(
   | { view: "marketplace" }
   | { view: "competitors" }
   | { view: "keywords" }
+  | { view: "revserp-visibility" }
   | null {
   switch (hash.replace(/-tab$/, "")) {
     case "summary":
@@ -60,6 +61,9 @@ export function revbotHashTarget(
       return { view: "competitors" }
     case "keywords":
       return { view: "keywords" }
+    case "maps":
+    case "ai-visibility":
+      return { view: "revserp-visibility" }
     default:
       return null
   }

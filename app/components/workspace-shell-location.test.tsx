@@ -81,7 +81,10 @@ describe("real shell location scope", () => {
     document.body.appendChild(host)
     root = createRoot(host)
     const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     })
     const router = createMemoryRouter(
       [
@@ -130,15 +133,29 @@ describe("real shell location scope", () => {
     return { calls, host: host as HTMLDivElement }
   }
 
-  test("navbar shows the location name with marker, scope action, no parent crawl action", async () => {
-    const seenViews: string[] = []
-    const { host: mounted } = await mountShell(seenViews)
-    const html = mounted.innerHTML
-    expect(html).toContain("Roastery")
-    expect(html).toContain("Location")
-    expect(html).toContain("Website scope")
-    expect(html.includes("Run crawl")).toBe(false)
-    expect(html).toContain("scoped child")
+  test("project navbar stays unchanged above a separate location navigation", async () => {
+    const { host: mounted } = await mountShell([])
+    expect(mounted.innerHTML).toContain("Revketer")
+    expect(mounted.innerHTML).toContain("Run crawl")
+    const localNav = mounted.querySelector(
+      'section[aria-label="Location workspace"]'
+    )
+    expect(localNav?.textContent).toContain("Roastery")
+    expect(localNav?.textContent).toContain("Location profile")
+    expect(Boolean(localNav?.textContent?.includes("Website pages"))).toBe(false)
+    const tabs = Array.from(
+      localNav?.querySelectorAll('nav[aria-label="Location navigation"] a') ?? []
+    ).map((link) => link.textContent)
+    expect(tabs.includes("Overview")).toBe(false)
+    expect(localNav?.className).toContain("px-4")
+    expect(localNav?.className).toContain("md:px-8")
+    const content = mounted.querySelector(".tour-scroll-lock")
+    expect(content?.className).toContain("px-4")
+    expect(content?.className).toContain("md:px-8")
+    expect(
+      Boolean(localNav?.querySelector('nav[aria-label="Location navigation"]'))
+    ).toBe(true)
+    expect(mounted.innerHTML).toContain("scoped child")
   })
 
   test("chat lists only location scoped conversations", async () => {
@@ -151,14 +168,18 @@ describe("real shell location scope", () => {
     }
   })
 
-  test("location dock merges competitors into the Maps test with no compare entry", async () => {
-    const seenViews: string[] = []
-    const { host: mounted } = await mountShell(seenViews)
-    const triggers = Array.from(mounted.querySelectorAll("button")).map(
-      (button) => button.textContent ?? ""
+  test("Maps and AI visibility links stay in the location navigation", async () => {
+    const { host: mounted } = await mountShell([])
+    const nav = mounted.querySelector('nav[aria-label="Location navigation"]')
+    const maps = Array.from(nav?.querySelectorAll("a") ?? []).find(
+      (link) => link.textContent === "Maps"
     )
-    expect(triggers.some((text) => text.includes("Compare"))).toBe(false)
-    expect(triggers.some((text) => text.includes("Visibility"))).toBe(true)
+    const ai = Array.from(nav?.querySelectorAll("a") ?? []).find(
+      (link) => link.textContent === "AI visibility"
+    )
+    expect(maps?.getAttribute("href")).toContain("location=l-9")
+    expect(maps?.getAttribute("href")).toContain("visibility=maps")
+    expect(ai?.getAttribute("href")).toContain("visibility=ai")
   })
 })
 
@@ -170,7 +191,10 @@ describe("real shell visibility mode", () => {
     document.body.appendChild(host)
     const root: Root = createRoot(host)
     const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     })
     const router = createMemoryRouter(
       [

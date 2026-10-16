@@ -67,7 +67,7 @@ import {
   getCrawlSelectionTarget,
   getCrawlValidationError,
   getInitials,
-  getProjectBackTarget,
+  getWorkspaceNavigationTarget,
   getProjectSwitchTarget,
   getVisibilityModeTarget,
 } from "~/components/app-navbar/utils"
@@ -91,10 +91,7 @@ import {
   PageAuditContext,
   type SelectedAuditPage,
 } from "~/components/page-audit/page-audit-context"
-import {
-  describeCrawlAnalysisProgress,
-  getCrawlTimestamp,
-} from "~/lib/crawl"
+import { describeCrawlAnalysisProgress, getCrawlTimestamp } from "~/lib/crawl"
 import { ApiError, clientApiFetch, clientApiPost } from "~/lib/api"
 import type {
   CrawlResponse,
@@ -109,9 +106,11 @@ import {
   OnboardingUiContext,
   requestOnboardingReplay,
 } from "~/components/onboarding/onboarding-ui"
-import { LocationWebsiteScopeSettingsButton } from "~/components/locations/location-website-scope-settings"
+import { LocationWorkspaceNavigation } from "~/components/locations/location-workspace-navigation"
+import { BusinessProfileDrawer } from "~/components/app-navbar/business-profile-drawer"
 import { selectRevbotAuditSuggestions } from "~/components/revbot/revbot-audit-suggestion-starters"
 import { WorkspaceSidebarNav } from "~/components/workspace-sidebar-nav"
+import { sortProjectsByName } from "~/lib/project-sort"
 
 type CreateProjectState = {
   isOpen: boolean
@@ -309,6 +308,10 @@ export function WorkspaceShellPreview({
   currentBreakdown,
 }: WorkspaceShellPreviewProps) {
   const navigate = useNavigate()
+  const alphabeticalProjects = useMemo(
+    () => sortProjectsByName(projects),
+    [projects]
+  )
   const location = useLocation()
   const revalidator = useRevalidator()
   const features = useFeatures()
@@ -379,6 +382,9 @@ export function WorkspaceShellPreview({
   const shouldReduceMotion = useReducedMotion() ?? false
   const locationWorkspace = useOptionalLocationWorkspace()
   const isLocationScoped = locationWorkspace !== null
+  const isLocationArea =
+    isLocationScoped ||
+    /^\/app\/projects\/[^/]+\/locations(\/|$)/.test(location.pathname)
   const locationProfileScope = useMemo(
     () =>
       locationWorkspace
@@ -586,14 +592,20 @@ export function WorkspaceShellPreview({
     revalidator,
   })
   const autoCrawl = useAutoCrawlSettings(activeProjectId)
-  const businessProfile = useBusinessProfile(locationProfileScope)
+  const businessProfile = useBusinessProfile()
+  const localBusinessProfile = useBusinessProfile(locationProfileScope)
   // Tour-held dock menu (audit/business-profile steps); undefined = hover state.
-  const [lockedDockItem, setLockedDockItem] = useState<string | null | undefined>(undefined)
+  const [lockedDockItem, setLockedDockItem] = useState<
+    string | null | undefined
+  >(undefined)
   const lockDockItem = useCallback((key: string | null) => {
     setLockedDockItem(key ?? undefined)
   }, [])
   const openRevbotForTour = useCallback(() => setIslandState("minimized"), [])
-  const maximizeRevbotForTour = useCallback(() => setIslandState("maximized"), [])
+  const maximizeRevbotForTour = useCallback(
+    () => setIslandState("maximized"),
+    []
+  )
   const dockRevbotForTour = useCallback(() => setIslandState("docked"), [])
   const openBusinessProfileForTour = useCallback(() => {
     if (activeProject) businessProfile.openBusinessProfileDrawer(activeProject)
@@ -655,8 +667,9 @@ export function WorkspaceShellPreview({
   const isExportingCrawl = projectActions.exportingCrawlId !== null
 
   function selectProject(projectId: string, crawlId?: string) {
-    const isLocationsActive =
-      /^\/app\/projects\/[^/]+\/locations(\/|$)/.test(location.pathname)
+    const isLocationsActive = /^\/app\/projects\/[^/]+\/locations(\/|$)/.test(
+      location.pathname
+    )
     if (isLocationsActive) {
       void navigate(`/app/projects/${projectId}/locations`)
       return
@@ -673,6 +686,10 @@ export function WorkspaceShellPreview({
   }
 
   function selectCrawl(crawlId: string) {
+    if (locationWorkspace) {
+      selectProject(locationWorkspace.projectId, crawlId)
+      return
+    }
     void navigate(getCrawlSelectionTarget(location, crawlId))
   }
 
@@ -696,6 +713,36 @@ export function WorkspaceShellPreview({
       .finally(() => fetchingProjectIds.current.delete(projectId))
   }
 
+  function selectProjectWorkspace(
+    nextView: typeof view,
+    nextAuditTab?: typeof auditTab,
+    nextVisibilityMode?: typeof visibilityMode
+  ) {
+    if (!locationWorkspace) {
+      selectWorkspace(nextView, nextAuditTab, nextVisibilityMode)
+      return
+    }
+    const params = new URLSearchParams(location.search)
+    for (const key of [
+      "location",
+      "location_view",
+      "revbotConversation",
+      "audit",
+      "visibility",
+    ])
+      params.delete(key)
+    if (nextView === "revserp-visibility")
+      params.set("visibility", nextVisibilityMode ?? "ai")
+    const target = getWorkspaceNavigationTarget(
+      { pathname: "/app", search: `?${params}` },
+      nextView,
+      nextAuditTab ?? "overview"
+    )
+    if (nextView === "revserp-visibility") target.hash = "#ai-visibility"
+    void navigate(target)
+    setIsMobileSidebarOpen(false)
+  }
+
   function selectWorkspace(
     nextView: typeof view,
     nextAuditTab?: typeof auditTab,
@@ -703,10 +750,7 @@ export function WorkspaceShellPreview({
   ) {
     onViewChange(nextView)
     if (nextAuditTab !== undefined) onAuditTabChange(nextAuditTab)
-    if (
-      nextVisibilityMode !== undefined &&
-      nextView === "revserp-visibility"
-    ) {
+    if (nextVisibilityMode !== undefined && nextView === "revserp-visibility") {
       void navigate(getVisibilityModeTarget(location, nextVisibilityMode), {
         replace: true,
       })
@@ -808,7 +852,10 @@ export function WorkspaceShellPreview({
       const exclusionPatternsError =
         validateExcludedUrlPatterns(excludedUrlPatterns)
       if (exclusionPatternsError) {
-        runCrawlDispatch({ type: "EXCLUSION_ERROR", value: exclusionPatternsError })
+        runCrawlDispatch({
+          type: "EXCLUSION_ERROR",
+          value: exclusionPatternsError,
+        })
         return
       }
       if (pendingExclusions.added.length > 0) {
@@ -838,7 +885,9 @@ export function WorkspaceShellPreview({
               render_javascript: runCrawl.renderJavaScript,
               ...(maxPages === undefined ? {} : { max_pages: maxPages }),
               ...(delayMs === undefined ? {} : { request_delay_ms: delayMs }),
-              ...(jitterMs === undefined ? {} : { request_jitter_ms: jitterMs }),
+              ...(jitterMs === undefined
+                ? {}
+                : { request_jitter_ms: jitterMs }),
             },
             excludedUrlPatterns
           ),
@@ -858,231 +907,228 @@ export function WorkspaceShellPreview({
 
   return (
     <OnboardingUiContext.Provider value={onboardingUi}>
-    <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
-      <LayoutGroup id="workspace-preview">
-        <SidebarProvider
-          className="relative h-svh min-h-0 bg-background text-foreground"
-          openMobile={isMobileSidebarOpen}
-          onOpenMobileChange={setIsMobileSidebarOpen}
-          style={{ "--sidebar-width": "4rem" } as CSSProperties}
-        >
-          <div className="md:hidden">
-          <Sidebar>
-            <SidebarContent className="p-2">
-              <WorkspaceSidebarNav
-                auditTab={auditTab}
-                gscConnector={features.gsc_connector}
-                integrations={features.integrations !== false}
-                isLocationScoped={isLocationScoped}
-                maxCompetitors={features.max_competitors}
-                onNavigate={() => setIsMobileSidebarOpen(false)}
-                onSelectWorkspace={selectWorkspace}
-                pathname={location.pathname}
-                projectId={activeProject?.id}
-                view={view}
-                visibilityMode={visibilityMode}
-              />
-            </SidebarContent>
-          </Sidebar>
-          </div>
-          <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
-            <div className="relative flex h-full min-h-0 bg-shell-chrome">
-              <section
+      <SetInsightsNavbarLabel.Provider value={setInsightsNavbarLabel}>
+        <LayoutGroup id="workspace-preview">
+          <SidebarProvider
+            className="relative h-svh min-h-0 bg-background text-foreground"
+            openMobile={isMobileSidebarOpen}
+            onOpenMobileChange={setIsMobileSidebarOpen}
+            style={{ "--sidebar-width": "4rem" } as CSSProperties}
+          >
+            <div className="md:hidden">
+              <Sidebar>
+                <SidebarContent className="p-2">
+                  <WorkspaceSidebarNav
+                    auditTab={isLocationScoped ? "overview" : auditTab}
+                    gscConnector={features.gsc_connector}
+                    integrations={features.integrations !== false}
+                    isLocationScoped={false}
+                    maxCompetitors={features.max_competitors}
+                    onNavigate={() => setIsMobileSidebarOpen(false)}
+                    onSelectWorkspace={selectProjectWorkspace}
+                    pathname={location.pathname}
+                    projectId={activeProject?.id}
+                    view={isLocationScoped ? "revserp-audit" : view}
+                    visibilityMode={visibilityMode}
+                  />
+                </SidebarContent>
+              </Sidebar>
+            </div>
+            <motion.main className="relative h-full min-h-0 w-full" layoutRoot>
+              <div className="relative flex h-full min-h-0 bg-shell-chrome">
+                <section
+                  className={
+                    fullBleed
+                      ? "relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+                      : "relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16"
+                  }
+                >
+                  {fullBleed ? null : (
+                    <header
+                      className={
+                        fullBleed
+                          ? "absolute inset-x-0 top-0 z-30 flex h-14 items-center gap-3 bg-transparent px-4 md:hidden"
+                          : "relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden"
+                      }
+                    >
+                      <SidebarTrigger aria-label="Open navigation" />
+                      <button
+                        className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
+                        onClick={openProjectPanel}
+                        type="button"
+                      >
+                        <span className="truncate">
+                          {activeProject?.name ?? "Select a project"}
+                        </span>
+                      </button>
+                    </header>
+                  )}
+                  {locationWorkspace && !fullBleed ? (
+                    <LocationWorkspaceNavigation
+                      view={view}
+                      auditTab={auditTab}
+                      visibilityMode={visibilityMode}
+                      googleReports={features.gsc_connector}
+                      onOpenProfile={() => {
+                        if (activeProject)
+                          localBusinessProfile.openBusinessProfileDrawer(
+                            activeProject
+                          )
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className={
+                      fullBleed
+                        ? "flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
+                        : islandState === "maximized"
+                          ? "tour-scroll-lock pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background"
+                          : `tour-scroll-lock min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background ${isLocationArea ? "px-4 md:px-8" : "px-3"}`
+                    }
+                  >
+                    <AnimatePresence initial={false} mode="wait">
+                      <motion.div
+                        animate={{ opacity: 1 }}
+                        className={
+                          fullBleed
+                            ? "flex h-full min-h-0 flex-col"
+                            : "flex min-h-full flex-col"
+                        }
+                        exit={{ opacity: 0 }}
+                        initial={{ opacity: 0 }}
+                        key={workspaceContentKey}
+                        transition={{
+                          duration: shouldReduceMotion ? 0 : 0.15,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                      >
+                        <RevbotStartPromptContext.Provider
+                          value={
+                            features.ai_chat ? revbotStartPromptValue : null
+                          }
+                        >
+                          <PageAuditContext.Provider value={pageAuditValue}>
+                            <ProjectPanelOpenContext.Provider
+                              value={openProjectPanel}
+                            >
+                              {projects.length === 0 ? (
+                                <div className="flex flex-1 items-center justify-center py-16">
+                                  <Empty className="border-0">
+                                    <EmptyHeader>
+                                      <EmptyMedia
+                                        className="size-16 rounded-2xl bg-primary/10 text-primary [&_svg:not([class*='size-'])]:size-8"
+                                        variant="icon"
+                                      >
+                                        <FolderPlusIcon aria-hidden="true" />
+                                      </EmptyMedia>
+                                      <EmptyTitle
+                                        aria-level={2}
+                                        className="text-2xl"
+                                        role="heading"
+                                      >
+                                        Start with a project
+                                      </EmptyTitle>
+                                      <EmptyDescription>
+                                        Add a website. Then set up its crawl and
+                                        business profile.
+                                      </EmptyDescription>
+                                    </EmptyHeader>
+                                    <EmptyContent>
+                                      <Button
+                                        data-tour="onboarding-new-project"
+                                        onClick={() =>
+                                          createProjectDispatch({
+                                            type: "OPEN",
+                                          })
+                                        }
+                                        type="button"
+                                      >
+                                        <PlusIcon
+                                          aria-hidden="true"
+                                          data-icon="inline-start"
+                                        />
+                                        Create project
+                                      </Button>
+                                    </EmptyContent>
+                                  </Empty>
+                                </div>
+                              ) : (
+                                children
+                              )}
+                            </ProjectPanelOpenContext.Provider>
+                          </PageAuditContext.Provider>
+                        </RevbotStartPromptContext.Provider>
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                  {tour}
+                </section>
+              </div>
+              <div
                 className={
                   fullBleed
-                    ? "relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
-                    : "relative ml-0 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden md:pt-16"
+                    ? "pointer-events-none fixed inset-x-0 top-2 z-40 flex h-14 items-center justify-end gap-2 bg-transparent px-3 text-foreground max-md:hidden"
+                    : "fixed inset-x-0 top-2 z-40 flex h-14 items-center gap-2 bg-shell-chrome px-3 text-foreground backdrop-blur-xl max-md:hidden"
                 }
               >
                 {fullBleed ? null : (
-                  <header
-                    className={
-                      fullBleed
-                        ? "absolute inset-x-0 top-0 z-30 flex h-14 items-center gap-3 bg-transparent px-4 md:hidden"
-                        : "relative z-30 flex h-14 shrink-0 items-center gap-3 px-4 md:hidden"
-                    }
-                  >
-                    <SidebarTrigger aria-label="Open navigation" />
-                    <button
-                      className="inline-flex min-w-0 items-center rounded-md px-1 py-0.5 text-sm font-semibold text-foreground"
-                      onClick={openProjectPanel}
-                      type="button"
-                    >
-                      <span className="truncate">
-                        {locationWorkspace
-                          ? locationWorkspace.location.name
-                          : (activeProject?.name ?? "Select a project")}
-                      </span>
-                      {locationWorkspace ? (
-                        <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-micro font-medium text-muted-foreground">
-                          Location
-                        </span>
-                      ) : null}
-                    </button>
-                  </header>
-                )}
-                <div
-                  className={
-                    fullBleed
-                      ? "flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
-                      : islandState === "maximized"
-                        ? "pointer-events-none relative z-0 flex min-h-0 flex-1 scrollbar-gutter-stable flex-col overflow-y-auto bg-background tour-scroll-lock"
-                        : "min-h-0 flex-1 scrollbar-gutter-stable overflow-y-auto bg-background px-3 tour-scroll-lock"
-                  }
-                >
-                  <AnimatePresence initial={false} mode="wait">
-                    <motion.div
-                      animate={{ opacity: 1 }}
-                      className={
-                        fullBleed
-                          ? "flex h-full min-h-0 flex-col"
-                          : "flex min-h-full flex-col"
+                  <div className="flex min-w-0 flex-1 items-center">
+                    <WorkspaceSwitcher
+                      activeOrganizationName={
+                        workspaceActions.activeOrganization?.name
                       }
-                      exit={{ opacity: 0 }}
-                      initial={{ opacity: 0 }}
-                      key={workspaceContentKey}
-                      transition={{
-                        duration: shouldReduceMotion ? 0 : 0.15,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                    >
-                      <RevbotStartPromptContext.Provider
-                        value={features.ai_chat ? revbotStartPromptValue : null}
-                      >
-                        <PageAuditContext.Provider value={pageAuditValue}>
-                          <ProjectPanelOpenContext.Provider
-                            value={openProjectPanel}
-                          >
-                            {projects.length === 0 ? (
-                              <div className="flex flex-1 items-center justify-center py-16">
-                                <Empty className="border-0">
-                                  <EmptyHeader>
-                                    <EmptyMedia
-                                      className="size-16 rounded-2xl bg-primary/10 text-primary [&_svg:not([class*='size-'])]:size-8"
-                                      variant="icon"
-                                    >
-                                      <FolderPlusIcon aria-hidden="true" />
-                                    </EmptyMedia>
-                                    <EmptyTitle
-                                      aria-level={2}
-                                      className="text-2xl"
-                                      role="heading"
-                                    >
-                                      Start with a project
-                                    </EmptyTitle>
-                                    <EmptyDescription>
-                                      Add a website. Then set up its crawl and
-                                      business profile.
-                                    </EmptyDescription>
-                                  </EmptyHeader>
-                                  <EmptyContent>
-                                    <Button
-                                      data-tour="onboarding-new-project"
-                                      onClick={() =>
-                                        createProjectDispatch({ type: "OPEN" })
-                                      }
-                                      type="button"
-                                    >
-                                      <PlusIcon
-                                        aria-hidden="true"
-                                        data-icon="inline-start"
-                                      />
-                                      Create project
-                                    </Button>
-                                  </EmptyContent>
-                                </Empty>
-                              </div>
-                            ) : (
-                              children
-                            )}
-                          </ProjectPanelOpenContext.Provider>
-                        </PageAuditContext.Provider>
-                      </RevbotStartPromptContext.Provider>
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-                {tour}
-              </section>
-            </div>
-            <div
-              className={
-                fullBleed
-                  ? "pointer-events-none fixed inset-x-0 top-2 z-40 flex h-14 items-center justify-end gap-2 bg-transparent px-3 text-foreground max-md:hidden"
-                  : "fixed inset-x-0 top-2 z-40 flex h-14 items-center gap-2 bg-shell-chrome px-3 text-foreground backdrop-blur-xl max-md:hidden"
-              }
-            >
-              {fullBleed ? null : (
-                <div className="flex min-w-0 flex-1 items-center">
-                  <WorkspaceSwitcher
-                    activeOrganizationName={
-                      workspaceActions.activeOrganization?.name
-                    }
-                    isActiveOrganizationOwner={
-                      workspaceActions.isActiveOrganizationOwner
-                    }
-                    canManageOrganization={
-                      workspaceActions.canManageActiveOrganization
-                    }
-                    onInviteOpen={workspaceActions.openInviteDialog}
-                    onLeaveWorkspaceOpen={
-                      workspaceActions.openLeaveWorkspaceDialog
-                    }
-                    onSelectOrganization={(id) =>
-                      void workspaceActions.handleSelectOrganization(id)
-                    }
-                    organizationId={organizationId}
-                    organizations={organizations}
-                    workspaceState={workspaceActions.workspaceState}
-                  />
-                </div>
-              )}
-              <div className="pointer-events-auto flex min-w-0 shrink items-center justify-center">
-                <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1">
-                  <WorkspaceDockNav
-                    activeProjectId={activeProjectId ?? undefined}
-                    auditTab={auditTab}
-                    crawls={activeProjectCrawls}
-                    currentCrawl={currentCrawl}
-                    formatCrawlLabel={formatCrawlDateTime}
-                    gscConnector={features.gsc_connector}
-                    integrations={features.integrations !== false}
-                    isLocationScoped={isLocationScoped}
-                    locationBackHref={
-                      locationWorkspace
-                        ? getProjectBackTarget(locationWorkspace.projectId)
-                        : null
-                    }
-                    locationName={locationWorkspace?.location.name ?? null}
-                    maxCompetitors={features.max_competitors}
-                    onCreateProject={() =>
-                      createProjectDispatch({ type: "OPEN" })
-                    }
-                    onDeleteCrawl={(crawl) =>
-                      projectActions.openDeleteCrawlDialog(crawl)
-                    }
-                    onDeleteProject={(project) =>
-                      projectActions.openDeleteProjectDialog(project)
-                    }
-                    onExportCrawl={(crawl, format) =>
-                      void projectActions.handleExportCrawl(crawl, format)
-                    }
-                    onOpenProjectPanel={openProjectPanel}
-                    onSelectCrawl={selectCrawl}
-                    onSelectProject={selectProject}
-                    onSelectWorkspace={selectWorkspace}
-                    lockedOpenItem={lockedDockItem}
-                    pathname={location.pathname}
-                    projectId={activeProject?.id}
-                    projects={projects}
-                    trailing={
-                      isLocationScoped && locationWorkspace ? (
-                        <LocationWebsiteScopeSettingsButton
-                          projectId={locationWorkspace.projectId}
-                          locationId={locationWorkspace.location.id}
-                          workspace={locationWorkspace}
-                          parentUrl={activeProject?.base_url ?? null}
-                        />
-                      ) : (
+                      isActiveOrganizationOwner={
+                        workspaceActions.isActiveOrganizationOwner
+                      }
+                      canManageOrganization={
+                        workspaceActions.canManageActiveOrganization
+                      }
+                      onInviteOpen={workspaceActions.openInviteDialog}
+                      onLeaveWorkspaceOpen={
+                        workspaceActions.openLeaveWorkspaceDialog
+                      }
+                      onSelectOrganization={(id) =>
+                        void workspaceActions.handleSelectOrganization(id)
+                      }
+                      organizationId={organizationId}
+                      organizations={organizations}
+                      workspaceState={workspaceActions.workspaceState}
+                    />
+                  </div>
+                )}
+                <div className="pointer-events-auto flex min-w-0 shrink items-center justify-center">
+                  <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1">
+                    <WorkspaceDockNav
+                      activeProjectId={activeProjectId ?? undefined}
+                      auditTab={isLocationScoped ? "overview" : auditTab}
+                      crawls={activeProjectCrawls}
+                      currentCrawl={currentCrawl}
+                      formatCrawlLabel={formatCrawlDateTime}
+                      gscConnector={features.gsc_connector}
+                      integrations={features.integrations !== false}
+                      isLocationScoped={false}
+                      maxCompetitors={features.max_competitors}
+                      onCreateProject={() =>
+                        createProjectDispatch({ type: "OPEN" })
+                      }
+                      onDeleteCrawl={(crawl) =>
+                        projectActions.openDeleteCrawlDialog(crawl)
+                      }
+                      onDeleteProject={(project) =>
+                        projectActions.openDeleteProjectDialog(project)
+                      }
+                      onExportCrawl={(crawl, format) =>
+                        void projectActions.handleExportCrawl(crawl, format)
+                      }
+                      onOpenProjectPanel={openProjectPanel}
+                      onSelectCrawl={selectCrawl}
+                      onSelectProject={selectProject}
+                      onSelectWorkspace={selectProjectWorkspace}
+                      lockedOpenItem={lockedDockItem}
+                      pathname={location.pathname}
+                      projectId={activeProject?.id}
+                      projects={alphabeticalProjects}
+                      trailing={
                         <button
                           className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"
                           disabled={!activeProject || isCrawlRunning}
@@ -1094,346 +1140,331 @@ export function WorkspaceShellPreview({
                             ? (runningStageTitle ?? crawlStatusLabel)
                             : "Run crawl"}
                         </button>
-                      )
-                    }
-                    view={view}
-                    visibilityMode={visibilityMode}
-                    actions={[
-                      ...(isLocationScoped
-                        ? []
-                        : [
-                            {
-                              key: "auto-crawl",
-                              icon: (
-                                <SparklesIcon
-                                  aria-hidden="true"
-                                  className="size-4"
-                                />
-                              ),
-                              disabled: !activeProject || autoCrawl.isSaving,
-                              label: autoCrawl.enabled
-                                ? "Auto crawl on"
-                                : "Auto crawl",
-                              onSelect: () =>
-                                autoCrawl.enabled
-                                  ? void autoCrawl.handleDisable()
-                                  : void autoCrawl.openDialog(),
-                            },
-                          ]),
-                      {
-                        key: "business-profile",
-                        icon: (
-                          <Building2Icon
-                            aria-hidden="true"
-                            className="size-4"
-                          />
-                        ),
-                        disabled: !activeProject,
-                        label: "Business profile",
-                        onSelect: () => {
-                          if (activeProject)
-                            businessProfile.openBusinessProfileDrawer(
-                              activeProject
-                            )
+                      }
+                      view={isLocationScoped ? "revserp-audit" : view}
+                      visibilityMode={visibilityMode}
+                      actions={[
+                        {
+                          key: "auto-crawl",
+                          icon: (
+                            <SparklesIcon
+                              aria-hidden="true"
+                              className="size-4"
+                            />
+                          ),
+                          disabled: !activeProject || autoCrawl.isSaving,
+                          label: autoCrawl.enabled
+                            ? "Auto crawl on"
+                            : "Auto crawl",
+                          onSelect: () =>
+                            autoCrawl.enabled
+                              ? void autoCrawl.handleDisable()
+                              : void autoCrawl.openDialog(),
                         },
-                      },
-                      ...(isLocationScoped ? [] : [{ key: "d1", divider: true }]),
-                      ...(isLocationScoped
-                        ? []
-                        : [
-                            {
-                              key: "export-pdf",
-                              icon: (
-                                <FileTextIcon
-                                  aria-hidden="true"
-                                  className="size-4"
-                                />
-                              ),
-                              disabled:
-                                !currentCrawlCompleted || isExportingAudit,
-                              label: isExportingAudit
-                                ? "Generating audit…"
-                                : "Export PDF audit",
-                              onSelect: onExportAudit,
-                            },
-                          ]),
-                      ...(isLocationScoped
-                        ? []
-                        : [
-                            {
-                              key: "export-xlsx",
-                              icon: (
-                                <FileSpreadsheetIcon
-                                  aria-hidden="true"
-                                  className="size-4"
-                                />
-                              ),
-                              disabled:
-                                !currentCrawlCompleted || isExportingCrawl,
-                              label: "Export crawl as XLSX",
-                              onSelect: () => {
-                                if (currentCrawl)
-                                  void projectActions.handleExportCrawl(
-                                    currentCrawl,
-                                    "xlsx"
-                                  )
-                              },
-                            },
-                          ]),
-                      ...(isLocationScoped
-                        ? []
-                        : [
-                            {
-                              key: "export-csv",
-                              icon: (
-                                <FileSpreadsheetIcon
-                                  aria-hidden="true"
-                                  className="size-4"
-                                />
-                              ),
-                              disabled:
-                                !currentCrawlCompleted || isExportingCrawl,
-                              label: "Export crawl as CSV",
-                              onSelect: () => {
-                                if (currentCrawl)
-                                  void projectActions.handleExportCrawl(
-                                    currentCrawl,
-                                    "csv"
-                                  )
-                              },
-                            },
-                          ]),
-                    ]}
-                  />
+
+                        {
+                          key: "business-profile",
+                          icon: (
+                            <Building2Icon
+                              aria-hidden="true"
+                              className="size-4"
+                            />
+                          ),
+                          disabled: !activeProject,
+                          label: "Business profile",
+                          onSelect: () => {
+                            if (activeProject)
+                              businessProfile.openBusinessProfileDrawer(
+                                activeProject
+                              )
+                          },
+                        },
+                        { key: "d1", divider: true },
+
+                        {
+                          key: "export-pdf",
+                          icon: (
+                            <FileTextIcon
+                              aria-hidden="true"
+                              className="size-4"
+                            />
+                          ),
+                          disabled: !currentCrawlCompleted || isExportingAudit,
+                          label: isExportingAudit
+                            ? "Generating audit…"
+                            : "Export PDF audit",
+                          onSelect: onExportAudit,
+                        },
+
+                        {
+                          key: "export-xlsx",
+                          icon: (
+                            <FileSpreadsheetIcon
+                              aria-hidden="true"
+                              className="size-4"
+                            />
+                          ),
+                          disabled: !currentCrawlCompleted || isExportingCrawl,
+                          label: "Export crawl as XLSX",
+                          onSelect: () => {
+                            if (currentCrawl)
+                              void projectActions.handleExportCrawl(
+                                currentCrawl,
+                                "xlsx"
+                              )
+                          },
+                        },
+
+                        {
+                          key: "export-csv",
+                          icon: (
+                            <FileSpreadsheetIcon
+                              aria-hidden="true"
+                              className="size-4"
+                            />
+                          ),
+                          disabled: !currentCrawlCompleted || isExportingCrawl,
+                          label: "Export crawl as CSV",
+                          onSelect: () => {
+                            if (currentCrawl)
+                              void projectActions.handleExportCrawl(
+                                currentCrawl,
+                                "csv"
+                              )
+                          },
+                        },
+                      ]}
+                    />
+                  </div>
                 </div>
-              </div>
-              {fullBleed ? null : (
-                <div className="flex min-w-0 flex-1 items-center justify-end">
-                  <ProfileMenu
-                    initials={initials}
-                    isPlatformAdmin={isPlatformAdmin}
-                    onLogout={() => void workspaceActions.handleLogout()}
-                    onTakeTour={requestOnboardingReplay}
-                    profileActionError={workspaceActions.profileActionError}
-                    userName={userName}
-                    workspaceState={workspaceActions.workspaceState}
-                  />
-                </div>
-              )}
-            </div>
-            {features.ai_chat && !fullBleed ? (
-              <LayoutGroup id="ai-island-group">
-                {islandState === "docked" ? (
-                  <DynamicIslandDockedChrome
-                    active={isIslandThinking || isRevbotTurnActive}
-                    onOpen={openIsland}
-                    transition={islandMorphTransition}
-                  />
-                ) : (
-                  <DynamicIslandPanel
-                    activeConversationId={islandRevbot.conversationId}
-                    conversations={islandRevbot.conversations}
-                    controlsDisabled={islandRevbot.loading}
-                    isConversationActive={islandRevbot.conversationActive}
-                    onDock={dockIsland}
-                    onDeleteConversation={(id) =>
-                      void islandRevbot.deleteConversation(id)
-                    }
-                    onMaximize={maximizeIsland}
-                    onMinimize={minimizeIsland}
-                    onNewChat={() => islandRevbot.newChat()}
-                    onSelectConversation={(id) =>
-                      void islandRevbot.selectConversation(id)
-                    }
-                    panelState={
-                      islandState === "maximized" ? "maximized" : "minimized"
-                    }
-                    title={islandConversationTitle}
-                    transition={islandMorphTransition}
-                  >
-                    {activeProject ? (
-                      <RevbotViewContent
-                        activeProject={activeProject}
-                        allowedEfforts={features.ai_allowed_reasoning_efforts}
-                        compact
-                        defaultHistoryOpen={false}
-                        hideCompactHeader
-                        hideHistory={islandState !== "maximized"}
-                        canManageOrganization={
-                          workspaceActions.canManageActiveOrganization
-                        }
-                        onActivityChange={setIsIslandThinking}
-                        onEditorLink={handleRevbotEditorLink}
-                        onInternalLink={handleRevbotInternalLink}
-                        onTitleChange={setIslandConversationTitle}
-                        revbot={islandRevbot}
-                        suggestions={revbotAuditSuggestions}
-                        showMessageAvatar={islandState === "maximized"}
-                        showMic
-                        variant="dark"
-                      />
-                    ) : null}
-                  </DynamicIslandPanel>
+                {fullBleed ? null : (
+                  <div className="flex min-w-0 flex-1 items-center justify-end">
+                    <ProfileMenu
+                      initials={initials}
+                      isPlatformAdmin={isPlatformAdmin}
+                      onLogout={() => void workspaceActions.handleLogout()}
+                      onTakeTour={requestOnboardingReplay}
+                      profileActionError={workspaceActions.profileActionError}
+                      userName={userName}
+                      workspaceState={workspaceActions.workspaceState}
+                    />
+                  </div>
                 )}
-              </LayoutGroup>
-            ) : null}
-            <AnimatePresence>
-              {isProjectPanelOpen ? (
-                <motion.button
-                  animate={{ opacity: 1 }}
-                  aria-label="Close project selector"
-                  className="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm"
-                  exit={{ opacity: 0 }}
-                  initial={{ opacity: 0 }}
-                  key="project-panel-backdrop"
-                  onClick={() => setIsProjectPanelOpen(false)}
-                  transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
-                  type="button"
-                />
-              ) : null}
-            </AnimatePresence>
-            {isProjectPanelOpen ? (
-              <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-                <ProjectPanel
-                  activeProjectId={activeProjectId}
-                  cancellingCrawlId={projectActions.cancellingCrawlId}
-                  crawlPanelCrawls={crawlPanelCrawls}
-                  currentCrawl={currentCrawl}
-                  deletingCrawlId={projectActions.deletingCrawlId}
-                  deletingProjectId={projectActions.deletingProjectId}
-                  exportFormat={projectActions.exportFormat}
-                  exportingCrawlId={projectActions.exportingCrawlId}
-                  onCancelCrawl={(crawl) =>
-                    void projectActions.handleCancelCrawl(crawl)
-                  }
-                  onCompareCrawl={(crawl) => {
-                    setIsProjectPanelOpen(false)
-                    onCompareCrawl(crawl)
-                  }}
-                  onCreateProjectOpen={() => {
-                    setIsProjectPanelOpen(false)
-                    createProjectDispatch({ type: "OPEN" })
-                  }}
-                  onDeleteCrawl={projectActions.openDeleteCrawlDialog}
-                  onDeleteProject={projectActions.openDeleteProjectDialog}
-                  onExportCrawl={(crawl, format) =>
-                    void projectActions.handleExportCrawl(crawl, format)
-                  }
-                  onExportFormatChange={projectActions.onExportFormatChange}
-                  onOpenBusinessProfile={(project) => {
-                    setIsProjectPanelOpen(false)
-                    businessProfile.openBusinessProfileDrawer(project)
-                  }}
-                  onProjectHover={(id) => hoverProject(id)}
-                  onSelectProject={(projectId, crawlId) => {
-                    setIsProjectPanelOpen(false)
-                    selectProject(projectId, crawlId)
-                  }}
-                  projectActionError={projectActions.projectActionError}
-                  projects={projects}
-                  reducedMotion={shouldReduceMotion}
-                />
               </div>
-            ) : null}
-          </motion.main>
-        </SidebarProvider>
-        <PageEditor />
-        <RunCrawlDialog
-          activeProject={activeProject}
-          activeProjectId={activeProjectId}
-          excludedUrlPatterns={runCrawl.excludedUrlPatterns}
-          exclusionDraft={runCrawl.exclusionDraft}
-          exclusionError={runCrawl.exclusionError}
-          delayMs={runCrawl.delayMs}
-          fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
-          forceFullCrawl={runCrawl.forceFullCrawl}
-          honourRobotsTxt={runCrawl.honourRobotsTxt}
-          renderJavaScript={runCrawl.renderJavaScript}
-          isCrawlRunning={isCrawlRunning}
-          isOpen={runCrawl.isOpen}
-          isStartingCrawl={runCrawl.starting}
-          jitterMs={runCrawl.jitterMs}
-          maxDepth={runCrawl.maxDepth}
-          maxPages={runCrawl.maxPages}
-          runCrawlError={runCrawl.error}
-          onDelayMsChange={(value) =>
-            runCrawlDispatch({ type: "DELAY_MS", value })
-          }
-          onFetchTimeoutSecondsChange={(value) =>
-            runCrawlDispatch({ type: "FETCH_TIMEOUT", value })
-          }
-          onForceFullCrawlChange={(value) =>
-            runCrawlDispatch({ type: "FORCE_FULL_CRAWL", value })
-          }
-          onHonourRobotsTxtChange={(value) =>
-            runCrawlDispatch({ type: "HONOUR_ROBOTS_TXT", value })
-          }
-          onRenderJavaScriptChange={(value) =>
-            runCrawlDispatch({ type: "RENDER_JAVASCRIPT", value })
-          }
-          onJitterMsChange={(value) =>
-            runCrawlDispatch({ type: "JITTER_MS", value })
-          }
-          onExclusionDraftChange={(value) =>
-            runCrawlDispatch({ type: "EXCLUSION_DRAFT", value })
-          }
-          onExclusionCommit={commitExclusionTokens}
-          onExclusionRemove={(pattern) =>
-            runCrawlDispatch({
-              type: "EXCLUDED_PATTERNS",
-              value: runCrawl.excludedUrlPatterns.filter(
-                (entry) => entry !== pattern
-              ),
-            })
-          }
-          onMaxDepthChange={(value) =>
-            runCrawlDispatch({ type: "MAX_DEPTH", value })
-          }
-          onMaxPagesChange={(value) =>
-            runCrawlDispatch({ type: "MAX_PAGES", value })
-          }
-          onOpenChange={(open) =>
-            runCrawlDispatch({ type: open ? "OPEN" : "CLOSE" })
-          }
-          onSubmit={handleRunCrawl}
-        />
-        <AutoCrawlDialog
-          config={autoCrawl.config}
-          error={autoCrawl.error}
-          isOpen={autoCrawl.isDialogOpen}
-          isSaving={autoCrawl.isSaving}
-          nextRunAt={autoCrawl.nextRunAt}
-          onConfigChange={autoCrawl.setConfig}
-          onOpenChange={(open) =>
-            open ? void autoCrawl.openDialog() : autoCrawl.closeDialog()
-          }
-          onSubmit={() => void autoCrawl.handleSaveConfig()}
-        />
-        <AppNavbarDialogs
-          businessProfile={businessProfile}
-          createProject={{
-            isCreateProjectOpen: createProject.isOpen,
-            projectName: createProject.name,
-            projectBaseUrl: createProject.baseUrl,
-            createProjectError: createProject.error,
-            isCreatingProject: createProject.creating,
-          }}
-          createProjectDispatch={(event) => {
-            if (event.type === "OPEN") createProjectDispatch({ type: "OPEN" })
-            else if (event.type === "CLOSE")
-              createProjectDispatch({ type: "CLOSE" })
-            else if (event.type === "SET_NAME")
-              createProjectDispatch({ type: "NAME", value: event.value })
-            else if (event.type === "SET_BASE_URL")
-              createProjectDispatch({ type: "BASE_URL", value: event.value })
-          }}
-          handleCreateProject={handleCreateProject}
-          onDismissDock={() => setIsProjectPanelOpen(false)}
-          projectActions={projectActions}
-          workspaceActions={workspaceActions}
-        />
-      </LayoutGroup>
-    </SetInsightsNavbarLabel.Provider>
+              {features.ai_chat && !fullBleed ? (
+                <LayoutGroup id="ai-island-group">
+                  {islandState === "docked" ? (
+                    <DynamicIslandDockedChrome
+                      active={isIslandThinking || isRevbotTurnActive}
+                      onOpen={openIsland}
+                      transition={islandMorphTransition}
+                    />
+                  ) : (
+                    <DynamicIslandPanel
+                      activeConversationId={islandRevbot.conversationId}
+                      conversations={islandRevbot.conversations}
+                      controlsDisabled={islandRevbot.loading}
+                      isConversationActive={islandRevbot.conversationActive}
+                      onDock={dockIsland}
+                      onDeleteConversation={(id) =>
+                        void islandRevbot.deleteConversation(id)
+                      }
+                      onMaximize={maximizeIsland}
+                      onMinimize={minimizeIsland}
+                      onNewChat={() => islandRevbot.newChat()}
+                      onSelectConversation={(id) =>
+                        void islandRevbot.selectConversation(id)
+                      }
+                      panelState={
+                        islandState === "maximized" ? "maximized" : "minimized"
+                      }
+                      title={islandConversationTitle}
+                      transition={islandMorphTransition}
+                    >
+                      {activeProject ? (
+                        <RevbotViewContent
+                          activeProject={activeProject}
+                          allowedEfforts={features.ai_allowed_reasoning_efforts}
+                          compact
+                          defaultHistoryOpen={false}
+                          hideCompactHeader
+                          hideHistory={islandState !== "maximized"}
+                          canManageOrganization={
+                            workspaceActions.canManageActiveOrganization
+                          }
+                          onActivityChange={setIsIslandThinking}
+                          onEditorLink={handleRevbotEditorLink}
+                          onInternalLink={handleRevbotInternalLink}
+                          onTitleChange={setIslandConversationTitle}
+                          revbot={islandRevbot}
+                          suggestions={revbotAuditSuggestions}
+                          showMessageAvatar={islandState === "maximized"}
+                          showMic
+                          variant="dark"
+                        />
+                      ) : null}
+                    </DynamicIslandPanel>
+                  )}
+                </LayoutGroup>
+              ) : null}
+              <AnimatePresence>
+                {isProjectPanelOpen ? (
+                  <motion.button
+                    animate={{ opacity: 1 }}
+                    aria-label="Close project selector"
+                    className="fixed inset-0 z-40 cursor-default bg-black/50 backdrop-blur-sm"
+                    exit={{ opacity: 0 }}
+                    initial={{ opacity: 0 }}
+                    key="project-panel-backdrop"
+                    onClick={() => setIsProjectPanelOpen(false)}
+                    transition={{ duration: shouldReduceMotion ? 0 : 0.2 }}
+                    type="button"
+                  />
+                ) : null}
+              </AnimatePresence>
+              {isProjectPanelOpen ? (
+                <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <ProjectPanel
+                    activeProjectId={activeProjectId}
+                    cancellingCrawlId={projectActions.cancellingCrawlId}
+                    crawlPanelCrawls={crawlPanelCrawls}
+                    currentCrawl={currentCrawl}
+                    deletingCrawlId={projectActions.deletingCrawlId}
+                    deletingProjectId={projectActions.deletingProjectId}
+                    exportFormat={projectActions.exportFormat}
+                    exportingCrawlId={projectActions.exportingCrawlId}
+                    onCancelCrawl={(crawl) =>
+                      void projectActions.handleCancelCrawl(crawl)
+                    }
+                    onCompareCrawl={(crawl) => {
+                      setIsProjectPanelOpen(false)
+                      onCompareCrawl(crawl)
+                    }}
+                    onCreateProjectOpen={() => {
+                      setIsProjectPanelOpen(false)
+                      createProjectDispatch({ type: "OPEN" })
+                    }}
+                    onDeleteCrawl={projectActions.openDeleteCrawlDialog}
+                    onDeleteProject={projectActions.openDeleteProjectDialog}
+                    onExportCrawl={(crawl, format) =>
+                      void projectActions.handleExportCrawl(crawl, format)
+                    }
+                    onExportFormatChange={projectActions.onExportFormatChange}
+                    onOpenBusinessProfile={(project) => {
+                      setIsProjectPanelOpen(false)
+                      businessProfile.openBusinessProfileDrawer(project)
+                    }}
+                    onProjectHover={(id) => hoverProject(id)}
+                    onSelectProject={(projectId, crawlId) => {
+                      setIsProjectPanelOpen(false)
+                      selectProject(projectId, crawlId)
+                    }}
+                    projectActionError={projectActions.projectActionError}
+                    projects={alphabeticalProjects}
+                    reducedMotion={shouldReduceMotion}
+                  />
+                </div>
+              ) : null}
+            </motion.main>
+          </SidebarProvider>
+          <PageEditor />
+          <RunCrawlDialog
+            activeProject={activeProject}
+            activeProjectId={activeProjectId}
+            excludedUrlPatterns={runCrawl.excludedUrlPatterns}
+            exclusionDraft={runCrawl.exclusionDraft}
+            exclusionError={runCrawl.exclusionError}
+            delayMs={runCrawl.delayMs}
+            fetchTimeoutSeconds={runCrawl.fetchTimeoutSeconds}
+            forceFullCrawl={runCrawl.forceFullCrawl}
+            honourRobotsTxt={runCrawl.honourRobotsTxt}
+            renderJavaScript={runCrawl.renderJavaScript}
+            isCrawlRunning={isCrawlRunning}
+            isOpen={runCrawl.isOpen}
+            isStartingCrawl={runCrawl.starting}
+            jitterMs={runCrawl.jitterMs}
+            maxDepth={runCrawl.maxDepth}
+            maxPages={runCrawl.maxPages}
+            runCrawlError={runCrawl.error}
+            onDelayMsChange={(value) =>
+              runCrawlDispatch({ type: "DELAY_MS", value })
+            }
+            onFetchTimeoutSecondsChange={(value) =>
+              runCrawlDispatch({ type: "FETCH_TIMEOUT", value })
+            }
+            onForceFullCrawlChange={(value) =>
+              runCrawlDispatch({ type: "FORCE_FULL_CRAWL", value })
+            }
+            onHonourRobotsTxtChange={(value) =>
+              runCrawlDispatch({ type: "HONOUR_ROBOTS_TXT", value })
+            }
+            onRenderJavaScriptChange={(value) =>
+              runCrawlDispatch({ type: "RENDER_JAVASCRIPT", value })
+            }
+            onJitterMsChange={(value) =>
+              runCrawlDispatch({ type: "JITTER_MS", value })
+            }
+            onExclusionDraftChange={(value) =>
+              runCrawlDispatch({ type: "EXCLUSION_DRAFT", value })
+            }
+            onExclusionCommit={commitExclusionTokens}
+            onExclusionRemove={(pattern) =>
+              runCrawlDispatch({
+                type: "EXCLUDED_PATTERNS",
+                value: runCrawl.excludedUrlPatterns.filter(
+                  (entry) => entry !== pattern
+                ),
+              })
+            }
+            onMaxDepthChange={(value) =>
+              runCrawlDispatch({ type: "MAX_DEPTH", value })
+            }
+            onMaxPagesChange={(value) =>
+              runCrawlDispatch({ type: "MAX_PAGES", value })
+            }
+            onOpenChange={(open) =>
+              runCrawlDispatch({ type: open ? "OPEN" : "CLOSE" })
+            }
+            onSubmit={handleRunCrawl}
+          />
+          <AutoCrawlDialog
+            config={autoCrawl.config}
+            error={autoCrawl.error}
+            isOpen={autoCrawl.isDialogOpen}
+            isSaving={autoCrawl.isSaving}
+            nextRunAt={autoCrawl.nextRunAt}
+            onConfigChange={autoCrawl.setConfig}
+            onOpenChange={(open) =>
+              open ? void autoCrawl.openDialog() : autoCrawl.closeDialog()
+            }
+            onSubmit={() => void autoCrawl.handleSaveConfig()}
+          />
+          <BusinessProfileDrawer businessProfile={localBusinessProfile} />
+          <AppNavbarDialogs
+            businessProfile={businessProfile}
+            createProject={{
+              isCreateProjectOpen: createProject.isOpen,
+              projectName: createProject.name,
+              projectBaseUrl: createProject.baseUrl,
+              createProjectError: createProject.error,
+              isCreatingProject: createProject.creating,
+            }}
+            createProjectDispatch={(event) => {
+              if (event.type === "OPEN") createProjectDispatch({ type: "OPEN" })
+              else if (event.type === "CLOSE")
+                createProjectDispatch({ type: "CLOSE" })
+              else if (event.type === "SET_NAME")
+                createProjectDispatch({ type: "NAME", value: event.value })
+              else if (event.type === "SET_BASE_URL")
+                createProjectDispatch({ type: "BASE_URL", value: event.value })
+            }}
+            handleCreateProject={handleCreateProject}
+            onDismissDock={() => setIsProjectPanelOpen(false)}
+            projectActions={projectActions}
+            workspaceActions={workspaceActions}
+          />
+        </LayoutGroup>
+      </SetInsightsNavbarLabel.Provider>
     </OnboardingUiContext.Provider>
   )
 }

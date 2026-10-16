@@ -591,7 +591,7 @@ describe("local SEO map fallback", () => {
 })
 
 describe("local SEO map result counts", () => {
-  test("equal counts render Avg rank with N/query and keep styled data accurate", () => {
+  test("equal counts render Avg rank with returned results/query and keep styled data accurate", () => {
     const overlay = gridFeatureCollection(
       [1, 6, 6, 15].map((rank) => ({
         point_index: 3,
@@ -610,12 +610,12 @@ describe("local SEO map result counts", () => {
     expect(point.rank).toBe(7)
     expect(point.gridValue).toBe("7")
     expect(point.displayRank).toBe("Avg 7")
-    expect(point.resultCountLabel).toBe("20/query")
+    expect(point.resultCountLabel).toBe("20 results/query")
     const map = renderMap({ center: CENTRE, overlayData: overlay })
     map.fire("load", { lngLat: { lng: 0, lat: 0 } })
     const data = map.sources.get("local-seo-overlay")?.data as typeof overlay
     expect(data.features[3].properties.displayRank).toBe("Avg 7")
-    expect(data.features[3].properties.resultCountLabel).toBe("20/query")
+    expect(data.features[3].properties.resultCountLabel).toBe("20 results/query")
     expect(data.features[3].properties.gridValue).toBe("7")
     const label = map.layers.find((layer) => layer["id"] === "local-seo-overlay-label")
     const layout = JSON.stringify(label?.["layout"])
@@ -626,7 +626,7 @@ describe("local SEO map result counts", () => {
       features: Array<{ properties: Record<string, unknown> }>
     }
     expect(labels.features[3].properties.displayRank).toBe("Avg 7")
-    expect(labels.features[3].properties.resultCountLabel).toBe("20/query")
+    expect(labels.features[3].properties.resultCountLabel).toBe("20 results/query")
   })
 
   test("unequal counts render an ASCII range", () => {
@@ -638,7 +638,7 @@ describe("local SEO map result counts", () => {
       CENTRE,
       5000
     )
-    expect(overlay.features[3].properties.resultCountLabel).toBe("15-20/query")
+    expect(overlay.features[3].properties.resultCountLabel).toBe("15-20 results/query")
   })
 })
 

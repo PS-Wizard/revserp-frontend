@@ -23,6 +23,7 @@ const { WorkspaceShellPreview } = await import(
   "~/components/workspace-shell-preview"
 )
 import { flushTestDom } from "~/lib/dom-test-setup"
+import { DEFAULT_EXCLUDED_URL_PATTERNS } from "./crawl-exclusions"
 
 const PROJECT = {
   id: "p-1",
@@ -226,7 +227,7 @@ describe("run crawl exclusions", () => {
     await mountShell(root)
 
     const input = await openRunCrawl()
-    expect(removeButtons()).toHaveLength(3)
+    expect(removeButtons()).toHaveLength(DEFAULT_EXCLUDED_URL_PATTERNS.length)
 
     // Enter adds a token but never submits the form.
     await act(async () => {
@@ -238,7 +239,7 @@ describe("run crawl exclusions", () => {
       await pressKey(input, "Enter")
       await flushTestDom()
     })
-    expect(removeButtons()).toHaveLength(4)
+    expect(removeButtons()).toHaveLength(DEFAULT_EXCLUDED_URL_PATTERNS.length + 1)
     expect(posts).toHaveLength(0)
 
     // Duplicates are dropped.
@@ -250,14 +251,14 @@ describe("run crawl exclusions", () => {
       await pressKey(input, "Enter")
       await flushTestDom()
     })
-    expect(removeButtons()).toHaveLength(4)
+    expect(removeButtons()).toHaveLength(DEFAULT_EXCLUDED_URL_PATTERNS.length + 1)
 
     // Pasted whitespace/newline text becomes tokens.
     await act(async () => {
       pasteText(input, "/p1/*\n/p2/* https://example.com/exact")
       await flushTestDom()
     })
-    expect(removeButtons()).toHaveLength(7)
+    expect(removeButtons()).toHaveLength(DEFAULT_EXCLUDED_URL_PATTERNS.length + 4)
 
     // A typed but unsplit URL still ships with the request.
     await act(async () => {
@@ -275,9 +276,7 @@ describe("run crawl exclusions", () => {
     const post = await waitForPost(posts)
     expect(!!post).toBe(true)
     expect(post?.body.config_snapshot.excluded_url_patterns).toEqual([
-      "/wp-admin/*",
-      "/wp-login.php",
-      "/admin/*",
+      ...DEFAULT_EXCLUDED_URL_PATTERNS,
       "/new/*",
       "/p1/*",
       "/p2/*",
@@ -334,13 +333,13 @@ describe("run crawl exclusions", () => {
     root = createRoot(host)
     await mountShell(root, { projectId: "p-2" })
     await openRunCrawl()
-    expect(removeButtons()).toHaveLength(3)
+    expect(removeButtons()).toHaveLength(DEFAULT_EXCLUDED_URL_PATTERNS.length)
 
     if (root) act(() => root?.unmount())
     host.innerHTML = ""
     root = createRoot(host)
     await mountShell(root, { userId: "user-2" })
     await openRunCrawl()
-    expect(removeButtons()).toHaveLength(3)
+    expect(removeButtons()).toHaveLength(DEFAULT_EXCLUDED_URL_PATTERNS.length)
   })
 })

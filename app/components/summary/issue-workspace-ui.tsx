@@ -105,7 +105,7 @@ function severityClassName(severity: string) {
   }
 }
 
-function SeverityBadge({ severity }: { severity: string }) {
+export function SeverityBadge({ severity }: { severity: string }) {
   return (
     <span
       className={cn(

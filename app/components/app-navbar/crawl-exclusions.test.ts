@@ -28,12 +28,47 @@ function memoryStorage() {
 }
 
 describe("crawl exclusion defaults", () => {
-  test("frontend defaults are the three listed patterns", () => {
-    expect([...DEFAULT_EXCLUDED_URL_PATTERNS]).toEqual([
+  test("defaults cover common non-content routes without a blanket admin rule", () => {
+    const patterns: readonly string[] = DEFAULT_EXCLUDED_URL_PATTERNS
+    for (const pattern of [
       "/wp-admin/*",
       "/wp-login.php",
-      "/admin/*",
-    ])
+      "/xmlrpc.php",
+      "/administrator/*",
+      "/login/*",
+      "/logout/*",
+      "/signin/*",
+      "/sign-in/*",
+      "/signout/*",
+      "/sign-out/*",
+      "/signup/*",
+      "/sign-up/*",
+      "/register/*",
+      "/forgot-password/*",
+      "/reset-password/*",
+      "/password/reset/*",
+      "/user/login/*",
+      "/user/logout/*",
+      "/user/password/*",
+      "/wp-json/*",
+      "/_next/*",
+      "/_nuxt/*",
+      "/_app/immutable/*",
+      "/__vite*",
+      "/__debug__/*",
+      "/.git/*",
+      "/.env",
+      "/.env.*",
+      "/node_modules/*",
+    ]) {
+      expect(patterns).toContain(pattern)
+    }
+    for (const pattern of ["/admin/*", "/vendor/*", "/debug/*", "/login*", "/signup*"]) {
+      expect(patterns.includes(pattern)).toBe(false)
+    }
+    expect(new Set(patterns).size).toBe(patterns.length)
+    expect(patterns.length < MAX_EXCLUDED_URL_PATTERNS).toBe(true)
+    expect(validateExcludedUrlPatterns([...patterns])).toBe("")
   })
 })
 

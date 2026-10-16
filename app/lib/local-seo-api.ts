@@ -15,7 +15,7 @@ export type LocalSeoLocation = {
   address: string
   locality: string
   localities: string[]
-  /** Server-effective Model A services; the only source for query generation. */
+  /** Legacy service labels retained for existing location records. */
   services: string[]
   latitude: number
   longitude: number

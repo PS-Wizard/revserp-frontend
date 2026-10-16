@@ -1259,6 +1259,29 @@ describe("stored result counts in the report", () => {
     expect(html).toContain("#7/20 returned")
   })
 
+  test("empty successful responses use a plain-language result count", () => {
+    const html = renderReport({
+      tab: "overview",
+      latestRun: makeRun({
+        queries: ["coffee"],
+        cells: [
+          makeCell({
+            point_index: 4,
+            ring: "centre",
+            sector: "centre",
+            call_status: "success_empty",
+            match_status: "absent",
+            rank: null,
+            result_count: 0,
+          }),
+        ],
+      }),
+    })
+    expect(html).toContain(", no results returned")
+    expect(html.includes("0/query")).toBe(false)
+    expect(html.includes("No results returned returned results")).toBe(false)
+  })
+
   test("legend spells the returned-count scope", () => {
     const html = renderReport({
       tab: "overview",

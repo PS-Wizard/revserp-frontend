@@ -53,7 +53,8 @@ function makeCells(): LocalSeoCell[] {
     latitude: 27.7 + pointIndex * 0.001,
     longitude: 85.3 + pointIndex * 0.001,
     distance_m: pointIndex * 100,
-    ring: pointIndex === 4 ? "centre" : pointIndex % 2 === 0 ? "corner" : "edge",
+    ring:
+      pointIndex === 4 ? "centre" : pointIndex % 2 === 0 ? "corner" : "edge",
     sector: SECTORS[pointIndex],
     call_status: "success_nonempty",
     match_status: "found",
@@ -141,7 +142,10 @@ function renderPage(run: LocalSeoRun) {
     return renderToStaticMarkup(
       <MemoryRouter>
         <QueryClientProvider client={client}>
-          <LocationMapsCompetitorsPage projectId={PROJECT} locationId={LOCATION} />
+          <LocationMapsCompetitorsPage
+            projectId={PROJECT}
+            locationId={LOCATION}
+          />
         </QueryClientProvider>
       </MemoryRouter>
     )
@@ -245,8 +249,13 @@ describe("combined page shared point selection", () => {
       input: string | URL | Request
     ) => {
       const url = typeof input === "string" ? input : input.toString()
+      if (url.includes("/maps-queries/status"))
+        return Response.json({ status: "idle" })
+      if (url.endsWith("/queries")) return Response.json([])
       if (url.includes("/points/") && url.includes("/competitors")) {
-        return Response.json(makeCompetitors({ run_id: run.id, point_index: 4 }))
+        return Response.json(
+          makeCompetitors({ run_id: run.id, point_index: 4 })
+        )
       }
       if (url.includes("/competitors")) {
         return Response.json(makeCompetitors({ run_id: run.id }))
@@ -330,7 +339,7 @@ describe("combined page shared point selection", () => {
       client.clear()
       restoreFetch()
     }
-})
+  })
 })
 
 describe("combined page shared run", () => {
@@ -348,11 +357,12 @@ describe("combined page shared run", () => {
     ) => {
       const url = typeof input === "string" ? input : input.toString()
       fetchCalls.push(url)
+      if (url.includes("/maps-queries/status"))
+        return Response.json({ status: "idle" })
+      if (url.endsWith("/queries")) return Response.json([])
       if (url.includes("/points/") && url.includes("/competitors")) {
         const runId = url.includes(saved.id) ? saved.id : latest.id
-        return Response.json(
-          makeCompetitors({ run_id: runId, point_index: 4 })
-        )
+        return Response.json(makeCompetitors({ run_id: runId, point_index: 4 }))
       }
       if (url.includes("/competitors")) {
         const runId = url.includes(saved.id) ? saved.id : latest.id
@@ -455,7 +465,9 @@ describe("combined page shared run", () => {
       expect(
         fetchCalls.some((url) => url.includes(`/runs/${saved.id}/competitors`))
       ).toBe(true)
-      expect(container.querySelectorAll('select[aria-label="Selected run"]').length).toBe(1)
+      expect(
+        container.querySelectorAll('select[aria-label="Selected run"]').length
+      ).toBe(1)
     } finally {
       root.unmount()
       client.clear()

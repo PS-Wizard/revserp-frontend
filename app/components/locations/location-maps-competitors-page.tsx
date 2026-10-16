@@ -33,6 +33,7 @@ import { gridFeatureCollection } from "~/lib/local-seo-grid-geo"
 import { Badge } from "~/components/ui/badge"
 import { LocalSeoMap } from "~/components/local-seo-map"
 import { LocalSeoRunControls } from "~/components/local-seo-run-controls"
+import { LocationMapsQueriesPanel } from "~/components/locations/location-maps-queries"
 import {
   LocationMapsPointCard,
   selectLocationMapsNewRunRadiusM,
@@ -82,9 +83,12 @@ export function LocationMapsCompetitorsPage({
 }) {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [sessionRunId, setSessionRunId] = useState<string | null>(null)
-  const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(null)
+  const [focusedPointIndex, setFocusedPointIndex] = useState<number | null>(
+    null
+  )
+  const [queriesBlockRun, setQueriesBlockRun] = useState(true)
   const workspace = useOptionalLocationWorkspace()
-  const canManage = workspace?.canManage ?? true
+  const canManage = workspace?.canManage ?? false
   const locationQuery = useQuery({
     queryKey: localSeoLocationQueryKey(projectId, locationId),
     queryFn: () => fetchLocalSeoLocation(projectId, locationId),
@@ -131,7 +135,11 @@ export function LocationMapsCompetitorsPage({
   const overlayData = useMemo(() => {
     if (!mapCenter || !evidenceRun) return undefined
     if (validateLocalSeoRadiusM(evidenceRun.radius_m) !== null) return undefined
-    return gridFeatureCollection(evidenceRun.cells, mapCenter, evidenceRun.radius_m)
+    return gridFeatureCollection(
+      evidenceRun.cells,
+      mapCenter,
+      evidenceRun.radius_m
+    )
   }, [mapCenter?.[0], mapCenter?.[1], evidenceRun])
 
   const competitorsEnabled = bound && evidenceRun !== null
@@ -191,57 +199,70 @@ export function LocationMapsCompetitorsPage({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
-      {evidenceRun || historySelected ? (
-      <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-      <LocationSavedRunPicker
+      <LocationMapsQueriesPanel
         projectId={projectId}
         locationId={location.id}
-        latestRun={latestRun}
-        value={selectedRunId}
-        sessionRunId={sessionRunId}
-        onChange={(runId) => {
-          setSelectedRunId(runId)
-          setFocusedPointIndex(null)
-        }}
+        onRunBlockedChange={setQueriesBlockRun}
       />
-      {evidenceRun ? (
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          <Badge
-            variant="outline"
-            title={evidenceRun.queries.join(" · ") || "No queries"}
-          >
-            {`${evidenceRun.queries.length} ${evidenceRun.queries.length === 1 ? "query" : "queries"}`}
-          </Badge>
-          <Badge variant="outline">
-            {`${(evidenceRun.radius_m / 1000).toFixed(1)} km radius`}
-          </Badge>
-          <Badge variant="secondary">{evidenceRun.status}</Badge>
+      {evidenceRun || historySelected ? (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <LocationSavedRunPicker
+              projectId={projectId}
+              locationId={location.id}
+              latestRun={latestRun}
+              value={selectedRunId}
+              sessionRunId={sessionRunId}
+              onChange={(runId) => {
+                setSelectedRunId(runId)
+                setFocusedPointIndex(null)
+              }}
+            />
+            {evidenceRun ? (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <Badge
+                  variant="outline"
+                  title={evidenceRun.queries.join(" · ") || "No queries"}
+                >
+                  {`${evidenceRun.queries.length} ${evidenceRun.queries.length === 1 ? "query" : "queries"}`}
+                </Badge>
+                <Badge variant="outline">
+                  {`${(evidenceRun.radius_m / 1000).toFixed(1)} km radius`}
+                </Badge>
+                <Badge variant="secondary">{evidenceRun.status}</Badge>
+              </div>
+            ) : null}
+          </div>
+          {canManage ? (
+            <LocalSeoRunControls
+              part="action"
+              key={`${projectId}:${location.id}`}
+              projectId={projectId}
+              location={location}
+              radiusM={radiusM}
+              startBlockedReason={
+                queriesBlockRun
+                  ? "Save query changes or wait for query preparation before starting a Maps run."
+                  : undefined
+              }
+              onRunStarted={(runId) => {
+                setSessionRunId(runId)
+                setSelectedRunId(runId)
+              }}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Only workspace managers can start a Maps run.
+            </p>
+          )}
         </div>
-      ) : null}
-      </div>
-      {canManage ? (
-        <LocalSeoRunControls
-          part="action"
-          key={`${projectId}:${location.id}`}
-          projectId={projectId}
-          location={location}
-          radiusM={radiusM}
-          onRunStarted={(runId) => {
-            setSessionRunId(runId)
-            setSelectedRunId(runId)
-          }}
-        />
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          Only workspace managers can start a Maps run.
-        </p>
-      )}
-      </div>
       ) : null}
       {latestRunQuery.isError ? (
         <p role="alert" className="text-sm text-destructive">
-          {errorMessageOf(latestRunQuery.error, "Could not load the latest run")}
+          {errorMessageOf(
+            latestRunQuery.error,
+            "Could not load the latest run"
+          )}
         </p>
       ) : null}
       {latestRun &&
@@ -306,36 +327,42 @@ export function LocationMapsCompetitorsPage({
               />
             </div>
           </section>
-          <section aria-label="Grid point results" className="flex flex-col gap-3">
+          <section
+            aria-label="Grid point results"
+            className="flex flex-col gap-3"
+          >
             <h2 className="text-sm font-medium">Grid points</h2>
             <div
               aria-label="Nine-point grid results"
               className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
             >
-              {Array.from({ length: LOCAL_SEO_POINT_COUNT }, (_, pointIndex) => {
-                const focused = focusedPointIndex === pointIndex
-                return (
-                  <div
-                    key={`${evidenceRun.id}:${pointIndex}`}
-                    className={
-                      focused
-                        ? "rounded-lg ring-2 ring-primary/70 ring-offset-4 ring-offset-background"
-                        : undefined
-                    }
-                  >
-                    <LocationMapsPointCard
-                      projectId={projectId}
-                      locationId={location.id}
-                      pointIndex={pointIndex}
-                      run={evidenceRun}
-                      pointCells={evidenceRun.cells.filter(
-                        (cell) => cell.point_index === pointIndex
-                      )}
-                      summary={pointSummaries.get(pointIndex) ?? null}
-                    />
-                  </div>
-                )
-              })}
+              {Array.from(
+                { length: LOCAL_SEO_POINT_COUNT },
+                (_, pointIndex) => {
+                  const focused = focusedPointIndex === pointIndex
+                  return (
+                    <div
+                      key={`${evidenceRun.id}:${pointIndex}`}
+                      className={
+                        focused
+                          ? "rounded-lg ring-2 ring-primary/70 ring-offset-4 ring-offset-background"
+                          : undefined
+                      }
+                    >
+                      <LocationMapsPointCard
+                        projectId={projectId}
+                        locationId={location.id}
+                        pointIndex={pointIndex}
+                        run={evidenceRun}
+                        pointCells={evidenceRun.cells.filter(
+                          (cell) => cell.point_index === pointIndex
+                        )}
+                        summary={pointSummaries.get(pointIndex) ?? null}
+                      />
+                    </div>
+                  )
+                }
+              )}
             </div>
           </section>
           <section
@@ -347,7 +374,9 @@ export function LocationMapsCompetitorsPage({
                 <select
                   aria-label="Competitor scope"
                   value={
-                    focusedPointIndex === null ? "whole" : String(focusedPointIndex)
+                    focusedPointIndex === null
+                      ? "whole"
+                      : String(focusedPointIndex)
                   }
                   onChange={(event) => {
                     setFocusedPointIndex(
@@ -400,6 +429,11 @@ export function LocationMapsCompetitorsPage({
                 projectId={projectId}
                 location={location}
                 radiusM={radiusM}
+                startBlockedReason={
+                  queriesBlockRun
+                    ? "Save query changes or wait for query preparation before starting a Maps run."
+                    : undefined
+                }
                 onRunStarted={(runId) => {
                   setSessionRunId(runId)
                   setSelectedRunId(runId)
