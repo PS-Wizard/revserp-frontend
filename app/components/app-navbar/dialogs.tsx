@@ -30,6 +30,7 @@ type CreateProjectDialogProps = {
   createProjectError: string
   isCreatingProject: boolean
   isOpen: boolean
+  isRenameMode?: boolean
   projectBaseUrl: string
   projectName: string
   onBaseUrlChange: (value: string) => void
@@ -41,6 +42,7 @@ type CreateProjectDialogProps = {
 export function CreateProjectDialog({
   createProjectError,
   isCreatingProject,
+  isRenameMode = false,
   isOpen,
   projectBaseUrl,
   projectName,
@@ -51,11 +53,11 @@ export function CreateProjectDialog({
 }: CreateProjectDialogProps) {
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
-      <DialogContent data-tour="onboarding-create-form">
+      <DialogContent data-tour={isRenameMode ? undefined : 'onboarding-create-form'}>
         <DialogHeader>
-          <DialogTitle>Create project</DialogTitle>
+          <DialogTitle>{isRenameMode ? 'Rename project' : 'Create project'}</DialogTitle>
           <DialogDescription>
-            Add a project to this workspace and start crawling it.
+            {isRenameMode ? 'Rename this project. Only the name changes.' : 'Add a project to this workspace and start crawling it.'}
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-6" onSubmit={onSubmit}>
@@ -75,10 +77,11 @@ export function CreateProjectDialog({
                 id="project-base-url"
                 onChange={(event) => onBaseUrlChange(event.target.value)}
                 placeholder="https://revserp.ai"
+                readOnly={isRenameMode}
                 value={projectBaseUrl}
               />
               <FieldDescription>
-                Use the canonical site URL you want to crawl.
+                {isRenameMode ? 'The website URL cannot be changed here.' : 'Use the canonical site URL you want to crawl.'}
               </FieldDescription>
             </Field>
           </FieldGroup>
@@ -87,6 +90,7 @@ export function CreateProjectDialog({
 
           <DialogFooter>
             <Button
+              disabled={isCreatingProject}
               onClick={() => onOpenChange(false)}
               type="button"
               variant="outline"
@@ -103,7 +107,7 @@ export function CreateProjectDialog({
                   style={{ width: 18, height: 18 }}
                 />
               ) : null}
-              {isCreatingProject ? "Creating..." : "Create project"}
+              {isCreatingProject ? (isRenameMode ? 'Saving...' : 'Creating...') : (isRenameMode ? 'Save changes' : 'Create project')}
             </Button>
           </DialogFooter>
         </form>

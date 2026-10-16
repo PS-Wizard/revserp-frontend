@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import {
   DownloadIcon,
   LogOutIcon,
+  MegaphoneIcon,
   MoonIcon,
   RouteIcon,
   ShieldIcon,
@@ -22,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import { HoverPill, useHoverMenu } from "~/components/ui/hover-pill"
+import { requestAnnouncementReplay } from "~/lib/announcement-events"
 import { cn } from "~/lib/utils"
 import {
   clearInstallPrompt,
@@ -216,6 +218,18 @@ export function ProfileMenu({
               Take the tour
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuItem
+            className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+            onClick={() => requestAnnouncementReplay()}
+            onMouseEnter={() => showProfilePill(5)}
+            ref={(element) => {
+              profileItemRefs.current[5] = element
+            }}
+            variant="default"
+          >
+            <MegaphoneIcon />
+            What’s new
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         {isStandalone ? null : (
           <>

@@ -26,6 +26,7 @@ type CreateProjectState = {
   projectBaseUrl: string
   createProjectError: string
   isCreatingProject: boolean
+  isRenameMode?: boolean
 }
 
 type CreateProjectEvent =
@@ -65,6 +66,7 @@ export function AppNavbarDialogs({
       <CreateProjectDialog
         createProjectError={createProject.createProjectError}
         isCreatingProject={createProject.isCreatingProject}
+        isRenameMode={createProject.isRenameMode}
         isOpen={createProject.isCreateProjectOpen}
         projectBaseUrl={createProject.projectBaseUrl}
         projectName={createProject.projectName}

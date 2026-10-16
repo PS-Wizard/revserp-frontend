@@ -1,0 +1,28 @@
+.release-announcement-slide,
+.release-announcement-art {
+  animation: release-announcement-in 180ms ease-out;
+}
+
+@keyframes release-announcement-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.release-announcement [data-slot="dialog-close"] {
+  background-color: color-mix(in oklab, var(--background) 82%, transparent);
+  border-radius: 9999px;
+  backdrop-filter: blur(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .release-announcement-slide,
+  .release-announcement-art {
+    animation: none;
+  }
+}

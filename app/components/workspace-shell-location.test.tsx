@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { act } from "react"
-import { createRoot, type Root } from "react-dom/client"
+import type { Root } from "react-dom/client"
 import { createMemoryRouter, RouterProvider } from "react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { WorkspaceShellPreview } from "~/components/workspace-shell-preview"
 import { LocationWorkspaceProvider } from "~/lib/location-workspace"
 import { flushTestDom, installTestDom } from "~/lib/dom-test-setup"
 
 installTestDom()
+delete (Element.prototype as Partial<Element>).animate
+
+const { createRoot } = await import("react-dom/client")
+const { WorkspaceShellPreview } = await import("~/components/workspace-shell-preview")
 
 const PROJECT = {
   id: "p-1",
@@ -130,8 +133,83 @@ describe("real shell location scope", () => {
       await flushTestDom()
       await flushTestDom()
     })
-    return { calls, host: host as HTMLDivElement }
+    return { calls, host: host as HTMLDivElement, router }
   }
+
+  test("project popup renames with a name-only PATCH and preserves the selected scope", async () => {
+    const seenViews: string[] = []
+    const { host: mounted, router } = await mountShell(seenViews)
+    const originalLocation = router.state.location
+    const fallbackFetch = globalThis.fetch
+    const updates: { url: string; body: unknown }[] = []
+    let failSave = true
+    globalThis.fetch = (async (input, init) => {
+      if (init?.method === "PATCH") {
+        updates.push({ url: String(input), body: JSON.parse(String(init.body)) })
+        return Response.json(
+          failSave ? { error: "Rename failed" } : { ...PROJECT, name: "Renamed" },
+          { status: failSave ? 400 : 200 }
+        )
+      }
+      return fallbackFetch(input, init)
+    }) as typeof fetch
+
+    const projectButton = Array.from(mounted.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === PROJECT.name
+    )
+    expect(Boolean(projectButton)).toBe(true)
+    await act(async () => {
+      projectButton?.click()
+      await flushTestDom()
+    })
+    const panel = document.querySelector('[role="dialog"][aria-label="Projects"]')
+    const trigger = panel?.querySelector('[data-slot="context-menu-trigger"]')
+    expect(Boolean(trigger)).toBe(true)
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, button: 2 }))
+      await flushTestDom()
+    })
+    const website = document.querySelector('a[target="_blank"][href="https://revketer.ai/"]')
+    expect(website?.getAttribute("rel")).toBe("noopener noreferrer")
+    const rename = Array.from(document.querySelectorAll<HTMLElement>('[data-slot="context-menu-item"]')).find(
+      (item) => item.textContent?.trim() === "Rename project"
+    )
+    expect(Boolean(rename)).toBe(true)
+    await act(async () => {
+      rename?.click()
+      await flushTestDom()
+      await flushTestDom()
+    })
+    const name = document.querySelector<HTMLInputElement>("#project-name")
+    const baseUrl = document.querySelector<HTMLInputElement>("#project-base-url")
+    expect(name?.value).toBe(PROJECT.name)
+    expect(baseUrl?.value).toBe(PROJECT.base_url)
+    expect(baseUrl?.readOnly).toBe(true)
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(Object.getPrototypeOf(name), "value")?.set?.call(name, "  Renamed  ")
+      name?.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    const submit = async () => {
+      await act(async () => {
+        name?.closest("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+        await flushTestDom()
+        await flushTestDom()
+      })
+    }
+    await submit()
+    expect(document.body.textContent).toContain("Rename failed")
+    expect(document.querySelector<HTMLInputElement>("#project-name")?.value).toBe("  Renamed  ")
+    failSave = false
+    await submit()
+    expect(updates.length).toBe(2)
+    for (const update of updates) {
+      expect(update.url.endsWith("/projects/p-1")).toBe(true)
+      expect(update.body).toEqual({ name: "Renamed" })
+    }
+    expect(document.querySelector("#project-name")).toBeNull()
+    expect(router.state.location).toEqual(originalLocation)
+    expect(seenViews).toEqual([])
+  })
 
   test("project navbar stays unchanged above a separate location navigation", async () => {
     const { host: mounted } = await mountShell([])

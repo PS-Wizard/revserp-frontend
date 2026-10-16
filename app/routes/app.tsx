@@ -85,6 +85,7 @@ import type {
   ProjectResponse,
   ScoreBreakdownResponse,
 } from "~/lib/api.types"
+import { ReleaseAnnouncementsController } from "~/components/announcements/release-announcements-controller"
 import { OnboardingTour } from "~/components/onboarding/onboarding-tour"
 import { isOnboardingSetupRunning } from "~/lib/onboarding-state"
 import { canManageOrganization } from "~/lib/organization-access"
@@ -895,6 +896,12 @@ export default function AppPage() {
             }
           >
             {cancelDialog}
+            <ReleaseAnnouncementsController
+              userId={me.user.id}
+              onboardingStatus={onboarding?.status ?? null}
+              setupPanelVisible={showProjectSetup}
+              setupRunning={onboardingSetupRunning}
+            />
             {outlet ?? (locationWorkspace ? (
               <Suspense fallback={null}>
                 <LocationWorkspaceView

@@ -118,9 +118,11 @@ type CreateProjectState = {
   baseUrl: string
   error: string
   creating: boolean
+  renameProjectId: string | null
 }
 type CreateProjectEvent =
   | { type: "OPEN" | "CLOSE" | "CREATING" | "CREATED" }
+  | { type: "RENAME"; project: ProjectResponse }
   | { type: "NAME" | "BASE_URL" | "ERROR"; value: string }
 
 function createProjectReducer(
@@ -129,25 +131,27 @@ function createProjectReducer(
 ): CreateProjectState {
   switch (event.type) {
     case "OPEN":
-      return { ...state, isOpen: true, error: "" }
+      return { ...initialCreateProjectState, isOpen: true }
+    case "RENAME":
+      return {
+        ...initialCreateProjectState,
+        isOpen: true,
+        renameProjectId: event.project.id,
+        name: event.project.name,
+        baseUrl: event.project.base_url,
+      }
     case "CLOSE":
-      return { ...state, isOpen: false }
+      return state.creating ? state : initialCreateProjectState
     case "NAME":
       return { ...state, name: event.value }
     case "BASE_URL":
-      return { ...state, baseUrl: event.value }
+      return state.renameProjectId ? state : { ...state, baseUrl: event.value }
     case "ERROR":
       return { ...state, error: event.value, creating: false }
     case "CREATING":
       return { ...state, creating: true, error: "" }
     case "CREATED":
-      return {
-        isOpen: false,
-        name: "",
-        baseUrl: "",
-        error: "",
-        creating: false,
-      }
+      return initialCreateProjectState
   }
 }
 
@@ -242,6 +246,7 @@ const initialCreateProjectState: CreateProjectState = {
   baseUrl: "",
   error: "",
   creating: false,
+  renameProjectId: null,
 }
 const initialRunCrawlState: RunCrawlState = {
   isOpen: false,
@@ -622,7 +627,7 @@ export function WorkspaceShellPreview({
       openBusinessProfile: openBusinessProfileForTour,
       closeBusinessProfile: closeBusinessProfileForTour,
       isBusinessProfileOpen: businessProfile.businessProfileProject !== null,
-      isCreateProjectOpen: createProject.isOpen,
+      isCreateProjectOpen: createProject.isOpen && !createProject.renameProjectId,
       lockDockItem,
     }),
     [
@@ -634,6 +639,7 @@ export function WorkspaceShellPreview({
       closeBusinessProfileForTour,
       businessProfile.businessProfileProject,
       createProject.isOpen,
+      createProject.renameProjectId,
       lockDockItem,
     ]
   )
@@ -758,20 +764,36 @@ export function WorkspaceShellPreview({
     setIsMobileSidebarOpen(false)
   }
 
+  function openRenameProject(project: ProjectResponse) {
+    setIsProjectPanelOpen(false)
+    createProjectDispatch({ type: "RENAME", project })
+  }
+
   async function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (createProject.creating) return
     const name = createProject.name.trim()
     const baseUrl = createProject.baseUrl.trim()
-    if (!name || !baseUrl) {
+    const renameProjectId = createProject.renameProjectId
+    if (!name || (!renameProjectId && !baseUrl)) {
       createProjectDispatch({
         type: "ERROR",
-        value: "Project name and base URL are required.",
+        value: renameProjectId ? "Project name is required." : "Project name and base URL are required.",
       })
       return
     }
     createProjectDispatch({ type: "CREATING" })
     try {
+      if (renameProjectId) {
+        await clientApiFetch<ProjectResponse>(`/projects/${renameProjectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        })
+        createProjectDispatch({ type: "CREATED" })
+        revalidator.revalidate()
+        return
+      }
       const project = await clientApiPost<ProjectResponse>(
         `/organizations/${organizationId}/projects`,
         { name, base_url: baseUrl }
@@ -793,7 +815,7 @@ export function WorkspaceShellPreview({
       createProjectDispatch({
         type: "ERROR",
         value:
-          error instanceof Error ? error.message : "Unable to create project.",
+          error instanceof Error ? error.message : renameProjectId ? "Unable to rename project." : "Unable to create project.",
       })
     }
   }
@@ -1117,6 +1139,7 @@ export function WorkspaceShellPreview({
                       onDeleteProject={(project) =>
                         projectActions.openDeleteProjectDialog(project)
                       }
+                      onRenameProject={openRenameProject}
                       onExportCrawl={(crawl, format) =>
                         void projectActions.handleExportCrawl(crawl, format)
                       }
@@ -1346,6 +1369,7 @@ export function WorkspaceShellPreview({
                     }}
                     onDeleteCrawl={projectActions.openDeleteCrawlDialog}
                     onDeleteProject={projectActions.openDeleteProjectDialog}
+                    onRenameProject={openRenameProject}
                     onExportCrawl={(crawl, format) =>
                       void projectActions.handleExportCrawl(crawl, format)
                     }
@@ -1448,6 +1472,7 @@ export function WorkspaceShellPreview({
               projectBaseUrl: createProject.baseUrl,
               createProjectError: createProject.error,
               isCreatingProject: createProject.creating,
+              isRenameMode: createProject.renameProjectId !== null,
             }}
             createProjectDispatch={(event) => {
               if (event.type === "OPEN") createProjectDispatch({ type: "OPEN" })

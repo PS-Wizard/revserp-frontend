@@ -19,6 +19,7 @@ export default [
     route("admin", "routes/app/admin.tsx"),
     route("projects/:projectID/locations", "routes/app/project-locations.tsx"),
     route("settings/integrations", "routes/app/settings-integrations.tsx"),
+    route("updates", "routes/app/updates.tsx"),
   ]),
   route("dev/audit-pdf", "routes/dev.audit-pdf.tsx"),
 ] satisfies RouteConfig

@@ -14,9 +14,11 @@ import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
 import {
   ArrowLeftIcon,
   CircleIcon,
+  ExternalLinkIcon,
   FileSpreadsheetIcon,
   HistoryIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
   TrashIcon,
 } from "lucide-react"
@@ -41,7 +43,8 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "~/components/ui/navigation-menu"
-import { cn } from "~/lib/utils"
+import { cn } from '~/lib/utils'
+import { getSafeProjectWebsiteUrl } from '~/lib/project-website'
 
 export type DockActionItem = {
   key: string
@@ -63,6 +66,7 @@ type WorkspaceDockNavProps = {
   onCreateProject: () => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onDeleteProject: (project: ProjectResponse) => void
+  onRenameProject: (project: ProjectResponse) => void
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
   onOpenProjectPanel: () => void
   onSelectCrawl: (crawlId: string) => void
@@ -117,6 +121,7 @@ export function WorkspaceDockNav({
   onCreateProject,
   onDeleteCrawl,
   onDeleteProject,
+  onRenameProject,
   onExportCrawl,
   onOpenProjectPanel,
   onSelectCrawl,
@@ -199,6 +204,10 @@ export function WorkspaceDockNav({
                 onContextOpenChange={setContextOpen}
                 onCreateProject={onCreateProject}
                 onDeleteProject={onDeleteProject}
+                onRenameProject={(project) => {
+                  setOpenItem(null)
+                  onRenameProject(project)
+                }}
                 onSelectProject={(projectId) => {
                   setOpenItem(null)
                   onSelectProject(projectId)
@@ -508,12 +517,13 @@ function DockActions({ actions }: { actions: DockActionItem[] }) {
  * full project panel, which is where crawls and per-project actions live.
  */
 
-function ProjectPanelList({
+export function ProjectPanelList({
   activeProjectId,
   locationBackHref,
   onContextOpenChange,
   onCreateProject,
   onDeleteProject,
+  onRenameProject,
   onSelectProject,
   projects,
 }: {
@@ -522,6 +532,7 @@ function ProjectPanelList({
   onContextOpenChange: (open: boolean) => void
   onCreateProject: () => void
   onDeleteProject: (project: ProjectResponse) => void
+  onRenameProject: (project: ProjectResponse) => void
   onSelectProject: (projectId: string) => void
   projects: ProjectResponse[]
 }) {
@@ -572,6 +583,7 @@ function ProjectPanelList({
       />
       {projects.map((project) => {
         const active = project.id === activeProjectId
+        const websiteUrl = getSafeProjectWebsiteUrl(project)
         return (
           <ContextMenu key={project.id} onOpenChange={onContextOpenChange}>
             <ContextMenuTrigger className="block">
@@ -606,6 +618,19 @@ function ProjectPanelList({
               </button>
             </ContextMenuTrigger>
             <ContextMenuContent>
+              {websiteUrl ? (
+                <ContextMenuItem
+                  render={<a href={websiteUrl} target='_blank' rel='noopener noreferrer' />}
+                >
+                  <ExternalLinkIcon aria-hidden='true' />
+                  Open website
+                </ContextMenuItem>
+              ) : null}
+              <ContextMenuItem onClick={() => onRenameProject(project)}>
+                <PencilIcon aria-hidden='true' />
+                Rename project
+              </ContextMenuItem>
+              <ContextMenuSeparator />
               <ContextMenuItem
                 onClick={() => onDeleteProject(project)}
                 variant="destructive"

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { motion } from "motion/react"
-import { Building2Icon, CheckIcon, PlusIcon, TrashIcon } from "lucide-react"
+import { Building2Icon, CheckIcon, ExternalLinkIcon, PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 import { ThinkingOrb } from "thinking-orbs"
 
 import { CrawlContextRow } from "~/components/app-navbar/crawl-context-row"
@@ -29,7 +29,8 @@ import {
   ContextMenuTrigger,
 } from "~/components/ui/context-menu"
 import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
-import { cn } from "~/lib/utils"
+import { cn } from '~/lib/utils'
+import { getSafeProjectWebsiteUrl } from '~/lib/project-website'
 
 import { CAPSULE_RADIUS, dockTransition, panelContentMotion } from "./constants"
 
@@ -50,6 +51,7 @@ export type ProjectPanelProps = {
   onCreateProjectOpen: () => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onDeleteProject: (project: ProjectResponse) => void
+  onRenameProject: (project: ProjectResponse) => void
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
   onExportFormatChange: (format: ExportFormat) => void
   onOpenBusinessProfile: (project: ProjectResponse) => void
@@ -74,6 +76,7 @@ export function ProjectPanel({
   onCreateProjectOpen,
   onDeleteCrawl,
   onDeleteProject,
+  onRenameProject,
   onExportCrawl,
   onExportFormatChange,
   onOpenBusinessProfile,
@@ -115,6 +118,7 @@ export function ProjectPanel({
             projects={projects}
             onCreateProjectOpen={onCreateProjectOpen}
             onDeleteProject={onDeleteProject}
+            onRenameProject={onRenameProject}
             onOpenBusinessProfile={onOpenBusinessProfile}
             onProjectHover={onProjectHover}
             onSelectProject={onSelectProject}
@@ -151,6 +155,7 @@ type ProjectCommandListProps = {
   projects: ProjectResponse[]
   onCreateProjectOpen: () => void
   onDeleteProject: (project: ProjectResponse) => void
+  onRenameProject: (project: ProjectResponse) => void
   onOpenBusinessProfile: (project: ProjectResponse) => void
   onProjectHover: (projectId: string) => void
   onSelectProject: (projectId: string) => void
@@ -162,6 +167,7 @@ function ProjectCommandList({
   projects,
   onCreateProjectOpen,
   onDeleteProject,
+  onRenameProject,
   onOpenBusinessProfile,
   onProjectHover,
   onSelectProject,
@@ -203,6 +209,7 @@ function ProjectCommandList({
               pillMenu={pillMenu}
               project={project}
               onDeleteProject={onDeleteProject}
+              onRenameProject={onRenameProject}
               onOpenBusinessProfile={onOpenBusinessProfile}
               onProjectHover={onProjectHover}
               onSelectProject={onSelectProject}
@@ -221,6 +228,7 @@ type ProjectCommandItemProps = {
   pillMenu: ReturnType<typeof useHoverPill>
   project: ProjectResponse
   onDeleteProject: (project: ProjectResponse) => void
+  onRenameProject: (project: ProjectResponse) => void
   onOpenBusinessProfile: (project: ProjectResponse) => void
   onProjectHover: (projectId: string) => void
   onSelectProject: (projectId: string) => void
@@ -233,11 +241,13 @@ function ProjectCommandItem({
   pillMenu,
   project,
   onDeleteProject,
+  onRenameProject,
   onOpenBusinessProfile,
   onProjectHover,
   onSelectProject,
 }: ProjectCommandItemProps) {
   const itemProps = pillMenu.getItemProps(index)
+  const websiteUrl = getSafeProjectWebsiteUrl(project)
 
   return (
     <ContextMenu>
@@ -267,6 +277,18 @@ function ProjectCommandItem({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44">
         <ContextMenuGroup>
+          {websiteUrl ? (
+            <ContextMenuItem
+              render={<a href={websiteUrl} target='_blank' rel='noopener noreferrer' />}
+            >
+              <ExternalLinkIcon aria-hidden='true' />
+              Open website
+            </ContextMenuItem>
+          ) : null}
+          <ContextMenuItem onClick={() => onRenameProject(project)}>
+            <PencilIcon aria-hidden='true' />
+            Rename project
+          </ContextMenuItem>
           <ContextMenuItem onClick={() => onOpenBusinessProfile(project)}>
             <Building2Icon />
             Business profile
