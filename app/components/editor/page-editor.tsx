@@ -61,28 +61,66 @@ import {
   type ParsedBlock,
 } from "./content-blocks-to-markdown"
 
-type CrawlPage = {
+export type ContentExtractionStatus = "ok" | "empty" | "failed"
+
+export type CrawlPage = {
   url: string
   title?: string | null
   visible_text?: string | null
   content_blocks?: ParsedBlock[] | null
+  content_extractor?: string | null
+  content_extraction_status?: ContentExtractionStatus | null
 }
 
-type SelectionAnchor = {
+export type SelectionAnchor = {
   getBoundingClientRect: () => DOMRect
   getClientRects: () => DOMRectList
 }
 
-type EditorState =
+export type EditorState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "document"; page: CrawlPage; markdown: string }
   | { status: "legacy" }
+  | { status: "unavailable"; reason: "empty" | "failed"; message: string }
   | { status: "error"; message: string }
 
-const LEGACY_MESSAGE =
+export const LEGACY_MESSAGE =
   "This page does not have a supported extraction. Run a full recrawl, then try again."
 
+export const EXTRACTION_EMPTY_MESSAGE =
+  "Content is unavailable for this page. The extraction finished but found no readable content."
+
+export const EXTRACTION_FAILED_MESSAGE =
+  "Content is unavailable for this page. The extraction failed, so there is nothing to show."
+
+export function getExtractionUnavailableReason(
+  page: Pick<CrawlPage, "content_extraction_status">
+): "empty" | "failed" | null {
+  const status = page.content_extraction_status ?? null
+  return status === "empty" || status === "failed" ? status : null
+}
+
+export function getUnavailableMessage(reason: "empty" | "failed"): string {
+  return reason === "empty"
+    ? EXTRACTION_EMPTY_MESSAGE
+    : EXTRACTION_FAILED_MESSAGE
+}
+
+export function resolvePageEditorContent(
+  page: CrawlPage
+):
+  | { status: "document"; markdown: string }
+  | { status: "unavailable"; reason: "empty" | "failed" }
+  | { status: "legacy" } {
+  if (isValidContentBlocks(page.content_blocks)) {
+    const markdown = contentBlocksToMarkdown(page.content_blocks, page.url)
+    if (markdown) return { status: "document", markdown }
+  }
+  const reason = getExtractionUnavailableReason(page)
+  if (reason) return { status: "unavailable", reason }
+  return { status: "legacy" }
+}
 function EditorLink({ children, ...props }: ComponentProps<"a">) {
   return (
     <a {...props} rel="noopener noreferrer" target="_blank">
@@ -128,7 +166,19 @@ function EditorImage({ alt, ...props }: ComponentProps<"img">) {
   )
 }
 
-const EDITOR_MARKDOWN_COMPONENTS = { a: EditorLink, img: EditorImage }
+export function EditorTable({ children, ...props }: ComponentProps<"table">) {
+  return (
+    <div className="typeset-scroll overflow-x-auto">
+      <table {...props}>{children}</table>
+    </div>
+  )
+}
+
+export const EDITOR_MARKDOWN_COMPONENTS = {
+  a: EditorLink,
+  img: EditorImage,
+  table: EditorTable,
+}
 
 const EditableDocument = memo(function EditableDocument({
   editableRef,
@@ -253,16 +303,20 @@ export function PageEditor() {
       { signal: controller.signal }
     )
       .then((page) => {
-        if (!isValidContentBlocks(page.content_blocks)) {
-          setState({ status: "legacy" })
+        const resolved = resolvePageEditorContent(page)
+        if (resolved.status === "document") {
+          setState({ status: "document", markdown: resolved.markdown, page })
           return
         }
-        const markdown = contentBlocksToMarkdown(page.content_blocks, page.url)
-        setState(
-          markdown
-            ? { status: "document", markdown, page }
-            : { status: "legacy" }
-        )
+        if (resolved.status === "unavailable") {
+          setState({
+            status: "unavailable",
+            reason: resolved.reason,
+            message: getUnavailableMessage(resolved.reason),
+          })
+          return
+        }
+        setState({ status: "legacy" })
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
@@ -571,6 +625,16 @@ export function PageEditor() {
                         </EmptyMedia>
                         <EmptyTitle>Unsupported page extraction</EmptyTitle>
                         <EmptyDescription>{LEGACY_MESSAGE}</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
+                  ) : state.status === "unavailable" ? (
+                    <Empty>
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <FileWarningIcon aria-hidden="true" />
+                        </EmptyMedia>
+                        <EmptyTitle>Content unavailable</EmptyTitle>
+                        <EmptyDescription>{state.message}</EmptyDescription>
                       </EmptyHeader>
                     </Empty>
                   ) : state.status === "document" ? (

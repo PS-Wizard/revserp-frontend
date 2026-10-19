@@ -18,6 +18,7 @@ const SUPPORTED_TAGS = new Set([
   "blockquote",
   "img",
   "pre",
+  "table",
 ])
 
 function escapeMarkdownText(value: string) {
@@ -156,6 +157,83 @@ function listToMarkdown(element: Element, pageUrl: string): string {
     .join("\n")
 }
 
+const TABLE_CELL_BLOCKS = new Set([
+  "p",
+  "div",
+  "li",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "blockquote",
+  "pre",
+  "ul",
+  "ol",
+])
+
+// GFM table cells must stay on one line and the renderer has no raw-HTML
+// plugin, so block boundaries and line breaks inside a cell flatten to a
+// space instead of <br /> (which would render as literal text).
+function tableCellChildren(node: Node, pageUrl: string): string {
+  if (node.nodeType === Node.TEXT_NODE)
+    return textToMarkdown(node.nodeValue ?? "")
+  if (node.nodeType !== Node.ELEMENT_NODE) return ""
+  const element = node as Element
+  const tag = element.tagName.toLowerCase()
+  if (tag === "br") return "\n"
+  if (TABLE_CELL_BLOCKS.has(tag)) {
+    const text = trimMarkdownBlock(
+      Array.from(element.childNodes)
+        .map((child) => tableCellChildren(child, pageUrl))
+        .join("")
+    )
+    return text ? `\n${text}\n` : ""
+  }
+  return inlineChildren(node, pageUrl)
+}
+
+function tableCellToMarkdown(cell: Element, pageUrl: string): string {
+  const raw = trimMarkdownBlock(
+    Array.from(cell.childNodes)
+      .map((child) => tableCellChildren(child, pageUrl))
+      .join("")
+  )
+  if (!raw) return ""
+  return raw
+    .replace(/\\\n/g, " ")
+    .replace(/\s*\n\s*/g, " ")
+    .replace(/(?<!\\)\|/g, "\\|")
+}
+
+function tableToMarkdown(table: Element, pageUrl: string): string | null {
+  const rows = Array.from(table.querySelectorAll("tr")).filter(
+    (row) => row.closest("table") === table
+  )
+  const parsed = rows
+    .map((row) =>
+      Array.from(row.children)
+        .filter((cell) => /^(th|td)$/i.test(cell.tagName))
+        .map((cell) => tableCellToMarkdown(cell, pageUrl))
+    )
+    .filter((cells) => cells.length > 0)
+  if (parsed.length === 0) return null
+  if (parsed.every((cells) => cells.every((cell) => !cell))) return null
+  const columnCount = Math.max(...parsed.map((cells) => cells.length))
+  const padded = parsed.map((cells) =>
+    cells.length < columnCount
+      ? [...cells, ...Array<string>(columnCount - cells.length).fill("")]
+      : cells
+  )
+  const [header, ...body] = padded
+  return [
+    `| ${header.join(" | ")} |`,
+    `| ${header.map(() => "---").join(" | ")} |`,
+    ...body.map((cells) => `| ${cells.join(" | ")} |`),
+  ].join("\n")
+}
+
 function elementToMarkdown(element: Element, pageUrl: string) {
   const tag = element.tagName.toLowerCase()
   if (/^h[1-6]$/.test(tag)) {
@@ -170,6 +248,7 @@ function elementToMarkdown(element: Element, pageUrl: string) {
       .join("\n")
   }
   if (tag === "ul" || tag === "ol") return listToMarkdown(element, pageUrl)
+  if (tag === "table") return tableToMarkdown(element, pageUrl) ?? ""
   if (tag === "pre") return fencedCode(element.textContent ?? "")
   return trimMarkdownBlock(inlineChildren(element, pageUrl))
 }
@@ -207,6 +286,21 @@ function blockToMarkdown(block: ParsedBlock, pageUrl: string) {
     return image
       ? elementToMarkdown(image, pageUrl)
       : fallbackBlockToMarkdown(block)
+  }
+
+  if (tag === "table") {
+    const tableDocument = new DOMParser().parseFromString(
+      block.html,
+      "text/html"
+    )
+    const found = tableDocument.querySelector("table")
+    if (found)
+      return tableToMarkdown(found, pageUrl) ?? fallbackBlockToMarkdown(block)
+    const tableWrapper = document.createElement("table")
+    tableWrapper.innerHTML = block.html
+    return (
+      tableToMarkdown(tableWrapper, pageUrl) ?? fallbackBlockToMarkdown(block)
+    )
   }
 
   const wrapper = document.createElement(tag)
