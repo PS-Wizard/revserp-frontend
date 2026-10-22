@@ -26,6 +26,7 @@ describe("onboarding setup gating", () => {
     for (const status of [
       "crawling",
       "profile_generation",
+      "keyword_analysis",
       "prompt_generation",
       "visibility",
     ]) {

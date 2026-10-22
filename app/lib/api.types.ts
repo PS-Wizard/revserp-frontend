@@ -42,7 +42,11 @@ export type ProjectResponse = {
 
 /** Once-per-project automated setup, driven entirely by the backend. */
 export type ProjectSetupStep =
-  "crawling" | "profile_generation" | "prompt_generation" | "visibility"
+  | "crawling"
+  | "profile_generation"
+  | "keyword_analysis"
+  | "prompt_generation"
+  | "visibility"
 
 export type ProjectSetupStatus =
   ProjectSetupStep | "ready" | "completed" | "failed"
@@ -114,6 +118,27 @@ export type ProjectKeywordsResponse = {
   project_id: string
   crawl_id?: string | null
   seeds: KeywordCoverageSeed[]
+}
+
+/** AI-estimated keyword metrics. Every metric is nullable: null renders as
+ * a dash, never a zero. kind reuses the project keyword vocabulary. */
+export type KeywordAnalysisKind = "brand" | "non_brand"
+
+export type KeywordAnalysis = {
+  keyword: string
+  kind: KeywordAnalysisKind
+  rank: number | null
+  traffic: number | null
+  volume: number | null
+  kd: number | null
+  cpc: number | null
+  results_count: number | null
+}
+
+/** GET /projects/{projectID}/keyword-analysis.
+ * GET /projects/{projectID}/competitors/{competitorID}/keyword-analysis. */
+export type ProjectKeywordAnalysisResponse = {
+  keywords: KeywordAnalysis[]
 }
 
 export type ProjectAIQuestionsResponse = {
@@ -1016,6 +1041,41 @@ export type EnqueueCompetitorCrawlsResponse = {
   crawls: Array<{ id: string }>
 }
 
+export type CompetitorInitializationStepId =
+  | "crawl"
+  | "keyword_generation"
+  | "keyword_analysis"
+
+export type CompetitorInitializationStepStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+
+export type CompetitorInitializationStep = {
+  id: CompetitorInitializationStepId
+  status: CompetitorInitializationStepStatus
+  reason?: string
+}
+
+export type CompetitorInitializationStatus =
+  | "ready"
+  | "running"
+  | "completed"
+  | "failed"
+
+/** GET /projects/{projectID}/competitors/{competitorID}/initialization. */
+export type CompetitorInitializationResponse = {
+  status: CompetitorInitializationStatus
+  steps: CompetitorInitializationStep[]
+  error?: string
+}
+
+export type CompetitorGapKeywordCoverage = {
+  you: KeywordCoverageSeed[]
+  them: KeywordCoverageSeed[]
+}
+
 /** GET /crawls/{competitorCrawlId}/competitor-gap */
 export type CompetitorGapReport = {
   version: string
@@ -1028,6 +1088,7 @@ export type CompetitorGapReport = {
   their_slice: CompetitorGapSlicePage[]
   issues: CompetitorGapIssueRow[]
   spread: CompetitorGapSpreadRow[]
+  keyword_coverage: CompetitorGapKeywordCoverage
   page_health: {
     you: CompetitorGapPageHealth
     them: CompetitorGapPageHealth

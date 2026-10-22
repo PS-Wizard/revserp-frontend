@@ -196,7 +196,7 @@ export function buildWorkspaceNavGroups({
   return [
     {
       key: "audit",
-      label: "Audit",
+      label: "Dashboard",
       tabs: auditTabs.map(([label, tab, Icon]): NavTab => ({
         key: `audit-${tab}`,
         label,

@@ -44,7 +44,7 @@ describe("public handbook routes", () => {
 
   test("pillar and bucket loaders return the correct guides", async () => {
     const pillar = await pillarLoader({ params: { pillar: "seo" } })
-    expect(pillar.guideCount).toBe(39)
+    expect(pillar.guideCount).toBe(38)
     const bucket = await bucketLoader({
       params: { pillar: "seo", bucket: "serp-metadata" },
     })

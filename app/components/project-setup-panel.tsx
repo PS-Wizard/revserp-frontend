@@ -8,6 +8,7 @@ import {
   CircleHelpIcon,
   EyeIcon,
   GlobeIcon,
+  TagsIcon,
   Loader2,
   Loader2Icon,
   RotateCcwIcon,
@@ -27,6 +28,7 @@ import type { ProjectSetupResponse, ProjectSetupStatus } from "~/lib/api.types"
 const SETUP_STEPS = [
   { id: "crawl", label: "Crawl site" },
   { id: "profile", label: "Business profile" },
+  { id: "keywords", label: "Keyword analysis" },
   { id: "questions", label: "Questions" },
   { id: "visibility", label: "Visibility" },
 ] as const
@@ -35,8 +37,9 @@ const STATUS_STEP_INDEX: Record<ProjectSetupStatus, number> = {
   ready: 0,
   crawling: 0,
   profile_generation: 1,
-  prompt_generation: 2,
-  visibility: 3,
+  keyword_analysis: 2,
+  prompt_generation: 3,
+  visibility: 4,
   completed: SETUP_STEPS.length,
   failed: 0,
 }
@@ -60,7 +63,7 @@ const SETUP_STAGE_COPY: Record<
     icon: SparklesIcon,
     title: "Set up this project",
     description:
-      "Run the crawl, draft a business profile, generate questions, and check AI visibility in one go.",
+      "Run the crawl, draft a business profile, analyze keywords, generate questions, and check AI visibility in one go.",
   },
   crawling: {
     icon: GlobeIcon,
@@ -73,6 +76,12 @@ const SETUP_STAGE_COPY: Record<
     title: "Drafting the business profile",
     description:
       "Reading the pages the crawl found to work out what you sell, who buys it, and what you should rank for.",
+  },
+  keyword_analysis: {
+    icon: TagsIcon,
+    title: "Analyzing keywords",
+    description:
+      "Estimating rank, traffic, volume, difficulty, CPC, and result counts for your brand and non-brand keywords.",
   },
   prompt_generation: {
     icon: CircleHelpIcon,

@@ -992,6 +992,7 @@ export default function AppPage() {
               (me.features?.max_competitors ?? 0) > 0 ? (
               <CompetitorsView
                 activeProject={activeProject}
+                canStart={canManageActiveOrganization}
                 currentCrawl={currentCrawl}
                 maxCompetitors={me.features.max_competitors}
                 trackCrawl={trackCrawl}

@@ -411,9 +411,24 @@ export function OrganizationEventsProvider({
         return
       }
 
+      if (type === "keyword_analysis.updated") {
+        if (event.project_id) {
+          void queryClient.invalidateQueries({
+            queryKey: ["project-keyword-analysis", event.project_id],
+          })
+          void queryClient.invalidateQueries({
+            queryKey: ["competitor-keyword-analysis", event.project_id],
+          })
+        }
+        return
+      }
+
       if (type === "project_keywords.updated") {
         if (event.project_id) {
           void invalidateProjectKeywordLists(queryClient, event.project_id)
+          void queryClient.invalidateQueries({
+            queryKey: ["project-keyword-analysis", event.project_id],
+          })
         }
         return
       }
@@ -445,6 +460,9 @@ export function OrganizationEventsProvider({
               queryKey: ["bucket-trends", event.project_id],
             })
             void invalidateBusinessProfile(queryClient, event.project_id)
+            void queryClient.invalidateQueries({
+              queryKey: ["project-keyword-analysis", event.project_id],
+            })
             void queryClient.invalidateQueries({
               queryKey: ["ai-audits-list", event.project_id],
             })

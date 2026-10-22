@@ -13,6 +13,7 @@ import { ExternalLinkIcon, TagsIcon, TriangleAlertIcon } from "lucide-react"
 import { ApiError, clientApiFetch } from "~/lib/api"
 import type {
   KeywordCoverageField,
+  KeywordCoverageSeed,
   KeywordCoverageState,
   ProjectKeywordsResponse,
 } from "~/lib/api.types"
@@ -46,7 +47,12 @@ type Props = {
   emptyDescription?: string
 }
 
-type KeywordCoverageSeed = ProjectKeywordsResponse["seeds"][number]
+export type KeywordCoverageCardProps = {
+  seeds: KeywordCoverageSeed[]
+  title?: string
+  scopeNotice?: string
+  emptyDescription?: string
+}
 
 type FilterState = "all" | KeywordCoverageState
 
@@ -473,21 +479,7 @@ export function KeywordsCoverage({
     placeholderData: (previous) => previous,
   })
 
-  const [filter, setFilter] = useState<FilterState>("all")
-  const listRef = useRef<HTMLDivElement>(null)
-  const listOverflows = useListOverflows(listRef)
-
   const seeds = useMemo(() => query.data?.seeds ?? [], [query.data])
-  const counts = useMemo(() => countByState(seeds), [seeds])
-  const grouped = useMemo(() => {
-    const visible: Record<KeywordCoverageState, KeywordCoverageSeed[]> = {
-      cannibalized: [],
-      no_landing_page: [],
-      likely_targeted: [],
-    }
-    for (const seed of seeds) visible[seed.state].push(seed)
-    return visible
-  }, [seeds])
 
   if (!projectId) {
     return (
@@ -533,13 +525,69 @@ export function KeywordsCoverage({
     )
   }
 
+  return (
+    <KeywordCoverageCard
+      emptyDescription={emptyDescription}
+      scopeNotice={scopeNotice}
+      seeds={seeds}
+    />
+  )
+}
+
+export function KeywordCoverageCard({
+  seeds,
+  title = "Keyword coverage",
+  scopeNotice,
+  emptyDescription = "Add keywords in the cards above, or let Revbot suggest them from Search Console.",
+}: KeywordCoverageCardProps) {
+  const [filter, setFilter] = useState<FilterState>("all")
+  const listRef = useRef<HTMLDivElement>(null)
+  const listOverflows = useListOverflows(listRef)
+  const counts = useMemo(() => countByState(seeds), [seeds])
+  const grouped = useMemo(() => {
+    const visible: Record<KeywordCoverageState, KeywordCoverageSeed[]> = {
+      cannibalized: [],
+      no_landing_page: [],
+      likely_targeted: [],
+    }
+    for (const seed of seeds) visible[seed.state].push(seed)
+    return visible
+  }, [seeds])
+
   if (seeds.length === 0) {
+    if (title === "Keyword coverage" && !scopeNotice) {
+      return (
+        <CoverageEmpty
+          description={emptyDescription}
+          icon={<TagsIcon aria-hidden="true" />}
+          title="No keywords yet"
+        />
+      )
+    }
     return (
-      <CoverageEmpty
-        description={emptyDescription}
-        icon={<TagsIcon aria-hidden="true" />}
-        title="No keywords yet"
-      />
+      <Card className={cardClass}>
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h3 className="font-heading text-base font-semibold tracking-tight">
+              {title}
+            </h3>
+            {scopeNotice ? (
+              <p className="text-xs text-pretty text-muted-foreground">
+                {scopeNotice}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <Empty className="min-h-64 border-0">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <TagsIcon aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>No keywords yet</EmptyTitle>
+            <EmptyDescription>{emptyDescription}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </Card>
     )
   }
 
@@ -548,7 +596,7 @@ export function KeywordsCoverage({
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-5 pt-4 pb-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h3 className="font-heading text-base font-semibold tracking-tight">
-            Keyword coverage
+            {title}
           </h3>
           {scopeNotice ? (
             <p className="text-xs text-pretty text-muted-foreground">

@@ -8,6 +8,7 @@ import {
   PlusIcon,
   SwordsIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -59,12 +60,15 @@ import { SetInsightsNavbarLabel } from "~/components/workspace-shell-preview"
 import { format } from "date-fns"
 
 import { CompetitorInsightsView } from "./competitor-insights"
+import { CompetitorSetupPanel } from "~/components/competitors/competitor-setup-panel"
+import { useCompetitorInitialization } from "~/components/competitors/use-competitor-initialization"
 
 type Props = {
   activeProject: ProjectResponse | null
   currentCrawl: CrawlResponse | null
   maxCompetitors: number
   trackCrawl: (id: string) => void
+  canStart?: boolean
 }
 
 function competitorsQueryKey(projectId: string, crawlId: string | null) {
@@ -161,7 +165,7 @@ function CompetitorCard({
   index: number
   parentCrawl: CrawlResponse | null
   isRemoving: boolean
-  onOpenInsights: (crawlId: string, name: string) => void
+  onOpenInsights: (competitorId: string, crawlId: string | null, name: string) => void
   onRemove: (id: string) => void
 }) {
   const host = hostLabel(competitor.seed_url)
@@ -189,16 +193,17 @@ function CompetitorCard({
       : null
 
   const openInsights = () => {
-    if (!isCompleted || !crawl) return
-    onOpenInsights(crawl.id, displayName)
+    const completedCrawlId =
+      crawl?.status === "completed" ? crawl.id : null
+    onOpenInsights(competitor.id, completedCrawlId, displayName)
   }
 
   return (
     <CompetitorCardShell
       title={cardTitle}
       index={index}
-      interactive={isCompleted}
-      onActivate={isCompleted ? openInsights : undefined}
+      interactive
+      onActivate={openInsights}
       body={
         isCompleted ? (
           <p className="text-sm text-foreground">
@@ -265,13 +270,101 @@ function CompetitorCard({
               <Trash2Icon aria-hidden="true" className="size-4" />
             )}
           </button>
-          {isCompleted ? (
-            <span aria-hidden="true" className={cardActionClass}>
-              <ArrowRightIcon className="size-4" />
-            </span>
-          ) : null}
+          <span aria-hidden="true" className={cardActionClass}>
+            <ArrowRightIcon className="size-4" />
+          </span>
         </>
       }
+    />
+  )
+}
+
+function CompetitorDetailView({
+  projectId,
+  projectName,
+  competitorId,
+  competitorName,
+  crawlId,
+  parentCrawlId,
+  canStart,
+  onClose,
+}: {
+  projectId: string
+  projectName: string
+  competitorId: string
+  competitorName: string
+  crawlId: string | null
+  parentCrawlId: string | null
+  canStart: boolean
+  onClose: () => void
+}) {
+  const initialization = useCompetitorInitialization({
+    projectId,
+    competitorId,
+    parentCrawlId,
+    enabled: true,
+  })
+  const setup = initialization.setup
+  const isReady = setup?.status === "completed"
+
+  if (!isReady) {
+    return (
+      <div className="@container/main relative flex flex-1 flex-col py-6">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button onClick={onClose} size="sm" type="button" variant="outline">
+            <XIcon data-icon="inline-start" />
+            Close
+          </Button>
+        </div>
+        <CompetitorSetupPanel
+          canStart={canStart}
+          isLoading={initialization.isLoading}
+          isStarting={initialization.isStarting}
+          loadError={initialization.loadError}
+          onRetry={() => void initialization.retry()}
+          onRetryLoad={() => void initialization.refetch()}
+          onStart={() => void initialization.start()}
+          setup={setup}
+          startError={initialization.startError}
+        />
+      </div>
+    )
+  }
+
+  if (!crawlId) {
+    return (
+      <div className="@container/main relative flex flex-1 flex-col py-6">
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <Button onClick={onClose} size="sm" type="button" variant="outline">
+            <XIcon data-icon="inline-start" />
+            Close
+          </Button>
+        </div>
+        <div className="flex flex-1 flex-col">
+          <Empty className="min-h-64 border-0">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SwordsIcon aria-hidden="true" />
+              </EmptyMedia>
+              <EmptyTitle>Not crawled for this audit</EmptyTitle>
+              <EmptyDescription>
+                Setup is complete. Crawl this competitor against the selected audit to see insights.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <CompetitorInsightsView
+      competitorCrawlId={crawlId}
+      competitorId={competitorId}
+      competitorName={competitorName}
+      onClose={onClose}
+      projectId={projectId}
+      projectName={projectName}
     />
   )
 }
@@ -281,6 +374,7 @@ export const CompetitorsView = memo(function CompetitorsView({
   currentCrawl,
   maxCompetitors,
   trackCrawl,
+  canStart = true,
 }: Props) {
   const queryClient = useQueryClient()
   const setInsightsNavbarLabel = useContext(SetInsightsNavbarLabel)
@@ -295,9 +389,16 @@ export const CompetitorsView = memo(function CompetitorsView({
   const [name, setName] = useState("")
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [insightsTarget, setInsightsTarget] = useState<{
-    crawlId: string
+    competitorId: string
+    crawlId: string | null
     name: string
   } | null>(null)
+
+  // The detail view is scoped to one competitor of one project. Clear it on
+  // project switch so a saved competitor id never loads under a new project.
+  useEffect(() => {
+    setInsightsTarget(null)
+  }, [projectId])
 
   const youLabel = activeProject?.name.trim() || "You"
 
@@ -343,12 +444,14 @@ export const CompetitorsView = memo(function CompetitorsView({
         `/projects/${projectId!}/competitors`,
         body
       ),
-    onSuccess: () => {
+    onSuccess: (created) => {
       setSeedUrl("")
       setName("")
       setDialogOpen(false)
       toast.success("Competitor added")
       invalidateCompetitors()
+      const createdName = created.name.trim() || hostLabel(created.seed_url)
+      setInsightsTarget({ competitorId: created.id, crawlId: null, name: createdName })
     },
     onError: (error) => {
       toast.error(
@@ -462,11 +565,20 @@ export const CompetitorsView = memo(function CompetitorsView({
   }
 
   if (insightsTarget) {
+    const liveCompetitor = competitors.find(
+      (competitor) => competitor.id === insightsTarget.competitorId
+    )
+    const liveCrawlId =
+      liveCompetitor?.crawl?.status === "completed" ? liveCompetitor.crawl.id : null
     return (
-      <CompetitorInsightsView
-        competitorCrawlId={insightsTarget.crawlId}
+      <CompetitorDetailView
+        canStart={canStart}
+        competitorId={insightsTarget.competitorId}
         competitorName={insightsTarget.name}
+        crawlId={liveCrawlId ?? insightsTarget.crawlId}
+        parentCrawlId={parentCrawlId}
         onClose={() => setInsightsTarget(null)}
+        projectId={projectId}
         projectName={activeProject.name}
       />
     )
@@ -535,7 +647,7 @@ export const CompetitorsView = memo(function CompetitorsView({
               </EmptyMedia>
               <EmptyTitle>No competitors</EmptyTitle>
               <EmptyDescription>
-                Add a site, then crawl it against the selected audit.
+                Add a site, then run setup to generate keywords and estimates.
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
@@ -559,8 +671,8 @@ export const CompetitorsView = memo(function CompetitorsView({
               index={index}
               parentCrawl={currentCrawl}
               isRemoving={removingId === competitor.id}
-              onOpenInsights={(crawlId, name) =>
-                setInsightsTarget({ crawlId, name })
+              onOpenInsights={(competitorId, crawlId, name) =>
+                setInsightsTarget({ competitorId, crawlId, name })
               }
               onRemove={(id) => void handleRemove(id)}
             />
@@ -574,8 +686,7 @@ export const CompetitorsView = memo(function CompetitorsView({
             <DialogHeader>
               <DialogTitle>New competitor</DialogTitle>
               <DialogDescription>
-                Added to {activeProject.name}. Crawl them from this page when
-                you are ready.
+                Added to {activeProject.name}. Set them up to generate keywords and estimates.
               </DialogDescription>
             </DialogHeader>
             <FieldGroup className="mt-6 gap-4">

@@ -20,6 +20,8 @@ import { Skeleton } from "~/components/ui/skeleton"
 import { clientApiFetch } from "~/lib/api"
 import { PillarScoresCompare } from "~/components/overview-pillar-scores-section"
 import { SliceScoreSankey } from "~/components/competitors/competitor-score-sankey"
+import { KeywordAnalysisCard } from "~/components/keywords/keyword-analysis-card"
+import { KeywordCoverageCard } from "~/components/keywords/keywords-coverage"
 import type {
   CompetitorGapPageHealth,
   CompetitorGapReport,
@@ -28,6 +30,8 @@ import type {
 const PAGE_HEALTH_BUCKETS = 21
 
 type Props = {
+  projectId: string
+  competitorId: string
   competitorCrawlId: string
   competitorName: string
   projectName: string
@@ -35,7 +39,7 @@ type Props = {
 }
 
 function competitorGapQueryKey(competitorCrawlId: string) {
-  return ["competitor-gap", competitorCrawlId, "v4"] as const
+  return ["competitor-gap", competitorCrawlId, "v5"] as const
 }
 
 function padHealthBuckets(health: CompetitorGapPageHealth | undefined) {
@@ -119,10 +123,14 @@ function InsightsLoading() {
 /* ------------------------------------------------------------------- body */
 
 function InsightsBody({
+  projectId,
+  competitorId,
   report,
   competitorName,
   projectName,
 }: {
+  projectId: string
+  competitorId: string
   report: CompetitorGapReport
   competitorName: string
   projectName: string
@@ -153,6 +161,42 @@ function InsightsBody({
         youLabel={youLabel}
       />
 
+      <section aria-label="Keywords" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h3 className="font-heading text-sm font-semibold">Keywords</h3>
+          <p className="text-xs text-muted-foreground">
+            Coverage measures the parent non-brand list on both sites; estimates are independent per site.
+          </p>
+        </div>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+          <KeywordCoverageCard
+            emptyDescription="No non-brand keywords to compare yet. Add non-brand keywords to the parent project."
+            scopeNotice={`Non-brand parent keywords measured on ${youLabel}.`}
+            seeds={report.keyword_coverage?.you ?? []}
+            title={youLabel}
+          />
+          <KeywordCoverageCard
+            emptyDescription="No non-brand keywords to compare yet. Add non-brand keywords to the parent project."
+            scopeNotice={`Non-brand parent keywords measured on ${themLabel}.`}
+            seeds={report.keyword_coverage?.them ?? []}
+            title={themLabel}
+          />
+        </div>
+        <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+          <KeywordAnalysisCard
+            projectId={projectId}
+            scopeNotice={`Brand and non-brand estimates from ${youLabel}.`}
+            title={youLabel}
+          />
+          <KeywordAnalysisCard
+            competitorId={competitorId}
+            projectId={projectId}
+            scopeNotice={`Independent brand and non-brand estimates from ${themLabel}’s crawl.`}
+            title={themLabel}
+          />
+        </div>
+      </section>
+
       <SectionCard title="Page health">
         <HealthRidge
           nameA={youLabel}
@@ -169,6 +213,8 @@ function InsightsBody({
 /* -------------------------------------------------------------------- top */
 
 export const CompetitorInsightsView = memo(function CompetitorInsightsView({
+  projectId,
+  competitorId,
   competitorCrawlId,
   competitorName,
   projectName,
@@ -230,7 +276,9 @@ export const CompetitorInsightsView = memo(function CompetitorInsightsView({
       }
     >
       <InsightsBody
+        competitorId={competitorId}
         competitorName={competitorName}
+        projectId={projectId}
         projectName={projectName}
         report={query.data}
       />

@@ -799,9 +799,7 @@ export function WorkspaceShellPreview({
         { name, base_url: baseUrl }
       )
       createProjectDispatch({ type: "CREATED" })
-      selectProject(project.id)
-      onViewChange("revserp-audit")
-      onAuditTabChange("overview")
+      void navigate(`/app?${new URLSearchParams({ project: project.id })}`)
     } catch (error) {
       if (
         error instanceof ApiError &&

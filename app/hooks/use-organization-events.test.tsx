@@ -87,6 +87,7 @@ async function mountEvent(
   viewed: string[],
   auditFetchFails = false,
   repeat = 1,
+  seedQueries?: (client: QueryClient) => void,
 ) {
   globalThis.fetch = (async (input: string | URL | Request) => {
     const url = String(input)
@@ -113,6 +114,7 @@ async function mountEvent(
     throw new Error(`unexpected request ${url}`)
   }) as typeof fetch
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  seedQueries?.(client)
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -360,4 +362,28 @@ test("stale visibility resolve across org switches stays silent", async () => {
       .length
   ).toBe(1)
   expect(dismissCalls).toEqual([])
+})
+
+test("keyword analysis saves invalidate estimates for the saved project only", async () => {
+  const projectKey = ["project-keyword-analysis", "project-1"]
+  const competitorKey = ["competitor-keyword-analysis", "project-1", "competitor-1"]
+  const otherProjectKey = ["project-keyword-analysis", "project-2"]
+  const otherCompetitorKey = ["competitor-keyword-analysis", "project-2", "competitor-2"]
+  await mountEvent(
+    "keyword_analysis.updated",
+    { competitor_id: "competitor-1" },
+    audit(),
+    [],
+    false,
+    1,
+    (queryClient) => {
+      for (const key of [projectKey, competitorKey, otherProjectKey, otherCompetitorKey]) {
+        queryClient.setQueryData(key, { keywords: [] })
+      }
+    }
+  )
+  expect(client!.getQueryState(projectKey)?.isInvalidated).toBe(true)
+  expect(client!.getQueryState(competitorKey)?.isInvalidated).toBe(true)
+  expect(client!.getQueryState(otherProjectKey)?.isInvalidated).toBe(false)
+  expect(client!.getQueryState(otherCompetitorKey)?.isInvalidated).toBe(false)
 })

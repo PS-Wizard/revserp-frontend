@@ -6,6 +6,7 @@ import {
   DefineYourKeywordsCard,
   SuggestedKeywordsCard,
 } from "~/components/keyword-management/project-keyword-cards"
+import { KeywordAnalysisCard } from "~/components/keywords/keyword-analysis-card"
 import { KeywordsCoverage } from "~/components/keywords/keywords-coverage"
 
 type Props = {
@@ -50,6 +51,15 @@ export function KeywordsView({ projectId }: Props) {
             projectId={projectId}
           />
         </div>
+      </div>
+
+      <div className="min-h-0">
+        <KeywordAnalysisCard
+          key={`analysis-${cardKey}`}
+          projectId={projectId}
+          scopeNotice="Brand and non-brand estimates from this project's keyword analysis."
+          title="Keyword estimates"
+        />
       </div>
     </div>
   )

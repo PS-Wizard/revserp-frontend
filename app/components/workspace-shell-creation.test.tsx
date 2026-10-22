@@ -96,7 +96,7 @@ describe("shell creation routing", () => {
     localStorage.clear()
   })
 
-  test("creating a project lands on Audit Overview with init guidance", async () => {
+  test("creating a project navigates directly to its workspace without old tab state", async () => {
     const posts: PostedProject[] = []
     restoreFetch = stubFetch(posts)
     const seenViews: string[] = []
@@ -142,7 +142,7 @@ describe("shell creation routing", () => {
           ),
         },
       ],
-      { initialEntries: ["/app"] },
+      { initialEntries: ["/app?project=p-1&view=revserp-visibility&crawl=old&revbotConversation=old#seo-tab"] },
     )
     await act(async () => {
       root?.render(<RouterProvider router={router} />)
@@ -197,7 +197,11 @@ describe("shell creation routing", () => {
       name: "New site",
       base_url: "https://new.example",
     })
-    expect(seenViews).toContain("revserp-audit")
-    expect(seenTabs).toContain("overview")
+    await settle()
+    expect(router.state.location.pathname).toBe("/app")
+    expect(router.state.location.search).toBe("?project=p-2")
+    expect(router.state.location.hash).toBe("")
+    expect(seenViews).toEqual([])
+    expect(seenTabs).toEqual([])
   })
 })

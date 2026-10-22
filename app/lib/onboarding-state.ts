@@ -69,6 +69,7 @@ export function isOnboardingSetupRunning(status: string | null | undefined) {
   return (
     status === "crawling" ||
     status === "profile_generation" ||
+    status === "keyword_analysis" ||
     status === "prompt_generation" ||
     status === "visibility"
   )

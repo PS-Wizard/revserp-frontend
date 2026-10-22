@@ -207,7 +207,7 @@ export const seoHandbookGuides: HandbookGuide[] = [
         url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
       },
     ],
-    relatedIssueTypes: ["duplicate_meta_description", "exact_duplicate_content", "near_duplicate_content", "missing_title"],
+    relatedIssueTypes: ["duplicate_meta_description", "exact_duplicate_content", "missing_title"],
   },
   {
     issueType: "missing_meta_description",
@@ -415,7 +415,7 @@ export const seoHandbookGuides: HandbookGuide[] = [
         url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
       },
     ],
-    relatedIssueTypes: ["duplicate_title", "missing_meta_description", "near_duplicate_content", "exact_duplicate_content"],
+    relatedIssueTypes: ["duplicate_title", "missing_meta_description", "exact_duplicate_content"],
   },
   {
     issueType: "missing_h1",
@@ -558,7 +558,7 @@ export const seoHandbookGuides: HandbookGuide[] = [
     ],
     cautions: [
       "Deliberately different but related phrasing near the 0.32 threshold can flag. When the divergence is intentional, acknowledge the row rather than warping good copy to satisfy a similarity number.",
-      "Similarity here is an unweighted Revserp character-trigram Dice comparison, not a search-engine relevance judgement; the field weights used for near-duplicate scoring do not apply to this check.",
+      "Similarity here is an unweighted Revserp character-trigram Dice comparison, not a search-engine relevance judgement.",
     ],
     references: [
       {
@@ -721,7 +721,7 @@ export const seoHandbookGuides: HandbookGuide[] = [
         url: "https://developers.google.com/search/docs/fundamentals/seo-starter-guide",
       },
     ],
-    relatedIssueTypes: ["near_empty_visible_content", "exact_duplicate_content", "near_duplicate_content", "missing_h2_on_long_page"],
+    relatedIssueTypes: ["near_empty_visible_content", "exact_duplicate_content", "missing_h2_on_long_page"],
   },
   {
     issueType: "near_empty_visible_content",
@@ -819,56 +819,7 @@ export const seoHandbookGuides: HandbookGuide[] = [
         url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
       },
     ],
-    relatedIssueTypes: ["near_duplicate_content", "duplicate_title", "duplicate_meta_description", "canonical_differs"],
-  },
-  {
-    issueType: "near_duplicate_content",
-    pillar: "seo",
-    bucket: "content_quality",
-    title: "Pages have near-duplicate content",
-    summary:
-      "Two or more pages are closely similar without being identical, so their intents overlap more than their words differ.",
-    scope: "page",
-    explanation: [
-      "Near-duplicates are the location pages that differ by one suburb name, or product pages sharing three paragraphs with one swapped specification. Each pair wastes a chance to answer its own intent distinctly.",
-      "Revserp first requires candidate pairs to share at least 2 word bigrams after stop-word removal, then scores weighted character-trigram similarity at 0.58 or more, composed of visible text at 0.55 plus title, meta description, and H1 at 0.15 each. Exact-hash matches are excluded from this check and reported as exact duplicates instead.",
-      "Relations carry the pairwise similarity for inspection. The check uses shingle prefiltering for scale, so very short pages may never become candidates even when they read similarly.",
-    ],
-    detection: [
-      "Read the matched URLs and their pairwise similarity in the relation evidence, then diff the pages to find the shared boilerplate versus the distinct facts.",
-      "Check templates that wrap a small unique slot in a large shared shell; the weighting means body-text overlap dominates the score while title and heading differences contribute less.",
-      "Short pages that feel duplicative but never flag are usually below the candidate prefilter, not proof of distinctness.",
-    ],
-    causes: [
-      "Location, category, or product templates reuse most of the body with token swaps for names or attributes.",
-      "Content was syndicated or copied across sections with light edits that preserve trigram structure.",
-      "Pagination or faceted pages share long introductions above small distinct listings.",
-    ],
-    fixes: [
-      "Differentiate with genuinely unique content per intent: distinct explanations, examples, scope, and next steps rather than synonym swaps.",
-      "Consolidate when intents truly overlap, keeping one strong page and redirecting the weaker siblings to it.",
-      "Treat canonical tags as consolidation practice with the same caveat as exact duplicates: the similarity check ignores canonical tags, so text must actually diverge or pages must leave the set.",
-      "Do not shuffle stop words alone; stop words are removed before comparison and such edits barely move the score.",
-    ],
-    verification: [
-      "Run a new crawl and confirm no near-duplicate relation remains for the pair because the content is actually distinct or consolidated out of the set.",
-      "Re-diff the former pair after the crawl; the shared boilerplate should be gone or sharply reduced, not merely reworded.",
-    ],
-    cautions: [
-      "Similarity scoring is a Revserp heuristic with fixed weights and a 0.58 gate, not a search-engine duplication verdict. Use it to prioritise rewriting, not to claim a penalty.",
-      "Very short pages may escape candidacy through the shingle prefilter; absence of a row never proves two stubs are distinct enough for readers.",
-    ],
-    references: [
-      {
-        label: "Google Search Central: Consolidate duplicate URLs",
-        url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls",
-      },
-      {
-        label: "Google Search Central: Helpful, reliable, people-first content",
-        url: "https://developers.google.com/search/docs/fundamentals/creating-helpful-content",
-      },
-    ],
-    relatedIssueTypes: ["exact_duplicate_content", "duplicate_title", "thin_content", "canonical_differs"],
+    relatedIssueTypes: ["duplicate_title", "duplicate_meta_description", "canonical_differs"],
   },
   {
     issueType: "missing_canonical",
