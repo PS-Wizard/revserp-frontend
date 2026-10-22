@@ -18,7 +18,15 @@ import {
   FieldLabel,
 } from "~/components/ui/field"
 import { Input } from "~/components/ui/input"
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group"
 import type { ProjectResponse } from "~/lib/api.types"
+
+const crawlSpeedPresets = [
+  { value: "safe", label: "Safe", delayMs: "1000", jitterMs: "500" },
+  { value: "balanced", label: "Balanced", delayMs: "500", jitterMs: "250" },
+  { value: "fast", label: "Fast", delayMs: "", jitterMs: "" },
+]
+
 
 type RunCrawlDialogProps = {
   activeProject: ProjectResponse | null
@@ -85,6 +93,11 @@ export function RunCrawlDialog({
   onOpenChange,
   onSubmit,
 }: RunCrawlDialogProps) {
+  const selectedSpeedPreset = crawlSpeedPresets.find(
+    (preset) =>
+      preset.delayMs === delayMs.trim() && preset.jitterMs === jitterMs.trim()
+  )
+
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
       <DialogContent className="flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
@@ -123,6 +136,46 @@ export function RunCrawlDialog({
                 />
                 <FieldDescription>
                   Leave blank to crawl every discovered page.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel id="crawl-speed-preset-label">
+                  Speed preset
+                  {!selectedSpeedPreset ? (
+                    <span className="text-muted-foreground">Custom</span>
+                  ) : null}
+                </FieldLabel>
+                <ToggleGroup
+                  aria-labelledby="crawl-speed-preset-label"
+                  className="w-full"
+                  id="crawl-speed-presets"
+                  onValueChange={(values) => {
+                    const preset = crawlSpeedPresets.find(
+                      (option) => option.value === values[0]
+                    )
+                    if (!preset) return
+                    onDelayMsChange(preset.delayMs)
+                    onJitterMsChange(preset.jitterMs)
+                  }}
+                  size="sm"
+                  spacing={0}
+                  value={selectedSpeedPreset ? [selectedSpeedPreset.value] : []}
+                  variant="outline"
+                >
+                  {crawlSpeedPresets.map((preset) => (
+                    <ToggleGroupItem
+                      className="flex-1 data-[pressed]:bg-foreground data-[pressed]:text-background aria-pressed:bg-foreground aria-pressed:text-background"
+                      key={preset.value}
+                      type="button"
+                      value={preset.value}
+                    >
+                      {preset.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                <FieldDescription>
+                  Fills delay and jitter below. Fast is the default, with no added
+                  delay or jitter.
                 </FieldDescription>
               </Field>
               <Field>

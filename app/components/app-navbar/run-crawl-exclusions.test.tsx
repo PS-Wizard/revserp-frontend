@@ -202,7 +202,7 @@ async function waitForPost(posts: PostedCrawl[]) {
   return posts.find((post) => post.url.includes("/projects/p-1/crawls"))
 }
 
-describe("run crawl exclusions", () => {
+describe("run crawl controls", () => {
   let root: Root | null = null
   let host: HTMLDivElement | null = null
   let restoreFetch: (() => void) | null = null
@@ -217,6 +217,64 @@ describe("run crawl exclusions", () => {
     restoreFetch = null
     localStorage.clear()
   })
+
+  test("speed presets fill timing fields, allow custom edits, and preserve the request", async () => {
+    const posts: PostedCrawl[] = []
+    restoreFetch = stubFetch(posts)
+    host = document.createElement("div")
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await mountShell(root)
+    await openRunCrawl()
+
+    const delay = document.querySelector("#delay-ms") as HTMLInputElement
+    const jitter = document.querySelector("#jitter-ms") as HTMLInputElement
+    const presetButton = (label: string) =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("#crawl-speed-presets button"))
+        .find((button) => button.textContent === label)!
+    const choosePreset = async (label: string) => {
+      await act(async () => {
+        presetButton(label).click()
+        await flushTestDom()
+      })
+    }
+
+    expect(presetButton("Fast").getAttribute("aria-pressed")).toBe("true")
+    for (const [label, delayValue, jitterValue] of [
+      ["Safe", "1000", "500"],
+      ["Balanced", "500", "250"],
+    ]) {
+      await choosePreset(label)
+      expect(delay.value).toBe(delayValue)
+      expect(jitter.value).toBe(jitterValue)
+      expect(presetButton(label).getAttribute("aria-pressed")).toBe("true")
+      expect(posts).toHaveLength(0)
+    }
+
+    await act(async () => {
+      await setInputValue(delay, "1200")
+      await flushTestDom()
+    })
+    expect(document.querySelector('#crawl-speed-presets [aria-pressed="true"]')).toBeNull()
+    expect(document.querySelector("#crawl-speed-preset-label")?.textContent).toContain("Custom")
+
+    await choosePreset("Fast")
+    expect(delay.value).toBe("")
+    expect(jitter.value).toBe("")
+    expect(posts).toHaveLength(0)
+
+    await choosePreset("Balanced")
+    await act(async () => {
+      document.querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
+      await flushTestDom()
+    })
+    const post = await waitForPost(posts)
+    expect(post?.body.config_snapshot.request_delay_ms).toBe(500)
+    expect(post?.body.config_snapshot.request_jitter_ms).toBe(250)
+    expect(post?.body.config_snapshot.max_depth).toBe(5)
+    expect(post?.body.config_snapshot.excluded_url_patterns).toEqual(DEFAULT_EXCLUDED_URL_PATTERNS)
+  })
+
 
   test("token editing feeds the submitted payload, pending draft included", async () => {
     const posts: PostedCrawl[] = []
