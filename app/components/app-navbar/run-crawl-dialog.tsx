@@ -22,7 +22,7 @@ import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group"
 import type { ProjectResponse } from "~/lib/api.types"
 
 const crawlSpeedPresets = [
-  { value: "safe", label: "Safe", delayMs: "1000", jitterMs: "500" },
+  { value: "safe", label: "Safe", delayMs: "5000", jitterMs: "500", fetchTimeoutSeconds: "60" },
   { value: "balanced", label: "Balanced", delayMs: "500", jitterMs: "250" },
   { value: "fast", label: "Fast", delayMs: "", jitterMs: "" },
 ]
@@ -95,7 +95,9 @@ export function RunCrawlDialog({
 }: RunCrawlDialogProps) {
   const selectedSpeedPreset = crawlSpeedPresets.find(
     (preset) =>
-      preset.delayMs === delayMs.trim() && preset.jitterMs === jitterMs.trim()
+      preset.delayMs === delayMs.trim() &&
+      preset.jitterMs === jitterMs.trim() &&
+      (!preset.fetchTimeoutSeconds || preset.fetchTimeoutSeconds === fetchTimeoutSeconds.trim())
   )
 
   return (
@@ -156,6 +158,9 @@ export function RunCrawlDialog({
                     if (!preset) return
                     onDelayMsChange(preset.delayMs)
                     onJitterMsChange(preset.jitterMs)
+                    if (preset.fetchTimeoutSeconds) {
+                      onFetchTimeoutSecondsChange(preset.fetchTimeoutSeconds)
+                    }
                   }}
                   size="sm"
                   spacing={0}
@@ -174,8 +179,8 @@ export function RunCrawlDialog({
                   ))}
                 </ToggleGroup>
                 <FieldDescription>
-                  Fills delay and jitter below. Fast is the default, with no added
-                  delay or jitter.
+                  Fills delay and jitter below. Safe also sets a 60-second fetch
+                  timeout. Fast is the default, with no added delay or jitter.
                 </FieldDescription>
               </Field>
               <Field>

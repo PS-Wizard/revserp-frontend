@@ -229,6 +229,7 @@ describe("run crawl controls", () => {
 
     const delay = document.querySelector("#delay-ms") as HTMLInputElement
     const jitter = document.querySelector("#jitter-ms") as HTMLInputElement
+    const timeout = document.querySelector("#fetch-timeout-seconds") as HTMLInputElement
     const presetButton = (label: string) =>
       Array.from(document.querySelectorAll<HTMLButtonElement>("#crawl-speed-presets button"))
         .find((button) => button.textContent === label)!
@@ -240,13 +241,18 @@ describe("run crawl controls", () => {
     }
 
     expect(presetButton("Fast").getAttribute("aria-pressed")).toBe("true")
+    await act(async () => {
+      await setInputValue(timeout, "120")
+      await flushTestDom()
+    })
     for (const [label, delayValue, jitterValue] of [
-      ["Safe", "1000", "500"],
+      ["Safe", "5000", "500"],
       ["Balanced", "500", "250"],
     ]) {
       await choosePreset(label)
       expect(delay.value).toBe(delayValue)
       expect(jitter.value).toBe(jitterValue)
+      expect(timeout.value).toBe("60")
       expect(presetButton(label).getAttribute("aria-pressed")).toBe("true")
       expect(posts).toHaveLength(0)
     }
@@ -263,14 +269,25 @@ describe("run crawl controls", () => {
     expect(jitter.value).toBe("")
     expect(posts).toHaveLength(0)
 
+    await choosePreset("Safe")
+    await act(async () => {
+      await setInputValue(timeout, "120")
+      await flushTestDom()
+    })
+    expect(document.querySelector('#crawl-speed-presets [aria-pressed="true"]')).toBeNull()
     await choosePreset("Balanced")
+    expect(timeout.value).toBe("120")
+    await choosePreset("Fast")
+    expect(timeout.value).toBe("120")
+    await choosePreset("Safe")
     await act(async () => {
       document.querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
       await flushTestDom()
     })
     const post = await waitForPost(posts)
-    expect(post?.body.config_snapshot.request_delay_ms).toBe(500)
-    expect(post?.body.config_snapshot.request_jitter_ms).toBe(250)
+    expect(post?.body.config_snapshot.request_delay_ms).toBe(5000)
+    expect(post?.body.config_snapshot.request_jitter_ms).toBe(500)
+    expect(post?.body.config_snapshot.fetch_timeout_seconds).toBe(60)
     expect(post?.body.config_snapshot.max_depth).toBe(5)
     expect(post?.body.config_snapshot.excluded_url_patterns).toEqual(DEFAULT_EXCLUDED_URL_PATTERNS)
   })
