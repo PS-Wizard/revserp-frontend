@@ -113,6 +113,13 @@ function Header() {
             Terms Of Service
           </Link>
           <Link
+            to="/privacy"
+            prefetch="intent"
+            className="hidden text-white/55 transition-colors hover:text-white/90 sm:inline"
+          >
+            Privacy Policy
+          </Link>
+          <Link
             to="/login"
             prefetch="intent"
             className="text-white/55 transition-colors hover:text-white/90"
@@ -251,8 +258,8 @@ function Footer() {
       <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:items-end md:justify-between">
         <div className="space-y-4">
           <RevserpLogoLink className="text-white/75" />
-          <p className="max-w-xs text-sm leading-relaxed text-white/38">
-            Crawl. Score. Fix. Ask your site anything.
+          <p className="max-w-md text-sm leading-relaxed text-white/38">
+            RevSerp is an SEO workspace. Crawl sites, track issues, connect Google Search Console and Google Analytics (read-only) for reports, and chat with your project data. Google data stays in your workspace. We do not sell it.
           </p>
         </div>
 
@@ -285,6 +292,13 @@ function Footer() {
               className="text-white/45 transition-colors hover:text-white/80"
             >
               Terms Of Service
+            </Link>
+            <Link
+              to="/privacy"
+              prefetch="intent"
+              className="text-white/45 transition-colors hover:text-white/80"
+            >
+              Privacy Policy
             </Link>
           </div>
           <p className="text-xs text-white/28">© {year} Revserp</p>
