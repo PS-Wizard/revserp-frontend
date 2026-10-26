@@ -9,6 +9,7 @@ export default [
     route(":pillar/:bucket/:issue", "routes/handbook-issue.tsx"),
   ]),
   route("terms", "routes/terms.tsx"),
+  route("privacy", "routes/privacy.tsx"),
   route("login", "routes/login.tsx"),
   route("signup", "routes/signup.tsx"),
   route("auth/callback", "routes/auth-callback.tsx"),
