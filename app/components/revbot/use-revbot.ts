@@ -426,6 +426,11 @@ export function useRevbot({
   requestedConversationId,
   locationId,
   onConversationChange,
+  pinnedConversationId,
+  disableConversationList,
+  onToolResult,
+  onTurnSettled,
+  onBeforeSend,
 }: {
   activeProject: ProjectResponse | null
   allowedEfforts: AIReasoningEffort[]
@@ -433,6 +438,23 @@ export function useRevbot({
   /** Location workspace scope. Absent means the parent project scope. */
   locationId?: string
   onConversationChange: (conversationId: string | null) => void
+  /**
+   * Pin the hook to one conversation (content drafts). The project
+   * conversation list is never fetched and the selection is never persisted
+   * to reload storage, so the island chat is left untouched.
+   */
+  pinnedConversationId?: string | null
+  /**
+   * Never fetch the project conversation list (content drafts). Pass from
+   * first render; pinnedConversationId can arrive later once loaded.
+   */
+  disableConversationList?: boolean
+  /** Fires for every streamed tool_result (draft sync point). */
+  onToolResult?: ((name: string, status: string) => void) | null
+  /** Fires when the active turn reaches a terminal status. */
+  onTurnSettled?: ((status: RevbotStatus) => void) | null
+  /** Awaited at the top of send(), so callers can flush pending writes. */
+  onBeforeSend?: (() => void | Promise<void>) | null
 }) {
   const queryClient = useQueryClient()
   const [effort, setEffortState] = useState<AIReasoningEffort>(() =>
@@ -505,6 +527,11 @@ export function useRevbot({
     (_turnId: string, _generation: number) => {}
   )
   const onConversationChangeRef = useRef(onConversationChange)
+  const pinnedConversationIdRef = useRef(pinnedConversationId ?? null)
+  const listDisabledRef = useRef(disableConversationList === true)
+  const onToolResultRef = useRef(onToolResult ?? null)
+  const onTurnSettledRef = useRef(onTurnSettled ?? null)
+  const onBeforeSendRef = useRef(onBeforeSend ?? null)
   const conversationCacheRef = useRef(
     new Map<string, AIConversationDetailResponse>()
   )
@@ -519,6 +546,26 @@ export function useRevbot({
   useEffect(() => {
     onConversationChangeRef.current = onConversationChange
   }, [onConversationChange])
+
+  useEffect(() => {
+    pinnedConversationIdRef.current = pinnedConversationId ?? null
+  }, [pinnedConversationId])
+
+  useEffect(() => {
+    listDisabledRef.current = disableConversationList === true
+  }, [disableConversationList])
+
+  useEffect(() => {
+    onToolResultRef.current = onToolResult ?? null
+  }, [onToolResult])
+
+  useEffect(() => {
+    onTurnSettledRef.current = onTurnSettled ?? null
+  }, [onTurnSettled])
+
+  useEffect(() => {
+    onBeforeSendRef.current = onBeforeSend ?? null
+  }, [onBeforeSend])
 
   useEffect(() => {
     messagesRef.current = state.messages
@@ -546,6 +593,8 @@ export function useRevbot({
 
   /** Best-effort refresh of the conversation list and per-conversation turn statuses. */
   const refreshConversations = useCallback(() => {
+    // Pinned (draft) conversations never list project conversations.
+    if (listDisabledRef.current || pinnedConversationIdRef.current) return
     const projectId = projectIdRef.current
     if (!projectId) return
     // Deliberately NOT gated by generation: selecting a conversation bumps
@@ -1012,6 +1061,7 @@ export function useRevbot({
                         : call
                     ),
                   }))
+                  onToolResultRef.current?.(payload.name, resultStatus)
                   if (
                     payload.name === "update_business_profile" &&
                     resultStatus === "completed"
@@ -1527,6 +1577,13 @@ export function useRevbot({
     })
     if (!projectId) return
 
+    // Content drafts never touch the project conversation list or the
+    // island's reload slot; the pinned effect below owns selection.
+    if (listDisabledRef.current) {
+      setState((current) => ({ ...current, loading: false }))
+      return
+    }
+
     refreshConversations()
 
     const stored = readStoredConversation(projectId, scopeLocationId)
@@ -1706,7 +1763,9 @@ export function useRevbot({
           }
           return
         }
-        saveStoredConversation(projectId, { conversationId }, scopeLocationId)
+        // Pinned (draft) chats must not overwrite the island's reload slot.
+        if (!pinnedConversationIdRef.current)
+          saveStoredConversation(projectId, { conversationId }, scopeLocationId)
         void syncQuestions(conversationId, generation)
         if (
           conversation.turn_id &&
@@ -1714,14 +1773,15 @@ export function useRevbot({
             conversation.turn_status === "running" ||
             isTurnWaitingStatus(conversation.turn_status))
         ) {
-          saveStoredConversation(
-            projectId,
-            {
-              conversationId,
-              turnId: conversation.turn_id,
-            },
-            scopeLocationId
-          )
+          if (!pinnedConversationIdRef.current)
+            saveStoredConversation(
+              projectId,
+              {
+                conversationId,
+                turnId: conversation.turn_id,
+              },
+              scopeLocationId
+            )
           try {
             const turn = await clientApiFetch<AITurnResponse>(
               `/ai/turns/${conversation.turn_id}`
@@ -1845,14 +1905,30 @@ export function useRevbot({
   )
 
   useEffect(() => {
+    // Pinned (draft) mode owns selection through the effect below; running
+    // newChat here would wipe the island's stored conversation.
+    if (disableConversationList || pinnedConversationId) return
     if (requestedConversationId === conversationIdRef.current) return
     if (requestedConversationId)
       void selectConversation(requestedConversationId)
     else newChat()
-  }, [newChat, requestedConversationId, selectConversation])
+  }, [
+    newChat,
+    disableConversationList,
+    pinnedConversationId,
+    requestedConversationId,
+    selectConversation,
+  ])
+
+  // Content drafts bind one Revbot instance to the draft's conversation.
+  useEffect(() => {
+    if (pinnedConversationId) void selectConversation(pinnedConversationId)
+  }, [pinnedConversationId, selectConversation])
 
   const send = useCallback(
     async (content: string, options?: SendOptions) => {
+      // Draft pages flush their autosave here so the turn reads fresh text.
+      await onBeforeSendRef.current?.()
       const projectId = projectIdRef.current
       const trimmed = content.trim()
       const images = options?.images
@@ -2282,6 +2358,11 @@ export function useRevbot({
 
   const pendingQuestion = pendingQuestionRequest(state.questions, state.turnId)
   const waitingForQuestion = pendingQuestion !== null
+
+  // Draft sync point: refetch the draft whenever a turn settles.
+  useEffect(() => {
+    if (isTurnTerminal(state.status)) onTurnSettledRef.current?.(state.status)
+  }, [state.status])
 
   return {
     activityStartedAt: state.activityStartedAt,

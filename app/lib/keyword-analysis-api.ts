@@ -59,6 +59,36 @@ export function competitorKeywordAnalysisQueryOptions(
   }
 }
 
+export function locationKeywordAnalysisQueryKey(
+  projectId: string,
+  locationId: string
+) {
+  return ["location-keyword-analysis", projectId, locationId] as const
+}
+
+export function fetchLocationKeywordAnalysis(
+  projectId: string,
+  locationId: string
+) {
+  return clientApiFetch<ProjectKeywordAnalysisResponse>(
+    `/projects/${projectId}/locations/${locationId}/keyword-analysis`
+  )
+}
+
+export function locationKeywordAnalysisQueryOptions(
+  projectId: string,
+  locationId: string
+) {
+  return {
+    queryKey: locationKeywordAnalysisQueryKey(projectId, locationId),
+    queryFn: () => fetchLocationKeywordAnalysis(projectId, locationId),
+    staleTime: 0,
+    gcTime: 30_000,
+    retry: false,
+    enabled: Boolean(projectId) && Boolean(locationId),
+  }
+}
+
 export function competitorInitializationQueryKey(
   projectId: string,
   competitorId: string

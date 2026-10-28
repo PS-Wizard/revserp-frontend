@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import { act, type ReactElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
-import { LocationKeywordsView } from "~/components/locations/location-keywords-view"
 import { RevbotStartPromptContext } from "~/components/revbot/revbot-start-prompt-context"
 import {
   locationKeywordCoverageQueryKey,
@@ -14,6 +13,22 @@ import type { LocalSeoLocation } from "~/lib/local-seo-api"
 import { flushTestDom, installTestDom } from "~/lib/dom-test-setup"
 
 installTestDom()
+
+// Base-UI portals never mount under happy-dom, so render dialog content inline.
+mock.module("~/components/ui/dialog", () => ({
+  Dialog: ({ open, children }: any) => (open ? <>{children}</> : null),
+  DialogContent: ({ children, ...props }: any) => (
+    <div {...props}>{children}</div>
+  ),
+  DialogHeader: ({ children }: any) => <div>{children}</div>,
+  DialogTitle: ({ children }: any) => <div>{children}</div>,
+  DialogDescription: ({ children }: any) => <div>{children}</div>,
+  DialogFooter: ({ children }: any) => <div>{children}</div>,
+}))
+
+const { LocationKeywordsView } = await import(
+  "~/components/locations/location-keywords-view"
+)
 
 type Group = { branded: string[]; non_branded: string[] }
 type Lists = {
@@ -43,8 +58,13 @@ function emptyLists(partial: Partial<Lists> = {}): Lists {
   }
 }
 
+type Analyses = { keywords: Array<Record<string, unknown>> }
+
 /** In-memory location keyword-lists store keyed by location id. */
-function installFetch(store: Record<string, Lists>) {
+function installFetch(
+  store: Record<string, Lists>,
+  analyses: Record<string, Analyses> = {}
+) {
   globalThis.fetch = (async (
     input: string | URL | Request,
     init?: RequestInit
@@ -70,6 +90,11 @@ function installFetch(store: Record<string, Lists>) {
         lists.selected = write.selected
         return Response.json(lists)
       }
+    }
+
+    const analysisMatch = url.match(/\/locations\/([^/]+)\/keyword-analysis$/)
+    if (analysisMatch && method === "GET") {
+      return Response.json(analyses[analysisMatch[1]] ?? { keywords: [] })
     }
 
     if (/\/locations\/[^/]+\/keywords$/.test(url) && method === "GET") {
@@ -184,6 +209,43 @@ function setInputValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }))
 }
 
+function setTextareaValue(area: HTMLTextAreaElement, value: string) {
+  // Same keydown-polyfill path as setInputValue, for the bulk-add textarea.
+  area.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+  const setter = Object.getOwnPropertyDescriptor(
+    window.HTMLTextAreaElement.prototype,
+    "value"
+  )!.set!
+  setter.call(area, value)
+  area.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true }))
+}
+
+function dialogButton(host: HTMLElement, text: string) {
+  return Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
+    (button) => (button.textContent ?? "").trim() === text
+  )
+}
+
+async function bulkAdd(host: HTMLElement, raw: string, submitLabel: string) {
+  await act(async () => {
+    buttonByText(host, "Add keywords")!.click()
+    await flushTestDom()
+  })
+  const area = host.querySelector<HTMLTextAreaElement>(
+    'textarea[aria-label="New brand keywords"]'
+  )
+  expect(area).toBeTruthy()
+  await act(async () => {
+    setTextareaValue(area!, raw)
+    await flushTestDom()
+  })
+  await act(async () => {
+    dialogButton(host, submitLabel)!.click()
+    await flushTestDom()
+    await flushTestDom()
+  })
+}
+
 function buttonByText(host: HTMLElement, text: string) {
   return Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
     (button) => (button.textContent ?? "").includes(text)
@@ -243,39 +305,25 @@ describe("location keywords view", () => {
     unmount()
   })
 
-  test("a manual keyword add PUTs only the location lists endpoint", async () => {
+  test("a bulk keyword add PUTs once with every new phrase", async () => {
     installFetch({ [LOCATION_A]: emptyLists() })
     const client = makeClient()
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
-    await act(async () => {
-      buttonByText(host, "New keyword")!.click()
-      await flushTestDom()
-    })
-    await act(async () => {
-      setInputValue(
-        host.querySelector<HTMLInputElement>(
-          'input[aria-label="New location keyword"]'
-        )!,
-        "coffee shop"
-      )
-      await flushTestDom()
-    })
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
-      await flushTestDom()
-      await flushTestDom()
-    })
+    await bulkAdd(host, "coffee shop\ncoffee shop\n tea house ", "Add 2 keywords")
 
-    const put = fetchCalls.find((call) => call.method === "PUT")
-    expect(put).toBeTruthy()
-    expect(put!.url.includes(`/locations/${LOCATION_A}/keyword-lists`)).toBe(
+    const puts = fetchCalls.filter((call) => call.method === "PUT")
+    expect(puts).toHaveLength(1)
+    expect(puts[0]!.url.includes(`/locations/${LOCATION_A}/keyword-lists`)).toBe(
       true
     )
-    expect((put!.body as { user_defined: Group }).user_defined.branded).toEqual(
-      ["coffee shop"]
-    )
+    expect((puts[0]!.body as { user_defined: Group }).user_defined.branded).toEqual([
+      "coffee shop",
+      "tea house",
+    ])
+    expect(host.textContent).toContain("coffee shop")
+    expect(host.textContent).toContain("tea house")
     expect(fetchCalls.every((call) => call.method !== "POST")).toBe(true)
     expect(
       fetchCalls.some((call) =>
@@ -286,17 +334,18 @@ describe("location keywords view", () => {
     unmount()
   })
 
-  test("the add form never nests a button inside a button", async () => {
+  test("the bulk add dialog never nests a button inside a button", async () => {
     installFetch({ [LOCATION_A]: emptyLists() })
     const client = makeClient()
     const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
     await flush()
 
     await act(async () => {
-      buttonByText(host, "New keyword")!.click()
+      buttonByText(host, "Add keywords")!.click()
       await flushTestDom()
     })
 
+    // The dialog mock renders inline, so the host covers its buttons too.
     const nested = Array.from(host.querySelectorAll("button")).filter(
       (button) => button.parentElement?.closest("button") != null
     )
@@ -404,7 +453,8 @@ describe("location keywords view", () => {
     )
     await flush()
 
-    expect(buttonByText(host, "New keyword")).toBeUndefined()
+    expect(buttonByText(host, "Add keywords")).toBeUndefined()
+    expect(host.querySelector('button[aria-label^="Edit keyword"]')).toBeNull()
     expect(buttonByText(host, "Find nearby keywords")).toBeUndefined()
     expect(host.textContent).toContain("Combined keywords")
     expect(host.textContent).toContain("acme plumbing")
@@ -547,24 +597,7 @@ describe("location keywords view", () => {
     const before = coverageReads()
     expect(before > 0).toBe(true)
 
-    await act(async () => {
-      buttonByText(host, "New keyword")!.click()
-      await flushTestDom()
-    })
-    await act(async () => {
-      setInputValue(
-        host.querySelector<HTMLInputElement>(
-          'input[aria-label="New location keyword"]'
-        )!,
-        "coffee shop"
-      )
-      await flushTestDom()
-    })
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click()
-      await flushTestDom()
-      await flushTestDom()
-    })
+    await bulkAdd(host, "coffee shop", "Add 1 keyword")
 
     expect(coverageReads() > before).toBe(true)
     expect(cloudText(host)).toContain("acme plumbing")
@@ -603,7 +636,7 @@ describe("location keywords view", () => {
     expect(host.textContent).toContain("Old Pick")
     expect((host.textContent ?? "").includes("Selected keywords")).toBe(false)
     const remove = host.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove keyword Old Pick"]'
+      'button[aria-label="Remove Old Pick"]'
     )
     expect(remove).toBeTruthy()
 
@@ -698,6 +731,81 @@ describe("location keywords view", () => {
     expect(prompts[0]).toContain("non_brand_keywords")
     expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
 
+    unmount()
+  })
+
+  test("location estimates render rows from the keyword-analysis endpoint", async () => {
+    installFetch({ [LOCATION_A]: emptyLists() }, {
+      [LOCATION_A]: {
+        keywords: [
+          {
+            keyword: "acme plumbing",
+            kind: "brand",
+            rank: 3,
+            traffic: 120,
+            volume: 500,
+            kd: 12.5,
+            cpc: 2.4,
+            results_count: null,
+          },
+          {
+            keyword: "emergency plumber",
+            kind: "non_brand",
+            rank: 21,
+            traffic: 40,
+            volume: 900,
+            kd: 44,
+            cpc: 5.1,
+            results_count: null,
+          },
+        ],
+      },
+    })
+    const client = makeClient()
+    const { host, unmount } = renderView(tree(client, PROJECT, LOCATION_A))
+    await flush()
+
+    expect(
+      fetchCalls.some((call) =>
+        call.url.includes(`/locations/${LOCATION_A}/keyword-analysis`)
+      )
+    ).toBe(true)
+    const estimates = Array.from(host.querySelectorAll("h3")).find(
+      (element) => element.textContent?.includes("Keyword estimates")
+    )
+    expect(estimates).toBeTruthy()
+    const card = estimates!.closest('[data-slot="card"]')?.textContent ?? ""
+    expect(card).toContain("acme plumbing")
+    expect(card).toContain("emergency plumber")
+    expect(card).toContain("1 brand · 1 non-brand")
+    unmount()
+  })
+
+  test("empty estimates offer Analyze Keywords with the location prompt", async () => {
+    installFetch({ [LOCATION_A]: emptyLists() })
+    const client = makeClient()
+    const prompts: string[] = []
+    const { host, unmount } = renderView(
+      tree(client, PROJECT, LOCATION_A, {
+        startPrompt: (content) => prompts.push(content),
+      })
+    )
+    await flush()
+
+    const analyze = buttonByText(host, "Analyze Keywords")
+    expect(analyze).toBeTruthy()
+
+    await act(async () => {
+      analyze!.click()
+      await flushTestDom()
+      await flushTestDom()
+    })
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]).toContain("set_keyword_analysis")
+    expect(prompts[0]).toContain("never passing competitor_id")
+    expect(prompts[0]).toContain("get_project_keywords")
+    expect(fetchCalls.every((call) => call.method === "GET")).toBe(true)
     unmount()
   })
 

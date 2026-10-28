@@ -1,4 +1,10 @@
-import { MonitorPlayIcon, RefreshCwIcon, ShieldCheckIcon, XIcon } from "lucide-react"
+import {
+  MailIcon,
+  MonitorPlayIcon,
+  RefreshCwIcon,
+  ShieldCheckIcon,
+  XIcon,
+} from "lucide-react"
 import { ThinkingOrb } from "thinking-orbs"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -22,11 +28,16 @@ import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group"
 import type { ProjectResponse } from "~/lib/api.types"
 
 const crawlSpeedPresets = [
-  { value: "safe", label: "Safe", delayMs: "5000", jitterMs: "500", fetchTimeoutSeconds: "60" },
+  {
+    value: "safe",
+    label: "Safe",
+    delayMs: "5000",
+    jitterMs: "500",
+    fetchTimeoutSeconds: "60",
+  },
   { value: "balanced", label: "Balanced", delayMs: "500", jitterMs: "250" },
   { value: "fast", label: "Fast", delayMs: "", jitterMs: "" },
 ]
-
 
 type RunCrawlDialogProps = {
   activeProject: ProjectResponse | null
@@ -38,6 +49,7 @@ type RunCrawlDialogProps = {
   forceFullCrawl: boolean
   honourRobotsTxt: boolean
   renderJavaScript: boolean
+  notifyCrawl: boolean
   isCrawlRunning: boolean
   isOpen: boolean
   isStartingCrawl: boolean
@@ -50,6 +62,7 @@ type RunCrawlDialogProps = {
   onForceFullCrawlChange: (value: boolean) => void
   onHonourRobotsTxtChange: (value: boolean) => void
   onRenderJavaScriptChange: (value: boolean) => void
+  onNotifyCrawlChange: (value: boolean) => void
   onMaxDepthChange: (value: string) => void
   onMaxPagesChange: (value: string) => void
   onDelayMsChange: (value: string) => void
@@ -71,6 +84,7 @@ export function RunCrawlDialog({
   forceFullCrawl,
   honourRobotsTxt,
   renderJavaScript,
+  notifyCrawl,
   isCrawlRunning,
   isOpen,
   isStartingCrawl,
@@ -83,6 +97,7 @@ export function RunCrawlDialog({
   onForceFullCrawlChange,
   onHonourRobotsTxtChange,
   onRenderJavaScriptChange,
+  onNotifyCrawlChange,
   onMaxDepthChange,
   onMaxPagesChange,
   onDelayMsChange,
@@ -97,7 +112,8 @@ export function RunCrawlDialog({
     (preset) =>
       preset.delayMs === delayMs.trim() &&
       preset.jitterMs === jitterMs.trim() &&
-      (!preset.fetchTimeoutSeconds || preset.fetchTimeoutSeconds === fetchTimeoutSeconds.trim())
+      (!preset.fetchTimeoutSeconds ||
+        preset.fetchTimeoutSeconds === fetchTimeoutSeconds.trim())
   )
 
   return (
@@ -169,7 +185,7 @@ export function RunCrawlDialog({
                 >
                   {crawlSpeedPresets.map((preset) => (
                     <ToggleGroupItem
-                      className="flex-1 data-[pressed]:bg-foreground data-[pressed]:text-background aria-pressed:bg-foreground aria-pressed:text-background"
+                      className="flex-1 aria-pressed:bg-foreground aria-pressed:text-background data-[pressed]:bg-foreground data-[pressed]:text-background"
                       key={preset.value}
                       type="button"
                       value={preset.value}
@@ -276,6 +292,21 @@ export function RunCrawlDialog({
                   Render JavaScript
                 </Button>
               </Field>
+              <Field>
+                <Button
+                  aria-pressed={notifyCrawl}
+                  className="w-full"
+                  onClick={() => onNotifyCrawlChange(!notifyCrawl)}
+                  type="button"
+                  variant={notifyCrawl ? "default" : "outline"}
+                >
+                  <MailIcon data-icon="inline-start" />
+                  Notify me
+                </Button>
+                <FieldDescription>
+                  Email me when the crawl finishes.
+                </FieldDescription>
+              </Field>
               <Field data-invalid={exclusionError ? true : undefined}>
                 <FieldLabel htmlFor="excluded-url-patterns">
                   Excluded URL patterns
@@ -310,12 +341,15 @@ export function RunCrawlDialog({
                   aria-invalid={exclusionError ? true : undefined}
                   autoComplete="off"
                   id="excluded-url-patterns"
-                  onChange={(event) => onExclusionDraftChange(event.target.value)}
+                  onChange={(event) =>
+                    onExclusionDraftChange(event.target.value)
+                  }
                   onKeyDown={(event) => {
                     // Space and Enter add tokens; Enter must not submit the form.
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault()
-                      if (exclusionDraft.trim()) onExclusionCommit(exclusionDraft)
+                      if (exclusionDraft.trim())
+                        onExclusionCommit(exclusionDraft)
                     }
                   }}
                   onPaste={(event) => {
@@ -329,8 +363,8 @@ export function RunCrawlDialog({
                   value={exclusionDraft}
                 />
                 <FieldDescription>
-                  Skip login and admin pages. Full https:// URL or path
-                  starting with /. Only * is a wildcard.
+                  Skip login and admin pages. Full https:// URL or path starting
+                  with /. Only * is a wildcard.
                 </FieldDescription>
                 {exclusionError ? (
                   <FieldError>{exclusionError}</FieldError>

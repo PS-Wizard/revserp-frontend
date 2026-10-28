@@ -31,6 +31,7 @@ import {
 const SETUP_STEPS: Array<{ id: LocationSetupStep["id"]; label: string }> = [
   { id: "prepare", label: "Prepare location" },
   { id: "profile", label: "Business profile" },
+  { id: "keyword_analysis", label: "Keyword estimates" },
   { id: "questions", label: "AI questions" },
   { id: "map_queries", label: "Map queries" },
   { id: "ai_visibility", label: "AI visibility test" },

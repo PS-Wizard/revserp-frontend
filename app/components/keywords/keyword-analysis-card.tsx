@@ -3,20 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
-  InfoIcon,
   Loader2,
   RefreshCwIcon,
   TagsIcon,
   TriangleAlertIcon,
 } from "lucide-react"
 
-import { queryMatchRowClassName } from "~/components/gsc-overview/query-match-badges"
+import { useKeywordCoverageQuery } from "~/components/keywords/keywords-coverage"
+import { AddNonBrandKeywordButton } from "~/components/keywords/add-non-brand-keyword-button"
+import { KeywordEstimatesTable } from "~/components/keywords/keyword-estimates-table"
 import { useRevbotStartPrompt } from "~/components/revbot/revbot-start-prompt-context"
-import {
-  KEYWORD_KIND_LABELS,
-  keywordCardClass,
-} from "~/components/keyword-management/keyword-card-parts"
-import { Badge } from "~/components/ui/badge"
+import { keywordCardClass } from "~/components/keyword-management/keyword-card-parts"
 import { Button } from "~/components/ui/button"
 import { Card } from "~/components/ui/card"
 import {
@@ -27,29 +24,16 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty"
 import { Skeleton } from "~/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip"
 import { useOrganizationEventsListener } from "~/hooks/use-organization-events"
 import { ApiError } from "~/lib/api"
 import type {
   KeywordAnalysis,
+  KeywordCoverageSeed,
   ProjectKeywordAnalysisResponse,
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
 import { cn } from "~/lib/utils"
 import {
-  KEYWORD_ESTIMATES_TOOLTIP,
   competitorKeywordAnalysisQueryOptions,
   projectKeywordAnalysisQueryOptions,
 } from "~/lib/keyword-analysis-api"
@@ -65,39 +49,29 @@ type Props = {
   title: string
   /** Shown under the title so the reader knows which site was measured. */
   scopeNotice?: string
+  /** Opt-in: shows a "+" per row that adds the keyword to this project's non-brand list. */
+  allowAddToProject?: boolean
+  /** Coverage override for the competitor case; projects load their own. */
+  coverage?: KeywordCoverageSeed[]
 }
 
-const DASH = "—"
+export {
+  formatAnalysisCpc,
+  formatAnalysisCount,
+  formatAnalysisKd,
+  formatAnalysisRank,
+} from "~/components/keywords/keyword-estimates-table"
 
 const ANALYZE_POLL_MS = 5000
 const ANALYZE_TIMEOUT_MS = 5 * 60_000
 const keywordAnalysisCardClass = cn(keywordCardClass, "h-[32rem] min-w-0")
-
-export function formatAnalysisCount(value: number | null) {
-  return value === null || value === undefined ? DASH : value.toLocaleString()
-}
-
-export function formatAnalysisRank(value: number | null) {
-  return value === null || value === undefined ? DASH : value.toLocaleString()
-}
-
-export function formatAnalysisKd(value: number | null) {
-  return value === null || value === undefined
-    ? DASH
-    : `${value.toLocaleString()}%`
-}
-
-export function formatAnalysisCpc(value: number | null) {
-  if (value === null || value === undefined) return DASH
-  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
 
 function projectAnalyzeKeywordsPrompt() {
   return [
     "Estimate keyword metrics for this project with the Revserp keyword tools.",
     "",
     "1. Start by calling get_project_keywords AND get_business_profile so you know the saved brand and non-brand keywords plus the brand, offering, and audience. Ground every estimate in crawled page content (titles, headings, body text) and Search Console data when connected. Do not use web search.",
-    "2. For EVERY saved keyword (brand and non-brand), estimate ALL five metrics as numbers: rank (1-100), traffic, volume, kd (0-100), cpc. Every metric must be a best-effort educated guess even without measured data — never null, never omitted, never \"--\".",
+    '2. For EVERY saved keyword (brand and non-brand), estimate ALL five metrics as numbers: rank (1-100), traffic, volume, kd (0-100), cpc. Every metric must be a best-effort educated guess even without measured data — never null, never omitted, never "--".',
     "3. Save the complete list with set_keyword_analysis, omitting competitor_id so the estimates attach to the current project.",
   ].join("\n")
 }
@@ -120,7 +94,7 @@ function competitorAnalyzeKeywordsPrompt(
     "",
     `1. ${knownSection} get_project_keywords reads the parent project only — never use it for this competitor and never copy the parent project's keywords.`,
     "2. Ground every estimate in the competitor's own crawled page content (titles, headings, body text) and context, plus general knowledge. Web fetch is optional.",
-    "3. For EVERY competitor keyword, estimate ALL five metrics as numbers: rank (1-100), traffic, volume, kd (0-100), cpc. Every metric must be a best-effort educated guess even without measured data — never null, never omitted, never \"--\".",
+    '3. For EVERY competitor keyword, estimate ALL five metrics as numbers: rank (1-100), traffic, volume, kd (0-100), cpc. Every metric must be a best-effort educated guess even without measured data — never null, never omitted, never "--".',
     `4. Save the complete list with set_keyword_analysis including competitor_id "${competitorId}".`,
   ].join("\n")
 }
@@ -129,64 +103,13 @@ function estimatesSignature(keywords: KeywordAnalysis[] | null | undefined) {
   return JSON.stringify(keywords ?? null)
 }
 
-function hasEstimateGaps(keywords: KeywordAnalysis[]) {
-  return keywords.some(
-    (row) =>
-      row.rank === null ||
-      row.rank === undefined ||
-      row.traffic === null ||
-      row.traffic === undefined ||
-      row.volume === null ||
-      row.volume === undefined ||
-      row.kd === null ||
-      row.kd === undefined ||
-      row.cpc === null ||
-      row.cpc === undefined
-  )
-}
-
-function KeywordKindBadge({ kind }: { kind: KeywordAnalysis["kind"] }) {
-  const isBrand = kind === "brand"
-  return (
-    <Badge
-      variant="outline"
-      className={
-        isBrand
-          ? "border-yellow-500/40 bg-yellow-400/15 text-yellow-800 dark:text-yellow-200"
-          : "border-blue-500/40 bg-blue-400/15 text-blue-800 dark:text-blue-200"
-      }
-    >
-      {KEYWORD_KIND_LABELS[isBrand ? "brand" : "non_brand"]}
-    </Badge>
-  )
-}
-
-function EstimatesNote() {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <span
-            aria-label={KEYWORD_ESTIMATES_TOOLTIP}
-            className="inline-flex shrink-0 items-center text-muted-foreground"
-            tabIndex={0}
-          />
-        }
-      >
-        <InfoIcon aria-hidden="true" className="size-3.5" />
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs break-words">
-        {KEYWORD_ESTIMATES_TOOLTIP}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 export function KeywordAnalysisCard({
   projectId,
   competitorId = null,
   title,
   scopeNotice,
+  allowAddToProject = false,
+  coverage,
 }: Props) {
   const features = useFeatures()
   const revbotPrompt = useRevbotStartPrompt()
@@ -200,6 +123,9 @@ export function KeywordAnalysisCard({
       : projectKeywordAnalysisQueryOptions(projectId ?? "")),
     refetchInterval: watching ? ANALYZE_POLL_MS : false,
   })
+  const coverageQuery = useKeywordCoverageQuery(
+    scopedCompetitor ? null : (projectId ?? null)
+  )
   const listsQuery = useQuery({
     ...projectKeywordListsQueryOptions(projectId ?? ""),
   })
@@ -207,19 +133,7 @@ export function KeywordAnalysisCard({
     listsQuery.data
   ).can_manage_keywords
 
-  const keywords = useMemo(
-    () => query.data?.keywords ?? [],
-    [query.data]
-  )
-  const brandCount = useMemo(
-    () => keywords.filter((row) => row.kind === "brand").length,
-    [keywords]
-  )
-  const nonBrandCount = useMemo(
-    () => keywords.filter((row) => row.kind === "non_brand").length,
-    [keywords]
-  )
-  const gaps = useMemo(() => hasEstimateGaps(keywords), [keywords])
+  const keywords = useMemo(() => query.data?.keywords ?? [], [query.data])
   const signature = estimatesSignature(query.data?.keywords)
 
   useEffect(() => {
@@ -335,27 +249,27 @@ export function KeywordAnalysisCard({
     )
   }
 
+  const onAddKeywordProjectId = allowAddToProject ? projectId : null
   const showAnalyzeButton = Boolean(canManage && startPrompt && projectId)
 
   return (
     <Card className={keywordAnalysisCardClass}>
-      <div className="flex min-h-20 shrink-0 flex-wrap items-center justify-between gap-3 px-5 py-3">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h3 className="flex items-center gap-1.5 font-heading text-base font-semibold tracking-tight">
-            {title}
-            <EstimatesNote />
-          </h3>
-          {scopeNotice ? (
-            <p className="text-xs text-pretty text-muted-foreground">
-              {scopeNotice}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <p className="text-xs text-muted-foreground tabular-nums">
-            {brandCount} brand · {nonBrandCount} non-brand
-          </p>
-          {watching ? (
+      <KeywordEstimatesTable
+        coverage={
+          scopedCompetitor ? coverage : coverageQuery.data?.seeds
+        }
+        rowAction={
+          onAddKeywordProjectId
+            ? (row) => (
+                <AddNonBrandKeywordButton
+                  keyword={row.keyword}
+                  projectId={onAddKeywordProjectId}
+                />
+              )
+            : undefined
+        }
+        action={
+          watching ? (
             <Button disabled size="xs" type="button" variant="ghost">
               <Loader2
                 aria-hidden="true"
@@ -363,7 +277,7 @@ export function KeywordAnalysisCard({
               />
               Working
             </Button>
-          ) : gaps && keywords.length > 0 && showAnalyzeButton ? (
+          ) : keywords.length > 0 && showAnalyzeButton ? (
             <Button
               disabled={!canGenerate}
               onClick={openAnalysisChat}
@@ -372,120 +286,52 @@ export function KeywordAnalysisCard({
               variant="ghost"
             >
               <RefreshCwIcon aria-hidden="true" />
-              Analyze keywords
+              Refresh estimates
             </Button>
-          ) : null}
-        </div>
-      </div>
-      {keywords.length === 0 ? (
-        <Empty className="min-h-48 border-0">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <TagsIcon aria-hidden="true" />
-            </EmptyMedia>
-            <EmptyTitle>No estimates yet</EmptyTitle>
-            <EmptyDescription>
-              Let Revbot estimate rank, traffic, volume, KD, and CPC
-              for this site&apos;s keywords.
-            </EmptyDescription>
-          </EmptyHeader>
-          {showAnalyzeButton ? (
-            <Button
-              className="mt-2"
-              disabled={watching || !canGenerate}
-              onClick={openAnalysisChat}
-              size="sm"
-              type="button"
-            >
-              {watching ? (
-                <>
-                  <Loader2
-                    aria-hidden="true"
-                    className="animate-spin motion-reduce:animate-none"
-                  />
-                  Generating…
-                </>
-              ) : (
-                "Analyze Keywords"
-              )}
-            </Button>
-          ) : null}
-          {watching ? (
-            <Button
-              onClick={() => void query.refetch()}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Check again
-            </Button>
-          ) : null}
-        </Empty>
-      ) : (
-        <div
-          aria-label={`${title} table`}
-          className="min-h-0 flex-1 overflow-auto border-t border-border/40 [&>[data-slot=table-container]]:overflow-visible"
-          role="region"
-          tabIndex={0}
-        >
-          <Table className="min-w-[40rem]">
-            <TableHeader className="sticky top-0 z-10 bg-card">
-              <TableRow>
-                <TableHead>Keyword</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead className="text-right">Rank</TableHead>
-                <TableHead className="text-right">Traffic</TableHead>
-                <TableHead className="text-right">Volume</TableHead>
-                <TableHead className="text-right">KD</TableHead>
-                <TableHead className="text-right">CPC</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keywords.map((row) => {
-                const isBrand = row.kind === "brand"
-                return (
-                  <TableRow
-                    key={`${row.kind}:${row.keyword}`}
-                    className={queryMatchRowClassName({
-                      brand: isBrand,
-                      nonBrand: !isBrand,
-                    })}
-                  >
-                    <TableCell className="max-w-56 truncate font-medium">
-                      {row.keyword}
-                    </TableCell>
-                    <TableCell>
-                      <KeywordKindBadge kind={row.kind} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatAnalysisRank(row.rank)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatAnalysisCount(row.traffic)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatAnalysisCount(row.volume)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatAnalysisKd(row.kd)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatAnalysisCpc(row.cpc)}
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-      {keywords.length > 0 ? (
-        <p className="shrink-0 border-t border-border/40 px-5 py-3 text-center text-xs text-muted-foreground">
-          {watching
-            ? "Waiting for new estimates…"
-            : KEYWORD_ESTIMATES_TOOLTIP}
-        </p>
-      ) : null}
+          ) : null
+        }
+        description={scopeNotice}
+        emptyAction={
+          // ponytail: fragment keeps both CTAs without a wrapper div
+          // that would break the Empty layout.
+          <>
+            {showAnalyzeButton ? (
+              <Button
+                className="mt-2"
+                disabled={watching || !canGenerate}
+                onClick={openAnalysisChat}
+                size="sm"
+                type="button"
+              >
+                {watching ? (
+                  <>
+                    <Loader2
+                      aria-hidden="true"
+                      className="animate-spin motion-reduce:animate-none"
+                    />
+                    Generating…
+                  </>
+                ) : (
+                  "Analyze Keywords"
+                )}
+              </Button>
+            ) : null}
+            {watching ? (
+              <Button
+                onClick={() => void query.refetch()}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Check again
+              </Button>
+            ) : null}
+          </>
+        }
+        footerNote={watching ? "Waiting for new estimates…" : undefined}
+        rows={keywords}
+        title={title}
+      />
     </Card>
   )
 }

@@ -74,7 +74,6 @@ import {
 import { useOptionalLocationWorkspace } from "~/lib/location-workspace"
 import { ProjectPanelOpenContext } from "~/components/summary/project-panel-context"
 import { ProjectPanel } from "~/components/command-dock/project-panel"
-import { PageEditor } from "~/components/editor/page-editor"
 import {
   DynamicIslandDockedChrome,
   DynamicIslandPanel,
@@ -160,6 +159,7 @@ type RunCrawlState = {
   forceFullCrawl: boolean
   honourRobotsTxt: boolean
   renderJavaScript: boolean
+  notifyCrawl: boolean
   maxDepth: string
   maxPages: string
   delayMs: string
@@ -174,7 +174,11 @@ type RunCrawlState = {
 type RunCrawlEvent =
   | { type: "OPEN" | "CLOSE" | "STARTING" | "STARTED" }
   | {
-      type: "FORCE_FULL_CRAWL" | "HONOUR_ROBOTS_TXT" | "RENDER_JAVASCRIPT"
+      type:
+        | "FORCE_FULL_CRAWL"
+        | "HONOUR_ROBOTS_TXT"
+        | "RENDER_JAVASCRIPT"
+        | "NOTIFY_CRAWL"
       value: boolean
     }
   | { type: "EXCLUDED_PATTERNS"; value: string[] }
@@ -206,6 +210,8 @@ function runCrawlReducer(
       return { ...state, honourRobotsTxt: event.value }
     case "RENDER_JAVASCRIPT":
       return { ...state, renderJavaScript: event.value }
+    case "NOTIFY_CRAWL":
+      return { ...state, notifyCrawl: event.value }
     case "MAX_DEPTH":
       return { ...state, maxDepth: event.value }
     case "MAX_PAGES":
@@ -234,6 +240,7 @@ function runCrawlReducer(
         forceFullCrawl: false,
         honourRobotsTxt: false,
         renderJavaScript: false,
+        notifyCrawl: false,
         exclusionDraft: "",
         exclusionError: "",
       }
@@ -253,6 +260,7 @@ const initialRunCrawlState: RunCrawlState = {
   forceFullCrawl: false,
   honourRobotsTxt: false,
   renderJavaScript: false,
+  notifyCrawl: false,
   maxDepth: "5",
   maxPages: "",
   delayMs: "",
@@ -320,6 +328,10 @@ export function WorkspaceShellPreview({
   const location = useLocation()
   const revalidator = useRevalidator()
   const features = useFeatures()
+  // The Content view docks its own chat, so the floating island steps aside
+  // there. Compared as a string so it typechecks whether or not DashboardView
+  // already lists "content"; island state stays intact for the return trip.
+  const isContentView = (view as string) === "content"
   const [islandState, setIslandState] = useState<
     "docked" | "minimized" | "maximized"
   >("docked")
@@ -464,30 +476,8 @@ export function WorkspaceShellPreview({
     [location.pathname, location.search, navigate]
   )
 
-  const handleRevbotEditorLink = useCallback(
-    (url: string) => {
-      const params = new URLSearchParams(location.search)
-      params.set("editorUrl", url)
-      if (!params.has("crawl") && currentCrawl?.id) {
-        params.set("crawl", currentCrawl.id)
-      }
-      navigate({
-        pathname: location.pathname,
-        search: params.toString(),
-        hash: location.hash,
-      })
-    },
-    [
-      currentCrawl?.id,
-      location.hash,
-      location.pathname,
-      location.search,
-      navigate,
-    ]
-  )
-
   useEffect(() => {
-    if (!features.ai_chat) return
+    if (!features.ai_chat || isContentView) return
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && islandState !== "docked") {
@@ -530,7 +520,7 @@ export function WorkspaceShellPreview({
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [features.ai_chat, islandState])
+  }, [features.ai_chat, islandState, isContentView])
 
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ??
@@ -627,7 +617,8 @@ export function WorkspaceShellPreview({
       openBusinessProfile: openBusinessProfileForTour,
       closeBusinessProfile: closeBusinessProfileForTour,
       isBusinessProfileOpen: businessProfile.businessProfileProject !== null,
-      isCreateProjectOpen: createProject.isOpen && !createProject.renameProjectId,
+      isCreateProjectOpen:
+        createProject.isOpen && !createProject.renameProjectId,
       lockDockItem,
     }),
     [
@@ -778,7 +769,9 @@ export function WorkspaceShellPreview({
     if (!name || (!renameProjectId && !baseUrl)) {
       createProjectDispatch({
         type: "ERROR",
-        value: renameProjectId ? "Project name is required." : "Project name and base URL are required.",
+        value: renameProjectId
+          ? "Project name is required."
+          : "Project name and base URL are required.",
       })
       return
     }
@@ -813,7 +806,11 @@ export function WorkspaceShellPreview({
       createProjectDispatch({
         type: "ERROR",
         value:
-          error instanceof Error ? error.message : renameProjectId ? "Unable to rename project." : "Unable to create project.",
+          error instanceof Error
+            ? error.message
+            : renameProjectId
+              ? "Unable to rename project."
+              : "Unable to create project.",
       })
     }
   }
@@ -896,6 +893,7 @@ export function WorkspaceShellPreview({
       const crawl = await clientApiPost<CrawlResponse>(
         `/projects/${activeProjectId}/crawls`,
         {
+          notify: runCrawl.notifyCrawl,
           config_snapshot: buildRunCrawlConfigSnapshot(
             {
               max_depth: maxDepth,
@@ -1272,7 +1270,7 @@ export function WorkspaceShellPreview({
                   </div>
                 )}
               </div>
-              {features.ai_chat && !fullBleed ? (
+              {features.ai_chat && !fullBleed && !isContentView ? (
                 <LayoutGroup id="ai-island-group">
                   {islandState === "docked" ? (
                     <DynamicIslandDockedChrome
@@ -1314,7 +1312,6 @@ export function WorkspaceShellPreview({
                             workspaceActions.canManageActiveOrganization
                           }
                           onActivityChange={setIsIslandThinking}
-                          onEditorLink={handleRevbotEditorLink}
                           onInternalLink={handleRevbotInternalLink}
                           onTitleChange={setIslandConversationTitle}
                           revbot={islandRevbot}
@@ -1389,7 +1386,6 @@ export function WorkspaceShellPreview({
               ) : null}
             </motion.main>
           </SidebarProvider>
-          <PageEditor />
           <RunCrawlDialog
             activeProject={activeProject}
             activeProjectId={activeProjectId}
@@ -1401,6 +1397,7 @@ export function WorkspaceShellPreview({
             forceFullCrawl={runCrawl.forceFullCrawl}
             honourRobotsTxt={runCrawl.honourRobotsTxt}
             renderJavaScript={runCrawl.renderJavaScript}
+            notifyCrawl={runCrawl.notifyCrawl}
             isCrawlRunning={isCrawlRunning}
             isOpen={runCrawl.isOpen}
             isStartingCrawl={runCrawl.starting}
@@ -1422,6 +1419,9 @@ export function WorkspaceShellPreview({
             }
             onRenderJavaScriptChange={(value) =>
               runCrawlDispatch({ type: "RENDER_JAVASCRIPT", value })
+            }
+            onNotifyCrawlChange={(value) =>
+              runCrawlDispatch({ type: "NOTIFY_CRAWL", value })
             }
             onJitterMsChange={(value) =>
               runCrawlDispatch({ type: "JITTER_MS", value })

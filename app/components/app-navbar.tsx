@@ -117,12 +117,24 @@ export function AppNavbarDialogs({
         isCreatingInvite={workspaceActions.isCreatingInvite}
         isOpen={workspaceActions.isInviteDialogOpen}
         profileActionError={workspaceActions.profileActionError}
+        inviteEmailDraft={workspaceActions.inviteEmailDraft}
+        inviteRecipients={workspaceActions.inviteRecipients}
+        isSendingInviteEmails={workspaceActions.isSendingInviteEmails}
+        inviteEmailResult={workspaceActions.inviteEmailResult}
+        inviteEmailResultIsError={workspaceActions.inviteEmailResultIsError}
         onCopyInviteLink={() => void workspaceActions.handleCopyInviteLink()}
         onExpiresAtChange={workspaceActions.setInviteExpiresAt}
         onMaxUsesChange={workspaceActions.setInviteMaxUses}
         onRoleChange={workspaceActions.setInviteRole}
         onOpenChange={workspaceActions.closeInviteDialog}
         onSubmit={workspaceActions.handleCreateInvite}
+        onEmailDraftChange={workspaceActions.setInviteEmailDraft}
+        onEmailCommit={workspaceActions.commitInviteEmailText}
+        onRemoveEmailRecipient={workspaceActions.removeInviteEmailRecipient}
+        onPopEmailRecipient={workspaceActions.popInviteEmailRecipient}
+        onSendInviteEmails={() =>
+          void workspaceActions.handleSendInviteEmails()
+        }
       />
 
       <LeaveWorkspaceDialog

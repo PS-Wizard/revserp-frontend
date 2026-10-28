@@ -2,9 +2,9 @@
 
 import {
   CombinedKeywordCloudCard,
-  CombinedKeywordsCard,
   DefineYourKeywordsCard,
-  SuggestedKeywordsCard,
+  ProjectCombinedKeywordsCard,
+  ProjectSuggestedKeywordsCard,
 } from "~/components/keyword-management/project-keyword-cards"
 import { KeywordAnalysisCard } from "~/components/keywords/keyword-analysis-card"
 import { KeywordsCoverage } from "~/components/keywords/keywords-coverage"
@@ -28,13 +28,13 @@ export function KeywordsView({ projectId }: Props) {
           />
         </div>
         <div className="min-h-0">
-          <SuggestedKeywordsCard
+          <ProjectSuggestedKeywordsCard
             key={`suggested-${cardKey}`}
             projectId={projectId}
           />
         </div>
         <div className="min-h-0">
-          <CombinedKeywordsCard
+          <ProjectCombinedKeywordsCard
             key={`combined-${cardKey}`}
             projectId={projectId}
           />

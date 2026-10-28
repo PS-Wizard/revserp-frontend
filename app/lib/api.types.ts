@@ -136,7 +136,8 @@ export type KeywordAnalysis = {
 }
 
 /** GET /projects/{projectID}/keyword-analysis.
- * GET /projects/{projectID}/competitors/{competitorID}/keyword-analysis. */
+ * GET /projects/{projectID}/competitors/{competitorID}/keyword-analysis.
+ * GET /projects/{projectID}/locations/{locationID}/keyword-analysis. */
 export type ProjectKeywordAnalysisResponse = {
   keywords: KeywordAnalysis[]
 }
@@ -1089,6 +1090,8 @@ export type CompetitorGapReport = {
   issues: CompetitorGapIssueRow[]
   spread: CompetitorGapSpreadRow[]
   keyword_coverage: CompetitorGapKeywordCoverage
+  /** The competitor's own non-brand keywords measured on both crawls. */
+  competitor_keyword_coverage?: CompetitorGapKeywordCoverage
   page_health: {
     you: CompetitorGapPageHealth
     them: CompetitorGapPageHealth

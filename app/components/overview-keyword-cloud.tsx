@@ -36,21 +36,25 @@ export function OverviewKeywordCloud({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-5">
       <div className="m-auto flex min-h-full flex-wrap content-center items-center justify-center gap-x-3 gap-y-2 text-center">
-        {items.map((item) => {
-          const weight = wordWeight(item.keyword)
-          return (
-            <span
-              className={cn(
-                "max-w-full font-medium tracking-tight",
-                SIZE_STEPS[weight % SIZE_STEPS.length],
-                KIND_TONES[item.kind]
-              )}
-              key={`${item.kind}:${item.keyword}`}
-            >
-              {item.keyword}
-            </span>
+        {[...items]
+          .sort(
+            (a, b) => Number(a.kind !== "brand") - Number(b.kind !== "brand")
           )
-        })}
+          .map((item) => {
+            const weight = wordWeight(item.keyword)
+            return (
+              <span
+                className={cn(
+                  "max-w-full font-medium tracking-tight",
+                  SIZE_STEPS[weight % SIZE_STEPS.length],
+                  KIND_TONES[item.kind]
+                )}
+                key={`${item.kind}:${item.keyword}`}
+              >
+                {item.keyword}
+              </span>
+            )
+          })}
       </div>
     </div>
   )

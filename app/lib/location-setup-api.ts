@@ -3,6 +3,7 @@ import { clientApiFetch, clientApiPost } from "~/lib/api"
 export type LocationSetupStepId =
   | "prepare"
   | "profile"
+  | "keyword_analysis"
   | "questions"
   | "map_queries"
   | "ai_visibility"

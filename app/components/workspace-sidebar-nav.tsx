@@ -12,6 +12,7 @@ import {
   CheckIcon,
   EyeIcon,
   FileSearchIcon,
+  FileTextIcon,
   GaugeIcon,
   MapPinIcon,
   NetworkIcon,
@@ -30,6 +31,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "~/components/ui/sidebar"
+import { useFeatures } from "~/lib/features"
 import { cn } from "~/lib/utils"
 
 // The calm summary home is a separate section from the audit breakdowns —
@@ -86,6 +88,8 @@ export type NavGroup = {
 type BuildGroupsInput = {
   gscConnector: boolean
   integrations: boolean
+  /** Gated on the same flag as AI chat; absent keeps the old groups. */
+  aiChat?: boolean
   maxCompetitors: number
   /** Project-scoped route tabs (Locations) render only when set. */
   projectId?: string | null
@@ -101,6 +105,7 @@ type BuildGroupsInput = {
 export function buildWorkspaceNavGroups({
   gscConnector,
   integrations,
+  aiChat = false,
   isLocationScoped = false,
   maxCompetitors,
   projectId,
@@ -187,13 +192,24 @@ export function buildWorkspaceNavGroups({
     })
   }
 
+  const drafts: NavTab[] = []
+  if (aiChat && !isLocationScoped) {
+    drafts.push({
+      key: "content",
+      label: "Content",
+      description: "Blog drafts written with Revbot.",
+      Icon: FileTextIcon,
+      view: "content",
+    })
+  }
+
   // Site graph is whole-site only: location mode drops that audit tab while
   // the parent keeps it. Stale location deep links normalize to overview
   // at the workspace dispatcher, so the tab is unreachable, not a dead end.
   const auditTabs = isLocationScoped
     ? auditSections.filter(([, tab]) => tab !== "site-graph")
     : auditSections
-  return [
+  const groups: NavGroup[] = [
     {
       key: "audit",
       label: "Dashboard",
@@ -209,6 +225,7 @@ export function buildWorkspaceNavGroups({
     { key: "visibility", label: "Visibility", tabs: visibility },
     { key: "compare", label: "Compare", tabs: compare },
     { key: "marketplace", label: "Marketplace", tabs: content },
+    { key: "content", label: "Content", tabs: drafts },
     ...(projectId
       ? [
           {
@@ -226,7 +243,8 @@ export function buildWorkspaceNavGroups({
           } satisfies NavGroup,
         ]
       : []),
-  ].filter((group) => group.tabs.length > 0)
+  ]
+  return groups.filter((group) => group.tabs.length > 0)
 }
 
 export function isWorkspaceTabActive(
@@ -353,9 +371,11 @@ export function WorkspaceSidebarNav({
   view: DashboardView
   visibilityMode?: VisibilityMode
 }) {
+  const features = useFeatures()
   const groups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
+    aiChat: features.ai_chat === true,
     isLocationScoped,
     maxCompetitors,
     projectId,

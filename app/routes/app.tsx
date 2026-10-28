@@ -104,6 +104,12 @@ const SiteGraphView = lazy(() =>
   }))
 )
 
+const ContentView = lazy(() =>
+  import("~/components/content/content-view").then((module) => ({
+    default: module.ContentView,
+  }))
+)
+
 export async function loader({
   request,
   params,
@@ -243,6 +249,7 @@ const viewLabels: Record<DashboardView, string> = {
   "search-console": "Search Console",
   analytics: "Google Analytics",
   marketplace: "Marketplace",
+  content: "Content",
   compare: "Compare",
 }
 
@@ -481,11 +488,22 @@ export default function AppPage() {
   const revalidatorStateRef = useRef(revalidator.state)
   revalidatorStateRef.current = revalidator.state
 
+  // A request during an in-flight revalidation is queued, not dropped: a fast
+  // crawl's crawl.completed can land while the progress refetch is running.
+  const revalidatePendingRef = useRef(false)
   const revalidateIfIdle = useCallback(() => {
     if (revalidatorStateRef.current === "idle") {
       revalidateRef.current()
+    } else {
+      revalidatePendingRef.current = true
     }
   }, [])
+  useEffect(() => {
+    if (revalidator.state === "idle" && revalidatePendingRef.current) {
+      revalidatePendingRef.current = false
+      revalidator.revalidate()
+    }
+  }, [revalidator])
 
   const goToCrawl = useCallback(
     (projectId: string, crawlId?: string, destination?: "competitors") => {
@@ -1018,6 +1036,17 @@ export default function AppPage() {
                 activeProject={activeProject}
                 canManageOrganization={canManageActiveOrganization}
               />
+            ) : view === "content" &&
+              me.features?.ai_chat === true &&
+              !locationWorkspace ? (
+              <Suspense fallback={null}>
+                <ContentView
+                  key={activeProject?.id}
+                  project={activeProject}
+                  allowedEfforts={me.features.ai_allowed_reasoning_efforts}
+                  canManageOrganization={canManageActiveOrganization}
+                />
+              </Suspense>
             ) : (
               <div className="p-6">
                 <Card>

@@ -287,6 +287,7 @@ function CompetitorDetailView({
   crawlId,
   parentCrawlId,
   canStart,
+  trackCrawl,
   onClose,
 }: {
   projectId: string
@@ -296,8 +297,30 @@ function CompetitorDetailView({
   crawlId: string | null
   parentCrawlId: string | null
   canStart: boolean
+  trackCrawl: (id: string) => void
   onClose: () => void
 }) {
+  const queryClient = useQueryClient()
+  const crawlMutation = useMutation({
+    mutationFn: () =>
+      clientApiPost<EnqueueCompetitorCrawlsResponse>(
+        `/projects/${projectId}/competitors/${competitorId}/crawls?crawl=${parentCrawlId}`,
+        {}
+      ),
+    onSuccess: (response) => {
+      for (const crawl of response.crawls) trackCrawl(crawl.id)
+      void queryClient.invalidateQueries({
+        queryKey: ["project-competitors", projectId],
+      })
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiError
+          ? error.message
+          : "Unable to start competitor crawl."
+      )
+    },
+  })
   const initialization = useCompetitorInitialization({
     projectId,
     competitorId,
@@ -351,6 +374,24 @@ function CompetitorDetailView({
                 Setup is complete. Crawl this competitor against the selected audit to see insights.
               </EmptyDescription>
             </EmptyHeader>
+            {canStart && parentCrawlId ? (
+              <EmptyContent>
+                <Button
+                  disabled={crawlMutation.isPending}
+                  onClick={() => crawlMutation.mutate()}
+                  type="button"
+                >
+                  {crawlMutation.isPending ? (
+                    <Loader2Icon
+                      aria-hidden="true"
+                      className="animate-spin"
+                      data-icon="inline-start"
+                    />
+                  ) : null}
+                  Crawl competitor
+                </Button>
+              </EmptyContent>
+            ) : null}
           </Empty>
         </div>
       </div>
@@ -573,6 +614,7 @@ export const CompetitorsView = memo(function CompetitorsView({
     return (
       <CompetitorDetailView
         canStart={canStart}
+        trackCrawl={trackCrawl}
         competitorId={insightsTarget.competitorId}
         competitorName={insightsTarget.name}
         crawlId={liveCrawlId ?? insightsTarget.crawlId}

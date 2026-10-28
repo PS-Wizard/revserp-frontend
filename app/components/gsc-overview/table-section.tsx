@@ -25,6 +25,7 @@ import {
   type ProjectKeywordQueryMatch,
 } from "./keyword-query-matching"
 import { QueryMatchBadges, queryMatchRowClassName } from "./query-match-badges"
+import { SortableTableHead } from "~/components/ui/sortable-table-head"
 import { cn } from "~/lib/utils"
 
 const dimensionTabs: Array<{ key: GSCDimensionTab; label: string }> = [
@@ -237,41 +238,46 @@ function RowsTable({
       <Table>
         <TableHeader>
           <UITableRow className="border-border/50 text-muted-foreground">
-            <SortableHead
-              column="label"
-              onToggle={onToggleTableSort}
-              tableSort={tableSort}
+            <SortableTableHead
+              active={tableSort.column === "label"}
+              direction={tableSort.direction}
+              indicator={<span>{sortIndicator(tableSort, "label")}</span>}
+              onToggle={() => onToggleTableSort("label")}
             >
               {primaryColumnLabel}
-            </SortableHead>
-            <SortableHead
-              column="clicks"
-              onToggle={onToggleTableSort}
-              tableSort={tableSort}
+            </SortableTableHead>
+            <SortableTableHead
+              active={tableSort.column === "clicks"}
+              direction={tableSort.direction}
+              indicator={<span>{sortIndicator(tableSort, "clicks")}</span>}
+              onToggle={() => onToggleTableSort("clicks")}
             >
               Clicks
-            </SortableHead>
-            <SortableHead
-              column="impressions"
-              onToggle={onToggleTableSort}
-              tableSort={tableSort}
+            </SortableTableHead>
+            <SortableTableHead
+              active={tableSort.column === "impressions"}
+              direction={tableSort.direction}
+              indicator={<span>{sortIndicator(tableSort, "impressions")}</span>}
+              onToggle={() => onToggleTableSort("impressions")}
             >
               Impressions
-            </SortableHead>
-            <SortableHead
-              column="ctr"
-              onToggle={onToggleTableSort}
-              tableSort={tableSort}
+            </SortableTableHead>
+            <SortableTableHead
+              active={tableSort.column === "ctr"}
+              direction={tableSort.direction}
+              indicator={<span>{sortIndicator(tableSort, "ctr")}</span>}
+              onToggle={() => onToggleTableSort("ctr")}
             >
               CTR
-            </SortableHead>
-            <SortableHead
-              column="position"
-              onToggle={onToggleTableSort}
-              tableSort={tableSort}
+            </SortableTableHead>
+            <SortableTableHead
+              active={tableSort.column === "position"}
+              direction={tableSort.direction}
+              indicator={<span>{sortIndicator(tableSort, "position")}</span>}
+              onToggle={() => onToggleTableSort("position")}
             >
               Position
-            </SortableHead>
+            </SortableTableHead>
             {showMatch ? <TableHead>Match</TableHead> : null}
           </UITableRow>
         </TableHeader>
@@ -341,29 +347,6 @@ function QueryLabelCell({
   )
 }
 
-function SortableHead({
-  column,
-  tableSort,
-  onToggle,
-  children,
-}: {
-  column: TableSortColumn
-  tableSort: TableSortState
-  onToggle: (column: TableSortColumn) => void
-  children: React.ReactNode
-}) {
-  return (
-    <TableHead>
-      <button
-        className="inline-flex items-center gap-2"
-        onClick={() => onToggle(column)}
-        type="button"
-      >
-        {children} <span>{sortIndicator(tableSort, column)}</span>
-      </button>
-    </TableHead>
-  )
-}
 
 function emptyMessage(tab: GSCDimensionTab) {
   return tab === "queries"

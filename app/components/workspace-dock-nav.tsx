@@ -43,6 +43,7 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "~/components/ui/navigation-menu"
+import { useFeatures } from "~/lib/features"
 import { cn } from '~/lib/utils'
 import { getSafeProjectWebsiteUrl } from '~/lib/project-website'
 
@@ -144,9 +145,11 @@ export function WorkspaceDockNav({
   // The panel stays put until the context menu reports itself closed.
   const [contextOpen, setContextOpen] = useState(false)
   const [clickLocked, setClickLocked] = useState(false)
+  const features = useFeatures()
   const groups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
+    aiChat: features.ai_chat === true,
     isLocationScoped,
     maxCompetitors,
     projectId,
@@ -290,7 +293,7 @@ export function WorkspaceDockNav({
                   )}
                 >
                   {group.label}
-                  {activeTab ? (
+                  {activeTab && group.tabs.length > 1 ? (
                     <>
                       <CircleIcon
                         aria-hidden="true"

@@ -5,8 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 import {
   CombinedKeywordCloudCard,
-  CombinedKeywordsCard,
   DefineYourKeywordsCard,
+  parseBulkKeywords,
+  ProjectCombinedKeywordsCard,
 } from "~/components/keyword-management/project-keyword-cards"
 import { flushTestDom, installTestDom } from "~/lib/dom-test-setup"
 
@@ -143,7 +144,7 @@ describe("shared project keyword cards", () => {
     await flush()
 
     await act(async () => {
-      buttonByText(host, "New keyword")!.click()
+      buttonByText(host, "Add keywords")!.click()
       await flushTestDom()
     })
 
@@ -165,7 +166,7 @@ describe("shared project keyword cards", () => {
       })
     )
     const { host, unmount } = render(
-      <CombinedKeywordsCard projectId={PROJECT} />
+      <ProjectCombinedKeywordsCard projectId={PROJECT} />
     )
     await flush()
 
@@ -196,5 +197,12 @@ describe("shared project keyword cards", () => {
     expect(host.textContent).toContain("Non-brand")
 
     unmount()
+  })
+
+  test("parseBulkKeywords splits on commas and newlines, trims, dedupes", () => {
+    expect(
+      parseBulkKeywords("Acme Plumbing, acme plumbing\n\n drain cleaning , ,DRAIN CLEANING")
+    ).toEqual(["Acme Plumbing", "drain cleaning"])
+    expect(parseBulkKeywords("   \n, ")).toEqual([])
   })
 })

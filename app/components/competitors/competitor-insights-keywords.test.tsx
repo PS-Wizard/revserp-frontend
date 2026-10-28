@@ -24,12 +24,16 @@ const { CompetitorInsightsView } = await import(
 const { KeywordCoverageCard, KeywordsCoverage } = await import(
   "~/components/keywords/keywords-coverage"
 )
+const { AddNonBrandKeywordButton } = await import(
+  "~/components/keywords/add-non-brand-keyword-button"
+)
 const { KeywordAnalysisCard } = await import(
   "~/components/keywords/keyword-analysis-card"
 )
 const { act } = await import("react")
 import type { ReactElement } from "react"
 const { createRoot } = await import("react-dom/client")
+const { MemoryRouter } = await import("react-router")
 import type { Root } from "react-dom/client"
 const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query")
 const { flushTestDom } = await import("~/lib/dom-test-setup")
@@ -194,7 +198,11 @@ function render(element: ReactElement) {
   document.body.appendChild(host)
   const root: Root = createRoot(host)
   act(() => {
-    root.render(<QueryClientProvider client={client}>{element}</QueryClientProvider>)
+    root.render(
+      <MemoryRouter>
+        <QueryClientProvider client={client}>{element}</QueryClientProvider>
+      </MemoryRouter>
+    )
   })
   roots.push(() => {
     act(() => root.unmount())
@@ -225,7 +233,7 @@ afterEach(() => {
 })
 
 describe("competitor keywords coverage", () => {
-  test("keywords sit below slice sankey with parent list on both sites", async () => {
+  test("slice sankey sits below keywords with parent list on both sites", async () => {
     installGapFetch(makeReport({ you: YOU_SEEDS, them: THEM_SEEDS }))
     const { host } = render(
       <CompetitorInsightsView
@@ -241,12 +249,12 @@ describe("competitor keywords coverage", () => {
 
     const text = host.textContent ?? ""
     expect(text).toContain("Keywords")
-    expect(text).toContain("Coverage measures the parent non-brand list on both sites")
+    expect(text).toContain("Coverage measures your non-brand keywords on both sites")
     const sankey = text.indexOf("Where the points go")
     const keywords = text.indexOf("Keywords")
     const health = text.indexOf("Page health")
     expect(sankey >= 0).toBe(true)
-    expect(keywords > sankey).toBe(true)
+    expect(sankey > keywords).toBe(true)
     expect(health > keywords).toBe(true)
     expect((text.match(/alpha gap/g) ?? []).length >= 2).toBe(true)
     expect(host.querySelector('a[href="https://you.example/beta"]')).toBeTruthy()
@@ -441,5 +449,44 @@ describe("competitor keyword estimates", () => {
     expect(text).toContain("drain fix")
     expect(text).toContain("—")
     expect(text).toContain("AI-generated estimates")
+  })
+})
+
+describe("add to non-brand keywords", () => {
+  function listsFetch(manage: boolean, combined: Array<{ keyword: string; kind: string; sources: string[] }>) {
+    globalThis.fetch = (async () =>
+      Response.json({
+        project_id: PROJECT_ID,
+        can_manage_keywords: manage,
+        user_defined: [],
+        revserp_suggested: [],
+        combined,
+      })) as typeof fetch
+  }
+  const withButtons = () => (
+    <>
+      {YOU_SEEDS.map((seed) => (
+        <AddNonBrandKeywordButton
+          key={seed.keyword}
+          keyword={seed.keyword}
+          projectId={PROJECT_ID}
+        />
+      ))}
+    </>
+  )
+
+  test("shows + for new keywords and a check for ones already saved", async () => {
+    listsFetch(true, [{ keyword: "Beta Targeted", kind: "brand", sources: ["user"] }])
+    const { host } = render(withButtons())
+    await flush()
+    expect(host.querySelector('button[aria-label="Already in your keywords"]')).toBeTruthy()
+    expect(host.querySelectorAll('button[aria-label^="Add "]').length).toBe(YOU_SEEDS.length - 1)
+  })
+
+  test("hides the button without manage rights", async () => {
+    listsFetch(false, [])
+    const { host } = render(withButtons())
+    await flush()
+    expect(host.querySelector('button[aria-label^="Add "]')).toBeNull()
   })
 })

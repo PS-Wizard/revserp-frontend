@@ -247,7 +247,7 @@ describe("keyword analysis card", () => {
     expect(text).toContain("$1.50")
     expect(text.includes("18,000")).toBe(false)
     expect(Array.from(host.querySelectorAll("th"), (cell) => cell.textContent)).toEqual([
-      "Keyword", "Kind", "Rank", "Traffic", "Volume", "KD", "CPC",
+      "Keyword", "Type", "Rank", "Traffic", "Volume", "KD", "CPC",
     ])
     expect(host.querySelector('[data-slot="card"]')?.classList.contains("h-[32rem]")).toBe(true)
     const scrollArea = host.querySelector('[role="region"]')
@@ -269,6 +269,68 @@ describe("keyword analysis card", () => {
     const row = rowFor(host, "drain fix")
     expect(row?.textContent).toContain("—")
     expect(row?.textContent).toContain("8,800")
+  })
+
+  test("sortable headers flip direction with nulls last and aria-sort", async () => {
+    installFetch()
+    analysisResponse = ANALYSIS
+    const { host } = render(
+      <KeywordAnalysisCard projectId={PROJECT_ID} title="Keyword estimates" />,
+      null
+    )
+    await flush()
+    const headButton = (label: string) =>
+      Array.from(host.querySelectorAll<HTMLButtonElement>("th button")).find(
+        (button) => (button.textContent ?? "") === label,
+      ) ?? null
+    const keywordOrder = () =>
+      Array.from(
+        host.querySelectorAll("tbody tr"),
+        (row) => row.querySelector("td")?.textContent ?? "",
+      )
+    const ariaSortFor = (label: string) =>
+      headButton(label)?.closest("th")?.getAttribute("aria-sort")
+
+    // Numeric columns sort descending first.
+    await act(async () => {
+      headButton("Volume")?.click()
+      await flushTestDom()
+    })
+    expect(keywordOrder()).toEqual(["drain fix", "acme care"])
+    expect(ariaSortFor("Volume")).toBe("descending")
+
+    // Second click flips to ascending.
+    await act(async () => {
+      headButton("Volume")?.click()
+      await flushTestDom()
+    })
+    expect(keywordOrder()).toEqual(["acme care", "drain fix"])
+    expect(ariaSortFor("Volume")).toBe("ascending")
+
+    // Text columns sort ascending first.
+    await act(async () => {
+      headButton("Keyword")?.click()
+      await flushTestDom()
+    })
+    expect(keywordOrder()).toEqual(["acme care", "drain fix"])
+    expect(ariaSortFor("Keyword")).toBe("ascending")
+    await act(async () => {
+      headButton("Keyword")?.click()
+      await flushTestDom()
+    })
+    expect(keywordOrder()).toEqual(["drain fix", "acme care"])
+
+    // Null metrics stay last in both directions.
+    await act(async () => {
+      headButton("Traffic")?.click()
+      await flushTestDom()
+    })
+    expect(keywordOrder()).toEqual(["acme care", "drain fix"])
+    await act(async () => {
+      headButton("Traffic")?.click()
+      await flushTestDom()
+    })
+    expect(keywordOrder()).toEqual(["acme care", "drain fix"])
   })
 
   test("empty estimates offer Analyze Keywords with the project prompt", async () => {
@@ -333,7 +395,7 @@ describe("keyword analysis card", () => {
     expect(prompts[0].includes("omitting competitor_id")).toBe(false)
   })
 
-  test("partially populated rows offer a re-analyze action; full rows do not", async () => {
+  test("estimates offer a refresh action", async () => {
     installFetch()
     analysisResponse = ANALYSIS
     const prompts: string[] = []
@@ -343,14 +405,14 @@ describe("keyword analysis card", () => {
     )
     await flush()
     await act(async () => {
-      buttonsByText(host, "Analyze keywords")[0].click()
+      buttonsByText(host, "Refresh estimates")[0].click()
       await flushTestDom()
     })
     expect(prompts).toHaveLength(1)
     expect(prompts[0]).toContain("set_keyword_analysis")
   })
 
-  test("complete estimates hide the re-analyze action", async () => {
+  test("complete estimates still offer a refresh action", async () => {
     installFetch()
     analysisResponse = {
       keywords: FULL_ANALYSIS.keywords.map((row) => ({ ...row, results_count: null })),
@@ -361,8 +423,7 @@ describe("keyword analysis card", () => {
     )
     await flush()
     expect(host.textContent).toContain("acme care")
-    expect(buttonsByText(host, "Analyze keywords")).toHaveLength(0)
-    expect(buttonsByText(host, "Analyze Keywords")).toHaveLength(0)
+    expect(buttonsByText(host, "Refresh estimates")).toHaveLength(1)
   })
 
   test("no Revbot context hides the Analyze button", async () => {

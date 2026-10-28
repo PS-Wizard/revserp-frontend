@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, type ReactNode } from "react"
+import { memo, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { TriangleAlertIcon, XIcon } from "lucide-react"
 
@@ -17,6 +17,8 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty"
 import { Skeleton } from "~/components/ui/skeleton"
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import { AddNonBrandKeywordButton } from "~/components/keywords/add-non-brand-keyword-button"
 import { clientApiFetch } from "~/lib/api"
 import { PillarScoresCompare } from "~/components/overview-pillar-scores-section"
 import { SliceScoreSankey } from "~/components/competitors/competitor-score-sankey"
@@ -97,7 +99,7 @@ function InsightsShell({
 }) {
   return (
     <div className="@container/main relative flex flex-1 flex-col gap-4 py-6">
-<div className="flex flex-wrap items-center justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         {subtitle ? <div className="mr-auto min-w-0">{subtitle}</div> : null}
         <Button onClick={onClose} size="sm" type="button" variant="outline">
           <XIcon data-icon="inline-start" />
@@ -111,7 +113,7 @@ function InsightsShell({
 
 function InsightsLoading() {
   return (
-<div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <Skeleton className="h-5 w-80" />
       <Skeleton className="h-48 rounded-xl" />
       <Skeleton className="h-72 rounded-xl" />
@@ -135,8 +137,25 @@ function InsightsBody({
   competitorName: string
   projectName: string
 }) {
+  const [keywordList, setKeywordList] = useState<"you" | "them">("you")
   const themLabel = competitorName.trim() || "Competitor"
   const youLabel = projectName.trim() || "You"
+  const theirList = keywordList === "them"
+  const coverage = (theirList
+    ? report.competitor_keyword_coverage
+    : report.keyword_coverage) ?? { you: [], them: [] }
+  const listLabel = theirList
+    ? `${themLabel}’s keywords`
+    : "Your non-brand keywords"
+  const emptyDescription = theirList
+    ? `${themLabel} has no non-brand keywords yet.`
+    : "No non-brand keywords to compare yet. Add non-brand keywords to the parent project."
+  // Our own list is already saved, so "+" only appears on the competitor's list.
+  const addRowAction = theirList
+    ? (keyword: string) => (
+        <AddNonBrandKeywordButton keyword={keyword} projectId={projectId} />
+      )
+    : undefined
   const youBreakdown = report.you_breakdown
   const themBreakdown = report.them_breakdown
 
@@ -144,7 +163,7 @@ function InsightsBody({
   const sharesThem = gapHealthShares(report.page_health?.them)
 
   return (
-<div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <PillarScoresCompare them={themBreakdown} you={youBreakdown} />
 
       <IssueBucketPies
@@ -154,31 +173,43 @@ function InsightsBody({
         youLabel={youLabel}
       />
 
-      <SliceScoreSankey
-        them={themBreakdown}
-        themLabel={themLabel}
-        you={youBreakdown}
-        youLabel={youLabel}
-      />
-
       <section aria-label="Keywords" className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-sm font-semibold">Keywords</h3>
-          <p className="text-xs text-muted-foreground">
-            Coverage measures the parent non-brand list on both sites; estimates are independent per site.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-heading text-sm font-semibold">Keywords</h3>
+            <p className="text-xs text-muted-foreground">
+              {theirList
+                ? `Coverage measures ${themLabel}’s non-brand keywords on both sites; Gaps on ${youLabel} are opportunities they target that you don’t.`
+                : "Coverage measures your non-brand keywords on both sites; estimates are independent per site."}
+            </p>
+          </div>
+          <Tabs
+            onValueChange={(value) => setKeywordList(value as "you" | "them")}
+            value={keywordList}
+          >
+            <TabsList className="h-auto rounded-lg bg-muted/50 p-1">
+              <TabsTrigger className="px-2.5 py-1 text-xs" value="you">
+                Your keywords
+              </TabsTrigger>
+              <TabsTrigger className="px-2.5 py-1 text-xs" value="them">
+                {themLabel}’s keywords
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <div className="grid min-w-0 gap-4 lg:grid-cols-2">
           <KeywordCoverageCard
-            emptyDescription="No non-brand keywords to compare yet. Add non-brand keywords to the parent project."
-            scopeNotice={`Non-brand parent keywords measured on ${youLabel}.`}
-            seeds={report.keyword_coverage?.you ?? []}
+            emptyDescription={emptyDescription}
+            rowAction={addRowAction}
+            scopeNotice={`${listLabel} measured on ${youLabel}.`}
+            seeds={coverage.you}
             title={youLabel}
           />
           <KeywordCoverageCard
-            emptyDescription="No non-brand keywords to compare yet. Add non-brand keywords to the parent project."
-            scopeNotice={`Non-brand parent keywords measured on ${themLabel}.`}
-            seeds={report.keyword_coverage?.them ?? []}
+            emptyDescription={emptyDescription}
+            rowAction={addRowAction}
+            scopeNotice={`${listLabel} measured on ${themLabel}.`}
+            seeds={coverage.them}
             title={themLabel}
           />
         </div>
@@ -189,13 +220,22 @@ function InsightsBody({
             title={youLabel}
           />
           <KeywordAnalysisCard
+            allowAddToProject
             competitorId={competitorId}
+            coverage={report.competitor_keyword_coverage?.them}
             projectId={projectId}
             scopeNotice={`Independent brand and non-brand estimates from ${themLabel}’s crawl.`}
             title={themLabel}
           />
         </div>
       </section>
+
+      <SliceScoreSankey
+        them={themBreakdown}
+        themLabel={themLabel}
+        you={youBreakdown}
+        youLabel={youLabel}
+      />
 
       <SectionCard title="Page health">
         <HealthRidge

@@ -179,6 +179,8 @@ type RevbotComposerProps = {
   allowedEfforts: AIReasoningEffort[]
   disabled: boolean
   effort: AIReasoningEffort
+  /** External text to append (content draft "Ask Revbot" quote). Bumped nonce = insert once. */
+  quoteInsert?: { text: string; nonce: number } | null
   onEffortChange: (effort: AIReasoningEffort) => void
   onSend: (content: string, images?: AITurnImage[]) => Promise<boolean | void> | void
   onStop: () => void
@@ -194,6 +196,7 @@ export function RevbotComposer({
   allowedEfforts,
   disabled,
   effort,
+  quoteInsert,
   onEffortChange,
   onSend,
   onStop,
@@ -299,6 +302,20 @@ export function RevbotComposer({
   useEffect(() => {
     promptRef.current = prompt
   }, [prompt])
+
+  // Content drafts insert a quoted selection from the document editor.
+  const appliedQuoteNonceRef = useRef<number | null>(null)
+  useEffect(() => {
+    if (!quoteInsert || appliedQuoteNonceRef.current === quoteInsert.nonce)
+      return
+    appliedQuoteNonceRef.current = quoteInsert.nonce
+    const base = promptRef.current
+    const next = base
+      ? `${base.replace(/\s+$/, "")}\n\n${quoteInsert.text}`
+      : quoteInsert.text
+    updatePrompt(next, next.length)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [quoteInsert])
 
   useEffect(() => {
     attachmentsRef.current = attachments

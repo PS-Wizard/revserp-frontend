@@ -124,3 +124,42 @@ describe("visibility mode tabs", () => {
     expect(findActiveTabKey(groups, "revserp-visibility", "overview", undefined, "ai")).toBe("visibility-ai")
   })
 })
+
+describe("content tab gating", () => {
+  const base = {
+    gscConnector: false,
+    integrations: false,
+    maxCompetitors: 0,
+    projectId: "proj-1",
+  }
+
+  test("hidden without ai_chat", () => {
+    expect(
+      buildWorkspaceNavGroups(base).some((entry) => entry.key === "content")
+    ).toBe(false)
+    expect(
+      buildWorkspaceNavGroups({ ...base, aiChat: false }).some(
+        (entry) => entry.key === "content"
+      )
+    ).toBe(false)
+  })
+
+  test("shown with ai_chat and links to the content view", () => {
+    const groups = buildWorkspaceNavGroups({ ...base, aiChat: true })
+    const content = groups.find((entry) => entry.key === "content")
+    expect(content?.tabs.map((tab) => tab.key)).toEqual(["content"])
+    expect(content?.tabs[0]?.view).toBe("content")
+    expect(
+      isWorkspaceTabActive(content!.tabs[0], "content", "overview")
+    ).toBe(true)
+  })
+
+  test("location scope hides content like marketplace", () => {
+    const groups = buildWorkspaceNavGroups({
+      ...base,
+      aiChat: true,
+      isLocationScoped: true,
+    })
+    expect(groups.some((entry) => entry.key === "content")).toBe(false)
+  })
+})

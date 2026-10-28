@@ -8,7 +8,13 @@ import {
   type ReactNode,
 } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ExternalLinkIcon, TagsIcon, TriangleAlertIcon } from "lucide-react"
+import {
+  ExternalLinkIcon,
+  PenLineIcon,
+  TagsIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
+import { useLocation, useNavigate } from "react-router"
 
 import { ApiError, clientApiFetch } from "~/lib/api"
 import type {
@@ -29,6 +35,15 @@ import {
 } from "~/components/ui/empty"
 import { Skeleton } from "~/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
+import {
+  getProjectIdFromLocationsPath,
+  isLocationsPath,
+} from "~/components/app-navbar/utils"
 import {
   fetchLocationKeywordCoverage,
   locationKeywordCoverageQueryKey,
@@ -52,9 +67,11 @@ export type KeywordCoverageCardProps = {
   title?: string
   scopeNotice?: string
   emptyDescription?: string
+  /** Optional per-keyword action rendered beside the write-content button. */
+  rowAction?: (keyword: string) => ReactNode
 }
 
-type FilterState = "all" | KeywordCoverageState
+export type FilterState = "all" | KeywordCoverageState
 
 type Page = { url: string; fields: KeywordCoverageField[] }
 
@@ -104,6 +121,30 @@ const STATE_GROUPS: Array<{
 ]
 
 const STATE_BY_ID = new Map(STATE_GROUPS.map((group) => [group.state, group]))
+
+/** Search param the Content tab reads to pre-fill its prompt box (never auto-sent). */
+export const CONTENT_PROMPT_PARAM = "contentPrompt"
+
+export function buildContentPrompt(keyword: string) {
+  return `Help me write a blog post about "${keyword}"`
+}
+
+/** Content-tab target for a coverage keyword, from any shell or locations route. */
+export function contentWriteTarget(
+  location: { pathname: string; search: string },
+  keyword: string
+) {
+  const params = new URLSearchParams(location.search)
+  params.set(CONTENT_PROMPT_PARAM, buildContentPrompt(keyword))
+  params.delete("draft")
+  if (isLocationsPath(location.pathname)) {
+    const projectId = getProjectIdFromLocationsPath(location.pathname)
+    if (projectId) params.set("project", projectId)
+    return `/app?${params.toString()}#content`
+  }
+  const search = params.toString()
+  return `${location.pathname}${search ? `?${search}` : ""}#content`
+}
 
 const cardClass =
   "flex h-full min-h-0 flex-col gap-0 overflow-hidden border-border/50 bg-gradient-to-br from-card via-card to-muted/30 py-0"
@@ -205,7 +246,7 @@ function CoverageSplit({ counts }: { counts: Record<KeywordCoverageState, number
   )
 }
 
-function CoverageFilter({
+export function CoverageFilter({
   counts,
   filter,
   onFilter,
@@ -274,14 +315,46 @@ function PageLink({ url, fields }: Page) {
   )
 }
 
-function KeywordRow({ seed }: { seed: KeywordCoverageSeed }) {
+function WriteContentButton({ keyword }: { keyword: string }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            aria-label={`Write content about "${keyword}"`}
+            className="shrink-0 self-center rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            onClick={(event) => {
+              event.stopPropagation()
+              void navigate(contentWriteTarget(location, keyword))
+            }}
+            type="button"
+          />
+        }
+      >
+        <PenLineIcon aria-hidden="true" className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent>Write content</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function KeywordRow({
+  seed,
+  rowAction,
+}: {
+  seed: KeywordCoverageSeed
+  rowAction?: (keyword: string) => ReactNode
+}) {
   const group = STATE_BY_ID.get(seed.state)
   const pages = useMemo(() => groupMatchesByPage(seed), [seed])
   const [open, setOpen] = useState(false)
   const single = pages.length === 1 ? pages[0] : null
 
   return (
-    <li className="flex gap-3 py-1.5">
+    <li className="group flex gap-3 py-1.5">
       <span
         aria-hidden="true"
         className={cn("w-0.5 shrink-0 self-stretch rounded-full", group?.spine)}
@@ -319,6 +392,8 @@ function KeywordRow({ seed }: { seed: KeywordCoverageSeed }) {
               {pages.length} pages
             </button>
           ) : null}
+          <WriteContentButton keyword={seed.keyword} />
+          {rowAction?.(seed.keyword)}
           <span className="sr-only">{group?.label}</span>
         </div>
 
@@ -339,9 +414,11 @@ function KeywordRow({ seed }: { seed: KeywordCoverageSeed }) {
 function CoverageGroup({
   group,
   seeds,
+  rowAction,
 }: {
   group: (typeof STATE_GROUPS)[number]
   seeds: KeywordCoverageSeed[]
+  rowAction?: (keyword: string) => ReactNode
 }) {
   if (seeds.length === 0) return null
 
@@ -366,7 +443,11 @@ function CoverageGroup({
       </div>
       <ul className="mt-2 flex flex-col gap-0.5">
         {ordered.map((seed) => (
-          <KeywordRow key={`${seed.keyword}-${seed.geo ? "geo" : "kw"}`} seed={seed} />
+          <KeywordRow
+            key={`${seed.keyword}-${seed.geo ? "geo" : "kw"}`}
+            rowAction={rowAction}
+            seed={seed}
+          />
         ))}
       </ul>
     </section>
@@ -457,14 +538,13 @@ function CoverageEmpty({
   )
 }
 
-export function KeywordsCoverage({
-  projectId,
-  locationId = null,
-  scopeNotice,
-  emptyDescription = "Add keywords in the cards above, or let Revbot suggest them from Search Console.",
-}: Props) {
+/** Coverage seeds for the project, or a location's keywords over the parent site. Shared query, so other cards reuse the cache. */
+export function useKeywordCoverageQuery(
+  projectId: string | null,
+  locationId: string | null = null
+) {
   const scoped = Boolean(projectId && locationId)
-  const query = useQuery<CoverageData>({
+  return useQuery<CoverageData>({
     queryKey: scoped
       ? locationKeywordCoverageQueryKey(projectId!, locationId!)
       : keywordsQueryKey(projectId!),
@@ -478,6 +558,15 @@ export function KeywordsCoverage({
     enabled: Boolean(projectId),
     placeholderData: (previous) => previous,
   })
+}
+
+export function KeywordsCoverage({
+  projectId,
+  locationId = null,
+  scopeNotice,
+  emptyDescription = "Add keywords in the cards above, or let Revbot suggest them from Search Console.",
+}: Props) {
+  const query = useKeywordCoverageQuery(projectId, locationId)
 
   const seeds = useMemo(() => query.data?.seeds ?? [], [query.data])
 
@@ -539,6 +628,7 @@ export function KeywordCoverageCard({
   title = "Keyword coverage",
   scopeNotice,
   emptyDescription = "Add keywords in the cards above, or let Revbot suggest them from Search Console.",
+  rowAction,
 }: KeywordCoverageCardProps) {
   const [filter, setFilter] = useState<FilterState>("all")
   const listRef = useRef<HTMLDivElement>(null)
@@ -623,12 +713,14 @@ export function KeywordCoverageCard({
             <CoverageGroup
               group={group}
               key={group.state}
+              rowAction={rowAction}
               seeds={grouped[group.state]}
             />
           ))
         ) : (
           <CoverageGroup
             group={STATE_BY_ID.get(filter)!}
+            rowAction={rowAction}
             seeds={grouped[filter]}
           />
         )}

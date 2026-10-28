@@ -17,7 +17,7 @@ describe("crawl selection navigation", () => {
     const location = {
       pathname: "/app",
       search:
-        "?project=p-1&crawl=latest&revbotConversation=chat-1&editorUrl=https%3A%2F%2Fexample.com%2F",
+        "?project=p-1&crawl=latest&revbotConversation=chat-1&location=loc-1",
     }
     const target = getCrawlSelectionTarget(location, "older")
     const params = new URLSearchParams(target.search)
@@ -26,7 +26,7 @@ describe("crawl selection navigation", () => {
     expect(params.get("crawl")).toBe("older")
     expect(params.get("project")).toBe("p-1")
     expect(params.get("revbotConversation")).toBe("chat-1")
-    expect(params.get("editorUrl")).toBe("https://example.com/")
+    expect(params.get("location")).toBe("loc-1")
     expect(revbotHashTarget(target.hash.slice(1))).toEqual({
       view: "revserp-audit",
       tab: "overview",

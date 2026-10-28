@@ -17,9 +17,7 @@ mock.module("~/components/ui/dialog", () => ({
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 
-const { InviteMembersDialog } = await import(
-  "~/components/app-navbar/dialogs"
-)
+const { InviteMembersDialog } = await import("~/components/app-navbar/dialogs")
 
 let root: Root | null = null
 let host: HTMLDivElement | null = null
@@ -32,7 +30,10 @@ afterEach(() => {
   document.body.innerHTML = ""
 })
 
-function renderDialog(inviteRole: "member" | "manager", onRoleChange: (v: any) => void) {
+function renderDialog(
+  inviteRole: "member" | "manager",
+  onRoleChange: (v: any) => void
+) {
   host = document.createElement("div")
   document.body.appendChild(host)
   root = createRoot(host)
@@ -71,9 +72,7 @@ describe("invite members dialog roles", () => {
     expect(
       (host.querySelector('input[value="member"]') as HTMLInputElement).checked
     ).toBe(true)
-    expect(document.body.textContent).toContain(
-      "never platform admin settings"
-    )
+    expect(document.body.textContent).toContain("never platform admin settings")
   })
 
   test("picking manager reports the manager role", () => {
@@ -88,5 +87,114 @@ describe("invite members dialog roles", () => {
       manager.click()
     })
     expect(picked).toBe("manager")
+  })
+})
+
+describe("invite members dialog email input", () => {
+  function renderEmailDialog(overrides: Record<string, any> = {}) {
+    host = document.createElement("div")
+    document.body.appendChild(host)
+    root = createRoot(host)
+    const calls: { commits: string[]; pops: number; sends: number } = {
+      commits: [],
+      pops: 0,
+      sends: 0,
+    }
+    act(() => {
+      root?.render(
+        <InviteMembersDialog
+          activeOrganizationName="Acme"
+          hasCopiedInviteLink
+          inviteExpiresAt=""
+          inviteLink="https://beta.revserp.ai/invite/tok"
+          inviteMaxUses="10"
+          inviteRole="member"
+          isCreatingInvite={false}
+          isOpen
+          profileActionError=""
+          inviteEmailDraft=""
+          inviteRecipients={[]}
+          isSendingInviteEmails={false}
+          inviteEmailResult=""
+          onCopyInviteLink={() => {}}
+          onExpiresAtChange={() => {}}
+          onMaxUsesChange={() => {}}
+          onRoleChange={() => {}}
+          onOpenChange={() => {}}
+          onSubmit={(event) => event.preventDefault()}
+          onEmailDraftChange={() => {}}
+          onEmailCommit={(value: string) => {
+            calls.commits.push(value)
+          }}
+          onRemoveEmailRecipient={() => {}}
+          onPopEmailRecipient={() => {
+            calls.pops += 1
+          }}
+          onSendInviteEmails={() => {
+            calls.sends += 1
+          }}
+          {...overrides}
+        />
+      )
+    })
+    return { host: host as HTMLDivElement, calls }
+  }
+
+  test("enter commits the draft", () => {
+    const { host, calls } = renderEmailDialog({ inviteEmailDraft: "a@b.com" })
+    const input = host.querySelector("#invite-emails") as HTMLInputElement
+    input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    })
+    expect(calls.commits).toEqual(["a@b.com"])
+  })
+
+  test("backspace on an empty draft pops the last chip", () => {
+    const { host, calls } = renderEmailDialog()
+    const input = host.querySelector("#invite-emails") as HTMLInputElement
+    input.dispatchEvent(new FocusEvent("focusin", { bubbles: true }))
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Backspace",
+          bubbles: true,
+          cancelable: true,
+        })
+      )
+    })
+    expect(calls.pops).toBe(1)
+  })
+
+  test("invalid recipients are visibly marked and send reports the result", () => {
+    const { host, calls } = renderEmailDialog({
+      inviteRecipients: [
+        { value: "good@example.com", valid: true },
+        { value: "not-an-email", valid: false },
+      ],
+      inviteEmailResult: "Invite sent to good@example.com.",
+    })
+    expect(host.textContent).toContain("not-an-email")
+    const badChip = Array.from(host.querySelectorAll("*" as any)).find(
+      (el) =>
+        el instanceof HTMLElement &&
+        el.textContent === "not-an-email" &&
+        /destructive/.test(el.className)
+    ) as HTMLElement | undefined
+    expect(badChip !== undefined).toBe(true)
+    expect(host.textContent).toContain("Invite sent to good@example.com.")
+    const send = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent === "Send"
+    ) as HTMLButtonElement
+    act(() => {
+      send.click()
+    })
+    expect(calls.sends).toBe(1)
   })
 })

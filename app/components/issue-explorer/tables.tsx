@@ -1,5 +1,4 @@
 import { ThinkingOrb } from "thinking-orbs"
-import { useSearchParams } from "react-router"
 import { Linkify } from "~/components/linkify"
 import { Badge } from "~/components/ui/badge"
 import { Button } from "~/components/ui/button"
@@ -415,7 +414,6 @@ export function IssueTypeTable({
 }
 
 type UrlIssueTableProps = {
-  crawlId: string
   error: string
   isLoading: boolean
   rows: MergedIssueUrlRow[]
@@ -433,7 +431,6 @@ type UrlIssueTableProps = {
 }
 
 export function UrlIssueTable({
-  crawlId,
   error,
   isLoading,
   rows,
@@ -449,15 +446,6 @@ export function UrlIssueTable({
   isPending,
 }: UrlIssueTableProps) {
   const { clearPill, containerRef, pill, rowRefs, showPill } = useTablePill()
-  const [, setSearchParams] = useSearchParams()
-  const openInEditor = (url: string) => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current)
-      next.set("editorUrl", url)
-      next.set("crawl", crawlId)
-      return next
-    })
-  }
   if (isLoading) {
     return (
       <div className="flex min-h-64 flex-col items-center justify-center gap-4 text-center">
@@ -547,11 +535,9 @@ export function UrlIssueTable({
                           className="block max-w-[18rem] truncate text-primary hover:underline"
                           href={row.url}
                           title={row.url}
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            openInEditor(row.url)
-                          }}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(event) => event.stopPropagation()}
                           onPointerDown={(event) => event.stopPropagation()}
                           onMouseDown={(event) => event.stopPropagation()}
                         />
@@ -579,18 +565,6 @@ export function UrlIssueTable({
                           variant="ghost"
                         >
                           Open in new tab
-                        </Button>
-                        <Button
-                          className="justify-start"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openInEditor(row.url)
-                          }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          size="sm"
-                          variant="ghost"
-                        >
-                          Open in editor
                         </Button>
                       </div>
                     </HoverCardContent>

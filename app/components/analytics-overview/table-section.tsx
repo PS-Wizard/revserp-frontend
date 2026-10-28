@@ -1,4 +1,4 @@
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
+import { SortableTableHead } from "~/components/ui/sortable-table-head"
 
 import { Input } from "~/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
@@ -6,7 +6,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
@@ -118,21 +117,41 @@ function RowsTable({
       <Table>
         <TableHeader>
           <TableRow className="border-border/50 text-muted-foreground">
-            <SortableHead column="label" sort={sort} onSort={onSort}>
+            <SortableTableHead
+              active={sort.column === "label"}
+              direction={sort.direction}
+              onToggle={() => onSort("label")}
+            >
               {primaryLabel}
-            </SortableHead>
-            <SortableHead column="active_users" sort={sort} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              active={sort.column === "active_users"}
+              direction={sort.direction}
+              onToggle={() => onSort("active_users")}
+            >
               Active users
-            </SortableHead>
-            <SortableHead column="sessions" sort={sort} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              active={sort.column === "sessions"}
+              direction={sort.direction}
+              onToggle={() => onSort("sessions")}
+            >
               Sessions
-            </SortableHead>
-            <SortableHead column="engagement_rate" sort={sort} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              active={sort.column === "engagement_rate"}
+              direction={sort.direction}
+              onToggle={() => onSort("engagement_rate")}
+            >
               Engagement rate
-            </SortableHead>
-            <SortableHead column="key_events" sort={sort} onSort={onSort}>
+            </SortableTableHead>
+            <SortableTableHead
+              active={sort.column === "key_events"}
+              direction={sort.direction}
+              onToggle={() => onSort("key_events")}
+            >
               Key events
-            </SortableHead>
+            </SortableTableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -164,45 +183,6 @@ function RowsTable({
   )
 }
 
-function SortableHead({
-  column,
-  sort,
-  onSort,
-  children,
-}: {
-  column: AnalyticsSort["column"]
-  sort: AnalyticsSort
-  onSort: (column: AnalyticsSort["column"]) => void
-  children: React.ReactNode
-}) {
-  const active = sort.column === column
-  return (
-    <TableHead
-      aria-sort={
-        active
-          ? sort.direction === "desc"
-            ? "descending"
-            : "ascending"
-          : "none"
-      }
-    >
-      <button
-        className="inline-flex items-center gap-2"
-        onClick={() => onSort(column)}
-        type="button"
-      >
-        {children}
-        {active ? (
-          sort.direction === "desc" ? (
-            <ArrowDownIcon aria-hidden="true" className="size-3.5" />
-          ) : (
-            <ArrowUpIcon aria-hidden="true" className="size-3.5" />
-          )
-        ) : null}
-      </button>
-    </TableHead>
-  )
-}
 
 export function filterAndSortRows(
   rows: ProjectAnalyticsRowResponse[],

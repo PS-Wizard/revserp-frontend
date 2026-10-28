@@ -12,6 +12,11 @@ import {
 } from "~/lib/organization-access"
 import { getDefaultInviteExpiryValue, getInviteValidationError } from "./utils"
 
+export type InviteEmailRecipient = {
+  value: string
+  valid: boolean
+}
+
 // --- State ---
 
 type WorkspaceAction = "idle" | "switching" | "leaving" | "logging-out"
@@ -24,8 +29,15 @@ type WorkspaceActionState = {
   inviteMaxUses: string
   inviteRole: OrganizationInviteRole
   inviteLink: string
+  inviteId: string
+  inviteToken: string
   hasCopiedInviteLink: boolean
   isCreatingInvite: boolean
+  inviteEmailDraft: string
+  inviteRecipients: InviteEmailRecipient[]
+  isSendingInviteEmails: boolean
+  inviteEmailResult: string
+  inviteEmailResultIsError: boolean
   isLeaveWorkspaceOpen: boolean
 }
 
@@ -38,8 +50,15 @@ function initialWorkspaceState(): WorkspaceActionState {
     inviteMaxUses: "10",
     inviteRole: DEFAULT_ORGANIZATION_INVITE_ROLE,
     inviteLink: "",
+    inviteId: "",
+    inviteToken: "",
     hasCopiedInviteLink: false,
     isCreatingInvite: false,
+    inviteEmailDraft: "",
+    inviteRecipients: [],
+    isSendingInviteEmails: false,
+    inviteEmailResult: "",
+    inviteEmailResultIsError: false,
     isLeaveWorkspaceOpen: false,
   }
 }
@@ -57,8 +76,18 @@ type WorkspaceActionEvent =
   | { type: "SET_INVITE_EXPIRES_AT"; value: string }
   | { type: "SET_INVITE_MAX_USES"; value: string }
   | { type: "SET_INVITE_ROLE"; value: OrganizationInviteRole }
-  | { type: "SET_INVITE_LINK"; value: string }
+  | {
+      type: "SET_INVITE_LINK"
+      value: { link: string; id: string; token: string }
+    }
   | { type: "SET_COPIED_INVITE_LINK"; value: boolean }
+  | { type: "SET_INVITE_EMAIL_DRAFT"; value: string }
+  | { type: "SET_INVITE_RECIPIENTS"; value: InviteEmailRecipient[] }
+  | { type: "SET_SENDING_INVITE_EMAILS"; value: boolean }
+  | {
+      type: "SET_INVITE_EMAIL_RESULT"
+      value: { message: string; isError: boolean }
+    }
   | { type: "OPEN_LEAVE_DIALOG" }
   | { type: "CLOSE_LEAVE_DIALOG" }
   | { type: "RESET_INVITE_FORM" }
@@ -96,9 +125,30 @@ function workspaceActionReducer(
     case "SET_INVITE_ROLE":
       return { ...state, inviteRole: event.value }
     case "SET_INVITE_LINK":
-      return { ...state, inviteLink: event.value }
+      return {
+        ...state,
+        inviteLink: event.value.link,
+        inviteId: event.value.id,
+        inviteToken: event.value.token,
+        inviteEmailDraft: "",
+        inviteRecipients: [],
+        inviteEmailResult: "",
+        inviteEmailResultIsError: false,
+      }
     case "SET_COPIED_INVITE_LINK":
       return { ...state, hasCopiedInviteLink: event.value }
+    case "SET_INVITE_EMAIL_DRAFT":
+      return { ...state, inviteEmailDraft: event.value }
+    case "SET_INVITE_RECIPIENTS":
+      return { ...state, inviteRecipients: event.value }
+    case "SET_SENDING_INVITE_EMAILS":
+      return { ...state, isSendingInviteEmails: event.value }
+    case "SET_INVITE_EMAIL_RESULT":
+      return {
+        ...state,
+        inviteEmailResult: event.value.message,
+        inviteEmailResultIsError: event.value.isError,
+      }
     case "OPEN_LEAVE_DIALOG":
       return { ...state, profileActionError: "", isLeaveWorkspaceOpen: true }
     case "CLOSE_LEAVE_DIALOG":
@@ -107,8 +157,15 @@ function workspaceActionReducer(
       return {
         ...state,
         inviteLink: "",
+        inviteId: "",
+        inviteToken: "",
         hasCopiedInviteLink: false,
         isCreatingInvite: false,
+        inviteEmailDraft: "",
+        inviteRecipients: [],
+        isSendingInviteEmails: false,
+        inviteEmailResult: "",
+        inviteEmailResultIsError: false,
         inviteExpiresAt: getDefaultInviteExpiryValue(),
         inviteMaxUses: "10",
         inviteRole: DEFAULT_ORGANIZATION_INVITE_ROLE,
@@ -124,6 +181,10 @@ type UseWorkspaceActionsParams = {
   isPlatformAdmin?: boolean
   navigate: ReturnType<typeof import("react-router").useNavigate>
   revalidator: ReturnType<typeof import("react-router").useRevalidator>
+}
+
+function isInviteEmailValid(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
 export function useWorkspaceActions({
@@ -206,6 +267,7 @@ export function useWorkspaceActions({
 
     try {
       const invite = await clientApiPost<{
+        invite: { id: string }
         token: string
       }>(`/organizations/${organizationId}/invites`, {
         expires_at: expiresAtDate.toISOString(),
@@ -214,7 +276,11 @@ export function useWorkspaceActions({
       })
       dispatch({
         type: "SET_INVITE_LINK",
-        value: `${window.location.origin}/invite/${invite.token}`,
+        value: {
+          link: `${window.location.origin}/invite/${invite.token}`,
+          id: invite.invite.id,
+          token: invite.token,
+        },
       })
     } catch (error) {
       dispatch({
@@ -234,6 +300,118 @@ export function useWorkspaceActions({
 
     await navigator.clipboard.writeText(state.inviteLink)
     dispatch({ type: "SET_COPIED_INVITE_LINK", value: true })
+  }
+
+  function commitInviteEmailText(text: string) {
+    const tokens = text
+      .split(/[\s,;]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0)
+    if (tokens.length === 0) {
+      dispatch({ type: "SET_INVITE_EMAIL_DRAFT", value: "" })
+      return
+    }
+    dispatch({
+      type: "SET_INVITE_RECIPIENTS",
+      value: [
+        ...state.inviteRecipients,
+        ...tokens.map((token) => ({
+          value: token,
+          valid: isInviteEmailValid(token),
+        })),
+      ],
+    })
+    dispatch({ type: "SET_INVITE_EMAIL_DRAFT", value: "" })
+  }
+
+  function removeInviteEmailRecipient(index: number) {
+    dispatch({
+      type: "SET_INVITE_RECIPIENTS",
+      value: state.inviteRecipients.filter((_, i) => i !== index),
+    })
+  }
+
+  function popInviteEmailRecipient() {
+    if (state.inviteRecipients.length === 0) return
+    removeInviteEmailRecipient(state.inviteRecipients.length - 1)
+  }
+
+  async function handleSendInviteEmails() {
+    const pending = state.inviteEmailDraft
+      .split(/[\s,;]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0)
+      .map((token) => ({ value: token, valid: isInviteEmailValid(token) }))
+    const recipients = [...state.inviteRecipients, ...pending]
+    if (pending.length > 0) {
+      dispatch({ type: "SET_INVITE_RECIPIENTS", value: recipients })
+      dispatch({ type: "SET_INVITE_EMAIL_DRAFT", value: "" })
+    }
+    const valid = recipients.filter((recipient) => recipient.valid)
+    if (!organizationId || !state.inviteId || !state.inviteToken) return
+    if (valid.length === 0) {
+      dispatch({
+        type: "SET_INVITE_EMAIL_RESULT",
+        value: {
+          message: "Add at least one valid email address.",
+          isError: true,
+        },
+      })
+      return
+    }
+    dispatch({ type: "SET_SENDING_INVITE_EMAILS", value: true })
+    dispatch({
+      type: "SET_INVITE_EMAIL_RESULT",
+      value: { message: "", isError: false },
+    })
+    try {
+      const response = await clientApiPost<{
+        results: { email: string; sent: boolean; error?: string }[]
+      }>(`/organizations/${organizationId}/invites/${state.inviteId}/email`, {
+        emails: valid.map((recipient) => recipient.value),
+        token: state.inviteToken,
+      })
+      const sent = response.results.filter((result) => result.sent)
+      const failed = response.results.filter((result) => !result.sent)
+      const sentEmails = new Set(
+        sent.map((result) => result.email.toLowerCase())
+      )
+      dispatch({
+        type: "SET_INVITE_RECIPIENTS",
+        value: recipients.filter(
+          (recipient) => !sentEmails.has(recipient.value.toLowerCase())
+        ),
+      })
+      dispatch({
+        type: "SET_INVITE_EMAIL_RESULT",
+        value:
+          failed.length === 0
+            ? {
+                message:
+                  sent.length === 1
+                    ? `Invite sent to ${sent[0].email}.`
+                    : `Invites sent to ${sent.length} addresses.`,
+                isError: false,
+              }
+            : {
+                message: `Sent to ${sent.length}, failed for ${failed
+                  .map((result) => result.email)
+                  .join(", ")}.`,
+                isError: true,
+              },
+      })
+    } catch (error) {
+      dispatch({
+        type: "SET_INVITE_EMAIL_RESULT",
+        value: {
+          message:
+            error instanceof Error ? error.message : "Unable to send invites.",
+          isError: true,
+        },
+      })
+    } finally {
+      dispatch({ type: "SET_SENDING_INVITE_EMAILS", value: false })
+    }
   }
 
   function openLeaveWorkspaceDialog() {
@@ -297,6 +475,11 @@ export function useWorkspaceActions({
     inviteLink: state.inviteLink,
     hasCopiedInviteLink: state.hasCopiedInviteLink,
     isCreatingInvite: state.isCreatingInvite,
+    inviteEmailDraft: state.inviteEmailDraft,
+    inviteRecipients: state.inviteRecipients,
+    isSendingInviteEmails: state.isSendingInviteEmails,
+    inviteEmailResult: state.inviteEmailResult,
+    inviteEmailResultIsError: state.inviteEmailResultIsError,
     isLeaveWorkspaceOpen: state.isLeaveWorkspaceOpen,
     activeOrganization,
     isActiveOrganizationOwner: activeOrganization?.role === "owner",
@@ -309,6 +492,10 @@ export function useWorkspaceActions({
     closeInviteDialog,
     handleCreateInvite,
     handleCopyInviteLink,
+    handleSendInviteEmails,
+    commitInviteEmailText,
+    removeInviteEmailRecipient,
+    popInviteEmailRecipient,
     openLeaveWorkspaceDialog,
     handleLeaveOrganization,
     handleLogout,
@@ -318,6 +505,8 @@ export function useWorkspaceActions({
       dispatch({ type: "SET_INVITE_MAX_USES", value }),
     setInviteRole: (value: OrganizationInviteRole) =>
       dispatch({ type: "SET_INVITE_ROLE", value }),
+    setInviteEmailDraft: (value: string) =>
+      dispatch({ type: "SET_INVITE_EMAIL_DRAFT", value }),
     setLeaveWorkspaceOpen: (open: boolean) => {
       dispatch(
         open ? { type: "OPEN_LEAVE_DIALOG" } : { type: "CLOSE_LEAVE_DIALOG" }

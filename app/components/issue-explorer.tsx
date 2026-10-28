@@ -1293,7 +1293,6 @@ export const IssueExplorer = memo(function IssueExplorer({
           >
             <UrlIssueTable
               checkedKeys={checkedUrlKeys}
-              crawlId={scopedIssueUrls?.pageCrawlId ?? crawlId}
               hideWorkActions={isScopedUrls}
               error={urlError}
               getRowProps={urlDrag.getRowProps}

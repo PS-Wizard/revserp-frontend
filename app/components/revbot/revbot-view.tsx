@@ -14,7 +14,6 @@ import { useReducedMotion } from "motion/react"
 import {
   BotIcon,
   Loader2,
-  FilePenLineIcon,
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PlusIcon,
@@ -536,12 +535,12 @@ export function RevbotViewContent({
   allowedEfforts,
   revbot,
   compact,
+  composerQuoteInsert,
   defaultHistoryOpen,
   hideCompactHeader,
   hideHistory,
   canManageOrganization,
   onActivityChange,
-  onEditorLink,
   onInternalLink,
   onTitleChange,
   showMessageAvatar = false,
@@ -553,12 +552,13 @@ export function RevbotViewContent({
   allowedEfforts: AIReasoningEffort[]
   revbot: RevbotHandle
   compact: boolean
+  /** Forwarded to the composer (content draft selection quotes). */
+  composerQuoteInsert?: { text: string; nonce: number } | null
   defaultHistoryOpen: boolean
   hideCompactHeader: boolean
   hideHistory: boolean
   canManageOrganization: boolean
   onActivityChange?: (active: boolean) => void
-  onEditorLink?: (url: string) => void
   onInternalLink?: (hash: string) => void
   onTitleChange?: (title: string) => void
   showMessageAvatar?: boolean
@@ -572,32 +572,6 @@ export function RevbotViewContent({
     () => ({
       a: ({ href, node: _node, title, children, ...props }) => {
         if (!href) return <a {...props}>{children}</a>
-        if (title === "revserp-editor") {
-          return (
-            <span className="editor-link-row">
-              <a
-                {...props}
-                className="citation-link editor-link"
-                href={href}
-                onClick={(event) => {
-                  if (!onEditorLink) return
-                  event.preventDefault()
-                  onEditorLink(href)
-                }}
-                rel="noopener noreferrer"
-              >
-                <span
-                  aria-hidden="true"
-                  className="citation-avatar"
-                  style={{ backgroundColor: citationColor(href) }}
-                >
-                  <FilePenLineIcon className="size-3" />
-                </span>
-                <span className="citation-text">{children}</span>
-              </a>
-            </span>
-          )
-        }
         // Citation chip only for known internal targets (#seo, #aeo-tab, …).
         // Everything else keeps the default markdown link.
         if (revbotHashTarget(href.replace(/^#/, "")) === null) {
@@ -636,7 +610,7 @@ export function RevbotViewContent({
       },
       table: RevbotExportableTable,
     }),
-    [onEditorLink, onInternalLink]
+    [onInternalLink]
   )
 
   useEffect(() => {
@@ -1118,6 +1092,7 @@ export function RevbotViewContent({
         <RevbotComposer
           key={revbot.conversationId ?? "new"}
           active={active}
+          quoteInsert={composerQuoteInsert}
           allowedEfforts={allowedEfforts}
           disabled={
             revbot.loading ||
