@@ -1462,3 +1462,25 @@ export type CrawlEventPayload = {
   source?: string
   competitor_label?: string
 }
+
+export type MeUsageMeter = {
+  used: number
+  limit: number
+}
+
+/** GET /me/usage — quota usage for the caller's active workspace. */
+export type MeUsageResponse = {
+  organization_id: string
+  /** Current UTC month, YYYY-MM-DD. Monthly meters reset on period_end. */
+  period_start: string
+  period_end: string
+  ai_messages: MeUsageMeter
+  ai_visibility_audits: MeUsageMeter
+  projects: MeUsageMeter
+  max_competitors_per_project: number
+  maps_credits: {
+    remaining: number
+    reserved: number
+    spent: number
+  }
+}

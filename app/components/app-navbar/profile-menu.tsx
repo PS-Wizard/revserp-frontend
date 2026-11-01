@@ -8,10 +8,15 @@ import {
   MoonIcon,
   RouteIcon,
   ShieldIcon,
+  UserRoundIcon,
 } from "lucide-react"
 
 import { toast } from "sonner"
 import { ThinkingOrb } from "thinking-orbs"
+import {
+  AccountSettingsDialog,
+  type AccountSummary,
+} from "~/components/account/account-settings-dialog"
 import { Avatar, AvatarFallback } from "~/components/ui/avatar"
 import {
   DropdownMenu,
@@ -43,6 +48,8 @@ type ProfileMenuProps = {
   onLogout: () => void
   /** Manual replay entry; the tour never auto-shows after dismiss. */
   onTakeTour?: () => void
+  /** Shows the "Account settings" entry when present. */
+  account?: AccountSummary
 }
 
 function isStandaloneMode() {
@@ -76,7 +83,9 @@ export function ProfileMenu({
   isPlatformAdmin,
   onLogout,
   onTakeTour,
+  account,
 }: ProfileMenuProps) {
+  const [accountOpen, setAccountOpen] = useState(false)
   const navigate = useNavigate()
   const isLoggingOut = workspaceState === "logging-out"
   const [isDarkMode, setIsDarkMode] = useState(
@@ -149,6 +158,7 @@ export function ProfileMenu({
   const hoverMenu = useHoverMenu()
 
   return (
+    <>
     <DropdownMenu onOpenChange={hoverMenu.onOpenChange} open={hoverMenu.open}>
       <div {...hoverMenu.triggerProps}>
         <DropdownMenuTrigger
@@ -191,6 +201,25 @@ export function ProfileMenu({
         sideOffset={10}
       >
         <HoverPill pill={profilePill} />
+        {account ? (
+          <>
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+                onClick={() => setAccountOpen(true)}
+                onMouseEnter={() => showProfilePill(6)}
+                ref={(element) => {
+                  profileItemRefs.current[6] = element
+                }}
+                variant="default"
+              >
+                <UserRoundIcon />
+                Account settings
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuGroup>
           <DropdownMenuCheckboxItem
             checked={isDarkMode}
@@ -303,5 +332,13 @@ export function ProfileMenu({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+    {account ? (
+      <AccountSettingsDialog
+        account={account}
+        onOpenChange={setAccountOpen}
+        open={accountOpen}
+      />
+    ) : null}
+    </>
   )
 }

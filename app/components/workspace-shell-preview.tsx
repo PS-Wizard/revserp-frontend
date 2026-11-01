@@ -633,6 +633,9 @@ export function WorkspaceShellPreview({
       lockDockItem,
     ]
   )
+  const activeOrganization = organizations.find(
+    (organization) => organization.id === organizationId
+  )
   const initials = useMemo(() => {
     const source = userName?.trim() || userEmail.split("@")[0] || "R"
     return getInitials(source, "R")
@@ -1258,6 +1261,12 @@ export function WorkspaceShellPreview({
                 {fullBleed ? null : (
                   <div className="flex min-w-0 flex-1 items-center justify-end">
                     <ProfileMenu
+                      account={{
+                        email: userEmail,
+                        name: userName,
+                        role: activeOrganization?.role,
+                        workspaceName: activeOrganization?.name,
+                      }}
                       initials={initials}
                       isPlatformAdmin={isPlatformAdmin}
                       onLogout={() => void workspaceActions.handleLogout()}
