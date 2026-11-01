@@ -101,7 +101,11 @@ import type {
 } from "~/lib/api.types"
 import { useFeatures } from "~/lib/features"
 import { toast } from "sonner"
-import { WorkspaceDockNav } from "~/components/workspace-dock-nav"
+import {
+  ContextNavSeparator,
+  WorkspaceContextNav,
+  WorkspaceDockNav,
+} from "~/components/workspace-dock-nav"
 import {
   OnboardingUiContext,
   requestOnboardingReplay,
@@ -1094,62 +1098,67 @@ export function WorkspaceShellPreview({
               >
                 {fullBleed ? null : (
                   <div className="flex min-w-0 flex-1 items-center">
-                    <WorkspaceSwitcher
-                      activeOrganizationName={
-                        workspaceActions.activeOrganization?.name
-                      }
-                      isActiveOrganizationOwner={
-                        workspaceActions.isActiveOrganizationOwner
-                      }
-                      canManageOrganization={
-                        workspaceActions.canManageActiveOrganization
-                      }
-                      onInviteOpen={workspaceActions.openInviteDialog}
-                      onLeaveWorkspaceOpen={
-                        workspaceActions.openLeaveWorkspaceDialog
-                      }
-                      onSelectOrganization={(id) =>
-                        void workspaceActions.handleSelectOrganization(id)
-                      }
-                      organizationId={organizationId}
-                      organizations={organizations}
-                      workspaceState={workspaceActions.workspaceState}
-                    />
+                    <div className="flex max-w-full min-w-0 items-center rounded-xl border border-border bg-background p-1 shadow-sm dark:border-white/12 dark:bg-shell-chrome dark:shadow-none">
+                      <WorkspaceSwitcher
+                        bare
+                        activeOrganizationName={
+                          workspaceActions.activeOrganization?.name
+                        }
+                        isActiveOrganizationOwner={
+                          workspaceActions.isActiveOrganizationOwner
+                        }
+                        canManageOrganization={
+                          workspaceActions.canManageActiveOrganization
+                        }
+                        onInviteOpen={workspaceActions.openInviteDialog}
+                        onLeaveWorkspaceOpen={
+                          workspaceActions.openLeaveWorkspaceDialog
+                        }
+                        onSelectOrganization={(id) =>
+                          void workspaceActions.handleSelectOrganization(id)
+                        }
+                        organizationId={organizationId}
+                        organizations={organizations}
+                        workspaceState={workspaceActions.workspaceState}
+                      />
+                      <ContextNavSeparator />
+                      <WorkspaceContextNav
+                        activeProjectId={activeProjectId ?? undefined}
+                        crawls={activeProjectCrawls}
+                        currentCrawl={currentCrawl}
+                        formatCrawlLabel={formatCrawlDateTime}
+                        onCreateProject={() =>
+                          createProjectDispatch({ type: "OPEN" })
+                        }
+                        onDeleteCrawl={(crawl) =>
+                          projectActions.openDeleteCrawlDialog(crawl)
+                        }
+                        onDeleteProject={(project) =>
+                          projectActions.openDeleteProjectDialog(project)
+                        }
+                        onRenameProject={openRenameProject}
+                        onExportCrawl={(crawl, format) =>
+                          void projectActions.handleExportCrawl(crawl, format)
+                        }
+                        onSelectCrawl={selectCrawl}
+                        onSelectProject={selectProject}
+                        projects={alphabeticalProjects}
+                      />
+                    </div>
                   </div>
                 )}
                 <div className="pointer-events-auto flex min-w-0 shrink items-center justify-center">
                   <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-border bg-background p-1 shadow-sm dark:border-white/12 dark:bg-shell-chrome dark:shadow-none">
                     <WorkspaceDockNav
-                      activeProjectId={activeProjectId ?? undefined}
                       auditTab={isLocationScoped ? "overview" : auditTab}
-                      crawls={activeProjectCrawls}
-                      currentCrawl={currentCrawl}
-                      formatCrawlLabel={formatCrawlDateTime}
                       gscConnector={features.gsc_connector}
                       integrations={features.integrations !== false}
                       isLocationScoped={false}
                       maxCompetitors={features.max_competitors}
-                      onCreateProject={() =>
-                        createProjectDispatch({ type: "OPEN" })
-                      }
-                      onDeleteCrawl={(crawl) =>
-                        projectActions.openDeleteCrawlDialog(crawl)
-                      }
-                      onDeleteProject={(project) =>
-                        projectActions.openDeleteProjectDialog(project)
-                      }
-                      onRenameProject={openRenameProject}
-                      onExportCrawl={(crawl, format) =>
-                        void projectActions.handleExportCrawl(crawl, format)
-                      }
-                      onOpenProjectPanel={openProjectPanel}
-                      onSelectCrawl={selectCrawl}
-                      onSelectProject={selectProject}
                       onSelectWorkspace={selectProjectWorkspace}
                       lockedOpenItem={lockedDockItem}
                       pathname={location.pathname}
                       projectId={activeProject?.id}
-                      projects={alphabeticalProjects}
                       trailing={
                         <button
                           className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors duration-150 hover:bg-foreground/10 disabled:pointer-events-none disabled:opacity-40"

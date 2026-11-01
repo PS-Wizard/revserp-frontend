@@ -3,18 +3,24 @@ import { cva } from "class-variance-authority"
 
 import { cn } from "~/lib/utils"
 
+type NavigationMenuPopupMotion = "morph" | "fade"
+
 function NavigationMenu({
   align = "start",
   className,
   children,
   side = "bottom",
   sideOffset,
+  popupMotion = "morph",
   ...props
 }: NavigationMenuPrimitive.Root.Props &
   Pick<
     NavigationMenuPrimitive.Positioner.Props,
     "align" | "side" | "sideOffset"
-  >) {
+  > & {
+    /** "morph" slides and resizes one popup between items; "fade" only fades in and closes instantly. */
+    popupMotion?: NavigationMenuPopupMotion
+  }) {
   return (
     <NavigationMenuPrimitive.Root
       data-slot="navigation-menu"
@@ -25,7 +31,12 @@ function NavigationMenu({
       {...props}
     >
       {children}
-      <NavigationMenuPositioner align={align} side={side} sideOffset={sideOffset} />
+      <NavigationMenuPositioner
+        align={align}
+        popupMotion={popupMotion}
+        side={side}
+        sideOffset={sideOffset}
+      />
     </NavigationMenuPrimitive.Root>
   )
 }
@@ -103,8 +114,12 @@ function NavigationMenuPositioner({
   sideOffset = 8,
   align = "start",
   alignOffset = 0,
+  popupMotion = "morph",
   ...props
-}: NavigationMenuPrimitive.Positioner.Props) {
+}: NavigationMenuPrimitive.Positioner.Props & {
+  popupMotion?: NavigationMenuPopupMotion
+}) {
+  const fade = popupMotion === "fade"
   return (
     <NavigationMenuPrimitive.Portal>
       <NavigationMenuPrimitive.Positioner
@@ -113,12 +128,22 @@ function NavigationMenuPositioner({
         align={align}
         alignOffset={alignOffset}
         className={cn(
-          "isolate z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) transition-[top,left,right,bottom] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] data-instant:transition-none data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:right-0 data-[side=bottom]:before:left-0",
+          "isolate z-50 h-(--positioner-height) w-(--positioner-width) max-w-(--available-width) data-[side=bottom]:before:top-[-10px] data-[side=bottom]:before:right-0 data-[side=bottom]:before:left-0",
+          fade
+            ? "transition-none"
+            : "transition-[top,left,right,bottom] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] data-instant:transition-none",
           className
         )}
         {...props}
       >
-        <NavigationMenuPrimitive.Popup className="data-[ending-style]:easing-[ease] xs:w-(--popup-width) surface-dialog relative h-(--popup-height) w-(--popup-width) origin-(--transform-origin) rounded-lg border border-border text-popover-foreground shadow transition-[opacity,transform,width,height,scale,translate] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] outline-none data-ending-style:scale-90 data-ending-style:opacity-0 data-ending-style:duration-150 data-starting-style:scale-90 data-starting-style:opacity-0">
+        <NavigationMenuPrimitive.Popup
+          className={cn(
+            "xs:w-(--popup-width) surface-dialog relative h-(--popup-height) w-(--popup-width) origin-(--transform-origin) rounded-lg border border-border text-popover-foreground shadow outline-none",
+            fade
+              ? "transition-opacity duration-150 ease-out data-ending-style:opacity-0 data-ending-style:duration-0 data-starting-style:opacity-0"
+              : "transition-[opacity,transform,width,height,scale,translate] duration-[0.35s] ease-[cubic-bezier(0.22,1,0.36,1)] data-[ending-style]:easing-[ease] data-ending-style:scale-90 data-ending-style:opacity-0 data-ending-style:duration-150 data-starting-style:scale-90 data-starting-style:opacity-0"
+          )}
+        >
           <NavigationMenuPrimitive.Viewport className="relative size-full overflow-hidden" />
         </NavigationMenuPrimitive.Popup>
       </NavigationMenuPrimitive.Positioner>

@@ -21,6 +21,7 @@ import {
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
+  SearchIcon,
   TrashIcon,
 } from "lucide-react"
 
@@ -29,6 +30,11 @@ import {
   isNavTabActive,
 } from "~/components/workspace-sidebar-nav"
 import { HoverPill, useKeyedHoverPill } from "~/components/ui/hover-pill"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "~/components/ui/input-group"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -62,19 +68,6 @@ export type DockActionItem = {
 type WorkspaceDockNavProps = {
   /** Rows rendered in the overflow panel, after a separator. */
   actions?: DockActionItem[]
-  activeProjectId?: string
-  crawls: CrawlResponse[]
-  currentCrawl?: CrawlResponse | null
-  formatCrawlLabel: (crawl: CrawlResponse) => string
-  onCreateProject: () => void
-  onDeleteCrawl: (crawl: CrawlResponse) => void
-  onDeleteProject: (project: ProjectResponse) => void
-  onRenameProject: (project: ProjectResponse) => void
-  onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
-  onOpenProjectPanel: () => void
-  onSelectCrawl: (crawlId: string) => void
-  onSelectProject: (projectId: string) => void
-  projects: ProjectResponse[]
   /** Primary action rendered after the navigation menu. */
   trailing?: React.ReactNode
   auditTab: AuditTab
@@ -82,10 +75,6 @@ type WorkspaceDockNavProps = {
   integrations: boolean
   /** Location mode hides groups without scoped support (Marketplace). */
   isLocationScoped?: boolean
-  /** Back-to-project href shown above the project list when scoped. */
-  locationBackHref?: string | null
-  /** Location name replacing the project name in the navbar when scoped. */
-  locationName?: string | null
   maxCompetitors: number
   onSelectWorkspace: (
     nextView: DashboardView,
@@ -110,29 +99,14 @@ type WorkspaceDockNavProps = {
  */
 export function WorkspaceDockNav({
   actions,
-  activeProjectId,
   auditTab,
-  crawls,
-  currentCrawl,
-  formatCrawlLabel,
   gscConnector,
   integrations,
   isLocationScoped = false,
-  locationBackHref,
-  locationName,
   maxCompetitors,
-  onCreateProject,
-  onDeleteCrawl,
-  onDeleteProject,
-  onRenameProject,
-  onExportCrawl,
-  onOpenProjectPanel,
-  onSelectCrawl,
-  onSelectProject,
   onSelectWorkspace,
   pathname,
   projectId,
-  projects,
   trailing,
   view,
   visibilityMode = "maps",
@@ -143,9 +117,6 @@ export function WorkspaceDockNav({
   // Controlled so a click can dismiss the mega menu before the project panel
   // opens. Otherwise the portalled menu paints above it and the two fight.
   const [openItem, setOpenItem] = useState<string | null>(null)
-  // The context menu renders inside the panel, so a close unmounts it mid-gesture.
-  // The panel stays put until the context menu reports itself closed.
-  const [contextOpen, setContextOpen] = useState(false)
   const [clickLocked, setClickLocked] = useState(false)
   const features = useFeatures()
   const groups = buildWorkspaceNavGroups({
@@ -171,7 +142,6 @@ export function WorkspaceDockNav({
             return
           }
           if (clickLocked) return
-          if (next === null && contextOpen) return
           setOpenItem(next)
         }}
         side="bottom"
@@ -179,83 +149,6 @@ export function WorkspaceDockNav({
         value={lockedOpenItem ?? openItem}
       >
         <NavigationMenuList onPointerLeave={() => setClickLocked(false)}>
-          <NavigationMenuItem value="projects">
-            <NavigationMenuTrigger
-              className="h-9 max-w-56 cursor-pointer gap-2 rounded-lg px-3 text-sm text-foreground hover:bg-accent hover:text-foreground"
-              onClick={(event) => {
-                event.currentTarget.blur()
-                setClickLocked(true)
-                setOpenItem(null)
-                onOpenProjectPanel()
-              }}
-            >
-              <span className="truncate">
-                {locationName ??
-                  projects.find((project) => project.id === activeProjectId)
-                    ?.name ?? "Select a project"}
-              </span>
-              {locationName ? (
-                <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-micro font-medium text-muted-foreground">
-                  Location
-                </span>
-              ) : null}
-            </NavigationMenuTrigger>
-            <NavigationMenuContent
-              className={cn("p-2", projects.length > 3 ? "w-[36rem]" : "w-80")}
-            >
-              <ProjectPanelList
-                activeProjectId={activeProjectId}
-                locationBackHref={locationBackHref}
-                onContextOpenChange={setContextOpen}
-                onCreateProject={onCreateProject}
-                onDeleteProject={onDeleteProject}
-                onRenameProject={(project) => {
-                  setOpenItem(null)
-                  onRenameProject(project)
-                }}
-                onSelectProject={(projectId) => {
-                  setOpenItem(null)
-                  onSelectProject(projectId)
-                }}
-                projects={projects}
-              />
-            </NavigationMenuContent>
-          </NavigationMenuItem>
-          <NavigationMenuItem value="crawls">
-            <NavigationMenuTrigger
-              className="h-9 max-w-48 cursor-pointer gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-              onClick={(event) => {
-                event.currentTarget.blur()
-                setOpenItem(null)
-              }}
-            >
-              <span className="truncate">
-                {isLocationScoped ? "Parent · " : ""}
-                {currentCrawl ? formatCrawlLabel(currentCrawl) : "No crawl yet"}
-              </span>
-            </NavigationMenuTrigger>
-            <NavigationMenuContent
-              className={cn("p-2", crawls.length > 2 ? "w-[32rem]" : "w-80")}
-            >
-              <CrawlPanelList
-                crawls={crawls}
-                currentCrawlId={currentCrawl?.id}
-                isLocationScoped={isLocationScoped}
-                onContextOpenChange={setContextOpen}
-                formatLabel={formatCrawlLabel}
-                onDeleteCrawl={onDeleteCrawl}
-                onExportCrawl={onExportCrawl}
-                onSelectCrawl={(crawlId) => {
-                  setOpenItem(null)
-                  onSelectCrawl(crawlId)
-                }}
-              />
-            </NavigationMenuContent>
-          </NavigationMenuItem>
-          <span
-            aria-hidden="true"
-            className="mx-2 h-5 w-px shrink-0 self-center bg-border dark:bg-white/12"
-          />
           {groups.map((group) => {
             const activeTab = group.tabs.find((tab) =>
               isNavTabActive(
@@ -349,6 +242,213 @@ export function WorkspaceDockNav({
     </>
   )
 }
+type WorkspaceContextNavProps = {
+  activeProjectId?: string
+  crawls: CrawlResponse[]
+  currentCrawl?: CrawlResponse | null
+  formatCrawlLabel: (crawl: CrawlResponse) => string
+  /** Location mode labels the crawl as the parent project's. */
+  isLocationScoped?: boolean
+  /** Back-to-project href shown above the project list when scoped. */
+  locationBackHref?: string | null
+  /** Location name replacing the project name when scoped. */
+  locationName?: string | null
+  onCreateProject: () => void
+  onDeleteCrawl: (crawl: CrawlResponse) => void
+  onDeleteProject: (project: ProjectResponse) => void
+  onRenameProject: (project: ProjectResponse) => void
+  onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
+  onSelectCrawl: (crawlId: string) => void
+  onSelectProject: (projectId: string) => void
+  projects: ProjectResponse[]
+}
+
+/** Dot between breadcrumb segments, the same mark as "Dashboard • Overview". */
+export function ContextNavSeparator() {
+  return (
+    <CircleIcon
+      aria-hidden="true"
+      className="mx-1.5 size-1 shrink-0 fill-current text-muted-foreground/50"
+    />
+  )
+}
+
+/**
+ * Project • Crawl breadcrumb segments. Each opens its hover mega menu like the
+ * page groups do; clicking the project opens the full project panel.
+ */
+export function WorkspaceContextNav({
+  activeProjectId,
+  crawls,
+  currentCrawl,
+  formatCrawlLabel,
+  isLocationScoped = false,
+  locationBackHref,
+  locationName,
+  onCreateProject,
+  onDeleteCrawl,
+  onDeleteProject,
+  onRenameProject,
+  onExportCrawl,
+  onSelectCrawl,
+  onSelectProject,
+  projects,
+}: WorkspaceContextNavProps) {
+  // One segment open at a time: hovering the other closes this one at once
+  // instead of waiting out its close delay.
+  const [openSegment, setOpenSegment] = useState<string | null>(null)
+  const projectLabel =
+    locationName ??
+    projects.find((project) => project.id === activeProjectId)?.name ??
+    "Select a project"
+
+  return (
+    <div className="flex min-w-0 items-center">
+      <ContextNavSegment
+        contentClassName={projects.length > 3 ? "w-[36rem]" : "w-80"}
+        onOpenChange={(open) =>
+          setOpenSegment((current) =>
+            open ? "projects" : current === "projects" ? null : current
+          )
+        }
+        open={openSegment === "projects"}
+        trigger={
+          <>
+            <span className="truncate">{projectLabel}</span>
+            {locationName ? (
+              <span className="shrink-0 rounded-full bg-foreground/10 px-2 py-0.5 text-micro font-medium text-muted-foreground">
+                Location
+              </span>
+            ) : null}
+          </>
+        }
+        triggerClassName="max-w-44 font-medium text-foreground"
+        value="projects"
+      >
+        {({ close, setContextOpen }) => (
+          <ProjectPanelList
+            activeProjectId={activeProjectId}
+            locationBackHref={locationBackHref}
+            onContextOpenChange={setContextOpen}
+            onCreateProject={onCreateProject}
+            onDeleteProject={onDeleteProject}
+            onRenameProject={(project) => {
+              close()
+              onRenameProject(project)
+            }}
+            onSelectProject={(projectId) => {
+              close()
+              onSelectProject(projectId)
+            }}
+            projects={projects}
+          />
+        )}
+      </ContextNavSegment>
+      <ContextNavSeparator />
+      <ContextNavSegment
+        contentClassName={crawls.length > 2 ? "w-[32rem]" : "w-80"}
+        onOpenChange={(open) =>
+          setOpenSegment((current) =>
+            open ? "crawls" : current === "crawls" ? null : current
+          )
+        }
+        open={openSegment === "crawls"}
+        trigger={
+          <span className="truncate">
+            {isLocationScoped ? "Parent · " : ""}
+            {currentCrawl ? formatCrawlLabel(currentCrawl) : "No crawl yet"}
+          </span>
+        }
+        triggerClassName="max-w-52 text-muted-foreground"
+        value="crawls"
+      >
+        {({ close, setContextOpen }) => (
+          <CrawlPanelList
+            crawls={crawls}
+            currentCrawlId={currentCrawl?.id}
+            isLocationScoped={isLocationScoped}
+            onContextOpenChange={setContextOpen}
+            formatLabel={formatCrawlLabel}
+            onDeleteCrawl={onDeleteCrawl}
+            onExportCrawl={onExportCrawl}
+            onSelectCrawl={(crawlId) => {
+              close()
+              onSelectCrawl(crawlId)
+            }}
+          />
+        )}
+      </ContextNavSegment>
+    </div>
+  )
+}
+
+/**
+ * One breadcrumb segment with its own NavigationMenu, so its popup never
+ * morphs into a neighbour's: moving between segments closes one and opens the
+ * other instead of sliding a shared viewport.
+ */
+function ContextNavSegment({
+  value,
+  open,
+  onOpenChange,
+  trigger,
+  triggerClassName,
+  contentClassName,
+  children,
+}: {
+  value: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  trigger: React.ReactNode
+  triggerClassName?: string
+  contentClassName?: string
+  children: (api: {
+    close: () => void
+    setContextOpen: (open: boolean) => void
+  }) => React.ReactNode
+}) {
+  // The context menu renders inside the panel, so a close unmounts it mid-gesture.
+  // The panel stays put until the context menu reports itself closed.
+  const [contextOpen, setContextOpen] = useState(false)
+
+  return (
+    <NavigationMenu
+      align="start"
+      className="max-w-full min-w-0 flex-none"
+      closeDelay={180}
+      delay={0}
+      onValueChange={(next, details) => {
+        // Click to open, like the workspace switcher: hover never opens or closes.
+        if (details.reason === "trigger-hover") return
+        if (next === null && contextOpen) return
+        onOpenChange(next === value)
+      }}
+      popupMotion="fade"
+      side="bottom"
+      sideOffset={10}
+      value={open ? value : null}
+    >
+      <NavigationMenuList>
+        <NavigationMenuItem value={value}>
+          <NavigationMenuTrigger
+            className={cn(
+              "h-9 cursor-pointer gap-2 rounded-lg px-2.5 text-sm hover:bg-accent hover:text-foreground",
+              triggerClassName
+            )}
+          >
+            {trigger}
+          </NavigationMenuTrigger>
+          <NavigationMenuContent
+            className={cn("p-2 transition-none", contentClassName)}
+          >
+            {children({ close: () => onOpenChange(false), setContextOpen })}
+          </NavigationMenuContent>
+        </NavigationMenuItem>
+      </NavigationMenuList>
+    </NavigationMenu>
+  )
+}
+
 /**
  * The panel rows use the app's sliding pill rather than a per-row hover fill, so
  * moving down the list glides one highlight instead of blinking each row. The
@@ -542,112 +642,144 @@ export function ProjectPanelList({
   projects: ProjectResponse[]
 }) {
   const { clearPill, pill, setItemRef, showPill } = useKeyedHoverPill()
+  const [query, setQuery] = useState("")
   const columns = projects.length > 3 ? 2 : 1
+  const needle = query.trim().toLowerCase()
+  const visibleProjects = needle
+    ? projects.filter(
+        (project) =>
+          project.name.toLowerCase().includes(needle) ||
+          project.base_url.toLowerCase().includes(needle)
+      )
+    : projects
 
   return (
-    <ul
-      className="relative grid max-h-72 gap-0.5 overflow-y-auto"
-      onMouseLeave={clearPill}
-      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-    >
-      <HoverPill className="rounded-lg" pill={pill} />
-      {locationBackHref ? (
+    <div className="flex flex-col gap-2">
+      <InputGroup className="shadow-none">
+        <InputGroupAddon align="inline-start">
+          <SearchIcon aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          aria-label="Search projects"
+          autoComplete="off"
+          autoFocus
+          onChange={(event) => setQuery(event.target.value)}
+          // Keys stay in the box so the menu does not read them as navigation.
+          onKeyDown={(event) => event.stopPropagation()}
+          placeholder="Search projects"
+          type="search"
+          value={query}
+        />
+      </InputGroup>
+      <ul
+        className="relative grid max-h-72 gap-0.5 overflow-y-auto"
+        onMouseLeave={clearPill}
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      >
+        <HoverPill className="rounded-lg" pill={pill} />
+        {locationBackHref ? (
+          <li className="col-span-full">
+            <NavigationMenuLink
+              className="relative z-10 h-auto cursor-pointer items-start gap-2.5 bg-transparent p-2 text-foreground/80 hover:bg-transparent hover:text-foreground"
+              onMouseEnter={() => showPill("__back_to_project__")}
+              ref={setItemRef("__back_to_project__")}
+              render={
+                <Link to={locationBackHref}>
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-muted-foreground ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]">
+                    <ArrowLeftIcon aria-hidden="true" className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">Back to project</span>
+                  </span>
+                </Link>
+              }
+            />
+          </li>
+        ) : null}
         <li className="col-span-full">
-          <NavigationMenuLink
-            className="relative z-10 h-auto cursor-pointer items-start gap-2.5 bg-transparent p-2 text-foreground/80 hover:bg-transparent hover:text-foreground"
-            onMouseEnter={() => showPill("__back_to_project__")}
-            ref={setItemRef("__back_to_project__")}
-            render={
-              <Link to={locationBackHref}>
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-muted-foreground ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]">
-                  <ArrowLeftIcon aria-hidden="true" className="size-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">Back to project</span>
-                </span>
-              </Link>
-            }
-          />
+          <button
+            className="relative z-10 flex w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left text-muted-foreground hover:bg-transparent hover:text-foreground"
+            onClick={onCreateProject}
+            type="button"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-muted-foreground ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]">
+              <PlusIcon aria-hidden="true" className="size-4" />
+            </span>
+            <span className="text-sm font-medium">New project</span>
+          </button>
         </li>
-      ) : null}
-      <li className="col-span-full">
-        <button
-          className="relative z-10 flex w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left text-muted-foreground hover:bg-transparent hover:text-foreground"
-          onClick={onCreateProject}
-          type="button"
-        >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-muted-foreground ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]">
-            <PlusIcon aria-hidden="true" className="size-4" />
-          </span>
-          <span className="text-sm font-medium">New project</span>
-        </button>
-      </li>
-      <li
-        aria-hidden="true"
-        className="col-span-full my-0.5 h-px bg-border dark:bg-white/10"
-      />
-      {projects.map((project) => {
-        const active = project.id === activeProjectId
-        const websiteUrl = getSafeProjectWebsiteUrl(project)
-        return (
-          <ContextMenu key={project.id} onOpenChange={onContextOpenChange}>
-            <ContextMenuTrigger className="block">
-              <button
-                className={cn(
-                  "relative z-10 flex h-auto w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left hover:bg-transparent focus:bg-transparent",
-                  active
-                    ? "text-foreground"
-                    : "text-foreground/80 hover:text-foreground"
-                )}
-                onClick={() => onSelectProject(project.id)}
-                onMouseEnter={() => showPill(project.id)}
-                ref={setItemRef(project.id)}
-                type="button"
-              >
-                <span
+        <li
+          aria-hidden="true"
+          className="col-span-full my-0.5 h-px bg-border dark:bg-white/10"
+        />
+        {visibleProjects.length === 0 ? (
+          <li className="col-span-full px-2 py-3 text-sm text-muted-foreground">
+            No projects match “{query.trim()}”.
+          </li>
+        ) : null}
+        {visibleProjects.map((project) => {
+          const active = project.id === activeProjectId
+          const websiteUrl = getSafeProjectWebsiteUrl(project)
+          return (
+            <ContextMenu key={project.id} onOpenChange={onContextOpenChange}>
+              <ContextMenuTrigger className="block">
+                <button
                   className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-sm font-semibold ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]",
-                    active ? "text-foreground" : "text-muted-foreground"
+                    "relative z-10 flex h-auto w-full cursor-pointer items-center gap-2.5 rounded-lg bg-transparent p-2 text-left hover:bg-transparent focus:bg-transparent",
+                    active
+                      ? "text-foreground"
+                      : "text-foreground/80 hover:text-foreground"
                   )}
+                  onClick={() => onSelectProject(project.id)}
+                  onMouseEnter={() => showPill(project.id)}
+                  ref={setItemRef(project.id)}
+                  type="button"
                 >
-                  {project.name.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">
-                    {project.name}
+                  <span
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-sm font-semibold ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]",
+                      active ? "text-foreground" : "text-muted-foreground"
+                    )}
+                  >
+                    {project.name.slice(0, 1).toUpperCase()}
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                    {project.base_url}
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">
+                      {project.name}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {project.base_url}
+                    </span>
                   </span>
-                </span>
-              </button>
-            </ContextMenuTrigger>
-            <ContextMenuContent>
-              {websiteUrl ? (
-                <ContextMenuItem
-                  render={<a href={websiteUrl} target='_blank' rel='noopener noreferrer' />}
-                >
-                  <ExternalLinkIcon aria-hidden='true' />
-                  Open website
+                </button>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                {websiteUrl ? (
+                  <ContextMenuItem
+                    render={<a href={websiteUrl} target='_blank' rel='noopener noreferrer' />}
+                  >
+                    <ExternalLinkIcon aria-hidden='true' />
+                    Open website
+                  </ContextMenuItem>
+                ) : null}
+                <ContextMenuItem onClick={() => onRenameProject(project)}>
+                  <PencilIcon aria-hidden='true' />
+                  Rename project
                 </ContextMenuItem>
-              ) : null}
-              <ContextMenuItem onClick={() => onRenameProject(project)}>
-                <PencilIcon aria-hidden='true' />
-                Rename project
-              </ContextMenuItem>
-              <ContextMenuSeparator />
-              <ContextMenuItem
-                onClick={() => onDeleteProject(project)}
-                variant="destructive"
-              >
-                <TrashIcon aria-hidden="true" />
-                Delete project
-              </ContextMenuItem>
-            </ContextMenuContent>
-          </ContextMenu>
-        )
-      })}
-    </ul>
+                <ContextMenuSeparator />
+                <ContextMenuItem
+                  onClick={() => onDeleteProject(project)}
+                  variant="destructive"
+                >
+                  <TrashIcon aria-hidden="true" />
+                  Delete project
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 

@@ -34,6 +34,8 @@ type WorkspaceSwitcherProps = {
   onInviteOpen: () => void
   onLeaveWorkspaceOpen: () => void
   onSelectOrganization: (organizationId: string) => void
+  /** Borderless trigger for use inside the navbar breadcrumb pill. */
+  bare?: boolean
 }
 
 export function WorkspaceSwitcher({
@@ -46,6 +48,7 @@ export function WorkspaceSwitcher({
   onInviteOpen,
   onLeaveWorkspaceOpen,
   onSelectOrganization,
+  bare = false,
 }: WorkspaceSwitcherProps) {
   const pillMenu = useHoverPill()
   const hoverMenu = useHoverMenu()
@@ -62,7 +65,12 @@ export function WorkspaceSwitcher({
           render={
             <button
               aria-label="Switch workspace"
-              className="flex max-w-56 items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5 text-left text-sm text-card-foreground transition-colors duration-150 hover:bg-accent"
+              className={cn(
+                "flex items-center gap-2 rounded-lg text-left text-sm transition-colors duration-150 hover:bg-accent",
+                bare
+                  ? "h-9 max-w-44 px-2 text-foreground"
+                  : "max-w-56 border border-border bg-card px-2 py-1.5 text-card-foreground"
+              )}
               type="button"
             />
           }
