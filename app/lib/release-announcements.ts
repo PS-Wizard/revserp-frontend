@@ -25,6 +25,105 @@ export type ReleaseAnnouncement = {
 
 export const RELEASE_ANNOUNCEMENTS: readonly ReleaseAnnouncement[] = [
   {
+    id: "2026-11-early-november-update",
+    title: "Early November update",
+    publishedAt: "2026-11-01T00:00:00Z",
+    summary: "Side-by-side competitor scores, crawl details for every crawl, an account page with your usage, a redesigned Marketplace, and a simpler navbar.",
+    coverImage: "/announcements/october-2026/mountain-dither.jpg",
+    slides: [
+      {
+        id: "competitor-scores",
+        title: "Compare scores side by side",
+        description: "Each score card now shows your site and the competitor together, with the gap between you for every pillar and bucket.",
+        image: "/announcements/october-2026/mountain-dither.jpg",
+        imagePosition: "50% 45%",
+        bullets: ["One card per pillar instead of two rows", "Us, Them, and Delta for every bucket", "Green when you lead, red when they do"],
+      },
+      {
+        id: "crawl-details",
+        title: "See what happened in each crawl",
+        description: "Right-click any crawl and open Crawl details to see how long it took, which status codes came back, and which URLs failed and why.",
+        image: "/announcements/october-2026/cloud-texture.jpg",
+        imagePosition: "50% 40%",
+        bullets: ["Duration, pages crawled, and overall score", "Failed URLs with the reason", "Internal, outbound, and broken links"],
+      },
+      {
+        id: "account",
+        title: "Your account and usage in one place",
+        description: "Open Account settings from the profile menu to see your profile and how much of this month's allowance your workspace has used.",
+        image: "/announcements/october-2026/pixel-clouds.jpg",
+        imagePosition: "50% 35%",
+        bullets: ["Profile, workspace, and role", "AI messages and visibility audits this month", "Projects and maps credits"],
+      },
+      {
+        id: "marketplace",
+        title: "A cleaner Marketplace",
+        description: "Connectors are easier to scan, connected tools sit together at the top, and the less common categories stay folded until you need them.",
+        image: "/announcements/october-2026/cloud-texture.jpg",
+        imagePosition: "50% 55%",
+        bullets: ["Larger connector cards", "Connected tools listed once, under Connections", "Folded groups for the rest"],
+      },
+      {
+        id: "navbar",
+        title: "Workspace, project, and crawl together",
+        description: "The top left of the navbar now shows your workspace, project, and crawl side by side. Click any of them to switch, and search to find a project fast.",
+        image: "/announcements/october-2026/mountain-dither.jpg",
+        imagePosition: "50% 30%",
+        bullets: ["Workspace • Project • Crawl", "Click to open, no hover surprises", "Search in the project menu"],
+      },
+    ],
+    sections: [
+      {
+        title: "Competitors",
+        items: [
+          "Merged the two rows of competitor score cards into one row of side-by-side cards for Overall, SEO, AEO, and PageSpeed.",
+          "Added a score delta to each card and a Us / Them / Delta table for every bucket.",
+          "Gave your site and the competitor fixed colors, so green and red now only mean who leads.",
+          "Removed the Page health chart from the competitor view.",
+          "Removed the separate project-to-project comparison mode. Competitor comparison stays under Compare.",
+        ],
+      },
+      {
+        title: "Crawls",
+        items: [
+          "Added Crawl details to the crawl menu in the navbar and in the project selector.",
+          "Crawl details shows duration, pages crawled and discovered, overall score, status codes, and soft 404s.",
+          "Listed failed URLs with the reason the crawler recorded, or the HTTP status when there is no other reason.",
+          "Added link totals: internal, outbound, external domains, nofollow, and broken internal links.",
+          "Added a notice when a completed crawl could not fetch some URLs, or when a crawl failed or was cancelled.",
+        ],
+      },
+      {
+        title: "Account",
+        items: [
+          "Added Account settings to the profile menu.",
+          "Profile shows your name, email, workspace, and role, with a generated avatar.",
+          "Usage shows AI messages and AI visibility audits for this month, with the reset date.",
+          "Usage also shows projects, competitors per project, and maps credits.",
+        ],
+      },
+      {
+        title: "Marketplace",
+        items: [
+          "Redesigned connector cards with larger icons, two-line descriptions, and a clear action button.",
+          "Connected tools now appear under Connections and no longer repeat in the catalog.",
+          "Connected tools use a settings button to configure, refresh, or disconnect.",
+          "Moved Custom MCP to a button beside Connections.",
+          "Folded Content and publishing, Analytics and ads, and Others by default.",
+        ],
+      },
+      {
+        title: "Navigation",
+        items: [
+          "Moved the project and crawl pickers to the top left, beside the workspace switcher.",
+          "Workspace, project, and crawl pickers now all open on click.",
+          "Added a search box to the project menu.",
+          "Removed the sliding animation between the project and crawl menus.",
+        ],
+      },
+    ],
+  },
+  {
     id: "2026-10-october-update",
     title: "October update",
     publishedAt: "2026-10-16T00:00:00Z",

@@ -117,7 +117,7 @@ describe("ReleaseAnnouncementDialog", () => {
     for (let i = 1; i < RELEASE.slides.length; i += 1) {
       click(findButton("Next"))
     }
-    expect(text().includes(`6 of ${RELEASE.slides.length}`)).toBe(true)
+    expect(text().includes(`${RELEASE.slides.length} of ${RELEASE.slides.length}`)).toBe(true)
     click(findButton("Done"))
     expect(seen.includes(false)).toBe(true)
   })
