@@ -4,11 +4,8 @@ import { memo, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { TriangleAlertIcon, XIcon } from "lucide-react"
 
-import { HealthRidge } from "~/components/compare/charts"
-import { PAINT_A, PAINT_B } from "~/components/compare/helpers"
 import { IssueBucketPies } from "~/components/competitors/issue-bucket-pies"
 import { Button } from "~/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import {
   Empty,
   EmptyDescription,
@@ -20,16 +17,11 @@ import { Skeleton } from "~/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { AddNonBrandKeywordButton } from "~/components/keywords/add-non-brand-keyword-button"
 import { clientApiFetch } from "~/lib/api"
-import { PillarScoresCompare } from "~/components/overview-pillar-scores-section"
+import { CompetitorPillarCompare } from "~/components/competitors/competitor-pillar-compare"
 import { SliceScoreSankey } from "~/components/competitors/competitor-score-sankey"
 import { KeywordAnalysisCard } from "~/components/keywords/keyword-analysis-card"
 import { KeywordCoverageCard } from "~/components/keywords/keywords-coverage"
-import type {
-  CompetitorGapPageHealth,
-  CompetitorGapReport,
-} from "~/lib/api.types"
-
-const PAGE_HEALTH_BUCKETS = 21
+import type { CompetitorGapReport } from "~/lib/api.types"
 
 type Props = {
   projectId: string
@@ -44,47 +36,7 @@ function competitorGapQueryKey(competitorCrawlId: string) {
   return ["competitor-gap", competitorCrawlId, "v5"] as const
 }
 
-function padHealthBuckets(health: CompetitorGapPageHealth | undefined) {
-  const buckets = health?.buckets ?? []
-  return Array.from(
-    { length: PAGE_HEALTH_BUCKETS },
-    (_, index) => buckets[index] ?? 0
-  )
-}
-
-function gapHealthShares(health: CompetitorGapPageHealth | undefined) {
-  const buckets = padHealthBuckets(health)
-  const total =
-    health && health.total_pages > 0
-      ? health.total_pages
-      : buckets.reduce((sum, count) => sum + count, 0)
-  if (total <= 0) {
-    return buckets.map(() => 0)
-  }
-  return buckets.map((count) => count / total)
-}
-
 /* ------------------------------------------------------------- primitives */
-
-function SectionCard({
-  title,
-  children,
-}: {
-  title: string
-  children: ReactNode
-}) {
-  return (
-    <Card
-      className="@container/card bg-gradient-to-br from-card via-card to-muted/30"
-      size="sm"
-    >
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  )
-}
 
 /* ------------------------------------------------------------------ shell */
 
@@ -159,12 +111,14 @@ function InsightsBody({
   const youBreakdown = report.you_breakdown
   const themBreakdown = report.them_breakdown
 
-  const sharesYou = gapHealthShares(report.page_health?.you)
-  const sharesThem = gapHealthShares(report.page_health?.them)
-
   return (
     <div className="flex flex-col gap-4">
-      <PillarScoresCompare them={themBreakdown} you={youBreakdown} />
+      <CompetitorPillarCompare
+        them={themBreakdown}
+        themLabel={themLabel}
+        you={youBreakdown}
+        youLabel={youLabel}
+      />
 
       <IssueBucketPies
         them={themBreakdown}
@@ -237,15 +191,6 @@ function InsightsBody({
         youLabel={youLabel}
       />
 
-      <SectionCard title="Page health">
-        <HealthRidge
-          nameA={youLabel}
-          nameB={themLabel}
-          paintA={PAINT_A}
-          paintB={PAINT_B}
-          values={{ a: sharesYou, b: sharesThem }}
-        />
-      </SectionCard>
     </div>
   )
 }

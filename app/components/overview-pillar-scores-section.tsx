@@ -1,11 +1,9 @@
 "use client"
 
 import { memo, useMemo } from "react"
-import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 
 import type { CrawlBreakdown } from "~/components/pillar-audit-view"
 import { ScoreRadialChart } from "~/components/score-radial-chart"
-import { Badge } from "~/components/ui/badge"
 import {
   Card,
   CardDescription,
@@ -13,7 +11,7 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { getPillarChartColor } from "~/lib/pillar-colors"
-import { cn, formatBucketLabel } from "~/lib/utils"
+import { formatBucketLabel } from "~/lib/utils"
 
 const OVERVIEW_PILLARS = [
   { id: "seo", label: "SEO" },
@@ -133,85 +131,6 @@ export const PillarScoresRow = memo(function PillarScoresRow({
     </div>
   )
 })
-
-export const PillarScoresCompare = memo(function PillarScoresCompare({
-  you,
-  them,
-}: {
-  you?: PillarScoresBreakdown | null
-  them?: PillarScoresBreakdown | null
-}) {
-  const youCharts = useMemo(() => buildCharts(you, "seo"), [you])
-  const themCharts = useMemo(() => buildCharts(them, "aeo"), [them])
-
-  if (!youCharts.hasScores && !themCharts.hasScores) {
-    return <NoPillarScores />
-  }
-
-  return (
-    <div className="flex flex-col">
-      <PillarScoresRow breakdown={you} colorSource="seo" />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(260px,9fr)_repeat(3,minmax(0,7fr))]">
-        <ScoreDelta
-          them={themCharts.overall.centerValue}
-          you={youCharts.overall.centerValue}
-        />
-        {youCharts.pillars.map((pillar, index) => (
-          <ScoreDelta
-            key={pillar.id}
-            them={themCharts.pillars[index]?.centerValue}
-            you={pillar.centerValue}
-          />
-        ))}
-      </div>
-      <PillarScoresRow breakdown={them} colorSource="aeo" />
-    </div>
-  )
-})
-
-function ScoreDelta({
-  you,
-  them,
-}: {
-  you?: number | null
-  them?: number | null
-}) {
-  const delta =
-    typeof you === "number" &&
-    Number.isFinite(you) &&
-    typeof them === "number" &&
-    Number.isFinite(them)
-      ? Math.round(you) - Math.round(them)
-      : null
-
-  return (
-    <div className="flex h-16 flex-col items-center">
-      <div className="w-0 flex-1 border-l-2 border-dotted border-muted-foreground/70" />
-      {delta === null ? (
-        <span className="text-sm text-muted-foreground">—</span>
-      ) : (
-        <Badge
-          className={cn(
-            "h-7 gap-1.5 border-2 px-2.5 text-sm [&>svg]:size-3.5!",
-            delta > 0 && "border-emerald-400/70 text-emerald-400",
-            delta < 0 && "border-rose-400/70 text-rose-400",
-            delta === 0 && "border-muted-foreground/60"
-          )}
-          variant="outline"
-        >
-          {delta > 0 ? (
-            <TrendingUpIcon />
-          ) : delta < 0 ? (
-            <TrendingDownIcon />
-          ) : null}
-          {delta > 0 ? "+" : ""}
-          {delta} pts
-        </Badge>
-      )}
-      <div className="w-0 flex-1 border-l-2 border-dotted border-muted-foreground/70" />
-    </div>
-  )
-}
 
 function NoPillarScores() {
   return (

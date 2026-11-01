@@ -5,17 +5,11 @@ installTestDom()
 
 // Charts need canvas runtimes happy-dom lacks; stub the score visuals so the
 // keywords wiring below them stays real, which is what this test pins.
-mock.module("~/components/overview-pillar-scores-section", () => ({
-  PillarScoresCompare: () => null,
-}))
 mock.module("~/components/competitors/issue-bucket-pies", () => ({
   IssueBucketPies: () => null,
 }))
 mock.module("~/components/competitors/competitor-score-sankey", () => ({
   SliceScoreSankey: () => <div>Where the points go</div>,
-}))
-mock.module("~/components/compare/charts", () => ({
-  HealthRidge: () => null,
 }))
 
 const { CompetitorInsightsView } = await import(
@@ -252,10 +246,9 @@ describe("competitor keywords coverage", () => {
     expect(text).toContain("Coverage measures your non-brand keywords on both sites")
     const sankey = text.indexOf("Where the points go")
     const keywords = text.indexOf("Keywords")
-    const health = text.indexOf("Page health")
     expect(sankey >= 0).toBe(true)
     expect(sankey > keywords).toBe(true)
-    expect(health > keywords).toBe(true)
+    expect(text.includes("Page health")).toBe(false)
     expect((text.match(/alpha gap/g) ?? []).length >= 2).toBe(true)
     expect(host.querySelector('a[href="https://you.example/beta"]')).toBeTruthy()
     expect(host.querySelector('a[href="https://them.example/beta"]')).toBeTruthy()
@@ -359,8 +352,8 @@ describe("competitor keyword estimates", () => {
     await flush()
 
     const text = host.textContent ?? ""
-    expect(host.querySelectorAll("table")).toHaveLength(2)
-    const tables = Array.from(host.querySelectorAll("table"))
+    expect(host.querySelectorAll('section[aria-label="Keywords"] table')).toHaveLength(2)
+    const tables = Array.from(host.querySelectorAll('section[aria-label="Keywords"] table'))
     for (const table of tables) {
       expect(table.closest('[data-slot="card"]')?.classList.contains("h-[32rem]")).toBe(true)
       expect(table.closest('[role="region"]')?.classList.contains("overflow-auto")).toBe(true)
@@ -397,14 +390,14 @@ describe("competitor keyword estimates", () => {
     expect(text).toContain("rival care")
     expect(text).toContain("pipe fix")
     expect((text.match(/1 brand · 1 non-brand/g) ?? []).length).toBe(2)
-    const estimateCards = Array.from(host.querySelectorAll("table"))
+    const estimateCards = Array.from(host.querySelectorAll('section[aria-label="Keywords"] table'))
     expect(estimateCards).toHaveLength(2)
     for (const table of estimateCards) {
       expect(table.querySelector('[role="tab"]')).toBeNull()
     }
   })
 
-  test("estimates sit below coverage grid and above page health", async () => {
+  test("estimates sit below coverage grid", async () => {
     installGapFetch(makeReport({ you: YOU_SEEDS, them: THEM_SEEDS }))
     const { host } = render(
       <CompetitorInsightsView
@@ -420,7 +413,7 @@ describe("competitor keyword estimates", () => {
     const text = host.textContent ?? ""
     expect(text).toContain("rival care")
     expect(text.indexOf("rival care") > text.indexOf("Coverage measures the parent non-brand list")).toBe(true)
-    expect(text.indexOf("Page health") > text.indexOf("rival care")).toBe(true)
+    expect(text.includes("Page health")).toBe(false)
   })
 
   test("analysis card renders non-brand rows with dash nulls", async () => {
