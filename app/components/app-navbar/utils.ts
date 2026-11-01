@@ -183,7 +183,7 @@ export function getWorkspaceNavigationTarget(
   const hash =
     view === "revserp-audit"
       ? `#${auditTab}-tab`
-      : view === "compare" || view === "revserp-visibility"
+      : view === "revserp-visibility"
         ? ""
         : `#${view}`
   if (isLocationsPath(location.pathname)) {

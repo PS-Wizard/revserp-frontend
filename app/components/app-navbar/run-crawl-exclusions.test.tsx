@@ -139,14 +139,12 @@ async function mountShell(
             <WorkspaceShellPreview
               activeProjectId={projectId}
               auditTab="overview"
-              compareLabel={null}
               crawlStatusLabel=""
               currentCrawl={null}
               isCrawlRunning={false}
               isExportingAudit={false}
               isPlatformAdmin={false}
               onAuditTabChange={() => undefined}
-              onCompareCrawl={() => undefined}
               onCrawlStart={() => undefined}
               onExportAudit={() => undefined}
               onRevbotConversationChange={() => undefined}

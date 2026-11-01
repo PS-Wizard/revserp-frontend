@@ -43,6 +43,10 @@ import {
 import { Textarea } from "~/components/ui/textarea"
 import { useFeatures } from "~/lib/features"
 import {
+  mergeCompetitorSelectionsIntoCombined,
+  useCompetitorKeywordSelections,
+} from "~/lib/competitor-keyword-selections"
+import {
   applyProjectKeywordListsResponse,
   createProjectKeyword,
   deleteProjectKeyword,
@@ -66,12 +70,15 @@ export const MAX_PROJECT_KEYWORDS_PER_SOURCE = {
   non_brand: 20,
 } as const
 
+// Revserp suggestions stay at 10 per kind, below the user-defined caps.
+const MAX_SUGGESTED_KEYWORDS_PER_KIND = 10
+
 const FIND_KEYWORDS_PROMPT = `Suggest keywords for this project with the Revserp keyword tools.
 
 1. Start by calling get_business_profile AND get_project_keywords so you know the brand, category, location, offering, audience, and the keywords already saved (both user-defined and Revserp-suggested).
 2. Ground every suggestion in real evidence: when Search Console is connected, use live GSC queries, impressions, clicks, and positions. Otherwise read crawled page CONTENT (titles, headings, body text) — not just URLs — opening important pages where needed.
-3. Write the result with update_project_keywords. Both brand_keywords and non_brand_keywords are required and brand_keywords must contain 1 to ${MAX_PROJECT_KEYWORDS_PER_SOURCE.brand} keywords and non_brand_keywords 1 to ${MAX_PROJECT_KEYWORDS_PER_SOURCE.non_brand}. Pick the strongest terms backed by the GSC/crawl evidence above. Never invent search volume, clicks, or rankings.
-4. Never modify the user's own keywords and never write business-profile keyword fields. update_project_keywords (Revserp suggestions) only. Keep strong existing suggestions and replace weaker terms when needed to stay within ${MAX_PROJECT_KEYWORDS_PER_SOURCE.brand} brand and ${MAX_PROJECT_KEYWORDS_PER_SOURCE.non_brand} non-brand keywords.`
+3. Write the result with update_project_keywords. Both brand_keywords and non_brand_keywords are required and brand_keywords must contain 1 to ${MAX_SUGGESTED_KEYWORDS_PER_KIND} keywords and non_brand_keywords 1 to ${MAX_SUGGESTED_KEYWORDS_PER_KIND}. Pick the strongest terms backed by the GSC/crawl evidence above. Never invent search volume, clicks, or rankings.
+4. Never modify the user's own keywords and never write business-profile keyword fields. update_project_keywords (Revserp suggestions) only. Keep strong existing suggestions and replace weaker terms when needed to stay within ${MAX_SUGGESTED_KEYWORDS_PER_KIND} brand and ${MAX_SUGGESTED_KEYWORDS_PER_KIND} non-brand keywords.`
 
 function useKeywordLists(
   projectId: string | null,
@@ -714,6 +721,9 @@ export function ProjectSuggestedKeywordsCard({
   const startPrompt = revbotPrompt?.startPrompt
   const [watching, setWatching] = useState(false)
   const baselineRef = useRef<string | null>(null)
+  const queryClient = useQueryClient()
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState("")
 
   // While waiting for Revbot, poll so a suggestion write (plus the central
   // SSE invalidation) ends the watching state without touching the events module.
@@ -755,6 +765,27 @@ export function ProjectSuggestedKeywordsCard({
   const canGenerate = Boolean(
     features.ai_chat && startPrompt && projectId && canManage && !watching
   )
+
+  async function handleRemove(keyword: ProjectKeyword) {
+    if (!projectId || busyId !== null) return
+    const requestProjectId = projectId
+    setBusyId(keyword.id)
+    setRemoveError("")
+    try {
+      const response = await deleteProjectKeyword(requestProjectId, keyword.id)
+      await applyProjectKeywordListsResponse(
+        queryClient,
+        requestProjectId,
+        response
+      )
+    } catch (removeErr) {
+      setRemoveError(
+        keywordErrorMessage(removeErr, "Could not remove keyword.")
+      )
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   function openKeywordChat() {
     if (!startPrompt) return
@@ -812,6 +843,37 @@ export function ProjectSuggestedKeywordsCard({
 
   return (
     <SuggestedKeywordsCard
+      belowList={
+        removeError ? (
+          <p className="px-5 py-2 text-xs text-destructive">{removeError}</p>
+        ) : null
+      }
+      getTrailing={
+        canManage
+          ? (phrase) => {
+              const keyword = data.revserp_suggested.find(
+                (row) => row.keyword === phrase
+              )
+              if (!keyword) return null
+              return (
+                <Button
+                  aria-label={`Remove ${phrase}`}
+                  disabled={busyId !== null}
+                  onClick={() => void handleRemove(keyword)}
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                >
+                  {busyId === keyword.id ? (
+                    <Loader2 aria-hidden="true" className="animate-spin" />
+                  ) : (
+                    <XIcon aria-hidden="true" />
+                  )}
+                </Button>
+              )
+            }
+          : undefined
+      }
       brandPhrases={filterByKind(data.revserp_suggested, "brand").map(
         (keyword) => keyword.keyword
       )}
@@ -878,6 +940,9 @@ function SourceBadges({
       {sources.includes("revserp") ? (
         <Badge variant="outline">Revserp suggested</Badge>
       ) : null}
+      {sources.includes("competitor") ? (
+        <Badge variant="default">Competitor</Badge>
+      ) : null}
     </span>
   )
 }
@@ -933,6 +998,11 @@ export function CombinedKeywordCloudCard({
   projectId: string | null
 }) {
   const { query, data } = useKeywordLists(projectId)
+  const { selected } = useCompetitorKeywordSelections(projectId)
+  const combined = useMemo(
+    () => mergeCompetitorSelectionsIntoCombined(data.combined, selected),
+    [data.combined, selected]
+  )
 
   return (
     <KeywordCloudCard>
@@ -945,10 +1015,10 @@ export function CombinedKeywordCloudCard({
           message={keywordErrorMessage(query.error, "Could not load keywords.")}
           onRetry={() => void query.refetch()}
         />
-      ) : data.combined.length === 0 ? (
+      ) : combined.length === 0 ? (
         <KeywordCloudMessage text="Add keywords above to see them here." />
       ) : (
-        <OverviewKeywordCloud items={data.combined} />
+        <OverviewKeywordCloud items={combined} />
       )}
     </KeywordCloudCard>
   )

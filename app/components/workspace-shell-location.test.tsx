@@ -99,14 +99,12 @@ describe("real shell location scope", () => {
                 <WorkspaceShellPreview
                   activeProjectId="p-1"
                   auditTab="overview"
-                  compareLabel={null}
                   crawlStatusLabel=""
                   currentCrawl={null}
                   isCrawlRunning={false}
                   isExportingAudit={false}
                   isPlatformAdmin={false}
                   onAuditTabChange={() => undefined}
-                  onCompareCrawl={() => undefined}
                   onCrawlStart={() => undefined}
                   onExportAudit={() => undefined}
                   onRevbotConversationChange={() => undefined}
@@ -284,14 +282,12 @@ describe("real shell visibility mode", () => {
                 <WorkspaceShellPreview
                   activeProjectId="p-1"
                   auditTab="overview"
-                  compareLabel={null}
                   crawlStatusLabel=""
                   currentCrawl={null}
                   isCrawlRunning={false}
                   isExportingAudit={false}
                   isPlatformAdmin={false}
                   onAuditTabChange={() => undefined}
-                  onCompareCrawl={() => undefined}
                   onCrawlStart={() => undefined}
                   onExportAudit={() => undefined}
                   onRevbotConversationChange={() => undefined}

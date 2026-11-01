@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query"
 import { clientApiDelete, clientApiFetch, clientApiPost } from "~/lib/api"
 
 export type ProjectKeywordKind = "brand" | "non_brand"
-export type ProjectKeywordSource = "user" | "revserp"
+export type ProjectKeywordSource = "user" | "revserp" | "competitor"
 
 export interface ProjectKeyword {
   id: string

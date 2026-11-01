@@ -93,13 +93,13 @@ export function TaskMark({
 function severityClassName(severity: string) {
   switch (severity) {
     case "critical":
-      return "border-red-500/35 bg-red-500/12 text-red-300"
+      return "border-red-500/35 bg-red-500/12 text-red-700 dark:text-red-300"
     case "high":
-      return "border-orange-500/35 bg-orange-500/12 text-orange-300"
+      return "border-orange-500/35 bg-orange-500/12 text-orange-700 dark:text-orange-300"
     case "medium":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-200"
+      return "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
     case "low":
-      return "border-sky-500/30 bg-sky-500/10 text-sky-300"
+      return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300"
     default:
       return "border-border bg-muted/50 text-muted-foreground"
   }
@@ -130,12 +130,12 @@ export function StatBadge({
       className={cn(
         "inline-flex h-6 items-center rounded-md border px-2.5 text-xs font-medium tabular-nums",
         tone === "green" &&
-          "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+          "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
         tone === "violet" &&
-          "border-violet-500/30 bg-violet-500/10 text-violet-300",
-        tone === "blue" && "border-sky-500/30 bg-sky-500/10 text-sky-300",
+          "border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+        tone === "blue" && "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
         tone === "amber" &&
-          "border-amber-500/30 bg-amber-500/10 text-amber-200",
+          "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200",
         tone === "neutral" &&
           "border-border/80 bg-muted/30 text-muted-foreground"
       )}

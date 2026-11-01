@@ -51,7 +51,7 @@ export type KeywordEstimatesTableProps = {
   action?: ReactNode
   /** Empty-state slot for CTAs. */
   emptyAction?: ReactNode
-  /** Coverage seeds; when set, rows can be filtered by gap / targeted / cannibalized. */
+  /** Coverage seeds; when set, rows can be filtered by gap / covered / cannibalized. */
   coverage?: KeywordCoverageSeed[]
   /** Optional per-row action shown beside the keyword on hover/focus. */
   rowAction?: (row: KeywordAnalysis) => ReactNode

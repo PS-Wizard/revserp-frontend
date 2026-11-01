@@ -15,6 +15,7 @@ import {
 
 export const ISSUE_TYPE_FIXED_CARD_TITLE = "Fixed From Last Crawl"
 export const ISSUE_TYPE_NEW_CARD_TITLE = "New In This Crawl"
+export const ISSUE_TYPE_NOT_VERIFIED_CARD_TITLE = "Failed verification"
 
 const ISSUE_TYPE_CHANGE_PAGE_SIZE = 25
 
@@ -49,6 +50,8 @@ function IssueTypeChangeRow({
           ) : null}
           {excluded ? (
             <StatBadge tone="amber">Excluded</StatBadge>
+          ) : row.change_type === "not_verified" ? (
+            <StatBadge tone="amber">Failed verification</StatBadge>
           ) : fixed ? null : (
             <StatBadge tone="amber">New</StatBadge>
           )}
@@ -92,7 +95,7 @@ function IssueTypeChangeListCard({
 }: {
   baselineCrawlId: string
   bucketId: string
-  changeType: "new" | "resolved"
+  changeType: "new" | "resolved" | "not_verified"
   crawlId: string
   emptyMessage: string
   fixed: boolean
@@ -119,7 +122,9 @@ function IssueTypeChangeListCard({
       ? row.change_type === "resolved" ||
         row.change_type === "no_longer_detected" ||
         row.change_type === "excluded"
-      : row.change_type === "new"
+      : changeType === "not_verified"
+        ? row.change_type === "not_verified"
+        : row.change_type === "new"
   )
   const total = rowsQuery.data?.pagination.total ?? 0
   const pageCount = Math.max(
@@ -193,7 +198,7 @@ export function IssueTypeChangeCards({
 
   if (baselineQuery.isPending) {
     return (
-      <div className="grid min-w-0 gap-5 max-md:auto-rows-[28rem] md:grid-cols-2 md:grid-rows-1 md:max-lg:h-[28rem] lg:h-[32rem]">
+      <div className="grid min-w-0 gap-5 max-md:auto-rows-[28rem] md:grid-cols-3 md:grid-rows-1 md:max-lg:h-[28rem] lg:h-[32rem]">
         <FixCard
           count={0}
           isLoading
@@ -202,6 +207,9 @@ export function IssueTypeChangeCards({
           {null}
         </FixCard>
         <FixCard count={0} isLoading title={ISSUE_TYPE_NEW_CARD_TITLE}>
+          {null}
+        </FixCard>
+        <FixCard count={0} isLoading title={ISSUE_TYPE_NOT_VERIFIED_CARD_TITLE}>
           {null}
         </FixCard>
       </div>
@@ -236,7 +244,7 @@ export function IssueTypeChangeCards({
   }
 
   return (
-    <div className="grid min-w-0 gap-5 max-md:auto-rows-[28rem] md:grid-cols-2 md:grid-rows-1 md:max-lg:h-[28rem] lg:h-[32rem]">
+    <div className="grid min-w-0 gap-5 max-md:auto-rows-[28rem] md:grid-cols-3 md:grid-rows-1 md:max-lg:h-[28rem] lg:h-[32rem]">
       <IssueTypeChangeListCard
         baselineCrawlId={baselineCrawlId}
         bucketId={bucketId}
@@ -259,6 +267,17 @@ export function IssueTypeChangeCards({
         issueTypeId={issueTypeId}
         pillarId={pillarId}
         title={ISSUE_TYPE_NEW_CARD_TITLE}
+      />
+      <IssueTypeChangeListCard
+        baselineCrawlId={baselineCrawlId}
+        bucketId={bucketId}
+        changeType="not_verified"
+        crawlId={crawlId}
+        emptyMessage={`No failed verification URLs for ${issueTypeLabel} in this crawl.`}
+        fixed={false}
+        issueTypeId={issueTypeId}
+        pillarId={pillarId}
+        title={ISSUE_TYPE_NOT_VERIFIED_CARD_TITLE}
       />
     </div>
   )

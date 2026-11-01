@@ -13,7 +13,6 @@ export type DashboardView =
   | "analytics"
   | "marketplace"
   | "content"
-  | "compare"
 export type AuditTab =
   "overview" | "seo" | "aeo" | "pagespeed" | "pages" | "site-graph"
 /** Outer-nav visibility choice. Maps renders the nine-point cards page, AI renders in chrome. */
@@ -79,8 +78,6 @@ export type AppNavbarProps = {
   isCrawlRunning: boolean
   crawlStatusLabel: string
   onCrawlStart: (crawl: CrawlResponse) => void
-  onCompareCrawl: (crawl: CrawlResponse) => void
-  compareLabel: string | null
   organizationId: string
   organizations: MeResponse["organizations"]
   projects: ProjectResponse[]

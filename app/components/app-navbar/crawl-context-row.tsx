@@ -1,10 +1,4 @@
-import {
-  ArrowLeftRightIcon,
-  BanIcon,
-  CheckIcon,
-  DownloadIcon,
-  TrashIcon,
-} from "lucide-react"
+import { BanIcon, CheckIcon, DownloadIcon, TrashIcon } from "lucide-react"
 
 import { ThinkingOrb } from "thinking-orbs"
 import {
@@ -37,8 +31,6 @@ type CrawlContextRowProps = {
   isDeleting: boolean
   isExporting: boolean
   onCancel: () => void
-  /** Present only when this crawl can be compared against the current one. */
-  onCompare?: () => void
   onDelete: () => void
   onExport: (format: ExportFormat) => void
   onFormatChange: (format: ExportFormat) => void
@@ -55,7 +47,6 @@ export function CrawlContextRow({
   isDeleting,
   isExporting,
   onCancel,
-  onCompare,
   onDelete,
   onExport,
   onFormatChange,
@@ -93,23 +84,10 @@ export function CrawlContextRow({
                 {formatCrawlStats(crawl)}
               </p>
             </div>
-            <span
-              className="rounded-full border border-border/70 px-1.5 py-0.5 text-micro tracking-wide text-muted-foreground uppercase transition data-[compare=true]:group-hover/crawl:opacity-0"
-              data-compare={onCompare !== undefined}
-            >
+            <span className="rounded-full border border-border/70 px-1.5 py-0.5 text-micro tracking-wide text-muted-foreground uppercase">
               {crawl.status}
             </span>
           </button>
-          {onCompare ? (
-            <button
-              className="absolute top-1/2 right-2 inline-flex -translate-y-1/2 items-center gap-1.5 rounded-md border border-border/70 bg-popover px-2 py-1 text-micro opacity-0 transition group-hover/crawl:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
-              onClick={onCompare}
-              type="button"
-            >
-              <ArrowLeftRightIcon className="size-3" />
-              Compare
-            </button>
-          ) : null}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">

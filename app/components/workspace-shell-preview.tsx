@@ -300,7 +300,6 @@ export function WorkspaceShellPreview({
   isCrawlRunning,
   crawlStatusLabel,
   onCrawlStart,
-  onCompareCrawl,
   organizationId,
   organizations,
   projects,
@@ -1115,7 +1114,7 @@ export function WorkspaceShellPreview({
                   </div>
                 )}
                 <div className="pointer-events-auto flex min-w-0 shrink items-center justify-center">
-                  <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-white/12 bg-shell-chrome p-1">
+                  <div className="flex max-w-full min-w-0 items-center overflow-hidden rounded-xl border border-border bg-background p-1 shadow-sm dark:border-white/12 dark:bg-shell-chrome dark:shadow-none">
                     <WorkspaceDockNav
                       activeProjectId={activeProjectId ?? undefined}
                       auditTab={isLocationScoped ? "overview" : auditTab}
@@ -1354,10 +1353,6 @@ export function WorkspaceShellPreview({
                     onCancelCrawl={(crawl) =>
                       void projectActions.handleCancelCrawl(crawl)
                     }
-                    onCompareCrawl={(crawl) => {
-                      setIsProjectPanelOpen(false)
-                      onCompareCrawl(crawl)
-                    }}
                     onCreateProjectOpen={() => {
                       setIsProjectPanelOpen(false)
                       createProjectDispatch({ type: "OPEN" })

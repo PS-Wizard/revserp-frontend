@@ -81,7 +81,7 @@ export function useIssueTypeDiffRows({
 }: {
   baselineCrawlId?: string
   bucketId?: string
-  changeType?: "new" | "resolved"
+  changeType?: "new" | "resolved" | "not_verified"
   currentCrawlId?: string
   enabled: boolean
   /** Union excluded rows into the resolved page on the server; send only when true. */

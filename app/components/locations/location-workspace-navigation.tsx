@@ -63,7 +63,7 @@ export function LocationWorkspaceNavigation({
         ? auditTab !== "overview" || params.get("location_view") === "website"
           ? "website"
           : "maps"
-        : view === "competitors" || view === "compare"
+        : view === "competitors"
           ? "maps"
           : view
 

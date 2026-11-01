@@ -1,12 +1,6 @@
 "use client"
 
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   ExternalLinkIcon,
@@ -25,6 +19,7 @@ import type {
 } from "~/lib/api.types"
 import { cn } from "~/lib/utils"
 import { Button } from "~/components/ui/button"
+import { Checkbox } from "~/components/ui/checkbox"
 import { Card } from "~/components/ui/card"
 import {
   Empty,
@@ -48,6 +43,10 @@ import {
   fetchLocationKeywordCoverage,
   locationKeywordCoverageQueryKey,
 } from "~/lib/location-keywords-api"
+import {
+  mergeCompetitorSelectionsIntoSeeds,
+  useCompetitorKeywordSelections,
+} from "~/lib/competitor-keyword-selections"
 
 type Props = {
   projectId: string | null
@@ -100,7 +99,8 @@ const STATE_GROUPS: Array<{
   {
     state: "cannibalized",
     label: "Cannibalized",
-    advice: "Several pages compete for the same keyword. Keep one and settle the rest.",
+    advice:
+      "Several pages compete for the same keyword. Keep one and settle the rest.",
     dot: "bg-rose-500 dark:bg-rose-400",
     spine: "bg-rose-500/80 dark:bg-rose-400/80",
   },
@@ -113,8 +113,8 @@ const STATE_GROUPS: Array<{
   },
   {
     state: "likely_targeted",
-    label: "Targeted",
-    advice: "One page targets each of these. This is the healthy state.",
+    label: "Covered",
+    advice: "One page covers each of these. This is the healthy state.",
     dot: "bg-emerald-500 dark:bg-emerald-400",
     spine: "bg-emerald-500/80 dark:bg-emerald-400/80",
   },
@@ -127,6 +127,35 @@ export const CONTENT_PROMPT_PARAM = "contentPrompt"
 
 export function buildContentPrompt(keyword: string) {
   return `Help me write a blog post about "${keyword}"`
+}
+
+/** Max keywords folded into one bulk content prompt. */
+export const MAX_BULK_CONTENT_KEYWORDS = 20
+
+export function buildBulkContentPrompt(keywords: string[]): string {
+  const capped = keywords.slice(0, MAX_BULK_CONTENT_KEYWORDS)
+  const quoted = capped.map((keyword) => `"${keyword}"`).join(", ")
+  if (capped.length <= 1) {
+    return `Help me write content encapsulating ${quoted}. Also help me decide if it is the best primary focus keyword for this content.`
+  }
+  return `Help me write content encapsulating ${quoted}. Also help me decide which one is the best primary focus keyword for this content.`
+}
+
+/** Content-tab target for several coverage keywords drafted as one piece. */
+export function contentBulkWriteTarget(
+  location: { pathname: string; search: string },
+  keywords: string[]
+) {
+  const params = new URLSearchParams(location.search)
+  params.set(CONTENT_PROMPT_PARAM, buildBulkContentPrompt(keywords))
+  params.delete("draft")
+  if (isLocationsPath(location.pathname)) {
+    const projectId = getProjectIdFromLocationsPath(location.pathname)
+    if (projectId) params.set("project", projectId)
+    return `/app?${params.toString()}#content`
+  }
+  const search = params.toString()
+  return `${location.pathname}${search ? `?${search}` : ""}#content`
 }
 
 /** Content-tab target for a coverage keyword, from any shell or locations route. */
@@ -224,7 +253,11 @@ function useListOverflows(ref: React.RefObject<HTMLDivElement | null>) {
   return overflows
 }
 
-function CoverageSplit({ counts }: { counts: Record<KeywordCoverageState, number> }) {
+function CoverageSplit({
+  counts,
+}: {
+  counts: Record<KeywordCoverageState, number>
+}) {
   const segments = STATE_GROUPS.map((group) => ({
     group,
     value: counts[group.state],
@@ -273,9 +306,7 @@ export function CoverageFilter({
             key={group.state}
             value={group.state}
           >
-            <span
-              className={cn("size-1.5 shrink-0 rounded-full", group.dot)}
-            />
+            <span className={cn("size-1.5 shrink-0 rounded-full", group.dot)} />
             {group.label}
             <span className="text-muted-foreground tabular-nums">
               {counts[group.state]}
@@ -325,7 +356,7 @@ function WriteContentButton({ keyword }: { keyword: string }) {
         render={
           <button
             aria-label={`Write content about "${keyword}"`}
-            className="shrink-0 self-center rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+            className="shrink-0 self-center rounded-md p-1 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
             onClick={(event) => {
               event.stopPropagation()
               void navigate(contentWriteTarget(location, keyword))
@@ -344,9 +375,13 @@ function WriteContentButton({ keyword }: { keyword: string }) {
 function KeywordRow({
   seed,
   rowAction,
+  selected,
+  onToggle,
 }: {
   seed: KeywordCoverageSeed
   rowAction?: (keyword: string) => ReactNode
+  selected?: boolean
+  onToggle?: () => void
 }) {
   const group = STATE_BY_ID.get(seed.state)
   const pages = useMemo(() => groupMatchesByPage(seed), [seed])
@@ -355,6 +390,18 @@ function KeywordRow({
 
   return (
     <li className="group flex gap-3 py-1.5">
+      {onToggle ? (
+        <span
+          className="flex shrink-0 self-start pt-1"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <Checkbox
+            aria-label={`Select keyword "${seed.keyword}"`}
+            checked={selected ?? false}
+            onCheckedChange={onToggle}
+          />
+        </span>
+      ) : null}
       <span
         aria-hidden="true"
         className={cn("w-0.5 shrink-0 self-stretch rounded-full", group?.spine)}
@@ -415,10 +462,15 @@ function CoverageGroup({
   group,
   seeds,
   rowAction,
+  selected,
+  onToggleKeyword,
 }: {
   group: (typeof STATE_GROUPS)[number]
   seeds: KeywordCoverageSeed[]
   rowAction?: (keyword: string) => ReactNode
+  /** Keywords ticked for one bulk content draft; keyed by keyword text. */
+  selected?: ReadonlySet<string>
+  onToggleKeyword?: (keyword: string) => void
 }) {
   if (seeds.length === 0) return null
 
@@ -445,8 +497,12 @@ function CoverageGroup({
         {ordered.map((seed) => (
           <KeywordRow
             key={`${seed.keyword}-${seed.geo ? "geo" : "kw"}`}
+            onToggle={
+              onToggleKeyword ? () => onToggleKeyword(seed.keyword) : undefined
+            }
             rowAction={rowAction}
             seed={seed}
+            selected={selected?.has(seed.keyword)}
           />
         ))}
       </ul>
@@ -567,8 +623,18 @@ export function KeywordsCoverage({
   emptyDescription = "Add keywords in the cards above, or let Revbot suggest them from Search Console.",
 }: Props) {
   const query = useKeywordCoverageQuery(projectId, locationId)
-
-  const seeds = useMemo(() => query.data?.seeds ?? [], [query.data])
+  // Location scopes measure the parent site with the location's own
+  // selected list; competitor checks only extend the project matrix.
+  const { selected } = useCompetitorKeywordSelections(
+    locationId ? null : projectId
+  )
+  const seeds = useMemo(
+    () =>
+      locationId
+        ? (query.data?.seeds ?? [])
+        : mergeCompetitorSelectionsIntoSeeds(query.data?.seeds ?? [], selected),
+    [locationId, query.data, selected]
+  )
 
   if (!projectId) {
     return (
@@ -631,9 +697,52 @@ export function KeywordCoverageCard({
   rowAction,
 }: KeywordCoverageCardProps) {
   const [filter, setFilter] = useState<FilterState>("all")
+  const location = useLocation()
+  const navigate = useNavigate()
   const listRef = useRef<HTMLDivElement>(null)
   const listOverflows = useListOverflows(listRef)
   const counts = useMemo(() => countByState(seeds), [seeds])
+  /** Bulk selection keyed by keyword text: one tick covers every geo row
+  // with the same text. Lives here so it survives filter switches. */
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const seedsSignature = seeds
+    .map((seed) => seed.keyword)
+    .sort()
+    .join("\0")
+  useEffect(() => {
+    setSelected((previous) => {
+      if (previous.size === 0) return previous
+      const valid = new Set(seedsSignature ? seedsSignature.split("\0") : [])
+      let dropped = false
+      const next = new Set<string>()
+      for (const keyword of previous) {
+        if (valid.has(keyword)) next.add(keyword)
+        else dropped = true
+      }
+      return dropped ? next : previous
+    })
+  }, [seedsSignature])
+  const toggleKeyword = (keyword: string) => {
+    setSelected((previous) => {
+      const next = new Set(previous)
+      if (next.has(keyword)) next.delete(keyword)
+      else next.add(keyword)
+      return next
+    })
+  }
+  /** Selection in seed order, de-duplicated across geo rows. */
+  const selectedKeywords = useMemo(() => {
+    if (selected.size === 0) return []
+    const seen = new Set<string>()
+    const ordered: string[] = []
+    for (const seed of seeds) {
+      if (selected.has(seed.keyword) && !seen.has(seed.keyword)) {
+        seen.add(seed.keyword)
+        ordered.push(seed.keyword)
+      }
+    }
+    return ordered
+  }, [seeds, selected])
   const grouped = useMemo(() => {
     const visible: Record<KeywordCoverageState, KeywordCoverageSeed[]> = {
       cannibalized: [],
@@ -694,12 +803,33 @@ export function KeywordCoverageCard({
             </p>
           ) : null}
         </div>
-        <CoverageFilter
-          counts={counts}
-          filter={filter}
-          onFilter={setFilter}
-          total={seeds.length}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <CoverageFilter
+            counts={counts}
+            filter={filter}
+            onFilter={setFilter}
+            total={seeds.length}
+          />
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <Button
+                disabled={selectedKeywords.length === 0}
+                onClick={() =>
+                  void navigate(
+                    contentBulkWriteTarget(location, selectedKeywords)
+                  )
+                }
+                size="sm"
+                type="button"
+              >
+                Write content ({selectedKeywords.length})
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              Select multiple keywords to draft one piece of content.
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       <CoverageHeadline counts={counts} total={seeds.length} />
@@ -713,15 +843,19 @@ export function KeywordCoverageCard({
             <CoverageGroup
               group={group}
               key={group.state}
+              onToggleKeyword={toggleKeyword}
               rowAction={rowAction}
               seeds={grouped[group.state]}
+              selected={selected}
             />
           ))
         ) : (
           <CoverageGroup
             group={STATE_BY_ID.get(filter)!}
+            onToggleKeyword={toggleKeyword}
             rowAction={rowAction}
             seeds={grouped[filter]}
+            selected={selected}
           />
         )}
         {listOverflows ? (

@@ -46,7 +46,6 @@ describe("crawl selection navigation", () => {
       "keywords",
       "competitors",
       "marketplace",
-      "compare",
       "revserp-visibility",
     ] as const) {
       const target = getWorkspaceNavigationTarget(location, view, "seo")
@@ -55,7 +54,7 @@ describe("crawl selection navigation", () => {
       expect(target.hash).toBe(
         view === "revserp-audit"
           ? "#seo-tab"
-          : view === "compare" || view === "revserp-visibility"
+          : view === "revserp-visibility"
             ? ""
             : `#${view}`
       )

@@ -52,11 +52,11 @@ export const islandMinimizedSizeClass =
 
 const islandMinimizedShadowClass = "shadow-[0_18px_50px_-12px_rgba(0,0,0,0.65)]"
 
-const islandPanelClass = "surface-dialog border border-border text-foreground"
+const islandPanelClass = "dark border border-white/10 bg-[#0b0b0c] text-white"
 
-const islandPanelHeaderClass = "border-b border-border surface-dialog"
+const islandPanelHeaderClass = "border-b border-white/10 bg-[#0b0b0c]"
 
-const islandPanelBodyClass = "surface-dialog"
+const islandPanelBodyClass = "bg-[#0b0b0c]"
 
 const DOCKED_RADIUS = 36
 const PANEL_RADIUS = 12
@@ -88,7 +88,7 @@ export function DynamicIslandDockedChrome({
             aria-label="Chat with Revbot (Command or Control + K)"
             data-tour="onboarding-revbot-launcher"
             className={cn(
-              "revbot-docked-launcher surface-dialog pointer-events-auto flex items-center justify-center overflow-hidden rounded-full border border-border",
+              "dark revbot-docked-launcher pointer-events-auto flex items-center justify-center overflow-hidden rounded-full border border-white/10 bg-[#0b0b0c]",
               islandDockedSizeClass
             )}
             data-active={active ? "true" : undefined}

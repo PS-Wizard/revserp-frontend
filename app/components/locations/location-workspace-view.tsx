@@ -69,7 +69,6 @@ export function LocationWorkspaceView({
         />
       )
     case "competitors":
-    case "compare":
       // Location competitors merged into the combined Maps page: the old
       // competitors navigation renders the same shared-run page.
       return (

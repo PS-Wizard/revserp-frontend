@@ -4,6 +4,7 @@ import { memo, useCallback, useContext, useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowRightIcon,
+  ExternalLinkIcon,
   Loader2Icon,
   PlusIcon,
   SwordsIcon,
@@ -251,6 +252,24 @@ function CompetitorCard({
       }
       footerActions={
         <>
+          {competitor.seed_url?.trim() ? (
+            <a
+              aria-label={`Open ${displayName} in new tab`}
+              className={cn(
+                cardActionClass,
+                "hover:bg-foreground/5 hover:text-foreground dark:hover:bg-white/10"
+              )}
+              href={competitor.seed_url}
+              onClick={(event) => {
+                event.stopPropagation()
+              }}
+              rel="noopener noreferrer"
+              target="_blank"
+              title={`Open ${displayName} in new tab`}
+            >
+              <ExternalLinkIcon aria-hidden="true" className="size-4" />
+            </a>
+          ) : null}
           <button
             aria-label={`Remove ${displayName}`}
             className={cn(

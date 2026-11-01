@@ -99,16 +99,12 @@ export default function IntegrationsPage() {
       <WorkspaceShellPreview
         activeProjectId={activeProject?.id}
         auditTab="overview"
-        compareLabel={null}
         crawlStatusLabel=""
         currentCrawl={recentCrawls[0] ?? null}
         isCrawlRunning={false}
         isExportingAudit={false}
         isPlatformAdmin={me.is_platform_admin}
         onAuditTabChange={() => void navigate("/app")}
-        onCompareCrawl={(crawl) =>
-          void navigate(`/app?project=${crawl.project_id}&crawl=${crawl.id}`)
-        }
         onCrawlStart={(crawl) =>
           void navigate(`/app?project=${crawl.project_id}&crawl=${crawl.id}`)
         }

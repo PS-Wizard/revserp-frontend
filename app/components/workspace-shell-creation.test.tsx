@@ -116,14 +116,12 @@ describe("shell creation routing", () => {
               <WorkspaceShellPreview
                 activeProjectId={null}
                 auditTab="seo"
-                compareLabel={null}
                 crawlStatusLabel=""
                 currentCrawl={null}
                 isCrawlRunning={false}
                 isExportingAudit={false}
                 isPlatformAdmin={false}
                 onAuditTabChange={(tab) => seenTabs.push(tab)}
-                onCompareCrawl={() => undefined}
                 onCrawlStart={() => undefined}
                 onExportAudit={() => undefined}
                 onRevbotConversationChange={() => undefined}

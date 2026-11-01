@@ -41,7 +41,6 @@ import {
   type CrawlBreakdown,
   type CrawlBreakdownScores,
 } from "~/components/pillar-audit-view"
-import { CompareView } from "~/components/compare/compare-view"
 import { CompetitorsView } from "~/components/competitors/competitors-view"
 import { KeywordsView } from "~/components/keywords/keywords-view"
 import { RevserpVisibilityView } from "~/components/revserp-visibility-view"
@@ -250,7 +249,6 @@ const viewLabels: Record<DashboardView, string> = {
   analytics: "Google Analytics",
   marketplace: "Marketplace",
   content: "Content",
-  compare: "Compare",
 }
 
 function RevserpAuditPanel({
@@ -377,14 +375,6 @@ export default function AppPage() {
   const [auditTab, setAuditTab] = useState<AuditTab>("overview")
   const shouldReduceMotion = useReducedMotion() ?? false
   const [isStartingCrawl, setIsStartingCrawl] = useState(false)
-  // The other side of an open comparison. The near side is always the current
-  // project/crawl selection, so a project switch closes the comparison rather
-  // than silently re-pointing it.
-  const [compareTarget, setCompareTarget] = useState<{
-    crawl: CrawlResponse
-    projectName: string
-    baseUrl: string
-  } | null>(null)
 
   useEffect(() => {
     setView(getInitialWorkspaceView(location.search))
@@ -788,49 +778,6 @@ export default function AppPage() {
     void exportPdfRef.current()
   }, [])
 
-  // A comparison needs a scored crawl on both sides. The near side follows the
-  // current selection, so switching project or crawl invalidates it.
-  const compareSides = useMemo(() => {
-    if (locationWorkspace || !compareTarget || !stableCurrentCrawl || !activeProject) return null
-    if (stableCurrentCrawl.status !== "completed") return null
-    if (compareTarget.crawl.project_id === activeProject.id) return null
-    return {
-      a: {
-        projectName: activeProject.name,
-        baseUrl: activeProject.base_url,
-        crawl: stableCurrentCrawl,
-      },
-      b: compareTarget,
-    }
-  }, [compareTarget, stableCurrentCrawl, activeProject, locationWorkspace])
-
-  const handleCompareCrawl = useCallback(
-    (crawl: CrawlResponse) => {
-      const project = projects.find((entry) => entry.id === crawl.project_id)
-      if (!project) return
-      setCompareTarget({
-        crawl,
-        projectName: project.name,
-        baseUrl: project.base_url,
-      })
-      handleViewChange("compare")
-    },
-    [projects, handleViewChange]
-  )
-
-  const handleExitCompare = useCallback(() => {
-    setCompareTarget(null)
-    handleViewChange("revserp-audit")
-  }, [handleViewChange])
-
-  // Drop a stale comparison rather than leaving an empty tab selected.
-  useEffect(() => {
-    if (compareTarget && !compareSides) {
-      setCompareTarget(null)
-      setView((current) => (current === "compare" ? "revserp-audit" : current))
-    }
-  }, [compareTarget, compareSides])
-
   return (
     <LocationWorkspaceProvider
       key={`${activeProject?.id ?? ""}:${locationWorkspace?.location.id ?? "project"}`}
@@ -859,9 +806,6 @@ export default function AppPage() {
           <WorkspaceShellPreview
             activeProjectId={activeProject?.id}
             auditTab={auditTab}
-            compareLabel={
-              compareSides ? `vs ${compareSides.b.projectName}` : null
-            }
             crawlStatusLabel={crawlStatusLabel}
             currentBreakdown={stableCurrentBreakdown}
             currentCrawl={currentCrawl}
@@ -869,7 +813,6 @@ export default function AppPage() {
             isExportingAudit={isExporting}
             isPlatformAdmin={me.is_platform_admin}
             onAuditTabChange={handleAuditTabChange}
-            onCompareCrawl={handleCompareCrawl}
             onCrawlStart={handleCrawlStart}
             onExportAudit={handleExportAudit}
             onRevbotConversationChange={handleRevbotConversationChange}
@@ -992,12 +935,6 @@ export default function AppPage() {
                   ) : null}
                 </div>
               )
-            ) : view === "compare" && compareSides ? (
-              <CompareView
-                a={compareSides.a}
-                b={compareSides.b}
-                onExit={handleExitCompare}
-              />
             ) : view === "revserp-visibility" ? (
               <RevserpVisibilityView
                 projectId={activeProject?.id ?? null}

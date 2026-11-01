@@ -23,7 +23,7 @@ type RowsResult = {
 type RowsCall = {
   baselineCrawlId?: string
   bucketId?: string
-  changeType?: "new" | "resolved"
+  changeType?: "new" | "resolved" | "not_verified"
   includeExcluded?: boolean
   issueTypeId?: string
   pillarId?: string
@@ -249,13 +249,14 @@ describe("IssueTypeChangeCards", () => {
     expect(host?.querySelectorAll("button").length).toBe(0)
   })
 
-  test("unchanged and not_verified rows never appear in either card", async () => {
+  test("unchanged rows never appear and not_verified rows appear only in the failed verification card", async () => {
     baselineData = baselineOk()
     baselinePending = false
     const staleFixed = "https://example.com/stale-fixed"
     const unverifiedFixed = "https://example.com/unverified-fixed"
     const leakedNew = "https://example.com/leaked-new"
     const staleNew = "https://example.com/stale-new"
+    const leakedUnverified = "https://example.com/leaked-unverified"
     rowsHandler = (changeType) =>
       okRows(
         changeType === "resolved"
@@ -268,22 +269,48 @@ describe("IssueTypeChangeCards", () => {
               ],
               4
             )
-          : rowsPayload(
-              [
-                diffRow(NEW_URL, "new", "current"),
-                diffRow(staleNew, "unchanged", "current"),
-              ],
-              2
-            )
+          : changeType === "not_verified"
+            ? rowsPayload(
+                [
+                  diffRow(unverifiedFixed, "not_verified", "current"),
+                  diffRow(staleNew, "unchanged", "current"),
+                  diffRow(leakedNew, "new", "current"),
+                ],
+                3
+              )
+            : rowsPayload(
+                [
+                  diffRow(NEW_URL, "new", "current"),
+                  diffRow(staleNew, "unchanged", "current"),
+                  diffRow(leakedUnverified, "not_verified", "current"),
+                ],
+                3
+              )
       )
     await renderCards()
 
+    expect(host?.textContent).toContain("Fixed From Last Crawl")
+    expect(host?.textContent).toContain("New In This Crawl")
+    expect(host?.textContent).toContain("Failed verification")
     expect(host?.textContent).toContain(FIXED_URL)
     expect(host?.textContent).toContain(NEW_URL)
+    expect(host?.textContent).toContain(unverifiedFixed)
     expect(host?.textContent?.includes(staleFixed) ?? false).toBe(false)
-    expect(host?.textContent?.includes(unverifiedFixed) ?? false).toBe(false)
-    expect(host?.textContent?.includes(leakedNew) ?? false).toBe(false)
     expect(host?.textContent?.includes(staleNew) ?? false).toBe(false)
+    expect(host?.textContent?.includes(leakedNew) ?? false).toBe(false)
+    expect(host?.textContent?.includes(leakedUnverified) ?? false).toBe(false)
+
+    const notVerifiedCall = rowsCalls.find(
+      (call) => call.changeType === "not_verified"
+    )
+    expect(notVerifiedCall).toBeTruthy()
+    expect(notVerifiedCall?.pillarId).toBe("seo")
+    expect(notVerifiedCall?.bucketId).toBe("serp_metadata")
+    expect(notVerifiedCall?.issueTypeId).toBe("missing_title")
+
+    const unverified = urlSpan(unverifiedFixed)
+    expect(unverified).toBeTruthy()
+    expect(unverified?.className.includes("line-through")).toBe(false)
   })
 
   test("zero totals render honest empty states with zero counts", async () => {
@@ -298,8 +325,12 @@ describe("IssueTypeChangeCards", () => {
     expect(host?.textContent).toContain(
       "No new URLs for Missing title in this crawl."
     )
+    expect(host?.textContent).toContain(
+      "No failed verification URLs for Missing title in this crawl."
+    )
     expect(cardBadge("Fixed From Last Crawl")).toBe("0")
     expect(cardBadge("New In This Crawl")).toBe("0")
+    expect(cardBadge("Failed verification")).toBe("0")
   })
 
   test("a first crawl shows an unavailable message and fetches no rows", async () => {
@@ -326,6 +357,7 @@ describe("IssueTypeChangeCards", () => {
 
     expect(host?.textContent).toContain("Fixed From Last Crawl")
     expect(host?.textContent).toContain("New In This Crawl")
+    expect(host?.textContent).toContain("Failed verification")
     expect(host?.textContent).toContain("…")
     expect(rowsCalls).toEqual([])
   })
@@ -352,7 +384,7 @@ describe("IssueTypeChangeCards", () => {
     expect(host?.textContent).toContain("Fixed From Last Crawl")
     expect(host?.textContent).toContain("Could not load this section.")
     expect(cardBadge("Fixed From Last Crawl")).toBe("—")
-    expect(buttonsByLabel("Retry")).toHaveLength(2)
+    expect(buttonsByLabel("Retry")).toHaveLength(3)
     click(buttonsByLabel("Retry")[0])
     expect(rowsRefetchCalls).toBe(1)
   })
@@ -472,5 +504,9 @@ describe("IssueTypeChangeCards", () => {
     expect(resolvedCall?.includeExcluded).toBe(true)
     const newCall = rowsCalls.find((call) => call.changeType === "new")
     expect(newCall?.includeExcluded).toBeUndefined()
+    const notVerifiedCall = rowsCalls.find(
+      (call) => call.changeType === "not_verified"
+    )
+    expect(notVerifiedCall?.includeExcluded).toBeUndefined()
   })
 })

@@ -46,8 +46,6 @@ export type ProjectPanelProps = {
   projectActionError: string
   projects: ProjectResponse[]
   onCancelCrawl: (crawl: CrawlResponse) => void
-  /** Absent when nothing is selected to compare against. */
-  onCompareCrawl?: (crawl: CrawlResponse) => void
   onCreateProjectOpen: () => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onDeleteProject: (project: ProjectResponse) => void
@@ -72,7 +70,6 @@ export function ProjectPanel({
   projectActionError,
   projects,
   onCancelCrawl,
-  onCompareCrawl,
   onCreateProjectOpen,
   onDeleteCrawl,
   onDeleteProject,
@@ -132,7 +129,6 @@ export function ProjectPanel({
             exportFormat={exportFormat}
             exportingCrawlId={exportingCrawlId}
             onCancelCrawl={onCancelCrawl}
-            onCompareCrawl={onCompareCrawl}
             onDeleteCrawl={onDeleteCrawl}
             onExportCrawl={onExportCrawl}
             onExportFormatChange={onExportFormatChange}
@@ -326,7 +322,6 @@ type CrawlPanelProps = {
   exportFormat: ExportFormat
   exportingCrawlId: string | null
   onCancelCrawl: (crawl: CrawlResponse) => void
-  onCompareCrawl?: (crawl: CrawlResponse) => void
   onDeleteCrawl: (crawl: CrawlResponse) => void
   onExportCrawl: (crawl: CrawlResponse, format: ExportFormat) => void
   onExportFormatChange: (format: ExportFormat) => void
@@ -341,7 +336,6 @@ function CrawlPanel({
   exportFormat,
   exportingCrawlId,
   onCancelCrawl,
-  onCompareCrawl,
   onDeleteCrawl,
   onExportCrawl,
   onExportFormatChange,
@@ -382,13 +376,6 @@ function CrawlPanel({
                     isDeleting={deletingCrawlId === crawl.id}
                     isExporting={exportingCrawlId === crawl.id}
                     onCancel={() => onCancelCrawl(crawl)}
-                    onCompare={
-                      onCompareCrawl &&
-                      crawl.status === "completed" &&
-                      crawl.project_id !== currentCrawl?.project_id
-                        ? () => onCompareCrawl(crawl)
-                        : undefined
-                    }
                     onDelete={() => onDeleteCrawl(crawl)}
                     onExport={(format) => onExportCrawl(crawl, format)}
                     onFormatChange={onExportFormatChange}

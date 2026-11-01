@@ -28,6 +28,13 @@ function wordWeight(word: string) {
   return Math.abs(hash)
 }
 
+const SOURCE_LABELS: Record<CombinedProjectKeyword["sources"][number], string> =
+  {
+    user: "User-defined",
+    revserp: "Revserp suggested",
+    competitor: "Competitor",
+  }
+
 export function OverviewKeywordCloud({
   items,
 }: {
@@ -50,6 +57,7 @@ export function OverviewKeywordCloud({
                   KIND_TONES[item.kind]
                 )}
                 key={`${item.kind}:${item.keyword}`}
+                title={`${item.keyword} — ${item.sources.map((source) => SOURCE_LABELS[source] ?? source).join(", ")}`}
               >
                 {item.keyword}
               </span>

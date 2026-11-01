@@ -252,7 +252,7 @@ export function WorkspaceDockNav({
           </NavigationMenuItem>
           <span
             aria-hidden="true"
-            className="mx-2 h-5 w-px shrink-0 self-center bg-white/12"
+            className="mx-2 h-5 w-px shrink-0 self-center bg-border dark:bg-white/12"
           />
           {groups.map((group) => {
             const activeTab = group.tabs.find((tab) =>
@@ -326,7 +326,7 @@ export function WorkspaceDockNav({
             <>
               <span
                 aria-hidden="true"
-                className="mx-2 h-5 w-px shrink-0 self-center bg-white/12"
+                className="mx-2 h-5 w-px shrink-0 self-center bg-border dark:bg-white/12"
               />
               {trailing}
               <NavigationMenuItem value="actions">
@@ -414,7 +414,7 @@ function DockPanel({
                   <Link to={tab.href}>
                     <span
                       className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] ring-1 ring-white/[0.06] ring-inset",
+                        "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]",
                         active ? "text-foreground" : "text-muted-foreground"
                       )}
                     >
@@ -450,7 +450,7 @@ function DockPanel({
             >
               <span
                 className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] ring-1 ring-white/[0.06] ring-inset",
+                  "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]",
                   active ? "text-foreground" : "text-muted-foreground"
                 )}
               >
@@ -484,7 +484,7 @@ function DockActions({ actions }: { actions: DockActionItem[] }) {
         action.divider ? (
           <li
             aria-hidden="true"
-            className="my-1 h-px bg-white/10"
+            className="my-1 h-px bg-border dark:bg-white/10"
             key={action.key}
           />
         ) : (
@@ -557,7 +557,7 @@ export function ProjectPanelList({
             ref={setItemRef("__back_to_project__")}
             render={
               <Link to={locationBackHref}>
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] text-muted-foreground ring-1 ring-white/[0.06] ring-inset">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-muted-foreground ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]">
                   <ArrowLeftIcon aria-hidden="true" className="size-4" />
                 </span>
                 <span className="min-w-0">
@@ -574,7 +574,7 @@ export function ProjectPanelList({
           onClick={onCreateProject}
           type="button"
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] text-muted-foreground ring-1 ring-white/[0.06] ring-inset">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-muted-foreground ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]">
             <PlusIcon aria-hidden="true" className="size-4" />
           </span>
           <span className="text-sm font-medium">New project</span>
@@ -582,7 +582,7 @@ export function ProjectPanelList({
       </li>
       <li
         aria-hidden="true"
-        className="col-span-full my-0.5 h-px bg-white/10"
+        className="col-span-full my-0.5 h-px bg-border dark:bg-white/10"
       />
       {projects.map((project) => {
         const active = project.id === activeProjectId
@@ -604,7 +604,7 @@ export function ProjectPanelList({
               >
                 <span
                   className={cn(
-                    "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] text-sm font-semibold ring-1 ring-white/[0.06] ring-inset",
+                    "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] text-sm font-semibold ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]",
                     active ? "text-foreground" : "text-muted-foreground"
                   )}
                 >
@@ -708,7 +708,7 @@ function CrawlPanelList({
             >
               <span
                 className={cn(
-                  "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-white/10 to-white/[0.03] ring-1 ring-white/[0.06] ring-inset",
+                  "flex size-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-foreground/[0.07] to-foreground/[0.03] ring-1 ring-border ring-inset dark:from-white/10 dark:to-white/[0.03] dark:ring-white/[0.06]",
                   active ? "text-foreground" : "text-muted-foreground"
                 )}
               >
