@@ -3,8 +3,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
+  AppWindowIcon,
+  ChevronRightIcon,
   CopyIcon,
-  EllipsisIcon,
   ExternalLinkIcon,
   Loader2Icon,
   LockIcon,
@@ -19,7 +20,7 @@ import { toast } from "sonner"
 
 import { Badge } from "~/components/ui/badge"
 import { Button, buttonVariants } from "~/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
+import { Card, CardContent } from "~/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,7 @@ import {
 } from "./marketplace-api"
 import type { MCPConnectionFieldError } from "./marketplace-api"
 import { MarketplaceBrandIcon } from "./marketplace-brand-icon"
+import type { CatalogGroupId } from "./marketplace-catalog"
 import {
   catalogConnectionsForItem,
   catalogEntryConnectionSupported,
@@ -266,8 +268,14 @@ export const MarketplaceView = memo(function MarketplaceView({
   )
     ? mergedCatalogItems
     : [...mergedCatalogItems, CLAUDE_OUTBOUND_CATALOG_ITEM]
-  const catalogGroups = groupCatalogItems(catalogItems)
   const connections = connectionsQuery.data?.connections ?? []
+  // Connected entries already show under Connections; the catalog lists the rest.
+  const catalogGroups = groupCatalogItems(
+    catalogItems.filter(
+      (item) =>
+        catalogConnectionsForItem(item, connections, catalogItems).length === 0
+    )
+  )
   const loading =
     (catalogQuery.isLoading || connectionsQuery.isLoading) &&
     connections.length === 0
@@ -324,14 +332,12 @@ export const MarketplaceView = memo(function MarketplaceView({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-6 sm:py-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-balance">
-          Marketplace
-        </h1>
-        <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-          Connect WordPress or custom MCP servers so chat tools can read content
-          and propose edits. Every tool asks first until you allow it.
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight">Marketplace</h1>
+        <p className="text-sm text-muted-foreground">
+          Connect MCP servers so chat tools can read content and propose edits.
+          Tools ask first until you allow them.
         </p>
       </header>
 
@@ -356,80 +362,73 @@ export const MarketplaceView = memo(function MarketplaceView({
       ) : null}
 
       <section aria-label="Connections" className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium">
-          Connections
-          <span className="ml-2 text-muted-foreground tabular-nums">
-            {connections.length}
-          </span>
-        </h2>
-        <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium">
+            Connections
+            <span className="ml-2 text-muted-foreground tabular-nums">
+              {connections.length}
+            </span>
+          </h2>
           {canManageOrganization ? (
-            <CatalogCard
-              tone="action"
-              item={CUSTOM_MCP_CATALOG_ITEM}
-              connections={catalogConnectionsForItem(
-                CUSTOM_MCP_CATALOG_ITEM,
-                connections,
-                catalogItems
-              )}
-              canManage
-              checkingId={checkingId}
-              actions={catalogActions(CUSTOM_MCP_CATALOG_ITEM)}
-            />
+            <Button
+              aria-label="Connect Custom MCP"
+              onClick={catalogActions(CUSTOM_MCP_CATALOG_ITEM).onConnect}
+              size="sm"
+              title={CUSTOM_MCP_CATALOG_ITEM.description}
+              type="button"
+              variant="outline"
+            >
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
+              Custom MCP
+            </Button>
           ) : null}
-          {connections.length === 0 ? (
-            <Empty className="border p-8">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <PlugIcon aria-hidden="true" />
-                </EmptyMedia>
-                <EmptyTitle>No connections yet</EmptyTitle>
-                <EmptyDescription>
-                  Connect {activeProject.name} to a catalog entry below to
-                  discover its tools.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {connections.map((connection) => (
-                <ConnectionCard
-                  key={connection.id}
-                  connection={connection}
-                  canManage={canManageOrganization}
-                  checking={checkingId === connection.id}
-                  onConfigure={() => setConfigureId(connection.id)}
-                  onEdit={() => {
-                    setActionError("")
-                    setConnectState({ mode: "edit", connection })
-                  }}
-                  onCheck={() => void handleCheck(connection)}
-                  onDelete={() => setDeleteTarget(connection)}
-                />
-              ))}
-            </div>
-          )}
         </div>
+        {connections.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border/70 px-4 py-3.5 text-sm text-muted-foreground">
+            No connections yet. Connect {activeProject.name} to a catalog entry
+            below to discover its tools.
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {connections.map((connection) => (
+              <ConnectionCard
+                key={connection.id}
+                connection={connection}
+                canManage={canManageOrganization}
+                checking={checkingId === connection.id}
+                onConfigure={() => setConfigureId(connection.id)}
+                onEdit={() => {
+                  setActionError("")
+                  setConnectState({ mode: "edit", connection })
+                }}
+                onCheck={() => void handleCheck(connection)}
+                onDelete={() => setDeleteTarget(connection)}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
-      <section aria-label="Catalog" className="flex flex-col gap-5">
+      <section aria-label="Catalog" className="flex flex-col gap-6">
         <h2 className="text-sm font-medium">Catalog</h2>
         {catalogGroups.map((group) =>
-          group.id === "others" ? (
-            <details key={group.id}>
-              <summary className="cursor-pointer text-micro font-medium tracking-wide text-muted-foreground uppercase select-none">
-                {group.title}
-                <span className="ml-2 tabular-nums">{group.items.length}</span>
+          FOLDED_CATALOG_GROUPS.has(group.id) ? (
+            <details className="group/fold" key={group.id}>
+              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-sm select-none focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+                <ChevronRightIcon
+                  aria-hidden="true"
+                  className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open/fold:rotate-90"
+                />
+                <CatalogGroupLabel count={group.items.length} title={group.title} />
               </summary>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {group.items.map(renderCatalogCard)}
               </div>
             </details>
           ) : (
-            <div className="flex flex-col gap-2.5" key={group.id}>
-              <h3 className="text-micro font-medium tracking-wide text-muted-foreground uppercase">
-                {group.title}
-                <span className="ml-2 tabular-nums">{group.items.length}</span>
+            <div className="flex flex-col gap-3" key={group.id}>
+              <h3 className="flex items-center gap-3">
+                <CatalogGroupLabel count={group.items.length} title={group.title} />
               </h3>
               <div className="grid gap-3 sm:grid-cols-2">
                 {group.items.map(renderCatalogCard)}
@@ -573,15 +572,12 @@ export function CatalogCard({
   connections,
   canManage,
   checkingId,
-  tone = "catalog",
   actions,
 }: {
   item: MCPCatalogItem
   connections: MCPConnection[]
   canManage: boolean
   checkingId: string | null
-  /** "action" tints the add-custom row with accent tokens. */
-  tone?: "catalog" | "action"
   actions: CatalogConnectionActions
 }) {
   const connected = connections.length > 0
@@ -590,121 +586,98 @@ export function CatalogCard({
     ? undefined
     : (item.setup_note ??
       "New connections are not supported for this provider.")
-  return (
-    <div
-      className={cn(
-        "flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5",
-        tone === "action" ? "border-accent/40 bg-accent/25" : "border-border"
-      )}
-    >
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-        <MarketplaceBrandIcon
-          id={item.id}
-          logo={marketplaceBrandLogo(item.id, item.logo)}
-        />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-medium">{item.title}</span>
-          {supported ? null : (
-            <Badge className="shrink-0" variant="outline">
-              Setup required
-            </Badge>
-          )}
-        </span>
-        <span className="truncate text-xs text-muted-foreground">
-          {blockedNote ?? item.description}
-        </span>
-      </div>
-      {canManage ? (
-        connected ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  aria-label={`Manage ${item.title}`}
-                  size="icon-sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  <EllipsisIcon className="size-4" />
-                </Button>
-              }
-            />
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuGroup>
-                {connections.map((connection) => (
-                  <DropdownMenuSub key={connection.id}>
-                    <DropdownMenuSubTrigger>
-                      {connection.name}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                      <DropdownMenuItem
-                        onClick={() => actions.onConfigure(connection)}
-                      >
-                        <Settings2Icon className="size-4" />
-                        Configure tools
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => actions.onEdit(connection)}
-                      >
-                        <PlugIcon className="size-4" />
-                        Edit connection
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        disabled={checkingId === connection.id}
-                        onClick={() => actions.onRefresh(connection)}
-                      >
-                        {checkingId === connection.id ? (
-                          <Loader2Icon className="size-4 animate-spin" />
-                        ) : (
-                          <RefreshCwIcon className="size-4" />
-                        )}
-                        {checkingId === connection.id
-                          ? "Checking…"
-                          : "Refresh tools"}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => actions.onDisconnect(connection)}
-                        variant="destructive"
-                      >
-                        <Trash2Icon className="size-4" />
-                        Disconnect
-                      </DropdownMenuItem>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                ))}
-                <DropdownMenuItem
-                  disabled={!supported}
-                  onClick={actions.onConnect}
-                >
-                  <PlusIcon className="size-4" />
-                  Add connection
-                </DropdownMenuItem>
-                {blockedNote ? (
-                  <p className="px-2 py-1.5 text-xs leading-relaxed text-pretty text-muted-foreground">
-                    {blockedNote}
-                  </p>
-                ) : null}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <Button
-            aria-label={`Connect ${item.title}`}
-            disabled={!supported}
-            onClick={actions.onConnect}
-            size="icon-sm"
-            title={blockedNote}
 
-            type="button"
-            variant="ghost"
-          >
-            <PlusIcon className="size-4" />
-          </Button>
-        )
-      ) : null}
-    </div>
+  let action: React.ReactNode = null
+  if (canManage && connected) {
+    action = (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <TileActionButton label={`Manage ${item.title}`}>
+              <Settings2Icon className="size-4" />
+            </TileActionButton>
+          }
+        />
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuGroup>
+            {connections.map((connection) => (
+              <DropdownMenuSub key={connection.id}>
+                <DropdownMenuSubTrigger>{connection.name}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem onClick={() => actions.onConfigure(connection)}>
+                    <Settings2Icon className="size-4" />
+                    Configure tools
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => actions.onEdit(connection)}>
+                    <PlugIcon className="size-4" />
+                    Edit connection
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={checkingId === connection.id}
+                    onClick={() => actions.onRefresh(connection)}
+                  >
+                    {checkingId === connection.id ? (
+                      <Loader2Icon className="size-4 animate-spin" />
+                    ) : (
+                      <RefreshCwIcon className="size-4" />
+                    )}
+                    {checkingId === connection.id ? "Checking…" : "Refresh tools"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => actions.onDisconnect(connection)}
+                    variant="destructive"
+                  >
+                    <Trash2Icon className="size-4" />
+                    Disconnect
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ))}
+            <DropdownMenuItem disabled={!supported} onClick={actions.onConnect}>
+              <PlusIcon className="size-4" />
+              Add connection
+            </DropdownMenuItem>
+            {blockedNote ? (
+              <p className="px-2 py-1.5 text-xs leading-relaxed text-pretty text-muted-foreground">
+                {blockedNote}
+              </p>
+            ) : null}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  } else if (canManage) {
+    action = (
+      <TileActionButton
+        disabled={!supported}
+        label={`Connect ${item.title}`}
+        onClick={actions.onConnect}
+        title={blockedNote}
+      >
+        <PlusIcon className="size-4" />
+      </TileActionButton>
+    )
+  }
+
+  return (
+    <MarketplaceTile
+      action={action}
+      badge={
+        supported ? null : <Badge variant="outline">Setup required</Badge>
+      }
+      description={blockedNote ?? item.description}
+      dimmed={!supported}
+      footer={
+        connected ? (
+          <span className="flex items-center gap-1.5 text-emerald-400">
+            <span className="size-1.5 rounded-full bg-emerald-400" />
+            Connected
+          </span>
+        ) : null
+      }
+      icon={<TileIcon id={item.id} logo={marketplaceBrandLogo(item.id, item.logo)} />}
+      title={item.title}
+    />
   )
 }
 
@@ -720,50 +693,148 @@ export function ClaudeSetupCatalogCard({ item }: { item: MCPCatalogItem }) {
   }
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-border px-3 py-2.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-        <MarketplaceBrandIcon
-          id={item.id}
-          logo={marketplaceBrandLogo(item.id, item.logo)}
-        />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium">{item.title}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          {item.description}
+    <MarketplaceTile
+      description={item.description}
+      footer={
+        <span className="-ml-2 flex flex-wrap items-center">
+          <a
+            aria-label="Open Claude setup guide in app"
+            className={buttonVariants({ variant: "ghost", size: "xs" })}
+            href={claudeDesktopSetupUrl()}
+          >
+            <AppWindowIcon className="size-3.5" />
+            Open in app
+          </a>
+          <a
+            aria-label="Open Claude setup guide"
+            className={buttonVariants({ variant: "ghost", size: "xs" })}
+            href={claudeSetupUrl()}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <ExternalLinkIcon className="size-3.5" />
+            Open in browser
+          </a>
+          <Button
+            aria-label="Copy Claude setup prompt"
+            onClick={() => void copySetupPrompt()}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            <CopyIcon className="size-3.5" />
+            Copy setup prompt
+          </Button>
         </span>
+      }
+      icon={<TileIcon id={item.id} logo={marketplaceBrandLogo(item.id, item.logo)} />}
+      title={item.title}
+    />
+  )
+}
+
+/** Catalog groups that start folded; the rest stay open. */
+const FOLDED_CATALOG_GROUPS = new Set<CatalogGroupId>([
+  "content",
+  "analytics",
+  "others",
+])
+
+/** Group label + count, then a rule that runs to the edge as a separator. */
+function CatalogGroupLabel({ title, count }: { title: string; count: number }) {
+  return (
+    <>
+      <span className="shrink-0 text-micro font-medium tracking-wide text-muted-foreground uppercase">
+        {title}
+        <span className="ml-2 tabular-nums">{count}</span>
+      </span>
+      <span aria-hidden="true" className="h-px flex-1 bg-border" />
+    </>
+  )
+}
+
+/** Shared catalog / connection tile: icon, title, two-line description, optional footer and a top-right action. */
+function MarketplaceTile({
+  icon,
+  title,
+  badge,
+  description,
+  footer,
+  action,
+  dimmed = false,
+}: {
+  icon: React.ReactNode
+  title: string
+  badge?: React.ReactNode
+  description: string
+  footer?: React.ReactNode
+  action?: React.ReactNode
+  dimmed?: boolean
+}) {
+  return (
+    <div className="surface-card flex min-w-0 items-start gap-4 rounded-xl border border-border p-4">
+      <div className={cn("shrink-0", dimmed && "opacity-60")}>{icon}</div>
+      <div
+        className={cn(
+          "flex min-w-0 flex-1 flex-col gap-1",
+          dimmed && "opacity-70"
+        )}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[0.9375rem] font-medium">{title}</span>
+          {badge ? <span className="shrink-0">{badge}</span> : null}
+        </span>
+        <p
+          className="line-clamp-2 text-sm leading-snug text-muted-foreground"
+          title={description}
+        >
+          {description}
+        </p>
+        {footer ? (
+          <div className="mt-1 min-w-0 text-xs text-muted-foreground">
+            {footer}
+          </div>
+        ) : null}
       </div>
-      <div className="flex w-full flex-wrap items-center gap-1">
-        <a
-          aria-label="Open Claude setup guide in app"
-          className={buttonVariants({ variant: "ghost", size: "sm" })}
-          href={claudeDesktopSetupUrl()}
-        >
-          Open in app
-        </a>
-        <a
-          aria-label="Open Claude setup guide"
-          className={buttonVariants({ variant: "ghost", size: "sm" })}
-          href={claudeSetupUrl()}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <ExternalLinkIcon className="size-4" />
-          Open in browser
-        </a>
-        <Button
-          aria-label="Copy Claude setup prompt"
-          onClick={() => void copySetupPrompt()}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <CopyIcon className="size-4" />
-          Copy setup prompt
-        </Button>
-      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   )
+}
+
+function TileIcon({ id, logo }: { id?: string; logo?: string }) {
+  return (
+    <span className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
+      <MarketplaceBrandIcon className="size-6 text-xs" id={id} logo={logo} />
+    </span>
+  )
+}
+
+function TileActionButton({
+  label,
+  children,
+  className,
+  ...props
+}: React.ComponentProps<"button"> & { label: string }) {
+  return (
+    <button
+      aria-label={label}
+      className={cn(
+        "flex size-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-40",
+        className
+      )}
+      type="button"
+      {...props}
+    >
+      {children}
+    </button>
+  )
+}
+
+function formatCheckedDate(value?: string) {
+  if (!value) return "Not checked yet"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return `Checked ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
 }
 
 export const ConnectionCard = memo(function ConnectionCard({
@@ -786,115 +857,86 @@ export const ConnectionCard = memo(function ConnectionCard({
   const allowCount = connection.tools.filter(
     (tool) => tool.permission === "allow"
   ).length
+  const brandId =
+    connection.service === "wordpress"
+      ? "wordpress"
+      : connectionBrandId(connection.endpoint_url)
+  const logo =
+    connection.service === "wordpress"
+      ? marketplaceBrandLogo("wordpress")
+      : connectionBrandLogo(connection.endpoint_url)
+
+  const action = canManage ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <TileActionButton label={`Manage ${connection.name}`}>
+            <Settings2Icon className="size-4" />
+          </TileActionButton>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={onConfigure}>
+            <Settings2Icon className="size-4" />
+            Configure tools
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onEdit}>
+            <PlugIcon className="size-4" />
+            Edit connection
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={checking} onClick={onCheck}>
+            {checking ? (
+              <Loader2Icon aria-hidden="true" className="size-4 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="size-4" />
+            )}
+            {checking ? "Checking…" : "Refresh tools"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onDelete} variant="destructive">
+            <Trash2Icon className="size-4" />
+            Disconnect
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : (
+    <TileActionButton label={`View ${connection.name} tools`} onClick={onConfigure}>
+      <Settings2Icon className="size-4" />
+    </TileActionButton>
+  )
+
   return (
-    <Card size="sm">
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/40">
-              <MarketplaceBrandIcon
-                id={
-                  connection.service === "wordpress"
-                    ? "wordpress"
-                    : connectionBrandId(connection.endpoint_url)
-                }
-                logo={
-                  connection.service === "wordpress"
-                    ? marketplaceBrandLogo("wordpress")
-                    : connectionBrandLogo(connection.endpoint_url)
-                }
-              />
-            </span>
-            <div className="flex min-w-0 flex-col">
-              <CardTitle className="truncate text-sm font-medium">
-                {connection.name}
-              </CardTitle>
-              <p className="truncate text-xs text-muted-foreground">
-                {SERVICE_LABEL[connection.service]} ·{" "}
-                {endpointHost(connection.endpoint_url)}
-              </p>
-            </div>
-          </div>
-          {canManage ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    aria-label={`Manage ${connection.name}`}
-                    size="icon-sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <EllipsisIcon className="size-4" />
-                  </Button>
-                }
-              />
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={onConfigure}>
-                    <Settings2Icon className="size-4" />
-                    Configure tools
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onEdit}>
-                    <PlugIcon className="size-4" />
-                    Edit connection
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled={checking} onClick={onCheck}>
-                    {checking ? (
-                      <Loader2Icon
-                        aria-hidden="true"
-                        className="size-4 animate-spin"
-                      />
-                    ) : (
-                      <RefreshCwIcon className="size-4" />
-                    )}
-                    {checking ? "Checking…" : "Refresh tools"}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={onDelete} variant="destructive">
-                    <Trash2Icon className="size-4" />
-                    Disconnect
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            variant="secondary"
-            aria-label={`${connection.tools.length} tools`}
-          >
+    <MarketplaceTile
+      action={action}
+      description={`${SERVICE_LABEL[connection.service]} · ${endpointHost(connection.endpoint_url)}`}
+      footer={
+        <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
+          <span aria-label={`${connection.tools.length} tools`} className="tabular-nums">
             {connection.tools.length} tools
-          </Badge>
+          </span>
           {allowCount > 0 ? (
-            <Badge variant="outline">{allowCount} always allowed</Badge>
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">{allowCount} always allowed</span>
+            </>
           ) : null}
-        </div>
-        {checking ? (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
-            Checking…
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Checked {formatCheckedAt(connection.last_checked_at)}
-          </p>
-        )}
-        <div>
-          <Button
-            onClick={onConfigure}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <Settings2Icon data-icon="inline-start" aria-hidden="true" />
-            Configure
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <span aria-hidden="true">·</span>
+          {checking ? (
+            <span className="flex items-center gap-1">
+              <Loader2Icon aria-hidden="true" className="size-3 animate-spin" />
+              Checking…
+            </span>
+          ) : (
+            <span title={formatCheckedAt(connection.last_checked_at)}>
+              {formatCheckedDate(connection.last_checked_at)}
+            </span>
+          )}
+        </span>
+      }
+      icon={<TileIcon id={brandId} logo={logo} />}
+      title={connection.name}
+    />
   )
 })
 

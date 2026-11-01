@@ -703,6 +703,18 @@ describe("MarketplaceView catalogue", () => {
     }
   })
 
+  test("a connected entry shows under Connections and not in Catalog", async () => {
+    connectionsFixture = [connectionFixture()]
+    const { root } = await mountView()
+    try {
+      expect(connectionsText().includes("WordPress")).toBe(true)
+      expect(catalogRow("WordPress")).toBe(false)
+      expect(catalogRow("Sanity")).toBe(true)
+    } finally {
+      await unmountElement(root)
+    }
+  })
+
   test("the Custom MCP action card is not counted as a connection", async () => {
     connectionsFixture = []
     const { root } = await mountView()
