@@ -28,7 +28,7 @@ export const RELEASE_ANNOUNCEMENTS: readonly ReleaseAnnouncement[] = [
     id: "2026-11-early-november-update",
     title: "Early November update",
     publishedAt: "2026-11-01T00:00:00Z",
-    summary: "Side-by-side competitor scores, crawl details for every crawl, an account page with your usage, a redesigned Marketplace, and a simpler navbar.",
+    summary: "Side-by-side competitor scores, competitor keywords, crawl details for every crawl, an account page with your usage, a redesigned Marketplace, a simpler navbar, and a proper light mode.",
     coverImage: "/announcements/october-2026/mountain-dither.jpg",
     slides: [
       {
@@ -38,6 +38,14 @@ export const RELEASE_ANNOUNCEMENTS: readonly ReleaseAnnouncement[] = [
         image: "/announcements/october-2026/mountain-dither.jpg",
         imagePosition: "50% 45%",
         bullets: ["One card per pillar instead of two rows", "Us, Them, and Delta for every bucket", "Green when you lead, red when they do"],
+      },
+      {
+        id: "competitor-keywords",
+        title: "Borrow your competitors' keywords",
+        description: "Tick the competitor keywords worth targeting and they join your keyword coverage. Pick several at once to start one content draft for all of them.",
+        image: "/announcements/october-2026/pixel-clouds.jpg",
+        imagePosition: "50% 50%",
+        bullets: ["Competitor keywords next to your own", "Bulk-select keywords for one draft", "RevBot can read competitors and their keywords"],
       },
       {
         id: "crawl-details",
@@ -65,11 +73,19 @@ export const RELEASE_ANNOUNCEMENTS: readonly ReleaseAnnouncement[] = [
       },
       {
         id: "navbar",
-        title: "Workspace, project, and crawl together",
-        description: "The top left of the navbar now shows your workspace, project, and crawl side by side. Click any of them to switch, and search to find a project fast.",
+        title: "A simpler, click-to-open navbar",
+        description: "Workspace, project, and crawl now sit together on the left. The center reads Overview, Audit, Visibility, Compare, Content, and Locations, and every menu opens on click.",
         image: "/announcements/october-2026/mountain-dither.jpg",
         imagePosition: "50% 30%",
-        bullets: ["Workspace • Project • Crawl", "Click to open, no hover surprises", "Search in the project menu"],
+        bullets: ["Workspace • Project • Crawl, with project search", "Overview on its own; Dashboard is now Audit", "Jump straight to a competitor or location"],
+      },
+      {
+        id: "light-mode",
+        title: "Light mode that actually looks right",
+        description: "Cards, menus, and dialogs now use light surfaces in light mode, and colored badges stay readable on both backgrounds.",
+        image: "/announcements/october-2026/cloud-texture.jpg",
+        imagePosition: "50% 35%",
+        bullets: ["Light cards, menus, and dialogs", "Readable issue and status badges", "RevBot keeps its dark island in both themes"],
       },
     ],
     sections: [
@@ -81,6 +97,17 @@ export const RELEASE_ANNOUNCEMENTS: readonly ReleaseAnnouncement[] = [
           "Gave your site and the competitor fixed colors, so green and red now only mean who leads.",
           "Removed the Page health chart from the competitor view.",
           "Removed the separate project-to-project comparison mode. Competitor comparison stays under Compare.",
+          "Added a button on each competitor card that opens the competitor's website in a new tab.",
+        ],
+      },
+      {
+        title: "Keywords",
+        items: [
+          "Added a competitor keywords card: tick the keywords worth targeting and they join your keyword coverage.",
+          "Added bulk selection in keyword coverage to start one content draft for up to 20 keywords.",
+          "Renamed the Targeted coverage filter to Covered.",
+          "Showed where each keyword in the keyword cloud came from: you, a Revserp suggestion, or a competitor.",
+          "Gave RevBot tools to list your competitors and read their keywords.",
         ],
       },
       {
@@ -119,6 +146,21 @@ export const RELEASE_ANNOUNCEMENTS: readonly ReleaseAnnouncement[] = [
           "Workspace, project, and crawl pickers now all open on click.",
           "Added a search box to the project menu.",
           "Removed the sliding animation between the project and crawl menus.",
+          "Made every navbar menu open on click instead of on hover.",
+          "Gave Overview its own link and renamed Dashboard to Audit.",
+          "Moved Marketplace into the ⋯ menu.",
+          "Compare now lists your competitors, and opening one shows its insights directly.",
+          "Locations now lists your locations, so you can jump straight into one.",
+          "Pages with nothing to choose from, like Content, open with one click.",
+        ],
+      },
+      {
+        title: "Audits and appearance",
+        items: [
+          "Added a Failed verification card next to Fixed and New in issue changes.",
+          "Fixed light mode: cards, menus, and dialogs now use light surfaces.",
+          "Made colored issue and status badges readable in light mode.",
+          "Kept the RevBot island and launcher dark in both themes.",
         ],
       },
     ],
