@@ -1,4 +1,10 @@
-import { BanIcon, CheckIcon, DownloadIcon, TrashIcon } from "lucide-react"
+import {
+  BanIcon,
+  CheckIcon,
+  DownloadIcon,
+  InfoIcon,
+  TrashIcon,
+} from "lucide-react"
 
 import { ThinkingOrb } from "thinking-orbs"
 import {
@@ -16,6 +22,7 @@ import {
 } from "~/components/ui/context-menu"
 import type { CrawlResponse } from "~/lib/api.types"
 import { formatCrawlDuration } from "~/lib/crawl"
+import { requestCrawlDetails } from "~/lib/crawl-details-events"
 
 import type { ExportFormat } from "./types"
 import { formatCrawlDateTime, formatCrawlStats } from "./utils"
@@ -92,6 +99,11 @@ export function CrawlContextRow({
       </ContextMenuTrigger>
       <ContextMenuContent className="w-48">
         <ContextMenuGroup>
+          <ContextMenuItem onClick={() => requestCrawlDetails(crawl)}>
+            <InfoIcon />
+            Crawl details
+          </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuSub>
             <ContextMenuSubTrigger disabled={!canExport || disabled}>
               {isExporting ? (

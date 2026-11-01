@@ -29,6 +29,7 @@ import {
 
 import { AppNavbarDialogs, type AppNavbarProps } from "~/components/app-navbar"
 import { AutoCrawlDialog } from "~/components/app-navbar/auto-crawl-dialog"
+import { CrawlDetailsDialogHost } from "~/components/app-navbar/crawl-details-dialog"
 import { ProfileMenu } from "~/components/app-navbar/profile-menu"
 import { WorkspaceSwitcher } from "~/components/app-navbar/workspace-switcher"
 import { Button } from "~/components/ui/button"
@@ -1466,6 +1467,7 @@ export function WorkspaceShellPreview({
             onSubmit={() => void autoCrawl.handleSaveConfig()}
           />
           <BusinessProfileDrawer businessProfile={localBusinessProfile} />
+          <CrawlDetailsDialogHost />
           <AppNavbarDialogs
             businessProfile={businessProfile}
             createProject={{

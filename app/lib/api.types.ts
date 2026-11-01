@@ -1484,3 +1484,23 @@ export type MeUsageResponse = {
     spent: number
   }
 }
+
+/** GET /crawls/{crawlID}/details */
+export type CrawlDetailsResponse = {
+  crawl_id: string
+  /** One entry per HTTP status; code null = no HTTP response. */
+  status_codes: Array<{ code: number | null; count: number }>
+  soft_404_count: number
+  failed_pages: {
+    total: number
+    /** First 100 failures; reason is the fetch error when there is one. */
+    items: Array<{ url: string; status_code: number | null; reason: string | null }>
+  }
+  links: {
+    internal: number
+    external: number
+    nofollow: number
+    broken_internal: number
+    unique_external_domains: number
+  }
+}

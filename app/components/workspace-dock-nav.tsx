@@ -17,6 +17,7 @@ import {
   ExternalLinkIcon,
   FileSpreadsheetIcon,
   HistoryIcon,
+  InfoIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -43,6 +44,7 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "~/components/ui/navigation-menu"
+import { requestCrawlDetails } from "~/lib/crawl-details-events"
 import { useFeatures } from "~/lib/features"
 import { cn } from '~/lib/utils'
 import { getSafeProjectWebsiteUrl } from '~/lib/project-website'
@@ -733,6 +735,11 @@ function CrawlPanelList({
             <ContextMenu key={crawl.id} onOpenChange={onContextOpenChange}>
               <ContextMenuTrigger className="block">{row}</ContextMenuTrigger>
               <ContextMenuContent>
+                <ContextMenuItem onClick={() => requestCrawlDetails(crawl)}>
+                  <InfoIcon aria-hidden="true" />
+                  Crawl details
+                </ContextMenuItem>
+                <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => onExportCrawl(crawl, "xlsx")}>
                   <FileSpreadsheetIcon aria-hidden="true" />
                   Export crawl as XLSX
