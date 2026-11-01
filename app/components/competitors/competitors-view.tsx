@@ -63,6 +63,10 @@ import { format } from "date-fns"
 import { CompetitorInsightsView } from "./competitor-insights"
 import { CompetitorSetupPanel } from "~/components/competitors/competitor-setup-panel"
 import { useCompetitorInitialization } from "~/components/competitors/use-competitor-initialization"
+import {
+  COMPETITOR_INSIGHTS_EVENT,
+  takePendingCompetitorInsights,
+} from "~/lib/competitor-insights-request"
 
 type Props = {
   activeProject: ProjectResponse | null
@@ -108,6 +112,17 @@ function hostLabel(url: string) {
     return new URL(url).hostname.replace(/^www\./, "")
   } catch {
     return url
+  }
+}
+
+function insightsTargetFor(competitor: CompetitorResponse) {
+  const customTitle = competitor.name.trim()
+  const displayName = customTitle || hostLabel(competitor.seed_url)
+  return {
+    competitorId: competitor.id,
+    crawlId:
+      competitor.crawl?.status === "completed" ? competitor.crawl.id : null,
+    name: displayName,
   }
 }
 
@@ -194,9 +209,8 @@ function CompetitorCard({
       : null
 
   const openInsights = () => {
-    const completedCrawlId =
-      crawl?.status === "completed" ? crawl.id : null
-    onOpenInsights(competitor.id, completedCrawlId, displayName)
+    const target = insightsTargetFor(competitor)
+    onOpenInsights(target.competitorId, target.crawlId, target.name)
   }
 
   return (
@@ -454,6 +468,22 @@ export const CompetitorsView = memo(function CompetitorsView({
     name: string
   } | null>(null)
 
+  const [pendingInsightsId, setPendingInsightsId] = useState<string | null>(null)
+
+  // The navbar's Compare menu requests insights via a pending id plus a
+  // window event. The view may mount after the request, so take any pending
+  // id on mount and on every event; it is applied once the list is loaded.
+  useEffect(() => {
+    const takeRequest = () => {
+      const requestedId = takePendingCompetitorInsights()
+      if (requestedId) setPendingInsightsId(requestedId)
+    }
+    takeRequest()
+    window.addEventListener(COMPETITOR_INSIGHTS_EVENT, takeRequest)
+    return () =>
+      window.removeEventListener(COMPETITOR_INSIGHTS_EVENT, takeRequest)
+  }, [])
+
   // The detail view is scoped to one competitor of one project. Clear it on
   // project switch so a saved competitor id never loads under a new project.
   useEffect(() => {
@@ -497,6 +527,17 @@ export const CompetitorsView = memo(function CompetitorsView({
   const competitors = data?.competitors ?? []
   const cap = data?.max_competitors ?? maxCompetitors
   const atCap = competitors.length >= cap
+
+  // Apply a requested competitor once the list is loaded. Unknown ids are
+  // ignored without error UI.
+  useEffect(() => {
+    if (!pendingInsightsId || !data) return
+    const match = data.competitors.find(
+      (competitor) => competitor.id === pendingInsightsId
+    )
+    setPendingInsightsId(null)
+    if (match) setInsightsTarget(insightsTargetFor(match))
+  }, [pendingInsightsId, data])
 
   const addMutation = useMutation({
     mutationFn: async (body: { seed_url: string; name?: string }) =>

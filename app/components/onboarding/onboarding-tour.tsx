@@ -124,7 +124,7 @@ const TOUR_STEPS: readonly TourStepDef[] = [
     checkpoint: "audit_navigation",
     element: '[data-tour="onboarding-audit-nav"]',
     title: "Every audit tab, one menu",
-    description: "Overview, SEO, AEO, PageSpeed, Pages, Site graph — all live here.",
+    description: "SEO, AEO, PageSpeed, Pages, Site graph — all live here.",
     showNext: true,
     side: "bottom",
     align: "center",

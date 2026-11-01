@@ -209,18 +209,25 @@ export function buildWorkspaceNavGroups({
   const auditTabs = isLocationScoped
     ? auditSections.filter(([, tab]) => tab !== "site-graph")
     : auditSections
+  const toAuditTab = ([label, tab, Icon]: (typeof auditSections)[number]): NavTab => ({
+    key: `audit-${tab}`,
+    label,
+    description: AUDIT_TAB_DESCRIPTIONS[tab],
+    Icon,
+    view: "revserp-audit",
+    auditTab: tab,
+  })
+  // Overview is the landing page, so it is its own link; Audit holds the rest.
   const groups: NavGroup[] = [
     {
+      key: "overview",
+      label: "Overview",
+      tabs: auditTabs.filter(([, tab]) => tab === "overview").map(toAuditTab),
+    },
+    {
       key: "audit",
-      label: "Dashboard",
-      tabs: auditTabs.map(([label, tab, Icon]): NavTab => ({
-        key: `audit-${tab}`,
-        label,
-        description: AUDIT_TAB_DESCRIPTIONS[tab],
-        Icon,
-        view: "revserp-audit",
-        auditTab: tab,
-      })),
+      label: "Audit",
+      tabs: auditTabs.filter(([, tab]) => tab !== "overview").map(toAuditTab),
     },
     { key: "visibility", label: "Visibility", tabs: visibility },
     { key: "compare", label: "Compare", tabs: compare },

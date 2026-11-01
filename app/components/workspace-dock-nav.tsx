@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Link, useNavigate } from "react-router"
 
 import type {
@@ -9,7 +10,11 @@ import type {
   VisibilityMode,
 } from "~/components/app-navbar/types"
 import type { ExportFormat } from "~/components/app-navbar/types"
-import type { CrawlResponse, ProjectResponse } from "~/lib/api.types"
+import type {
+  CrawlResponse,
+  ProjectCompetitorsResponse,
+  ProjectResponse,
+} from "~/lib/api.types"
 
 import {
   ArrowLeftIcon,
@@ -49,8 +54,20 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
   NavigationMenuTrigger,
+  navigationMenuTriggerStyle,
 } from "~/components/ui/navigation-menu"
 import { requestCrawlDetails } from "~/lib/crawl-details-events"
+import { requestCompetitorInsights } from "~/lib/competitor-insights-request"
+import { clientApiFetch } from "~/lib/api"
+import {
+  fetchLocalSeoLocations,
+  localSeoLocationsQueryKey,
+} from "~/lib/local-seo-api"
+import { locationOpenPath } from "~/components/locations/location-list-view"
+import {
+  CompetitorsDockPanel,
+  LocationsDockPanel,
+} from "~/components/workspace-dock-entity-panels"
 import { useFeatures } from "~/lib/features"
 import { cn } from '~/lib/utils'
 import { getSafeProjectWebsiteUrl } from '~/lib/project-website'
@@ -117,9 +134,29 @@ export function WorkspaceDockNav({
   // Controlled so a click can dismiss the mega menu before the project panel
   // opens. Otherwise the portalled menu paints above it and the two fight.
   const [openItem, setOpenItem] = useState<string | null>(null)
-  const [clickLocked, setClickLocked] = useState(false)
   const features = useFeatures()
-  const groups = buildWorkspaceNavGroups({
+  const competitorsEnabled =
+    Boolean(projectId) && maxCompetitors > 0 && !isLocationScoped
+  // Shares the "project-competitors" prefix, so the Competitors view's
+  // invalidations refresh this list too.
+  const competitorsQuery = useQuery({
+    queryKey: ["project-competitors", projectId, "dock"],
+    queryFn: () =>
+      clientApiFetch<ProjectCompetitorsResponse>(
+        `/projects/${projectId!}/competitors`
+      ),
+    enabled: competitorsEnabled,
+  })
+  const locationsQuery = useQuery({
+    queryKey: localSeoLocationsQueryKey(projectId ?? ""),
+    queryFn: () => fetchLocalSeoLocations(projectId!),
+    enabled: Boolean(projectId),
+  })
+  const competitors = competitorsEnabled
+    ? (competitorsQuery.data?.competitors ?? [])
+    : []
+  const locations = locationsQuery.data ?? []
+  const allGroups = buildWorkspaceNavGroups({
     gscConnector,
     integrations,
     aiChat: features.ai_chat === true,
@@ -127,6 +164,24 @@ export function WorkspaceDockNav({
     maxCompetitors,
     projectId,
   })
+  // Marketplace lives in the ⋯ menu, ahead of the shell's own actions.
+  const groups = allGroups.filter((group) => group.key !== "marketplace")
+  const marketplaceTab = allGroups.find(
+    (group) => group.key === "marketplace"
+  )?.tabs[0]
+  const dockActions: DockActionItem[] | undefined =
+    marketplaceTab && marketplaceTab.href === undefined
+      ? [
+          {
+            key: "marketplace",
+            label: marketplaceTab.label,
+            icon: <marketplaceTab.Icon aria-hidden="true" className="size-4" />,
+            onSelect: () => onSelectWorkspace(marketplaceTab.view),
+          },
+          ...(actions?.length ? [{ key: "marketplace-divider", divider: true }] : []),
+          ...(actions ?? []),
+        ]
+      : actions
 
   return (
     <>
@@ -135,89 +190,145 @@ export function WorkspaceDockNav({
         className="max-w-none min-w-0 shrink"
         closeDelay={180}
         delay={0}
-        onValueChange={(next: string | null) => {
+        onValueChange={(next, details) => {
           if (lockedOpenItem !== undefined) {
             // Tour-held menu stays open; the overlay owns pointer control.
             onLockedOpenItemChange?.(next)
             return
           }
-          if (clickLocked) return
+          // Click to open: hovering a group never opens or swaps its menu.
+          if (details.reason === "trigger-hover") return
           setOpenItem(next)
         }}
         side="bottom"
         sideOffset={10}
         value={lockedOpenItem ?? openItem}
       >
-        <NavigationMenuList onPointerLeave={() => setClickLocked(false)}>
-          {groups.map((group) => {
-            const activeTab = group.tabs.find((tab) =>
-              isNavTabActive(
-                groups,
-                tab,
-                view,
-                auditTab,
-                pathname,
-                visibilityMode
+        <NavigationMenuList>
+          {groups.map((group, index) => {
+            const item = (() => {
+              const activeTab = group.tabs.find((tab) =>
+                isNavTabActive(
+                  groups,
+                  tab,
+                  view,
+                  auditTab,
+                  pathname,
+                  visibilityMode
+                )
               )
-            )
-            return (
-              <NavigationMenuItem key={group.key} value={group.key}>
-                <NavigationMenuTrigger
-                  data-tour={group.key === "audit" ? "onboarding-audit-nav" : undefined}
-                  // Clicking the group name goes to that group's landing tab. The
-                  // groups are built in landing order, so the first tab is the one
-                  // to land on: Overview, Search Console, Competitors, CMS.
-                  onClick={() => {
-                    const landing = group.tabs[0]
-                    if (!landing) return
-                    if (landing.href !== undefined) {
-                      void navigate(landing.href)
-                      return
-                    }
-                    onSelectWorkspace(
-                      landing.view,
-                      landing.auditTab,
-                      landing.visibilityMode
-                    )
-                  }}
-                  className={cn(
-                    "relative z-10 h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-sm",
-                    activeTab
-                      ? "bg-foreground font-semibold text-background hover:opacity-90"
-                      : "bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground"
-                  )}
-                >
-                  {group.label}
-                  {activeTab && group.tabs.length > 1 ? (
-                    <>
-                      <CircleIcon
-                        aria-hidden="true"
-                        className="size-1.5 shrink-0 fill-current opacity-50"
-                      />
-                      {activeTab.label}
-                    </>
-                  ) : null}
-                </NavigationMenuTrigger>
-                <NavigationMenuContent
-                  className={cn(
-                    "p-2",
-                    group.tabs.length > 3 ? "w-[36rem]" : "w-80"
-                  )}
-                >
-                  <DockPanel
-                    group={group}
-                    groups={groups}
-                    auditTab={auditTab}
-                    onSelectWorkspace={onSelectWorkspace}
-                    pathname={pathname}
-                    view={view}
-                    visibilityMode={visibilityMode}
+              const triggerClassName = cn(
+                "relative z-10 h-9 cursor-pointer gap-1.5 rounded-lg px-3 text-sm",
+                activeTab
+                  ? "bg-foreground font-semibold text-background hover:opacity-90"
+                  : "bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground"
+              )
+              let entityPanel: React.ReactNode = null
+              if (group.key === "compare" && competitors.length > 0) {
+                entityPanel = (
+                  <CompetitorsDockPanel
+                    competitors={competitors}
+                    onOpenAll={() => onSelectWorkspace("competitors")}
+                    onOpenCompetitor={(competitorId) => {
+                      onSelectWorkspace("competitors")
+                      requestCompetitorInsights(competitorId)
+                    }}
                   />
-                </NavigationMenuContent>
-              </NavigationMenuItem>
+                )
+              } else if (group.key === "locations" && projectId && locations.length > 0) {
+                entityPanel = (
+                  <LocationsDockPanel
+                    locations={locations}
+                    onOpenAll={() =>
+                      void navigate(`/app/projects/${projectId}/locations`)
+                    }
+                    onOpenLocation={(locationId) =>
+                      void navigate(locationOpenPath(projectId, locationId))
+                    }
+                  />
+                )
+              }
+
+              // One page and nothing to list: the name goes straight there.
+              if (!entityPanel && group.tabs.length === 1) {
+                const landing = group.tabs[0]
+                return (
+                  <NavigationMenuItem key={group.key} value={group.key}>
+                    <button
+                      className={cn(
+                        navigationMenuTriggerStyle(),
+                        triggerClassName
+                      )}
+                      onClick={() => {
+                        setOpenItem(null)
+                        if (landing.href !== undefined) {
+                          void navigate(landing.href)
+                          return
+                        }
+                        onSelectWorkspace(
+                          landing.view,
+                          landing.auditTab,
+                          landing.visibilityMode
+                        )
+                      }}
+                      type="button"
+                    >
+                      {group.label}
+                    </button>
+                  </NavigationMenuItem>
+                )
+              }
+
+              return (
+                <NavigationMenuItem key={group.key} value={group.key}>
+                  <NavigationMenuTrigger
+                    data-tour={group.key === "audit" ? "onboarding-audit-nav" : undefined}
+                    className={triggerClassName}
+                  >
+                    {group.label}
+                    {activeTab && group.tabs.length > 1 ? (
+                      <>
+                        <CircleIcon
+                          aria-hidden="true"
+                          className="size-1.5 shrink-0 fill-current opacity-50"
+                        />
+                        {activeTab.label}
+                      </>
+                    ) : null}
+                  </NavigationMenuTrigger>
+                  <NavigationMenuContent
+                    className={cn(
+                      "p-2",
+                      entityPanel
+                        ? "w-[32rem]"
+                        : group.tabs.length > 3
+                          ? "w-[36rem]"
+                          : "w-80"
+                    )}
+                  >
+                    {entityPanel ?? (
+                      <DockPanel
+                        group={group}
+                        groups={groups}
+                        auditTab={auditTab}
+                        onSelectWorkspace={onSelectWorkspace}
+                        pathname={pathname}
+                        view={view}
+                        visibilityMode={visibilityMode}
+                      />
+                    )}
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
+              )
+            })()
+            return (
+              <Fragment key={group.key}>
+                {index > 0 ? <DockNavSeparator /> : null}
+                {item}
+              </Fragment>
             )
           })}
-          {actions ? (
+          {dockActions ? (
             <>
               <span
                 aria-hidden="true"
@@ -232,7 +343,7 @@ export function WorkspaceDockNav({
                   <MoreHorizontalIcon aria-hidden="true" className="size-4" />
                 </NavigationMenuTrigger>
                 <NavigationMenuContent className="w-60 p-2">
-                  <DockActions actions={actions} />
+                  <DockActions actions={dockActions} />
                 </NavigationMenuContent>
               </NavigationMenuItem>
             </>
@@ -263,7 +374,17 @@ type WorkspaceContextNavProps = {
   projects: ProjectResponse[]
 }
 
-/** Dot between breadcrumb segments, the same mark as "Dashboard • Overview". */
+/** Thin "|" between the center navbar's links. */
+function DockNavSeparator() {
+  return (
+    <span
+      aria-hidden="true"
+      className="mx-0.5 h-4 w-px shrink-0 self-center bg-border dark:bg-white/12"
+    />
+  )
+}
+
+/** Dot between breadcrumb segments, the same mark as "Audit • SEO". */
 export function ContextNavSeparator() {
   return (
     <CircleIcon

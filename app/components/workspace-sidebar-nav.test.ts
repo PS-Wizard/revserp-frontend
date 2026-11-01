@@ -46,7 +46,14 @@ describe("location scoped nav groups", () => {
       .find((entry) => entry.key === "audit")
       ?.tabs.map((tab) => tab.key)
     expect(locationTabs?.includes("audit-site-graph")).toBe(false)
-    expect(locationTabs).toContain("audit-overview")
+    expect(locationTabs).toContain("audit-seo")
+    const overviewTabs = buildWorkspaceNavGroups({
+      ...base,
+      isLocationScoped: true,
+    })
+      .find((entry) => entry.key === "overview")
+      ?.tabs.map((tab) => tab.key)
+    expect(overviewTabs).toEqual(["audit-overview"])
     const parentTabs = buildWorkspaceNavGroups(base)
       .find((entry) => entry.key === "audit")
       ?.tabs.map((tab) => tab.key)
