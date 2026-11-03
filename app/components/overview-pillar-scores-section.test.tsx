@@ -50,19 +50,15 @@ function badgeLabels(element?: Element | null) {
 }
 
 describe("overview score trend badges", () => {
-  test("cards and inline score rows reuse growth, regression, and flat badges", () => {
+  test("cards and inline score rows reuse growth and regression badges, flat shows none", () => {
     const document = renderScores([current, previous], "current")
     const headers = document.querySelectorAll('[data-slot="card-header"]')
     expect(Array.from(headers).flatMap(badgeLabels)).toEqual([
-      "+8 pts", "+4 pts", "-1 pts", "No change",
+      "+8 pts", "+4 pts", "-1 pts",
     ])
     const contents = document.querySelectorAll('[data-slot="card-content"]')
-    expect(badgeLabels(contents[0])).toEqual([
-      "+4 pts", "-1 pts", "No change",
-    ])
-    expect(badgeLabels(contents[1])).toEqual([
-      "+3 pts", "No change",
-    ])
+    expect(badgeLabels(contents[0])).toEqual(["+4 pts", "-1 pts"])
+    expect(badgeLabels(contents[1])).toEqual(["+3 pts"])
   })
 
   test("an older selected crawl compares with its predecessor, not the newest crawl", () => {
@@ -73,7 +69,7 @@ describe("overview score trend badges", () => {
     const document = renderScores([current, previous, older], "previous")
     const headers = document.querySelectorAll('[data-slot="card-header"]')
     expect(Array.from(headers).flatMap(badgeLabels)).toEqual([
-      "+10 pts", "-5 pts", "No change", "No change",
+      "+10 pts", "-5 pts",
     ])
     const contents = document.querySelectorAll('[data-slot="card-content"]')
     expect(badgeLabels(contents[1])).toEqual([
@@ -81,7 +77,7 @@ describe("overview score trend badges", () => {
     ])
   })
 
-  test("the first crawl has no false no-change badges", () => {
+  test("the first crawl has no trend badges", () => {
     expect(badgeLabels(renderScores([current], "current").body)).toEqual([])
   })
 

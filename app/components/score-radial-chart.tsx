@@ -92,7 +92,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
           {typeof centerValue === "number" && Number.isFinite(centerValue) ? (
             <ScoreCenter value={centerValue} compact={compact} />
           ) : (
-            <span className="text-sm text-muted-foreground">
+            <span className="text-base text-muted-foreground">
               No score data yet.
             </span>
           )}
@@ -101,7 +101,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
         <>
           <div className="relative mx-auto shrink-0" style={chartBoxStyle}>
             {!rechartsComponents ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              <div className="flex h-full items-center justify-center text-base text-muted-foreground">
                 Loading chart...
               </div>
             ) : (
@@ -166,7 +166,7 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
             ) : null}
           </div>
           <div
-            className="mt-auto grid shrink-0 gap-2 text-sm"
+            className="mt-auto grid shrink-0 gap-2 text-base"
             style={{ minHeight: legendMinHeight }}
           >
             {chartData.map((segment) => (
@@ -228,14 +228,14 @@ export const ScoreRadialChart = memo(function ScoreRadialChart({
       tabIndex={onSelect ? 0 : undefined}
     >
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="text-lg">{title}</CardTitle>
         <TrendBadge
           delta={getRoundedDelta(
             isNumber(centerValue) ? centerValue : undefined,
             isNumber(previousCenterValue) ? previousCenterValue : undefined
           )}
         />
-        {description ? <CardDescription>{description}</CardDescription> : null}
+        {description ? <CardDescription className="text-base">{description}</CardDescription> : null}
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">{body}</CardContent>
     </Card>

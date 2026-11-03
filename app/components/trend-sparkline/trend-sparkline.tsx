@@ -1,6 +1,6 @@
 "use client"
 
-import { MinusIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
+import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 
 import { Badge } from "~/components/ui/badge"
 import { CardAction } from "~/components/ui/card"
@@ -101,12 +101,12 @@ export function TrendBadge({
   delta: number | null
   inline?: boolean
 }) {
-  if (delta === null) return null
+  if (delta === null || delta === 0) return null
 
   const badge = (
     <Badge variant="outline">
-      {delta > 0 ? <TrendingUpIcon /> : delta < 0 ? <TrendingDownIcon /> : <MinusIcon />}
-      {delta === 0 ? "No change" : <>{delta > 0 ? "+" : ""}{delta} pts</>}
+      {delta > 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
+      <>{delta > 0 ? "+" : ""}{delta} pts</>
     </Badge>
   )
 
