@@ -70,6 +70,17 @@ export function formatCrawlDateTime(crawl: CrawlResponse) {
   )
 }
 
+const crawlDateFormatter = new Intl.DateTimeFormat("en", {
+  dateStyle: "medium",
+})
+
+/** Nav trigger label: date only ("Oct 30, 2026"). The dropdown keeps the time. */
+export function formatCrawlDateMedium(crawl: CrawlResponse) {
+  return crawlDateFormatter.format(
+    new Date(getCrawlReferenceTimestamp(crawl))
+  )
+}
+
 export async function readExportError(response: Response) {
   const responseText = await response.text()
   if (!responseText.trim()) {

@@ -64,6 +64,7 @@ import { useBusinessProfile } from "~/components/app-navbar/use-business-profile
 import { useProjectActions } from "~/components/app-navbar/use-project-actions"
 import { useWorkspaceActions } from "~/components/app-navbar/use-workspace-actions"
 import {
+  formatCrawlDateMedium,
   formatCrawlDateTime,
   getCrawlSelectionTarget,
   getCrawlValidationError,
@@ -1099,34 +1100,12 @@ export function WorkspaceShellPreview({
                 {fullBleed ? null : (
                   <div className="flex min-w-0 flex-1 items-center">
                     <div className="flex max-w-full min-w-0 items-center rounded-xl border border-border bg-background p-1 shadow-sm dark:border-white/12 dark:bg-shell-chrome dark:shadow-none">
-                      <WorkspaceSwitcher
-                        bare
-                        activeOrganizationName={
-                          workspaceActions.activeOrganization?.name
-                        }
-                        isActiveOrganizationOwner={
-                          workspaceActions.isActiveOrganizationOwner
-                        }
-                        canManageOrganization={
-                          workspaceActions.canManageActiveOrganization
-                        }
-                        onInviteOpen={workspaceActions.openInviteDialog}
-                        onLeaveWorkspaceOpen={
-                          workspaceActions.openLeaveWorkspaceDialog
-                        }
-                        onSelectOrganization={(id) =>
-                          void workspaceActions.handleSelectOrganization(id)
-                        }
-                        organizationId={organizationId}
-                        organizations={organizations}
-                        workspaceState={workspaceActions.workspaceState}
-                      />
-                      <ContextNavSeparator />
                       <WorkspaceContextNav
                         activeProjectId={activeProjectId ?? undefined}
                         crawls={activeProjectCrawls}
                         currentCrawl={currentCrawl}
                         formatCrawlLabel={formatCrawlDateTime}
+                        formatTriggerCrawlLabel={formatCrawlDateMedium}
                         onCreateProject={() =>
                           createProjectDispatch({ type: "OPEN" })
                         }
@@ -1270,21 +1249,48 @@ export function WorkspaceShellPreview({
                 </div>
                 {fullBleed ? null : (
                   <div className="flex min-w-0 flex-1 items-center justify-end">
-                    <ProfileMenu
-                      account={{
-                        email: userEmail,
-                        name: userName,
-                        role: activeOrganization?.role,
-                        workspaceName: activeOrganization?.name,
-                      }}
-                      initials={initials}
-                      isPlatformAdmin={isPlatformAdmin}
-                      onLogout={() => void workspaceActions.handleLogout()}
-                      onTakeTour={requestOnboardingReplay}
-                      profileActionError={workspaceActions.profileActionError}
-                      userName={userName}
-                      workspaceState={workspaceActions.workspaceState}
-                    />
+                    <div className="flex max-w-full min-w-0 items-center rounded-xl border border-border bg-background p-1 shadow-sm dark:border-white/12 dark:bg-shell-chrome dark:shadow-none">
+                      <WorkspaceSwitcher
+                        bare
+                        activeOrganizationName={
+                          workspaceActions.activeOrganization?.name
+                        }
+                        isActiveOrganizationOwner={
+                          workspaceActions.isActiveOrganizationOwner
+                        }
+                        canManageOrganization={
+                          workspaceActions.canManageActiveOrganization
+                        }
+                        menuAlign="end"
+                        onInviteOpen={workspaceActions.openInviteDialog}
+                        onLeaveWorkspaceOpen={
+                          workspaceActions.openLeaveWorkspaceDialog
+                        }
+                        onSelectOrganization={(id) =>
+                          void workspaceActions.handleSelectOrganization(id)
+                        }
+                        organizationId={organizationId}
+                        organizations={organizations}
+                        workspaceState={workspaceActions.workspaceState}
+                      />
+                      <ContextNavSeparator />
+                      <ProfileMenu
+                        account={{
+                          email: userEmail,
+                          name: userName,
+                          role: activeOrganization?.role,
+                          workspaceName: activeOrganization?.name,
+                        }}
+                        bare
+                        initials={initials}
+                        isPlatformAdmin={isPlatformAdmin}
+                        onLogout={() => void workspaceActions.handleLogout()}
+                        onTakeTour={requestOnboardingReplay}
+                        profileActionError={workspaceActions.profileActionError}
+                        userName={userName}
+                        workspaceState={workspaceActions.workspaceState}
+                      />
+                    </div>
                   </div>
                 )}
               </div>

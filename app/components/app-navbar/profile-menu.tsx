@@ -27,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { HoverPill, useHoverMenu } from "~/components/ui/hover-pill"
+import { HoverPill } from "~/components/ui/hover-pill"
 import { requestAnnouncementReplay } from "~/lib/announcement-events"
 import { cn } from "~/lib/utils"
 import {
@@ -48,6 +48,8 @@ type ProfileMenuProps = {
   onLogout: () => void
   /** Manual replay entry; the tour never auto-shows after dismiss. */
   onTakeTour?: () => void
+  /** Borderless trigger for use inside the navbar pill, next to the workspace. */
+  bare?: boolean
   /** Shows the "Account settings" entry when present. */
   account?: AccountSummary
 }
@@ -84,6 +86,7 @@ export function ProfileMenu({
   onLogout,
   onTakeTour,
   account,
+  bare = false,
 }: ProfileMenuProps) {
   const [accountOpen, setAccountOpen] = useState(false)
   const navigate = useNavigate()
@@ -155,12 +158,9 @@ export function ProfileMenu({
     }
   }
 
-  const hoverMenu = useHoverMenu()
-
   return (
     <>
-    <DropdownMenu onOpenChange={hoverMenu.onOpenChange} open={hoverMenu.open}>
-      <div {...hoverMenu.triggerProps}>
+      <DropdownMenu>
         <DropdownMenuTrigger
           render={
             <button
@@ -169,7 +169,9 @@ export function ProfileMenu({
                 "flex items-center transition data-[popup-open]:bg-muted/50",
                 compact
                   ? "size-9 shrink-0 justify-center rounded-md hover:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                  : "gap-3 rounded-md border border-border/60 bg-card px-2 py-1.5 text-left hover:bg-muted/50"
+                  : bare
+                    ? "h-9 max-w-44 gap-2 rounded-lg px-2 text-left text-sm text-foreground hover:bg-accent"
+                    : "gap-3 rounded-md border border-border/60 bg-card px-2 py-1.5 text-left hover:bg-muted/50"
               )}
               type="button"
             />
@@ -190,155 +192,152 @@ export function ProfileMenu({
             </span>
           )}
         </DropdownMenuTrigger>
-      </div>
-      <DropdownMenuContent
-        align="end"
-        className="relative w-64"
-        onMouseLeave={() => setProfilePill(null)}
-        onPointerEnter={hoverMenu.contentProps.onPointerEnter}
-        onPointerLeave={hoverMenu.contentProps.onPointerLeave}
-        side="bottom"
-        sideOffset={10}
-      >
-        <HoverPill pill={profilePill} />
-        {account ? (
-          <>
-            <DropdownMenuGroup>
+        <DropdownMenuContent
+          align="end"
+          className="relative w-64 data-closed:animate-none"
+          onMouseLeave={() => setProfilePill(null)}
+          side="bottom"
+          sideOffset={10}
+        >
+          <HoverPill pill={profilePill} />
+          {account ? (
+            <>
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+                  onClick={() => setAccountOpen(true)}
+                  onMouseEnter={() => showProfilePill(6)}
+                  ref={(element) => {
+                    profileItemRefs.current[6] = element
+                  }}
+                  variant="default"
+                >
+                  <UserRoundIcon />
+                  Account settings
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          <DropdownMenuGroup>
+            <DropdownMenuCheckboxItem
+              checked={isDarkMode}
+              className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+              onCheckedChange={onDarkModeChange}
+              onMouseEnter={() => showProfilePill(0)}
+              ref={(element) => {
+                profileItemRefs.current[0] = element
+              }}
+            >
+              <MoonIcon />
+              Dark mode
+            </DropdownMenuCheckboxItem>
+            {onTakeTour ? (
               <DropdownMenuItem
                 className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-                onClick={() => setAccountOpen(true)}
-                onMouseEnter={() => showProfilePill(6)}
+                onClick={onTakeTour}
+                onMouseEnter={() => showProfilePill(4)}
                 ref={(element) => {
-                  profileItemRefs.current[6] = element
+                  profileItemRefs.current[4] = element
                 }}
                 variant="default"
               >
-                <UserRoundIcon />
-                Account settings
+                <RouteIcon />
+                Take the tour
               </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-        <DropdownMenuGroup>
-          <DropdownMenuCheckboxItem
-            checked={isDarkMode}
-            className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-            onCheckedChange={onDarkModeChange}
-            onMouseEnter={() => showProfilePill(0)}
-            ref={(element) => {
-              profileItemRefs.current[0] = element
-            }}
-          >
-            <MoonIcon />
-            Dark mode
-          </DropdownMenuCheckboxItem>
-          {onTakeTour ? (
+            ) : null}
             <DropdownMenuItem
               className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-              onClick={onTakeTour}
-              onMouseEnter={() => showProfilePill(4)}
+              onClick={() => requestAnnouncementReplay()}
+              onMouseEnter={() => showProfilePill(5)}
               ref={(element) => {
-                profileItemRefs.current[4] = element
+                profileItemRefs.current[5] = element
               }}
               variant="default"
             >
-              <RouteIcon />
-              Take the tour
+              <MegaphoneIcon />
+              What’s new
             </DropdownMenuItem>
-          ) : null}
+          </DropdownMenuGroup>
+          {isStandalone ? null : (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+                  onClick={handleInstall}
+                  onMouseEnter={() => showProfilePill(1)}
+                  ref={(element) => {
+                    profileItemRefs.current[1] = element
+                  }}
+                  variant="default"
+                >
+                  <DownloadIcon />
+                  Download app
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuGroup>
+            {isPlatformAdmin ? (
+              <DropdownMenuItem
+                className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
+                onClick={() => {
+                  navigate("/app/admin")
+                }}
+                onMouseEnter={() => showProfilePill(2)}
+                ref={(element) => {
+                  profileItemRefs.current[2] = element
+                }}
+                variant="default"
+              >
+                <ShieldIcon />
+                Admin Settings
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
           <DropdownMenuItem
             className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-            onClick={() => requestAnnouncementReplay()}
-            onMouseEnter={() => showProfilePill(5)}
+            disabled={isLoggingOut}
+            onClick={onLogout}
+            onMouseEnter={() => showProfilePill(3)}
             ref={(element) => {
-              profileItemRefs.current[5] = element
+              profileItemRefs.current[3] = element
             }}
             variant="default"
           >
-            <MegaphoneIcon />
-            What’s new
+            {isLoggingOut ? (
+              <ThinkingOrb
+                aria-hidden="true"
+                className="shrink-0"
+                size={20}
+                state="working"
+                style={{ width: 16, height: 16 }}
+              />
+            ) : (
+              <LogOutIcon />
+            )}
+            {isLoggingOut ? "Logging out..." : "Logout"}
           </DropdownMenuItem>
-        </DropdownMenuGroup>
-        {isStandalone ? null : (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-                onClick={handleInstall}
-                onMouseEnter={() => showProfilePill(1)}
-                ref={(element) => {
-                  profileItemRefs.current[1] = element
-                }}
-                variant="default"
-              >
-                <DownloadIcon />
-                Download app
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-          </>
-        )}
-        <DropdownMenuGroup>
-          {isPlatformAdmin ? (
-            <DropdownMenuItem
-              className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-              onClick={() => {
-                navigate("/app/admin")
-              }}
-              onMouseEnter={() => showProfilePill(2)}
-              ref={(element) => {
-                profileItemRefs.current[2] = element
-              }}
-              variant="default"
-            >
-              <ShieldIcon />
-              Admin Settings
-            </DropdownMenuItem>
+          {profileActionError ? (
+            <>
+              <DropdownMenuSeparator />
+              <p className="px-2 py-1.5 text-xs text-destructive">
+                {profileActionError}
+              </p>
+            </>
           ) : null}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="focus:bg-transparent focus:text-current focus-visible:bg-accent focus-visible:text-accent-foreground"
-          disabled={isLoggingOut}
-          onClick={onLogout}
-          onMouseEnter={() => showProfilePill(3)}
-          ref={(element) => {
-            profileItemRefs.current[3] = element
-          }}
-          variant="default"
-        >
-          {isLoggingOut ? (
-            <ThinkingOrb
-              aria-hidden="true"
-              className="shrink-0"
-              size={20}
-              state="working"
-              style={{ width: 16, height: 16 }}
-            />
-          ) : (
-            <LogOutIcon />
-          )}
-          {isLoggingOut ? "Logging out..." : "Logout"}
-        </DropdownMenuItem>
-        {profileActionError ? (
-          <>
-            <DropdownMenuSeparator />
-            <p className="px-2 py-1.5 text-xs text-destructive">
-              {profileActionError}
-            </p>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-    {account ? (
-      <AccountSettingsDialog
-        account={account}
-        onOpenChange={setAccountOpen}
-        open={accountOpen}
-      />
-    ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {account ? (
+        <AccountSettingsDialog
+          account={account}
+          onOpenChange={setAccountOpen}
+          open={accountOpen}
+        />
+      ) : null}
     </>
   )
 }

@@ -358,6 +358,8 @@ type WorkspaceContextNavProps = {
   crawls: CrawlResponse[]
   currentCrawl?: CrawlResponse | null
   formatCrawlLabel: (crawl: CrawlResponse) => string
+  /** Nav trigger label; falls back to formatCrawlLabel. The list keeps formatCrawlLabel. */
+  formatTriggerCrawlLabel?: (crawl: CrawlResponse) => string
   /** Location mode labels the crawl as the parent project's. */
   isLocationScoped?: boolean
   /** Back-to-project href shown above the project list when scoped. */
@@ -403,6 +405,7 @@ export function WorkspaceContextNav({
   crawls,
   currentCrawl,
   formatCrawlLabel,
+  formatTriggerCrawlLabel,
   isLocationScoped = false,
   locationBackHref,
   locationName,
@@ -477,7 +480,9 @@ export function WorkspaceContextNav({
         trigger={
           <span className="truncate">
             {isLocationScoped ? "Parent · " : ""}
-            {currentCrawl ? formatCrawlLabel(currentCrawl) : "No crawl yet"}
+            {currentCrawl
+              ? (formatTriggerCrawlLabel ?? formatCrawlLabel)(currentCrawl)
+              : "No crawl yet"}
           </span>
         }
         triggerClassName="max-w-52 text-muted-foreground"

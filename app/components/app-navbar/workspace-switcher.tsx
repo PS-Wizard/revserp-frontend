@@ -15,7 +15,6 @@ import {
 import {
   DROPDOWN_PILL_ITEM_CLASS,
   HoverPill,
-  useHoverMenu,
   useHoverPill,
 } from "~/components/ui/hover-pill"
 import type { MeResponse } from "~/lib/api.types"
@@ -36,6 +35,8 @@ type WorkspaceSwitcherProps = {
   onSelectOrganization: (organizationId: string) => void
   /** Borderless trigger for use inside the navbar breadcrumb pill. */
   bare?: boolean
+  /** Dropdown alignment; the right-side pill needs "end". */
+  menuAlign?: "start" | "end"
 }
 
 export function WorkspaceSwitcher({
@@ -49,9 +50,9 @@ export function WorkspaceSwitcher({
   onLeaveWorkspaceOpen,
   onSelectOrganization,
   bare = false,
+  menuAlign = "start",
 }: WorkspaceSwitcherProps) {
   const pillMenu = useHoverPill()
-  const hoverMenu = useHoverMenu()
   const switchItemProps = pillMenu.getItemProps(0)
   const inviteItemProps = pillMenu.getItemProps(1)
   const leaveItemProps = pillMenu.getItemProps(canManageOrganization ? 2 : 1)
@@ -59,36 +60,32 @@ export function WorkspaceSwitcher({
   const isLeavingWorkspace = workspaceState === "leaving"
 
   return (
-    <DropdownMenu onOpenChange={hoverMenu.onOpenChange} open={hoverMenu.open}>
-      <div {...hoverMenu.triggerProps}>
-        <DropdownMenuTrigger
-          render={
-            <button
-              aria-label="Switch workspace"
-              className={cn(
-                "flex items-center gap-2 rounded-lg text-left text-sm transition-colors duration-150 hover:bg-accent",
-                bare
-                  ? "h-9 max-w-44 px-2 text-foreground"
-                  : "max-w-56 border border-border bg-card px-2 py-1.5 text-card-foreground"
-              )}
-              type="button"
-            />
-          }
-        >
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-semibold">
-            {getWorkspaceInitials(activeOrganizationName ?? "")}
-          </span>
-          <span className="min-w-0 truncate font-medium">
-            {activeOrganizationName || "Select a workspace"}
-          </span>
-        </DropdownMenuTrigger>
-      </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            aria-label="Switch workspace"
+            className={cn(
+              "flex items-center gap-2 rounded-lg text-left text-sm transition-colors duration-150 hover:bg-accent",
+              bare
+                ? "h-9 max-w-44 px-2 text-foreground"
+                : "max-w-56 border border-border bg-card px-2 py-1.5 text-card-foreground"
+            )}
+            type="button"
+          />
+        }
+      >
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-micro font-semibold">
+          {getWorkspaceInitials(activeOrganizationName ?? "")}
+        </span>
+        <span className="min-w-0 truncate font-medium">
+          {activeOrganizationName || "Select a workspace"}
+        </span>
+      </DropdownMenuTrigger>
       <DropdownMenuContent
-        align="start"
-        className="relative w-64"
+        align={menuAlign}
+        className="relative w-64 data-closed:animate-none"
         onMouseLeave={pillMenu.clearPill}
-        onPointerEnter={hoverMenu.contentProps.onPointerEnter}
-        onPointerLeave={hoverMenu.contentProps.onPointerLeave}
         side="bottom"
         sideOffset={10}
       >
