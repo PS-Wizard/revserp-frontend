@@ -32,6 +32,12 @@ import type {
   AIReasoningEffort,
   AIToolInfo,
 } from "~/lib/api.types"
+import {
+  getTierForWorkspaceFeatures,
+  presetPatch,
+  TIER_LABELS,
+  TIER_PRESETS,
+} from "~/lib/tiers"
 import { MapsCreditBudgetControl } from "~/components/admin/maps-credit-budget-control"
 
 const FEATURE_COLUMNS = [
@@ -459,6 +465,9 @@ export function FeaturesTab() {
                         Unsaved
                       </Badge>
                     ) : null}
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {TIER_LABELS[getTierForWorkspaceFeatures(row)]}
+                    </Badge>
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-1.5">
                     {chips.length === 0 ? (
@@ -509,6 +518,40 @@ export function FeaturesTab() {
               </DrawerHeader>
 
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">Tier preset</span>
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {TIER_LABELS[getTierForWorkspaceFeatures(open)]}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() =>
+                        updateRow(openWorkspace, presetPatch(TIER_PRESETS.baseline))
+                      }
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Apply Baseline
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        updateRow(openWorkspace, presetPatch(TIER_PRESETS.pro))
+                      }
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Apply Pro
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Fills the inputs below. Save to apply.
+                  </p>
+                </div>
+                <Separator />
                 <FieldGroup className="gap-2">
                   {FEATURE_COLUMNS.map((column) => (
                     <ToggleRow

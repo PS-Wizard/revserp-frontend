@@ -1,9 +1,25 @@
+import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
-import { GaugeIcon, UserRoundIcon, type LucideIcon } from "lucide-react"
+import {
+  ChevronDownIcon,
+  GaugeIcon,
+  UserRoundIcon,
+  type LucideIcon,
+} from "lucide-react"
 
 import { AccountAvatar } from "~/components/account/account-avatar"
 import { AccountUsageSection } from "~/components/account/account-usage-section"
 import { Badge } from "~/components/ui/badge"
+import { Skeleton } from "~/components/ui/skeleton"
+import { clientApiFetch } from "~/lib/api"
+import type { MeUsageResponse } from "~/lib/api.types"
+import {
+  getTierForUsage,
+  TIER_LABELS,
+  TIER_PRESETS,
+  tierFacts,
+} from "~/lib/tiers"
+import { meUsageQueryKey } from "./account-usage-section"
 import {
   Dialog,
   DialogContent,
@@ -119,6 +135,8 @@ function ProfileSection({ account }: { account: AccountSummary }) {
           />
         ) : null}
       </dl>
+
+      <PlanAccordion />
     </div>
   )
 }
@@ -128,6 +146,109 @@ function ProfileRow({ label, value }: { label: string; value: React.ReactNode })
     <div className="flex items-center justify-between gap-4 px-4 py-3">
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 truncate text-right">{value}</dd>
+    </div>
+  )
+}
+
+const planNumberFormat = new Intl.NumberFormat()
+
+function PlanAccordion() {
+  const [open, setOpen] = useState(false)
+  const { data: usage } = useQuery({
+    queryKey: meUsageQueryKey,
+    queryFn: () => clientApiFetch<MeUsageResponse>("/me/usage"),
+    staleTime: 30_000,
+  })
+  const tier = usage ? getTierForUsage(usage) : null
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/20 text-sm">
+      <button
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors outline-none hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        onClick={() => setOpen((value) => !value)}
+        type="button"
+      >
+        <span className="text-muted-foreground">Plan</span>
+        <span className="flex items-center gap-2">
+          {tier ? (
+            <Badge variant="outline">{TIER_LABELS[tier]}</Badge>
+          ) : (
+            <Skeleton className="h-5 w-16" />
+          )}
+          <ChevronDownIcon
+            className={cn(
+              "size-4 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none",
+              open && "rotate-180"
+            )}
+          />
+        </span>
+      </button>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="divide-y divide-border/60 border-t border-border/60">
+            <PlanRow
+              active={tier === "baseline"}
+              facts={tierFacts(TIER_PRESETS.baseline)}
+              name={TIER_PRESETS.baseline.label}
+              tagline="Default limits for every new workspace"
+            />
+            <PlanRow
+              active={tier === "pro"}
+              facts={tierFacts(TIER_PRESETS.pro)}
+              name={TIER_PRESETS.pro.label}
+              tagline="Higher limits for busy workspaces"
+            />
+            <PlanRow
+              active={tier === "customized"}
+              facts={tier === "customized" && usage ? customizedFacts(usage) : []}
+              name="Customized"
+              tagline={
+                tier === "customized"
+                  ? "Limits tuned for this workspace"
+                  : "Anything in between, set by your admin"
+              }
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function customizedFacts(usage: MeUsageResponse): string[] {
+  return [
+    `${planNumberFormat.format(usage.ai_messages.limit)} AI messages / month`,
+    `${planNumberFormat.format(usage.ai_visibility_audits.limit)} visibility audits / month`,
+    `${planNumberFormat.format(usage.projects.limit)} project${usage.projects.limit === 1 ? "" : "s"}, ${planNumberFormat.format(usage.max_competitors_per_project)} competitors each`,
+  ]
+}
+
+function PlanRow({
+  active,
+  facts,
+  name,
+  tagline,
+}: {
+  active: boolean
+  facts: string[]
+  name: string
+  tagline: string
+}) {
+  return (
+    <div className="flex flex-col gap-1 px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn(!active && "text-muted-foreground")}>{name}</span>
+        {active ? <Badge variant="outline">Current</Badge> : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {facts.length > 0 ? `${tagline}: ${facts.join(", ")}` : tagline}
+      </p>
     </div>
   )
 }
