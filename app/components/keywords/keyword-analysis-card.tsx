@@ -132,7 +132,25 @@ export function KeywordAnalysisCard({
   const canManage = normalizeProjectKeywordLists(
     listsQuery.data
   ).can_manage_keywords
-
+  const lists = useMemo(
+    () => normalizeProjectKeywordLists(listsQuery.data),
+    [listsQuery.data]
+  )
+  const sourceLabelsByKeyword = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const entry of lists.combined) {
+      const labels: string[] = []
+      if (entry.sources.includes("user")) labels.push("User defined")
+      if (entry.sources.includes("revserp")) labels.push("Revserp suggested")
+      if (entry.sources.includes("competitor")) labels.push("Competitor discovered")
+      if (labels.length > 0) map.set(entry.keyword.trim().toLowerCase(), labels)
+    }
+    return map
+  }, [lists])
+  const getSources = useMemo(() => {
+    if (scopedCompetitor) return () => ["Competitor discovered"]
+    return (row: KeywordAnalysis) => sourceLabelsByKeyword.get(row.keyword.trim().toLowerCase()) ?? []
+  }, [scopedCompetitor, sourceLabelsByKeyword])
   const keywords = useMemo(() => query.data?.keywords ?? [], [query.data])
   const signature = estimatesSignature(query.data?.keywords)
 
@@ -329,6 +347,7 @@ export function KeywordAnalysisCard({
           </>
         }
         footerNote={watching ? "Waiting for new estimates…" : undefined}
+        getSources={getSources}
         rows={keywords}
         title={title}
       />

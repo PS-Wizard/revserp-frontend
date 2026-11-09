@@ -14,6 +14,7 @@ import {
 
 const workspace: LocationWorkspace = {
   projectId: "project-1",
+  projectName: "Revketer",
   location: {
     id: "location-1",
     project_id: "project-1",
@@ -32,7 +33,21 @@ const workspace: LocationWorkspace = {
   websiteScopeRevisions: [],
 }
 
-function renderNavigation(website: boolean, googleReports = false) {
+function scopedWorkspace(): LocationWorkspace {
+  return {
+    ...workspace,
+    websiteScope: {
+      id: "scope-1",
+      revision: 1,
+      url: "https://example.com/parramatta",
+      match: "subtree",
+      created_at: "2026-01-01T00:00:00Z",
+    },
+  }
+}
+
+function renderNavigation(website: boolean, googleReports = false, scoped = website) {
+  const activeWorkspace = scoped ? scopedWorkspace() : workspace
   return renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter
@@ -44,7 +59,7 @@ function renderNavigation(website: boolean, googleReports = false) {
           ),
         ]}
       >
-        <LocationWorkspaceProvider workspace={workspace}>
+        <LocationWorkspaceProvider workspace={activeWorkspace}>
           <LocationWorkspaceNavigation
             view="revserp-audit"
             auditTab="overview"
@@ -86,6 +101,23 @@ describe("location workspace navigation", () => {
   test("Google report navigation follows the feature gate", () => {
     expect(renderNavigation(false).includes("Search Console")).toBe(false)
     expect(renderNavigation(false, true)).toContain("Search Console")
+  })
+
+  test("breadcrumb shows project, locations, and location with project linking to overview", () => {
+    const html = renderNavigation(false)
+    expect(html).toContain("Revketer")
+    expect(html).toContain("Locations")
+    expect(html).toContain("Parramatta")
+    expect(html).toContain('href="/app?project=project-1"')
+  })
+
+  test("website tab hides without scope and shows a connect action", () => {
+    const unscoped = renderNavigation(false, false, false)
+    expect(unscoped.includes(">Website<")).toBe(false)
+    expect(unscoped).toContain("Connect site")
+    const scoped = renderNavigation(true)
+    expect(scoped.includes(">Website<")).toBe(true)
+    expect(scoped.includes("Connect site")).toBe(false)
   })
 
   test("identifiers are URL encoded", () => {

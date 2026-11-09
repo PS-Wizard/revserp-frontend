@@ -11,6 +11,7 @@ import {
   FileCodeIcon,
   FileTextIcon,
   Loader2Icon,
+  RocketIcon,
   XIcon,
 } from "lucide-react"
 
@@ -68,6 +69,9 @@ type DraftFields = {
   meta_description: string
   target_keyword: string
 }
+
+const PUBLISH_DRAFT_MESSAGE =
+  "I like the current state, publish it as a draft and share the draft link."
 
 type SavedSnapshot = DraftFields & { body: string }
 
@@ -798,6 +802,16 @@ export function ContentDraftPage({
             </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button
+          disabled={busy}
+          onClick={() => void revbot.send(PUBLISH_DRAFT_MESSAGE)}
+          size="sm"
+          type="button"
+          variant="default"
+        >
+          <RocketIcon aria-hidden="true" />
+          Publish
+        </Button>
       </header>
 
       <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[minmax(0,25rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)]">

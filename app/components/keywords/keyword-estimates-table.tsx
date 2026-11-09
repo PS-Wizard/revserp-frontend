@@ -1,6 +1,6 @@
 "use client"
 
-import { InfoIcon, TagsIcon } from "lucide-react"
+import { InfoIcon, SearchIcon, TagsIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import type { ReactNode } from "react"
 
@@ -12,6 +12,7 @@ import { queryMatchRowClassName } from "~/components/gsc-overview/query-match-ba
 import { KEYWORD_KIND_LABELS } from "~/components/keyword-management/keyword-card-parts"
 import { SortableTableHead } from "~/components/ui/sortable-table-head"
 import { Badge } from "~/components/ui/badge"
+import { Input } from "~/components/ui/input"
 import {
   Empty,
   EmptyDescription,
@@ -55,10 +56,12 @@ export type KeywordEstimatesTableProps = {
   coverage?: KeywordCoverageSeed[]
   /** Optional per-row action shown beside the keyword on hover/focus. */
   rowAction?: (row: KeywordAnalysis) => ReactNode
+  /** Optional source labels per row, e.g. User defined / Revserp suggested / Competitor discovered. */
+  getSources?: (row: KeywordAnalysis) => string[]
 }
 
 type EstimatesColumn =
-  "keyword" | "kind" | "rank" | "traffic" | "volume" | "kd" | "cpc"
+  "keyword" | "kind" | "source" | "rank" | "traffic" | "volume" | "kd" | "cpc"
 
 type EstimatesSort = {
   column: EstimatesColumn
@@ -91,7 +94,7 @@ export function formatAnalysisCpc(value: number | null) {
 }
 
 function isTextColumn(column: EstimatesColumn) {
-  return column === "keyword" || column === "kind"
+  return column === "keyword" || column === "kind" || column === "source"
 }
 
 function toggleEstimatesSort(
@@ -104,12 +107,14 @@ function toggleEstimatesSort(
   return { column, direction: isTextColumn(column) ? "asc" : "desc" }
 }
 
-function sortValue(row: KeywordAnalysis, column: EstimatesColumn) {
+function sortValue(row: KeywordAnalysis, column: EstimatesColumn, getSources?: (row: KeywordAnalysis) => string[]) {
   switch (column) {
     case "keyword":
       return row.keyword
     case "kind":
       return KEYWORD_KIND_LABELS[row.kind]
+    case "source":
+      return (getSources?.(row) ?? []).join(", ").toLowerCase()
     case "rank":
       return row.rank
     case "traffic":
@@ -126,12 +131,13 @@ function sortValue(row: KeywordAnalysis, column: EstimatesColumn) {
 function compareEstimatesRows(
   a: KeywordAnalysis,
   b: KeywordAnalysis,
-  sort: EstimatesSort
+  sort: EstimatesSort,
+  getSources?: (row: KeywordAnalysis) => string[]
 ) {
-  const av = sortValue(a, sort.column)
-  const bv = sortValue(b, sort.column)
-  if (av === null || av === undefined) return 1
-  if (bv === null || bv === undefined) return -1
+  const av = sortValue(a, sort.column, getSources)
+  const bv = sortValue(b, sort.column, getSources)
+  if (av === null || av === undefined || av === "") return 1
+  if (bv === null || bv === undefined || bv === "") return -1
   const result =
     typeof av === "string" || typeof bv === "string"
       ? String(av).localeCompare(String(bv))
@@ -152,6 +158,23 @@ function KeywordKindBadge({ kind }: { kind: KeywordAnalysis["kind"] }) {
     >
       {KEYWORD_KIND_LABELS[isBrand ? "brand" : "non_brand"]}
     </Badge>
+  )
+}
+
+function KeywordSourceBadges({ sources }: { sources: string[] }) {
+  if (sources.length === 0) return <span className="text-muted-foreground">{DASH}</span>
+  return (
+    <span className="flex flex-wrap items-center gap-1">
+      {sources.map((source) => {
+        const key = source.toLowerCase()
+        const variant = key.includes("competitor") ? "default" : key.includes("user") ? "secondary" : "outline"
+        return (
+          <Badge className="text-[0.65rem]" key={source} variant={variant}>
+            {source}
+          </Badge>
+        )
+      })}
+    </span>
   )
 }
 
@@ -187,9 +210,11 @@ export function KeywordEstimatesTable({
   emptyAction,
   coverage,
   rowAction,
+  getSources,
 }: KeywordEstimatesTableProps) {
   const [sort, setSort] = useState<EstimatesSort | null>(null)
   const [filter, setFilter] = useState<FilterState>("all")
+  const [search, setSearch] = useState("")
 
   const stateByKeyword = useMemo(
     () =>
@@ -223,6 +248,11 @@ export function KeywordEstimatesTable({
           ),
     [rows, filter, stateByKeyword]
   )
+  const searchedRows = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    if (!needle) return filteredRows
+    return filteredRows.filter((row) => row.keyword.toLowerCase().includes(needle))
+  }, [filteredRows, search])
 
   const brandCount = useMemo(
     () => rows.filter((row) => row.kind === "brand").length,
@@ -235,9 +265,9 @@ export function KeywordEstimatesTable({
   const sortedRows = useMemo(
     () =>
       sort
-        ? [...filteredRows].sort((a, b) => compareEstimatesRows(a, b, sort))
-        : filteredRows,
-    [filteredRows, sort]
+        ? [...searchedRows].sort((a, b) => compareEstimatesRows(a, b, sort, getSources))
+        : searchedRows,
+    [searchedRows, sort, getSources]
   )
 
   function head(column: EstimatesColumn, label: string, alignRight?: boolean) {
@@ -274,14 +304,25 @@ export function KeywordEstimatesTable({
           {action}
         </div>
       </div>
-      {coverage && rows.length > 0 ? (
-        <div className="shrink-0 px-5 pb-3">
-          <CoverageFilter
-            counts={coverageCounts}
-            filter={filter}
-            onFilter={setFilter}
-            total={rows.length}
-          />
+      {rows.length > 0 ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-3 px-5 pb-3">
+          <div className="relative min-w-48 flex-1">
+            <SearchIcon aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="Search keywords"
+              className="pl-8" placeholder="Search keywords..."
+              onChange={(event) => setSearch(event.target.value)}
+              value={search}
+            />
+          </div>
+          {coverage ? (
+            <CoverageFilter
+              counts={coverageCounts}
+              filter={filter}
+              onFilter={setFilter}
+              total={rows.length}
+            />
+          ) : null}
         </div>
       ) : null}
       {rows.length === 0 ? (
@@ -302,11 +343,12 @@ export function KeywordEstimatesTable({
           role="region"
           tabIndex={0}
         >
-          <Table className="min-w-[40rem] [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
+          <Table className="min-w-[48rem] [&_td:first-child]:pl-5 [&_td:last-child]:pr-5 [&_th:first-child]:pl-5 [&_th:last-child]:pr-5">
             <TableHeader className="sticky top-0 z-10 bg-card">
               <TableRow>
                 {head("keyword", "Keyword")}
                 {head("kind", "Type")}
+                {head("source", "Source")}
                 {head("rank", "Rank", true)}
                 {head("traffic", "Traffic", true)}
                 {head("volume", "Volume", true)}
@@ -319,9 +361,9 @@ export function KeywordEstimatesTable({
                 <TableRow className="hover:bg-transparent">
                   <TableCell
                     className="py-8 text-center text-xs text-muted-foreground"
-                    colSpan={7}
+                    colSpan={8}
                   >
-                    No keywords in this group.
+                    {rows.length > 0 ? "No keywords match your search." : "No keywords in this group."}
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -347,6 +389,9 @@ export function KeywordEstimatesTable({
                     </TableCell>
                     <TableCell>
                       <KeywordKindBadge kind={row.kind} />
+                    </TableCell>
+                    <TableCell>
+                      <KeywordSourceBadges sources={getSources?.(row) ?? []} />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatAnalysisRank(row.rank)}

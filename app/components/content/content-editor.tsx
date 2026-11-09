@@ -5,6 +5,7 @@ import { EditorContent, useEditor, type Editor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Link from "@tiptap/extension-link"
 import Placeholder from "@tiptap/extension-placeholder"
+import { TableKit } from "@tiptap/extension-table"
 import { Markdown } from "@tiptap/markdown"
 import { MessageSquareTextIcon, TextQuoteIcon } from "lucide-react"
 
@@ -41,6 +42,71 @@ const FLOAT_GAP = 8
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+const TABLE_DELIMITER = /^\s*\|?[\s:|:-]*-[\s:|:-]*\|?\s*$/
+
+/**
+ * Joins GFM table rows split by blank lines into one contiguous block.
+ * The markdown table parser stops at the first blank line, so a model
+ * that writes one blank line between rows renders as plain pipe text.
+ * Fenced code blocks are left alone; row lines must start with a pipe.
+ */
+export function normalizeTableMarkdown(markdown: string): string {
+  const lines = markdown.split("\n")
+  const out: string[] = []
+  let i = 0
+  let inFence = false
+  while (i < lines.length) {
+    const line = lines[i]
+    const trimmed = line.trim()
+    if (/^(```|~~~)/.test(trimmed)) {
+      inFence = !inFence
+      out.push(line)
+      i += 1
+      continue
+    }
+    if (!inFence && trimmed.startsWith("|") && trimmed.includes("|")) {
+      let j = i + 1
+      while (j < lines.length && lines[j].trim() === "") j += 1
+      const delimiter = j < lines.length ? lines[j] : ""
+      const delimiterTrim = delimiter.trim()
+      if (
+        delimiterTrim.startsWith("|") &&
+        delimiterTrim.includes("|") &&
+        delimiterTrim.includes("-") &&
+        TABLE_DELIMITER.test(delimiter)
+      ) {
+        const block: string[] = [line, delimiter]
+        let k = j + 1
+        while (k < lines.length) {
+          const currentTrim = lines[k].trim()
+          if (currentTrim === "") {
+            let look = k + 1
+            while (look < lines.length && lines[look].trim() === "") look += 1
+            const next = look < lines.length ? lines[look].trim() : ""
+            if (next.startsWith("|") && next.includes("|")) {
+              k = look
+              continue
+            }
+            break
+          }
+          if (/^(```|~~~)/.test(currentTrim)) break
+          if (!currentTrim.startsWith("|") || !currentTrim.includes("|")) break
+          block.push(lines[k])
+          k += 1
+        }
+        if (block.length >= 3) {
+          out.push(...block)
+          i = k
+          continue
+        }
+      }
+    }
+    out.push(line)
+    i += 1
+  }
+  return out.join("\n")
 }
 
 /**
@@ -124,6 +190,7 @@ export function ContentEditor({
           defaultProtocol: "https",
         }),
         Placeholder.configure({ placeholder }),
+        TableKit.configure({ table: { resizable: false } }),
         Markdown,
         DraftCommentHighlight,
       ],
@@ -217,8 +284,9 @@ export function ContentEditor({
     if (!editor || !externalBody) return
     if (appliedExternalRef.current === externalBody.nonce) return
     appliedExternalRef.current = externalBody.nonce
-    if (editor.getMarkdown() !== externalBody.markdown) {
-      editor.commands.setContent(externalBody.markdown, {
+    const normalized = normalizeTableMarkdown(externalBody.markdown)
+    if (editor.getMarkdown() !== externalBody.markdown && editor.getMarkdown() !== normalized) {
+      editor.commands.setContent(normalized, {
         contentType: "markdown",
       })
     }

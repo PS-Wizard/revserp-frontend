@@ -6,10 +6,12 @@ import type {
   DashboardView,
   VisibilityMode,
 } from "~/components/app-navbar/types"
+import { getProjectBackTarget } from "~/components/app-navbar/utils"
 import { Button } from "~/components/ui/button"
 import { cn } from "~/lib/utils"
 import { useOptionalLocationWorkspace } from "~/lib/location-workspace"
 import { auditSections } from "~/components/workspace-sidebar-nav"
+import { LocationWebsiteScopeSettingsButton } from "~/components/locations/location-website-scope-settings"
 
 const LOCATION_SECTIONS = [
   { id: "maps", label: "Maps", hash: "maps" },
@@ -54,7 +56,9 @@ export function LocationWorkspaceNavigation({
   const location = useLocation()
   if (!workspace) return null
   const params = new URLSearchParams(location.search)
-  const activeSection =
+  const scope = workspace.websiteScope ?? null
+  const hasWebsiteScope = scope !== null && scope.match !== "none" && (scope.url ?? "") !== ""
+  const rawActiveSection =
     view === "revserp-visibility"
       ? visibilityMode === "ai"
         ? "ai"
@@ -66,7 +70,8 @@ export function LocationWorkspaceNavigation({
         : view === "competitors"
           ? "maps"
           : view
-
+  const activeSection = !hasWebsiteScope && rawActiveSection === "website" ? "maps" : rawActiveSection
+  const projectName = workspace.projectName?.trim() ? workspace.projectName : workspace.projectId
   return (
     <section
       aria-label="Location workspace"
@@ -74,6 +79,15 @@ export function LocationWorkspaceNavigation({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2 text-sm">
+          <Link
+            className="text-muted-foreground hover:text-foreground"
+            to={getProjectBackTarget(workspace.projectId)}
+          >
+            {projectName}
+          </Link>
+          <span aria-hidden="true" className="text-muted-foreground">
+            /
+          </span>
           <Link
             className="text-muted-foreground hover:text-foreground"
             to={`/app/projects/${encodeURIComponent(workspace.projectId)}/locations`}
@@ -88,6 +102,14 @@ export function LocationWorkspaceNavigation({
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {!hasWebsiteScope ? (
+            <LocationWebsiteScopeSettingsButton
+              label="Connect site"
+              locationId={workspace.location.id}
+              projectId={workspace.projectId}
+              workspace={workspace}
+            />
+          ) : null}
           <Button onClick={onOpenProfile} size="sm" variant="outline">
             Location profile
           </Button>
@@ -99,8 +121,9 @@ export function LocationWorkspaceNavigation({
       >
         {LOCATION_SECTIONS.filter(
           (item) =>
-            googleReports ||
-            (item.id !== "analytics" && item.id !== "search-console")
+            (hasWebsiteScope || item.id !== "website") &&
+            (googleReports ||
+              (item.id !== "analytics" && item.id !== "search-console"))
         ).map((item) => (
           <Link
             aria-current={activeSection === item.id ? "page" : undefined}

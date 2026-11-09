@@ -149,6 +149,7 @@ export async function loader({
       }
       locationWorkspace = {
         projectId,
+        projectName: bootstrap.active_project.name,
         location: workspace.location,
         canManage: workspace.can_manage,
         websiteScope: workspace.website_scope,

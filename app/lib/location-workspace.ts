@@ -18,6 +18,7 @@ export type LocationWorkspaceResponse = {
 
 export type LocationWorkspace = {
   projectId: string
+  projectName?: string | null
   location: LocalSeoLocation
   canManage: boolean
   websiteScope: LocationWebsiteScopeRevision | null

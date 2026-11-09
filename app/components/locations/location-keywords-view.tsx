@@ -575,6 +575,30 @@ function LocationKeywordEstimatesCard({
   })
   const keywords = useMemo(() => query.data?.keywords ?? [], [query.data])
   const coverageQuery = useKeywordCoverageQuery(projectId, locationId)
+  const listsQuery = useQuery({
+    ...locationKeywordListsQueryOptions(projectId, locationId),
+  })
+  const sourceForKeyword = useMemo(() => {
+    const userKeys = new Set<string>()
+    const suggestedKeys = new Set<string>()
+    const lists = listsQuery.data
+    if (lists) {
+      for (const phrase of [...lists.user_defined.branded, ...lists.user_defined.non_branded]) {
+        userKeys.add(normalizeLocationKeywordKey(phrase))
+      }
+      for (const phrase of [...lists.revserp_suggested.branded, ...lists.revserp_suggested.non_branded]) {
+        suggestedKeys.add(normalizeLocationKeywordKey(phrase))
+      }
+    }
+    return (keyword: string) => {
+      const key = normalizeLocationKeywordKey(keyword)
+      const labels: string[] = []
+      if (userKeys.has(key)) labels.push("User defined")
+      if (suggestedKeys.has(key)) labels.push("Revserp suggested")
+      return labels
+    }
+  }, [listsQuery.data])
+  const getSources = useMemo(() => (row: { keyword: string }) => sourceForKeyword(row.keyword), [sourceForKeyword])
   const signature = JSON.stringify(query.data?.keywords ?? null)
 
   useEffect(() => {
@@ -695,6 +719,7 @@ function LocationKeywordEstimatesCard({
         description="Brand and non-brand estimates for this location's keywords."
         emptyAction={emptyAction}
         footerNote={watching && keywords.length > 0 ? "Waiting for new estimates…" : undefined}
+        getSources={getSources}
         rows={keywords}
         title="Keyword estimates"
       />

@@ -514,6 +514,25 @@
 .content-editor-tiptap pre {
   overflow-x: auto;
 }
+.content-editor-tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-block: 1em 0;
+  overflow: hidden;
+  table-layout: fixed;
+}
+.content-editor-tiptap th,
+.content-editor-tiptap td {
+  border: 1px solid var(--color-border);
+  padding: 0.5em 0.75em;
+  text-align: start;
+  vertical-align: top;
+  min-width: 3em;
+}
+.content-editor-tiptap th {
+  font-weight: 600;
+  background: color-mix(in oklab, var(--color-muted) 60%, transparent);
+}
 .content-editor-tiptap .ProseMirror-selectednode,
 .content-editor-tiptap ::selection {
   background: color-mix(in oklab, var(--color-primary) 25%, transparent);

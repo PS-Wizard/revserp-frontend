@@ -247,7 +247,7 @@ describe("keyword analysis card", () => {
     expect(text).toContain("$1.50")
     expect(text.includes("18,000")).toBe(false)
     expect(Array.from(host.querySelectorAll("th"), (cell) => cell.textContent)).toEqual([
-      "Keyword", "Type", "Rank", "Traffic", "Volume", "KD", "CPC",
+      "Keyword", "Type", "Source", "Rank", "Traffic", "Volume", "KD", "CPC",
     ])
     expect(host.querySelector('[data-slot="card"]')?.classList.contains("h-[32rem]")).toBe(true)
     const scrollArea = host.querySelector('[role="region"]')
